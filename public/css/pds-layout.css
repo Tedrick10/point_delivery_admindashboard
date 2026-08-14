@@ -1,0 +1,270 @@
+/**
+ * Point Delivery — Admin layout (compatible with backend.css shell)
+ */
+
+body.pds-admin {
+    --pds-sidebar-w: 286px;
+    --pds-sidebar-w-collapsed: 80px;
+    --pds-topbar-h: 73px;
+    overflow-x: hidden;
+}
+
+body.pds-admin #app {
+    overflow-x: hidden;
+}
+
+/* ── Sidebar width ───────────────────────────────────────── */
+body.pds-admin .pds-sidebar.mm-sidebar {
+    width: var(--pds-sidebar-w) !important;
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    height: 100% !important;
+    transition: width 0.28s ease, left 0.28s ease !important;
+    will-change: width;
+}
+
+body.pds-admin.sidebar-main .pds-sidebar.mm-sidebar {
+    width: var(--pds-sidebar-w-collapsed) !important;
+}
+
+/* ── Top bar ───────────────────────────────────────────── */
+body.pds-admin .mm-top-navbar.pds-topbar {
+    width: calc(100% - var(--pds-sidebar-w)) !important;
+    left: var(--pds-sidebar-w) !important;
+    right: 0 !important;
+    position: fixed !important;
+    top: 0 !important;
+    z-index: 999 !important;
+}
+
+body.pds-admin.sidebar-main .mm-top-navbar.pds-topbar {
+    width: calc(100% - var(--pds-sidebar-w-collapsed)) !important;
+    left: var(--pds-sidebar-w-collapsed) !important;
+}
+
+/* ── Content ───────────────────────────────────────────── */
+body.pds-admin .content-page.pds-content-shell {
+    margin-left: var(--pds-sidebar-w) !important;
+    width: calc(100% - var(--pds-sidebar-w)) !important;
+    max-width: none !important;
+    padding: calc(var(--pds-topbar-h) + 1.25rem) 1.5rem 2rem !important;
+    overflow: visible !important;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+body.pds-admin.sidebar-main .content-page.pds-content-shell {
+    margin-left: var(--pds-sidebar-w-collapsed) !important;
+    width: calc(100% - var(--pds-sidebar-w-collapsed)) !important;
+}
+
+body.pds-admin .content-page.pds-content-shell::before {
+    display: none !important;
+}
+
+/* ── Footer ────────────────────────────────────────────── */
+body.pds-admin .mm-footer.pds-footer {
+    margin-left: var(--pds-sidebar-w) !important;
+    width: calc(100% - var(--pds-sidebar-w)) !important;
+    max-width: none !important;
+}
+
+body.pds-admin.sidebar-main .mm-footer.pds-footer {
+    margin-left: var(--pds-sidebar-w-collapsed) !important;
+    width: calc(100% - var(--pds-sidebar-w-collapsed)) !important;
+}
+
+/* ── Stat cards grid (equal-size columns) ──────────────── */
+body.pds-admin .pds-dashboard-panel > .card-body,
+body.pds-admin .content-page .card-body:has(> .pds-stats-grid) {
+    container-type: inline-size;
+    container-name: pds-stat-area;
+}
+
+body.pds-admin .pds-stats-grid {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    flex-wrap: unset !important;
+}
+
+body.pds-admin .pds-stats-grid::before,
+body.pds-admin .pds-stats-grid::after {
+    display: none !important;
+    content: none !important;
+}
+
+body.pds-admin .pds-stats-grid > [class*="col-"] {
+    display: block !important;
+    position: relative !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    min-width: 0 !important;
+    flex: none !important;
+    flex-basis: auto !important;
+    grid-column: span 1;
+}
+
+body.pds-admin .pds-stats-grid .card.card-block,
+body.pds-admin .pds-stats-grid .card.card-block.card-height,
+body.pds-admin .pds-stats-grid .card.card-block.card-stretch,
+body.pds-admin .content-page .pds-stats-grid .card.card-block.card-height,
+body.pds-admin .content-page .pds-stats-grid .card.card-block.card-stretch,
+body.pds-admin .pds-stats-grid .shadow-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    min-height: 118px !important;
+    margin: 0 !important;
+}
+
+body.pds-admin .pds-stats-grid .card.card-block .card-body,
+body.pds-admin .pds-stats-grid .shadow-card .card-body {
+    height: 100% !important;
+    padding: 0.9rem 1rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+}
+
+body.pds-admin .pds-stats-grid .mm-cart-text br {
+    display: none !important;
+}
+
+body.pds-admin .pds-stats-grid .mm-cart-text {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    overflow: hidden;
+}
+
+body.pds-admin .pds-stats-grid .mm-cart-text p {
+    font-size: 0.62rem !important;
+    line-height: 1.35 !important;
+    letter-spacing: 0.035em !important;
+    margin-bottom: 0.3rem !important;
+    height: 2.7em;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    hyphens: none !important;
+}
+
+body.pds-admin .pds-stats-grid .mm-cart-text h5 {
+    font-size: clamp(0.9rem, 1.05vw, 1.2rem) !important;
+    line-height: 1.15 !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.pds-admin .pds-stats-grid .card-body > .d-flex {
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 0.5rem !important;
+    width: 100%;
+    min-height: 72px;
+    height: 100%;
+}
+
+body.pds-admin .pds-stats-grid .mm-cart-image {
+    flex: 0 0 44px !important;
+    width: 44px !important;
+    height: 44px !important;
+    margin-left: 0 !important;
+}
+
+body.pds-admin .pds-stats-grid .mm-cart-image svg {
+    width: 22px !important;
+    height: 22px !important;
+}
+
+@container pds-stat-area (max-width: 1099px) {
+    body.pds-admin .pds-stats-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+}
+
+@container pds-stat-area (max-width: 699px) {
+    body.pds-admin .pds-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@container pds-stat-area (max-width: 439px) {
+    body.pds-admin .pds-stats-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (max-width: 1299.98px) {
+    body.pds-admin .pds-sidebar.mm-sidebar {
+        left: -300px !important;
+        width: var(--pds-sidebar-w) !important;
+        z-index: 1001 !important;
+        box-shadow: none;
+    }
+
+    body.pds-admin.sidebar-main .pds-sidebar.mm-sidebar {
+        left: 0 !important;
+        box-shadow: 8px 0 32px rgba(15, 23, 42, 0.18) !important;
+    }
+
+    body.pds-admin.sidebar-main::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.35);
+        z-index: 1000;
+        pointer-events: auto;
+    }
+
+    body.pds-admin .mm-top-navbar.pds-topbar,
+    body.pds-admin.sidebar-main .mm-top-navbar.pds-topbar {
+        width: 100% !important;
+        left: 0 !important;
+    }
+
+    body.pds-admin .content-page.pds-content-shell,
+    body.pds-admin.sidebar-main .content-page.pds-content-shell {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding-top: calc(var(--pds-topbar-h) + 1rem) !important;
+    }
+
+    body.pds-admin .mm-footer.pds-footer,
+    body.pds-admin.sidebar-main .mm-footer.pds-footer {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+}
+
+@media (max-width: 767.98px) {
+    body.pds-admin .content-page.pds-content-shell {
+        padding: calc(var(--pds-topbar-h) + 0.75rem) 0.85rem 1.5rem !important;
+    }
+}
+
+/* ── Form pages — always visible ───────────────────────── */
+body.pds-admin .pds-form-card,
+body.pds-admin .pds-page-card {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+}
+
+/* ── Dark mode ─────────────────────────────────────────── */
+body.pds-admin.dark .content-page.pds-content-shell {
+    background: transparent;
+}

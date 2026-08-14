@@ -1,0 +1,98 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Branch;
+use App\Models\RiderRemit;
+use App\Services\RiderRemitService;
+use Illuminate\Http\Request;
+
+class RiderRemitController extends Controller
+{
+    public function index(Request $request, RiderRemitService $service)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
+        }
+
+        $yangonToday = now('Asia/Yangon')->format('d-m-Y');
+        $dateRaw = trim((string) $request->get('date', $yangonToday));
+        $day = $service->parseDate($dateRaw)->toDateString();
+
+        $branchFilter = $request->get('branch_id', 'all');
+        $branchId = $branchFilter === 'all' || $branchFilter === '' || $branchFilter === null
+            ? null
+            : (int) $branchFilter;
+
+        $loginUser = auth()->user();
+        $branches = Branch::query()->where('status', 1)->orderBy('name')->get(['id', 'name']);
+        if (! in_array((string) ($loginUser->user_type ?? ''), ['admin', 'demo_admin'], true)
+            && (int) ($loginUser->branch_id ?? 0) > 0
+        ) {
+            $branches = $branches->where('id', (int) $loginUser->branch_id)->values();
+            $branchId = (int) $loginUser->branch_id;
+            $branchFilter = (string) $branchId;
+        }
+
+        $sheet = $service->sheet($day, $branchId);
+        $pageTitle = __('message.rider_remit_title');
+        $assets = [];
+        $canEdit = auth()->user()->can('order-edit');
+        $filterDate = $dateRaw;
+        $denoms = RiderRemit::DENOMS;
+        $riders = $sheet['riders'];
+        $summary = $sheet['summary'];
+        $storeBranchId = $branchId && $branchId > 0 ? $branchId : 0;
+
+        return view('order.rider-remit', compact(
+            'pageTitle',
+            'assets',
+            'riders',
+            'summary',
+            'filterDate',
+            'branchFilter',
+            'branches',
+            'canEdit',
+            'denoms',
+            'day',
+            'storeBranchId'
+        ));
+    }
+
+    public function save(Request $request, RiderRemitService $service)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $data = $request->validate([
+            'remit_date' => 'required|date',
+            'branch_id' => 'nullable|integer|min:0',
+            'delivery_man_id' => 'required|integer|exists:users,id',
+            'prepaid_amount' => 'nullable|numeric|min:0',
+            'fuel_amount' => 'nullable|numeric|min:0',
+            'fee_amount' => 'nullable|numeric|min:0',
+            'kpay_amount' => 'nullable|numeric|min:0',
+            'denominations' => 'nullable|array',
+        ]);
+
+        $isRider = \App\Models\User::query()
+            ->where('id', (int) $data['delivery_man_id'])
+            ->where('user_type', 'delivery_man')
+            ->exists();
+        if (! $isRider) {
+            return response()->json(['message' => __('message.something_went_wrong')], 422);
+        }
+
+        $row = $service->save($data, (int) auth()->id());
+        $branchId = (int) ($data['branch_id'] ?? 0);
+        $sheet = $service->sheet($row->remit_date->toDateString(), $branchId > 0 ? $branchId : null);
+        $rider = collect($sheet['riders'])->firstWhere('delivery_man_id', (int) $row->delivery_man_id);
+
+        return response()->json([
+            'message' => __('message.updated_successfully'),
+            'rider' => $rider,
+            'summary' => $sheet['summary'],
+        ]);
+    }
+}
