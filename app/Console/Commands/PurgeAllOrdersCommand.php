@@ -56,6 +56,7 @@ class PurgeAllOrdersCommand extends Command
                 'ratings',
                 'rest_api_histories',
                 'wallet_histories',
+                'dispatch_item_messages',
             ];
 
             foreach ($relatedTables as $table) {
@@ -70,8 +71,22 @@ class PurgeAllOrdersCommand extends Command
                 }
             }
 
-            if (Schema::hasTable('dispatch_order_items')) {
-                DB::table('dispatch_order_items')->delete();
+            $derivedTables = [
+                'dispatch_order_items',
+                'os_cash_payouts',
+                'os_money_transfers',
+                'os_settlement_drafts',
+                'os_settlement_batches',
+                'daily_check_invoices',
+                'rider_remits',
+                'delivery_man_payout_reports',
+                'claims_histories',
+            ];
+
+            foreach ($derivedTables as $table) {
+                if (Schema::hasTable($table)) {
+                    DB::table($table)->delete();
+                }
             }
 
             if (Schema::hasTable('customer_supports') && Schema::hasColumn('customer_supports', 'order_id')) {
@@ -86,8 +101,17 @@ class PurgeAllOrdersCommand extends Command
                 DB::table('claims')->whereIn('traking_no', $trackingNos)->delete();
             }
 
-            if (Schema::hasTable('claims_histories')) {
-                DB::table('claims_histories')->delete();
+            if (Schema::hasTable('notifications')) {
+                DB::table('notifications')->delete();
+            }
+
+            if (Schema::hasTable('wallets')) {
+                DB::table('wallets')->update([
+                    'total_amount' => 0,
+                    'online_received' => 0,
+                    'collected_cash' => 0,
+                    'total_withdrawn' => 0,
+                ]);
             }
 
             Order::withTrashed()->forceDelete();

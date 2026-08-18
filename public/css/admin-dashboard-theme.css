@@ -5623,6 +5623,17 @@ body.pds-admin .pds-price-input[type=number] {
     -moz-appearance: textfield;
 }
 
+body.pds-admin input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+body.pds-admin input[type="number"]::-webkit-outer-spin-button,
+body.pds-admin input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
 /* Shop Product form */
 body.pds-admin .pds-shop-product-page .pds-shop-product-card__sub {
     margin-top: 0.25rem;
@@ -12230,6 +12241,52 @@ body.pds-admin .pds-daily-check-total-row .pds-os-to-pay-negative {
 
 body.pds-admin .pds-daily-check-table {
     min-width: 1280px;
+    width: 100%;
+    table-layout: auto;
+    border-collapse: collapse;
+}
+
+body.pds-admin .pds-daily-check-table thead th,
+body.pds-admin .pds-daily-check-table tbody td,
+body.pds-admin .pds-daily-check-table tfoot td {
+    vertical-align: middle;
+    box-sizing: border-box;
+}
+
+body.pds-admin .pds-daily-check-table thead th.text-right,
+body.pds-admin .pds-daily-check-table tbody td.text-right,
+body.pds-admin .pds-daily-check-table tfoot td.text-right {
+    text-align: right !important;
+}
+
+body.pds-admin .pds-daily-check-ostopay,
+body.pds-admin .pds-daily-check-table td.pds-daily-check-ostopay {
+    white-space: nowrap;
+}
+
+body.pds-admin .pds-daily-check-table .pds-deli-amount-cell {
+    width: auto !important;
+    max-width: none !important;
+    justify-content: flex-end !important;
+}
+
+body.pds-admin .pds-daily-check-table .pds-deli-amount-price {
+    flex: 0 0 auto !important;
+}
+
+body.pds-admin .pds-daily-check-table .pds-deli-amount-type,
+body.pds-admin .pds-daily-check-table .pds-deli-amount-type--empty {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+}
+
+body.pds-admin .pds-daily-check-amount-stack {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.2rem;
+    width: auto;
 }
 
 body.pds-admin .pds-daily-check-invoice-no {
@@ -12436,8 +12493,8 @@ body.pds-admin .pds-daily-check-amount-stack {
     gap: 0.2rem;
 }
 
-body.pds-admin .js-daily-check-amount .pds-deli-amount-cell {
-    min-width: 8.5rem;
+body.pds-admin .pds-daily-check-ostopay .pds-deli-amount-cell {
+    min-width: 0;
 }
 
 body.pds-admin .pds-daily-check-bank-modal .modal-header .close {
@@ -13562,7 +13619,8 @@ body.pds-admin .pds-rider-remit-section th {
     z-index: 2;
 }
 
-body.pds-admin .pds-rider-remit-grid input[type="number"] {
+body.pds-admin .pds-rider-remit-grid input[type="number"],
+body.pds-admin .pds-rider-remit-grid input[data-pds-number] {
     width: 100%;
     min-width: 72px;
     border: 1px solid #e2e8f0;
@@ -13582,7 +13640,8 @@ body.pds-admin .pds-rider-remit-grid input[type="number"]::-webkit-inner-spin-bu
     margin: 0;
 }
 
-body.pds-admin .pds-rider-remit-grid input[type="number"]:focus {
+body.pds-admin .pds-rider-remit-grid input[type="number"]:focus,
+body.pds-admin .pds-rider-remit-grid input[data-pds-number]:focus {
     outline: none;
     border-color: #fb923c;
     box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
@@ -13603,24 +13662,26 @@ body.pds-admin .pds-rider-remit-row.is-total td.is-ok {
     background: #dcfce7;
 }
 
-body.pds-admin .pds-rider-remit-row.is-total td.is-off {
+body.pds-admin .pds-rider-remit-row.is-total td.is-off,
+body.pds-admin .pds-rider-remit-row.is-total td.is-short {
     background: #fee2e2;
 }
 
-body.pds-admin .pds-rider-remit-match {
-    display: block;
-    margin-top: 0.15rem;
-    font-size: 0.64rem;
-    font-weight: 800;
-    letter-spacing: 0.02em;
+body.pds-admin .pds-rider-remit-row.is-total td.is-over {
+    background: #dbeafe;
 }
 
-body.pds-admin .pds-rider-remit-row.is-total td.is-ok .pds-rider-remit-match {
+body.pds-admin .pds-rider-remit-row.is-total td.is-ok .pds-rider-remit-read {
     color: #15803d;
 }
 
-body.pds-admin .pds-rider-remit-row.is-total td.is-off .pds-rider-remit-match {
+body.pds-admin .pds-rider-remit-row.is-total td.is-off .pds-rider-remit-read,
+body.pds-admin .pds-rider-remit-row.is-total td.is-short .pds-rider-remit-read {
     color: #b91c1c;
+}
+
+body.pds-admin .pds-rider-remit-row.is-total td.is-over .pds-rider-remit-read {
+    color: #1d4ed8;
 }
 
 body.pds-admin .pds-rider-remit-hint {

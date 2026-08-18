@@ -77,12 +77,6 @@ class DeliverymanDataTable extends DataTable
             ->filterColumn('deliveryman', function($query, $keyword) {
                 return $query->where('name', 'like', "%{$keyword}%");
             })
-            ->addColumn('app_version', function ($row) {
-                return $row->app_version ?? '-';
-            })
-            ->addColumn('rating',function($query){
-                return count($query->rating) > 0 ? (float) number_format(max($query->rating->avg('rating'),0), 2) : 0;
-            })
             ->editColumn('contact_number', function ($query) {
                 $raw = trim((string) ($query->contact_number ?? ''));
                 $display = $raw !== ''
@@ -106,14 +100,6 @@ class DeliverymanDataTable extends DataTable
             })
             ->editColumn('last_actived_at', function ($query) {
                 return dateAgoFormate($query->last_actived_at, true) ?? '-';
-            })
-            ->editColumn('flag',function($query){
-                $flag = $query->flag;
-                if($flag == "1"){
-                    return '<i class="fa-solid fa-flag" style="color: #de1717;"></i>';
-                }else{
-                    return '<i class="fa-solid fa-flag" style="color: #63E6BE;"></i>';
-                }
             })
 
             ->addColumn('action', function ($row) {
@@ -168,7 +154,7 @@ class DeliverymanDataTable extends DataTable
                     return view('deliveryman.action', compact('data', 'action_type', 'deleted_at'))->render();
                 }
             })
-            ->rawColumns(['checkbox', 'action', 'status', 'deliveryman', 'contact_number', 'is_autoverified_email','is_autoverified_mobile','is_autoverified_document','flag']);
+            ->rawColumns(['checkbox', 'action', 'status', 'deliveryman', 'contact_number', 'is_autoverified_email','is_autoverified_mobile','is_autoverified_document']);
     }
 
     /**
@@ -256,11 +242,8 @@ class DeliverymanDataTable extends DataTable
             ['data' => 'city_id', 'name' => 'city_id', 'title' => __('message.city')],
             ['data' => 'country_id', 'name' => 'country_id', 'title' => __('message.country')],
             ['data' => 'contact_number', 'name' => 'contact_number', 'title' => __('message.contact_number')],
-            ['data' => 'app_version', 'name' => 'app_version', 'title' => __('message.app_version')],
-            ['data' => 'rating', 'name' => 'rating', 'title' => __('message.rating'),'orderable' => false],
             ['data' => 'created_at', 'name' => 'created_at', 'title' => __('message.created_at')],
             ['data' => 'last_actived_at', 'name' => 'last_actived_at', 'title' => __('message.last_active')],
-            ['data' => 'flag', 'name' => 'flag', 'title' => __('message.flag')],
         ];
 
         if ($status === 'active' || $status === 'inactive') {

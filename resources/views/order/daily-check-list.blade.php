@@ -142,9 +142,11 @@
                                         </td>
                                         <td class="text-right">{{ number_format($row->advance_paid) }}</td>
                                         <td class="text-right js-daily-check-amount {{ $row->payment_matched ? 'pds-daily-check-pay-ok' : 'pds-daily-check-pay-miss' }}">
-                                            {!! $row->amount_html ?? e(number_format($row->amount)) !!}
+                                            {{ number_format($row->amount) }}
                                         </td>
-                                        <td class="text-right {{ $row->os_to_pay < 0 ? 'pds-os-to-pay-negative' : '' }}">{{ number_format($row->os_to_pay) }}</td>
+                                        <td class="text-right pds-daily-check-ostopay {{ $row->os_to_pay < 0 ? 'pds-os-to-pay-negative' : '' }}">
+                                            {!! $row->os_to_pay_html ?? e(number_format($row->os_to_pay)) !!}
+                                        </td>
                                         <td class="text-right">{{ number_format($row->deli_amount) }}</td>
                                         <td class="text-right">{{ number_format($row->gate ?? 0) }}</td>
                                         <td>{{ $row->user_name }}</td>

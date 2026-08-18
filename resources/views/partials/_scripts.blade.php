@@ -150,6 +150,7 @@ if (window.PDS_MYANMAR_NRC_DATA_URL) {
 
 <script src="{{ asset('js/app.js') }}" defer></script>
 <script src="{{ asset('js/admin-animations.js') }}?v=8"></script>
+<script src="{{ asset('js/admin-number-fields.js') }}?v=2"></script>
 @include('helper.app_message')
 
 

@@ -67,6 +67,7 @@ class RiderRemitService
             $cash = $this->cashFromDenoms($denoms);
             $remaining = round($due - $prepaid - $fuel - $fee, 2);
             $combined = round($cash + $kpay, 2);
+            $match = $this->matchStatus($combined, $remaining);
 
             return (object) [
                 'delivery_man_id' => $riderId,
@@ -83,7 +84,9 @@ class RiderRemitService
                 'cash_total' => $cash,
                 'kpay_amount' => $kpay,
                 'combined' => $combined,
-                'balanced' => abs($combined - $remaining) < 0.51,
+                'balanced' => $match->ok,
+                'match_class' => $match->class,
+                'match_label' => $match->label,
                 'remit_id' => $remit?->id,
                 'remit_date' => $day,
                 'branch_id' => $branchId && $branchId > 0 ? $branchId : 0,
@@ -203,6 +206,24 @@ class RiderRemitService
         return round($total, 2);
     }
 
+    public function matchStatus(float $combined, float $remaining): object
+    {
+        $diff = round($combined - $remaining, 2);
+        if (abs($diff) < 0.51) {
+            return (object) [
+                'ok' => true,
+                'class' => 'is-ok',
+                'label' => '0',
+            ];
+        }
+
+        return (object) [
+            'ok' => false,
+            'class' => $diff > 0 ? 'is-over' : 'is-off',
+            'label' => ($diff > 0 ? '+' : '-').number_format(abs($diff)),
+        ];
+    }
+
     public function serializeRider(RiderRemit $row, float $liveDue): object
     {
         $denoms = $this->normalizeDenoms($row->denominations);
@@ -213,6 +234,7 @@ class RiderRemitService
         $cash = $this->cashFromDenoms($denoms);
         $remaining = round($liveDue - $prepaid - $fuel - $fee, 2);
         $combined = round($cash + $kpay, 2);
+        $match = $this->matchStatus($combined, $remaining);
 
         return (object) [
             'delivery_man_id' => (int) $row->delivery_man_id,
@@ -225,7 +247,9 @@ class RiderRemitService
             'cash_total' => $cash,
             'kpay_amount' => $kpay,
             'combined' => $combined,
-            'balanced' => abs($combined - $remaining) < 0.51,
+            'balanced' => $match->ok,
+            'match_class' => $match->class,
+            'match_label' => $match->label,
             'remit_id' => $row->id,
         ];
     }
@@ -254,32 +278,6 @@ class RiderRemitService
             return 'Rider #'.$riderId;
         }
 
-        $mapped = $this->myanmarRiderName($name);
-        if ($mapped !== '') {
-            return $mapped;
-        }
-
         return $name;
-    }
-
-    protected function myanmarRiderName(string $name): string
-    {
-        if (preg_match('/\p{Myanmar}/u', $name)) {
-            return $name;
-        }
-
-        $key = preg_replace('/\s+/', ' ', mb_strtolower(trim($name))) ?? '';
-        $map = [
-            'zin min oo' => 'ဇင်မင်းဦး',
-            'kyaw kyaw' => 'ကျော်ကျော်',
-            'mg mg' => 'မောင်မောင်',
-            'maung maung' => 'မောင်မောင်',
-            'aung aung' => 'အောင်အောင်',
-            'ko ko' => 'ကိုကို',
-            'kaung kha' => 'ကောင်းခ',
-            'kaungkha' => 'ကောင်းခ',
-        ];
-
-        return $map[$key] ?? '';
     }
 }

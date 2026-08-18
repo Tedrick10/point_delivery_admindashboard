@@ -88,10 +88,8 @@ class DailyCheckListService
             }
         }
 
-        $osGroups = collect($pendingGroups)->filter(fn ($g) => $g[2] === DailyCheckInvoice::PARTY_OS);
         $methodByItemId = $this->loadOsPaymentMethodByItemId(
-            $osGroups->flatMap(fn ($g) => $g[1]->pluck('id'))->map(fn ($id) => (int) $id)->unique()->values(),
-            $osGroups->map(fn ($g) => (int) $g[0]->party_user_id)->filter(fn ($id) => $id > 0)->unique()->values()
+            collect($pendingGroups)->flatMap(fn ($g) => $g[1]->pluck('id'))->map(fn ($id) => (int) $id)->unique()->values()
         );
 
         foreach ($pendingGroups as [$invoice, $groupItems, $partyType]) {
@@ -409,13 +407,14 @@ class DailyCheckListService
         // os_to_pay is signed (negative = Point pays OS).
         $deli = round($custGet + $osToPay - $gate, 2);
 
-        // Production: OS Amount = OsToPay (remittance). Rider Amount = Cust Get (cash collected).
-        $amount = $partyType === DailyCheckInvoice::PARTY_RIDER ? $custGet : $osToPay;
+        // Rider Amount = collected Cust Get. OS Amount also uses rider-collected Cust Get
+        // (KBZ Pay / Cash Pay from settlement). OsToPay stays the remittance figure.
+        $amount = $custGet;
         // Production greens Payment when amount == osPayment (settled).
         $osPayment = $invoice->remitted_date ? $amount : 0.0;
         $paymentInfo = $this->partyBankPaymentInfo($invoice, $amount);
         $paySplit = $this->resolveKpayCashAmounts($items, $partyType, $methodByItemId);
-        $amountDisplay = $this->formatAmountWithPayMethod($amount, $paySplit);
+        $osToPayDisplay = $this->formatAmountWithPayMethod($osToPay, $paySplit);
 
         $userName = $invoice->remittedByUser?->name
             ?: $invoice->createdByUser?->name
@@ -440,8 +439,10 @@ class DailyCheckListService
             'amount' => $amount,
             'kpay_amount' => $paySplit['kpay'],
             'cash_amount' => $paySplit['cash'],
-            'amount_display' => $amountDisplay['plain'],
-            'amount_html' => $amountDisplay['html'],
+            'amount_display' => number_format($amount),
+            'amount_html' => e(number_format($amount)),
+            'os_to_pay_display' => $osToPayDisplay['plain'],
+            'os_to_pay_html' => $osToPayDisplay['html'],
             'os_payment' => $osPayment,
             'payment_matched' => abs($amount - $osPayment) < 0.001,
             'bank_name_list' => $paymentInfo['bank_name_list'],
@@ -500,9 +501,8 @@ class DailyCheckListService
     }
 
     /**
-     * Split invoice amount into KBZ Pay / Cash Pay portions.
-     * - OS: from Finished settlement payment_method per item
-     * - Rider: collected cash → Cash Pay
+     * Split OsToPay into KBZ Pay / Cash Pay portions from settlement payment_method.
+     * Unmatched items count as Cash Pay.
      *
      * @param  Collection<int, DispatchOrderItem>  $items
      * @param  Collection<int, string>|null  $methodByItemId
@@ -515,26 +515,16 @@ class DailyCheckListService
     ): array {
         $kpay = 0.0;
         $cash = 0.0;
-
-        if ($partyType === DailyCheckInvoice::PARTY_RIDER) {
-            foreach ($items as $item) {
-                $cash += (float) ($item->cust_get ?? 0);
-            }
-
-            return ['kpay' => round($kpay, 2), 'cash' => round($cash, 2)];
-        }
-
         $methodByItemId = $methodByItemId ?? collect();
 
         foreach ($items as $item) {
             $portion = (float) $item->displayOsToPay();
             $method = $methodByItemId->get((int) $item->id);
-            if ($method === 'cash') {
-                $cash += $portion;
-            } elseif ($method === 'kpay') {
+            if ($method === 'kpay') {
                 $kpay += $portion;
+            } else {
+                $cash += $portion;
             }
-            // Unmatched finished items stay 0/0 until settlement method is known.
         }
 
         return ['kpay' => round($kpay, 2), 'cash' => round($cash, 2)];

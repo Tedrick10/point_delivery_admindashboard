@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="{{ asset('vendor/confirmJS/jquery-confirm.min.css') }}"/>
 <link rel="stylesheet" href="{{ asset('vendor/magnific-popup/css/magnific-popup.css') }}"/>
 <link rel="stylesheet" href="{{ asset('css/custom.css')}}">
-<link rel="stylesheet" href="{{ asset('css/admin-dashboard-theme.css') }}?v=167">
+<link rel="stylesheet" href="{{ asset('css/admin-dashboard-theme.css') }}?v=173">
 <link rel="stylesheet" href="{{ asset('css/pds-layout.css') }}?v=8">
 @if(isset($assets) && in_array('phone', $assets))
     <link rel="stylesheet" href="{{ asset('vendor/intlTelInput/css/intlTelInput.css') }}">

@@ -168,9 +168,8 @@
                                 <tr class="pds-rider-remit-row is-total">
                                     <th>{{ __('message.rider_remit_combined') }}</th>
                                     @foreach($riders as $rider)
-                                        <td data-rider="{{ $rider->delivery_man_id }}" class="{{ $rider->balanced ? 'is-ok' : 'is-off' }}">
-                                            <span class="pds-rider-remit-read js-rr-combined">{{ number_format($rider->combined) }}</span>
-                                            <span class="pds-rider-remit-match js-rr-match">{{ $rider->balanced ? __('message.rider_remit_ok') : __('message.rider_remit_off') }}</span>
+                                        <td data-rider="{{ $rider->delivery_man_id }}" class="{{ $rider->match_class ?? ($rider->balanced ? 'is-ok' : 'is-off') }}">
+                                            <span class="pds-rider-remit-read js-rr-match">{{ $rider->match_label ?? '0' }}</span>
                                         </td>
                                     @endforeach
                                 </tr>
@@ -183,9 +182,15 @@
         </div>
     </div>
 
-    @section('bottom_script')
-        <script>
-            $(function () {
+    <script>
+        (function bootRiderRemit() {
+            if (!window.jQuery) {
+                return setTimeout(bootRiderRemit, 40);
+            }
+            var $ = window.jQuery;
+            if (window.__pdsRiderRemitBound) return;
+            window.__pdsRiderRemitBound = true;
+
                 if (typeof flatpickr !== 'undefined') {
                     flatpickr('.dispatch-datepicker', { dateFormat: 'd-m-Y', allowInput: true });
                 }
@@ -223,15 +228,16 @@
                     });
                     var remaining = dueOf(riderId) - prepaid - fuel - fee;
                     var combined = cash + kpay;
-                    var ok = Math.abs(combined - remaining) < 0.51;
+                    var diff = combined - remaining;
+                    var ok = Math.abs(diff) < 0.51;
+                    var matchLabel = ok ? '0' : ((diff > 0 ? '+' : '-') + fmt(Math.abs(diff)));
                     col(riderId).find('.js-rr-remaining').text(fmt(remaining));
                     col(riderId).find('.js-rr-cash').text(fmt(cash));
-                    col(riderId).find('.js-rr-combined').text(fmt(combined));
                     $grid.find('thead .pds-rider-remit-col[data-rider="' + riderId + '"]').toggleClass('is-balanced', ok);
                     $grid.find('tr.is-total td[data-rider="' + riderId + '"]')
-                        .toggleClass('is-ok', ok)
-                        .toggleClass('is-off', !ok)
-                        .find('.js-rr-match').text(ok ? @json(__('message.rider_remit_ok')) : @json(__('message.rider_remit_off')));
+                        .removeClass('is-ok is-off is-short is-over')
+                        .addClass(ok ? 'is-ok' : (diff > 0 ? 'is-over' : 'is-off'))
+                        .find('.js-rr-match').text(matchLabel);
                     return { prepaid: prepaid, fuel: fuel, fee: fee, kpay: kpay, remaining: remaining, cash: cash, combined: combined, ok: ok };
                 }
                 function payload(riderId) {
@@ -294,7 +300,7 @@
                 $grid.on('input change', '.js-rr-field, .js-rr-denom', function () {
                     schedule($(this).data('rider'));
                 });
-            });
+                refreshSummary();
+        })();
         </script>
-    @endsection
 </x-master-layout>
