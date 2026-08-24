@@ -56,6 +56,9 @@ class OrderResource extends JsonResource
             'delivery_man_id'                => (int)$this->delivery_man_id,
             'delivery_man_name'              => optional($this->delivery_man)->name,
             'delivery_man_contact_number'    => optional($this->delivery_man)->riderAssignedPhone(),
+            'can_rate_rider'                 => $this->resolveCanRatePickupRider($request),
+            'my_rider_rating'                => $this->resolveMyPickupRiderRating($request),
+            'rating_presets'                 => \App\Models\Ratings::presetComments(),
             'fixed_charges'                  => $this->fixed_charges,
             'extra_charges'                  => $this->extra_charges,
             'total_amount'                   => $this->total_amount,
@@ -123,5 +126,49 @@ class OrderResource extends JsonResource
             ->with(['fromBranch', 'toBranch', 'photoMedia'])
             ->orderBy('id')
             ->get();
+    }
+
+    protected function resolveCanRatePickupRider($request): bool
+    {
+        $user = $request->user();
+        if (! $user || ($user->user_type ?? '') !== 'client') {
+            return false;
+        }
+        if ((int) $this->client_id !== (int) $user->id) {
+            return false;
+        }
+        if (empty($this->delivery_man_id)) {
+            return false;
+        }
+
+        return in_array((string) $this->status, [
+            'courier_picked_up',
+            'courier_departed',
+            'completed',
+        ], true);
+    }
+
+    protected function resolveMyPickupRiderRating($request): ?array
+    {
+        $user = $request->user();
+        if (! $user) {
+            return null;
+        }
+
+        $rating = \App\Models\Ratings::query()
+            ->where('order_id', $this->id)
+            ->where('user_id', $user->id)
+            ->whereNull('dispatch_order_item_id')
+            ->first();
+
+        if (! $rating) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $rating->id,
+            'rating' => (float) $rating->rating,
+            'comment' => $rating->comment,
+        ];
     }
 }

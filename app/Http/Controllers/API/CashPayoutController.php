@@ -73,9 +73,9 @@ class CashPayoutController extends Controller
                 'pending_photo_path' => $path,
             ]);
         } else {
-            $data = $request->validate([
+            $request->validate([
                 'status' => 'required|string|in:done',
-                'note' => 'required|string|max:2000',
+                'note' => 'nullable|string|max:2000',
                 'photo' => 'required|file|max:10240',
             ]);
             if (! in_array($payout->status, [OsCashPayout::STATUS_ASSIGNED, OsCashPayout::STATUS_PENDING], true)) {
@@ -89,7 +89,7 @@ class CashPayoutController extends Controller
             $payout->update([
                 'status' => OsCashPayout::STATUS_DONE,
                 'done_at' => now(),
-                'done_note' => trim((string) $data['note']),
+                'done_note' => null,
                 'done_photo_path' => $path,
             ]);
         }

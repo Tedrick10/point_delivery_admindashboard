@@ -78,6 +78,106 @@ class DeliverymanController extends Controller
         return $dataTable->with('status', request('status'))->render('global.deliveryman-filter', compact('assets', 'pageTitle', 'button', 'auth_user', 'multi_checkbox_delete','params','reset_file_button','selectedCityId','cities','selectedCountryId','country','export'));
     }
 
+    public function riderOfTheMonth()
+    {
+        if (! auth()->user()->can('deliveryman-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $from = now()->startOfMonth()->toDateTimeString();
+        $to = now()->endOfMonth()->toDateTimeString();
+
+        $finishedCounts = \App\Models\DispatchOrderItem::query()
+            ->selectRaw('delivery_man_id, COUNT(*) as finished_ways')
+            ->whereNotNull('delivery_man_id')
+            ->whereNotNull('admin_finished_at')
+            ->whereBetween('admin_finished_at', [$from, $to])
+            ->groupBy('delivery_man_id')
+            ->pluck('finished_ways', 'delivery_man_id');
+
+        $riders = User::query()
+            ->where('user_type', 'delivery_man')
+            ->whereNull('deleted_at')
+            ->withAvg('rating as average_rating', 'rating')
+            ->withCount('rating as ratings_count')
+            ->get()
+            ->map(function (User $rider) use ($finishedCounts) {
+                $avg = round((float) ($rider->average_rating ?? 0), 2);
+                $finished = (int) ($finishedCounts[$rider->id] ?? 0);
+
+                return [
+                    'id' => (int) $rider->id,
+                    'name' => $rider->name,
+                    'average_rating' => $avg,
+                    'ratings_count' => (int) ($rider->ratings_count ?? 0),
+                    'finished_ways' => $finished,
+                    'profile_image' => getSingleMedia($rider, 'profile_image', null),
+                    'score' => ($avg * 1000) + $finished,
+                ];
+            })
+            ->filter(fn ($row) => $row['ratings_count'] > 0 || $row['finished_ways'] > 0)
+            ->sortByDesc('score')
+            ->values();
+
+        $winner = $riders->first();
+
+        return response()->json([
+            'month_label' => now()->format('M Y'),
+            'rider' => $winner,
+            'message' => $winner
+                ? null
+                : __('message.rider_of_the_month_empty'),
+        ]);
+    }
+
+    public function reviews($id)
+    {
+        if (! auth()->user()->can('deliveryman-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $rider = User::query()
+            ->where('user_type', 'delivery_man')
+            ->whereNull('deleted_at')
+            ->findOrFail((int) $id);
+
+        $avg = round((float) $rider->rating()->avg('rating'), 2);
+        $count = (int) $rider->rating()->count();
+
+        $reviews = \App\Models\Ratings::query()
+            ->with(['user:id,name', 'dispatchOrderItem:id,code,customer_name'])
+            ->where('review_user_id', $rider->id)
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->map(static function ($row) {
+                return [
+                    'id' => (int) $row->id,
+                    'rating' => (float) $row->rating,
+                    'comment' => (string) ($row->comment ?? ''),
+                    'rating_by' => (string) ($row->rating_by ?? ''),
+                    'reviewer_name' => optional($row->user)->name ?: '-',
+                    'item_id' => $row->dispatch_order_item_id ? (int) $row->dispatch_order_item_id : null,
+                    'item_code' => optional($row->dispatchOrderItem)->code,
+                    'customer_name' => optional($row->dispatchOrderItem)->customer_name,
+                    'order_id' => $row->order_id ? (int) $row->order_id : null,
+                    'created_at' => optional($row->created_at)?->format('d/m/Y H:i'),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'rider' => [
+                'id' => (int) $rider->id,
+                'name' => $rider->name,
+                'average_rating' => $avg,
+                'ratings_count' => $count,
+                'profile_image' => getSingleMedia($rider, 'profile_image', null),
+            ],
+            'reviews' => $reviews,
+        ]);
+    }
+
     /**
      * Show the form for creating a new resource.
      *

@@ -10,9 +10,15 @@
                     <h4 class="pds-rider-hero__title">{{ $pageTitle }}</h4>
                     <p class="pds-rider-hero__subtitle">{{ __('message.rider_list_subtitle') }}</p>
                 </div>
-                <div class="pds-rider-hero__stat">
-                    <span class="pds-rider-hero__stat-value">{{ $riders->count() }}</span>
-                    <span class="pds-rider-hero__stat-label">{{ __('message.delivery_man') }}</span>
+                <div class="pds-rider-hero__actions">
+                    <button type="button" class="pds-rider-of-month-btn" id="pds-rider-of-month-btn">
+                        <i class="fas fa-trophy" aria-hidden="true"></i>
+                        <span>{{ __('message.rider_of_the_month') }}</span>
+                    </button>
+                    <div class="pds-rider-hero__stat">
+                        <span class="pds-rider-hero__stat-value">{{ $riders->count() }}</span>
+                        <span class="pds-rider-hero__stat-label">{{ __('message.rider_list') }}</span>
+                    </div>
                 </div>
             </div>
 
@@ -62,6 +68,7 @@
                                 <tr>
                                     <th class="pds-rider-col-no">{{ __('message.no') }}</th>
                                     <th class="pds-rider-col-rider">{{ __('message.delivery_man') }}</th>
+                                    <th class="pds-rider-col-rating">{{ __('message.rating') }}</th>
                                     <th class="pds-rider-col-count">
                                         <span class="pds-rider-status-chip pds-rider-status-chip--assigned">{{ __('message.follow_up_status_assigned') }}</span>
                                     </th>
@@ -91,8 +98,10 @@
                                             'to_date' => $filterToDate,
                                         ];
                                         $initial = mb_strtoupper(mb_substr(trim($rider->name) ?: 'R', 0, 1));
+                                        $avg = (float) ($rider->average_rating ?? 0);
+                                        $ratingCount = (int) ($rider->ratings_count ?? 0);
                                     @endphp
-                                    <tr>
+                                    <tr data-rider-id="{{ $rider->id }}" data-rider-name="{{ $rider->name }}">
                                         <td class="pds-rider-col-no">{{ $index + 1 }}</td>
                                         <td class="pds-rider-col-rider">
                                             <div class="pds-rider-person">
@@ -102,6 +111,45 @@
                                                     <div class="pds-dispatch-rider-list-phone">{{ $rider->phone }}</div>
                                                 </div>
                                             </div>
+                                        </td>
+                                        <td class="pds-rider-col-rating">
+                                            @if($ratingCount > 0)
+                                                @php
+                                                    $fullStars = (int) floor($avg);
+                                                    $frac = $avg - $fullStars;
+                                                    $halfStar = $frac >= 0.25 && $frac < 0.75;
+                                                    if ($frac >= 0.75) {
+                                                        $fullStars = min(5, $fullStars + 1);
+                                                        $halfStar = false;
+                                                    }
+                                                    $emptyStars = 5 - $fullStars - ($halfStar ? 1 : 0);
+                                                @endphp
+                                                <button
+                                                    type="button"
+                                                    class="pds-rider-rating-chip js-rider-reviews"
+                                                    data-rider-id="{{ $rider->id }}"
+                                                    title="{{ __('message.reviews') }}"
+                                                >
+                                                    <div class="pds-rider-rating-chip__score">
+                                                        <span>{{ number_format($avg, 2) }}</span>
+                                                        <i class="fas fa-star" aria-hidden="true"></i>
+                                                    </div>
+                                                    <div class="pds-rider-rating-chip__stars" aria-hidden="true">
+                                                        @for($s = 0; $s < $fullStars; $s++)
+                                                            <i class="fas fa-star"></i>
+                                                        @endfor
+                                                        @if($halfStar)
+                                                            <i class="fas fa-star-half-alt"></i>
+                                                        @endif
+                                                        @for($s = 0; $s < $emptyStars; $s++)
+                                                            <i class="far fa-star"></i>
+                                                        @endfor
+                                                    </div>
+                                                    <div class="pds-rider-rating-chip__count">{{ $ratingCount }} · {{ __('message.reviews') }}</div>
+                                                </button>
+                                            @else
+                                                <span class="pds-rider-rating-empty">—</span>
+                                            @endif
                                         </td>
                                         @foreach([
                                             'courier_assigned' => ['label' => __('message.follow_up_status_assigned'), 'tone' => 'assigned', 'status' => 'courier_assigned'],
@@ -137,6 +185,43 @@
         </div>
     </div>
 
+    <div class="pds-os-receive-modal pds-rotm-modal" id="pdsRiderReviewsModal" hidden>
+        <div class="pds-os-receive-modal__backdrop" data-close="reviews"></div>
+        <div class="pds-os-receive-modal__dialog pds-rotm-dialog pds-rider-reviews-dialog" role="dialog" aria-modal="true">
+            <header class="pds-rotm-header">
+                <div class="pds-rotm-header__badge"><i class="fas fa-comments" aria-hidden="true"></i></div>
+                <div>
+                    <p class="pds-rotm-header__eyebrow">{{ __('message.reviews') }}</p>
+                    <h5 id="pds-reviews-title">{{ __('message.reviews') }}</h5>
+                </div>
+            </header>
+            <div id="pds-reviews-summary" class="pds-rider-reviews-summary"></div>
+            <div id="pds-reviews-body" class="pds-rider-reviews-body"></div>
+            <footer class="pds-os-receive-modal__footer">
+                <button type="button" class="pds-os-receive-modal__btn is-ghost" id="pds-reviews-close">{{ __('message.close') }}</button>
+            </footer>
+        </div>
+    </div>
+
+    <div class="pds-os-receive-modal pds-rotm-modal" id="pdsRiderOfMonthModal" hidden>
+        <div class="pds-os-receive-modal__backdrop" data-close="rotm"></div>
+        <div class="pds-os-receive-modal__dialog pds-rotm-dialog" role="dialog" aria-modal="true">
+            <header class="pds-rotm-header">
+                <div class="pds-rotm-header__badge"><i class="fas fa-trophy" aria-hidden="true"></i></div>
+                <div>
+                    <p class="pds-rotm-header__eyebrow">{{ __('message.order') }}</p>
+                    <h5 id="pds-rotm-title">{{ __('message.rider_of_the_month') }}</h5>
+                </div>
+            </header>
+            <div id="pds-rotm-body" class="pds-rotm-body">
+                <p class="pds-os-receive-modal__text">...</p>
+            </div>
+            <footer class="pds-os-receive-modal__footer">
+                <button type="button" class="pds-os-receive-modal__btn is-ghost" id="pds-rotm-close">{{ __('message.close') }}</button>
+            </footer>
+        </div>
+    </div>
+
     @section('bottom_script')
         <script>
             $(document).ready(function () {
@@ -146,6 +231,132 @@
                         allowInput: true,
                     });
                 }
+
+                var riderOfMonthUrl = @json($riderOfMonthUrl ?? route('deliveryman.rider-of-month'));
+                var reviewsUrlTpl = @json(url('deliveryman/__ID__/reviews'));
+                var $rotmModal = $('#pdsRiderOfMonthModal');
+                var $reviewsModal = $('#pdsRiderReviewsModal');
+                var emptyRotm = @json(__('message.rider_of_the_month_empty'));
+                var ratingLabel = @json(__('message.rider_of_the_month_rating'));
+                var finishedLabel = @json(__('message.rider_of_the_month_finished'));
+                var rotmTitle = @json(__('message.rider_of_the_month'));
+                var reviewsTitle = @json(__('message.reviews'));
+                var noReviews = @json(__('message.no_record_found'));
+
+                function closeRotm() { $rotmModal.attr('hidden', true); }
+                function closeReviews() { $reviewsModal.attr('hidden', true); }
+
+                function starsHtml(avg) {
+                    var full = Math.floor(avg);
+                    var frac = avg - full;
+                    var half = frac >= 0.25 && frac < 0.75;
+                    if (frac >= 0.75) { full = Math.min(5, full + 1); half = false; }
+                    var empty = 5 - full - (half ? 1 : 0);
+                    var html = '';
+                    for (var i = 0; i < full; i++) html += '<i class="fas fa-star"></i>';
+                    if (half) html += '<i class="fas fa-star-half-alt"></i>';
+                    for (var j = 0; j < empty; j++) html += '<i class="far fa-star"></i>';
+                    return html;
+                }
+
+                function esc(s) { return $('<div>').text(s == null ? '' : String(s)).html(); }
+
+                function openRotm() {
+                    $('#pds-rotm-body').html('<div class="pds-rotm-loading"><i class="fas fa-spinner fa-spin"></i></div>');
+                    $rotmModal.removeAttr('hidden');
+                    $.getJSON(riderOfMonthUrl)
+                        .done(function (res) {
+                            var month = res.month_label ? String(res.month_label) : '';
+                            $('#pds-rotm-title').text(rotmTitle + (month ? ' · ' + month : ''));
+                            if (!res.rider) {
+                                $('#pds-rotm-body').html('<p class="pds-rotm-empty">' + (res.message || emptyRotm) + '</p>');
+                                return;
+                            }
+                            var r = res.rider;
+                            var avg = Number(r.average_rating || 0);
+                            var finished = Number(r.finished_ways || 0);
+                            var name = esc(r.name || '-');
+                            var img = r.profile_image
+                                ? '<img class="pds-rotm-avatar" src="' + r.profile_image + '" alt="">'
+                                : '<div class="pds-rotm-avatar pds-rotm-avatar--fallback"><i class="fas fa-user"></i></div>';
+                            $('#pds-rotm-body').html(
+                                '<div class="pds-rotm-winner">'
+                                + img
+                                + '<p class="pds-rotm-name">' + name + '</p>'
+                                + '<div class="pds-rotm-stars">' + starsHtml(avg) + '</div>'
+                                + '</div>'
+                                + '<div class="pds-rotm-metrics">'
+                                + '<div class="pds-rotm-metric pds-rotm-metric--rating">'
+                                + '<div class="pds-rotm-metric__icon"><i class="fas fa-star"></i></div>'
+                                + '<div class="pds-rotm-metric__copy"><span>' + ratingLabel + '</span><strong>' + avg.toFixed(2) + '</strong></div>'
+                                + '</div>'
+                                + '<div class="pds-rotm-metric pds-rotm-metric--ways">'
+                                + '<div class="pds-rotm-metric__icon"><i class="fas fa-route"></i></div>'
+                                + '<div class="pds-rotm-metric__copy"><span>' + finishedLabel + '</span><strong>' + finished.toLocaleString() + '</strong></div>'
+                                + '</div>'
+                                + '</div>'
+                            );
+                        })
+                        .fail(function () {
+                            $('#pds-rotm-body').html('<p class="pds-rotm-empty">' + emptyRotm + '</p>');
+                        });
+                }
+
+                function openReviews(riderId) {
+                    $('#pds-reviews-title').text(reviewsTitle);
+                    $('#pds-reviews-summary').html('');
+                    $('#pds-reviews-body').html('<div class="pds-rotm-loading"><i class="fas fa-spinner fa-spin"></i></div>');
+                    $reviewsModal.removeAttr('hidden');
+                    $.getJSON(reviewsUrlTpl.replace('__ID__', String(riderId)))
+                        .done(function (res) {
+                            var r = res.rider || {};
+                            var avg = Number(r.average_rating || 0);
+                            $('#pds-reviews-title').text((r.name || reviewsTitle));
+                            $('#pds-reviews-summary').html(
+                                '<div class="pds-rider-reviews-summary__score">'
+                                + '<strong>' + avg.toFixed(2) + '</strong>'
+                                + '<div class="pds-rotm-stars">' + starsHtml(avg) + '</div>'
+                                + '<span>' + Number(r.ratings_count || 0) + ' ' + reviewsTitle + '</span>'
+                                + '</div>'
+                            );
+                            var list = res.reviews || [];
+                            if (!list.length) {
+                                $('#pds-reviews-body').html('<p class="pds-rotm-empty">' + noReviews + '</p>');
+                                return;
+                            }
+                            var html = '<div class="pds-rider-reviews-list">';
+                            list.forEach(function (row) {
+                                var comment = (row.comment || '').trim();
+                                html += '<article class="pds-rider-review-card">'
+                                    + '<header class="pds-rider-review-card__head">'
+                                    + '<div><strong>' + esc(row.reviewer_name || '-') + '</strong>'
+                                    + (row.item_code ? '<span class="pds-rider-review-card__meta">#' + esc(row.item_code) + '</span>' : '')
+                                    + '</div>'
+                                    + '<div class="pds-rider-review-card__stars">' + starsHtml(Number(row.rating || 0)) + '</div>'
+                                    + '</header>'
+                                    + (comment ? '<p class="pds-rider-review-card__comment">' + esc(comment) + '</p>' : '<p class="pds-rider-review-card__comment is-muted">—</p>')
+                                    + '<footer class="pds-rider-review-card__foot">' + esc(row.created_at || '') + '</footer>'
+                                    + '</article>';
+                            });
+                            html += '</div>';
+                            $('#pds-reviews-body').html(html);
+                        })
+                        .fail(function () {
+                            $('#pds-reviews-body').html('<p class="pds-rotm-empty">' + noReviews + '</p>');
+                        });
+                }
+
+                $('#pds-rider-of-month-btn').on('click', openRotm);
+                $('#pds-rotm-close, #pdsRiderOfMonthModal [data-close="rotm"]').on('click', closeRotm);
+                $('#pds-reviews-close, #pdsRiderReviewsModal [data-close="reviews"]').on('click', closeReviews);
+                $(document).on('click', '.js-rider-reviews', function () {
+                    openReviews($(this).data('rider-id'));
+                });
+                $(document).on('keydown', function (e) {
+                    if (e.key !== 'Escape') return;
+                    if (!$rotmModal.is('[hidden]')) closeRotm();
+                    if (!$reviewsModal.is('[hidden]')) closeReviews();
+                });
             });
         </script>
     @endsection

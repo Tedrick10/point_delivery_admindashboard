@@ -116,8 +116,8 @@
                                                 @else
                                                     <span class="pds-cash-payout-photo-empty" aria-hidden="true"><i class="far fa-image"></i></span>
                                                 @endif
-                                                @if(filled($item->done_note))
-                                                    <div class="pds-cash-payout-photo-caption">{{ $item->done_note }}</div>
+                                                @if(filled($item->pending_note))
+                                                    <div class="pds-cash-payout-photo-caption">{{ $item->pending_note }}</div>
                                                 @endif
                                             </div>
                                         </td>
@@ -241,7 +241,11 @@
                     $('#cashPayoutPhoto').val('');
                     $('#cashPayoutPhotoPreview').hide().attr('src', '');
 
-                    $('#cashPayoutNoteWrap').removeClass('d-none');
+                    if (next === 'pending') {
+                        $('#cashPayoutNoteWrap').removeClass('d-none');
+                    } else {
+                        $('#cashPayoutNoteWrap').addClass('d-none');
+                    }
                     $('#cashPayoutPhotoWrap').removeClass('d-none');
                     $('#cashPayoutStatusTitle').text(next === 'pending'
                         ? @json(__('message.pending'))
@@ -273,11 +277,13 @@
                         if (typeof SnackBar === 'function') SnackBar({ message: 'Photo is required', status: 'error' });
                         return;
                     }
-                    if (!note) {
+                    if (next === 'pending' && !note) {
                         if (typeof SnackBar === 'function') SnackBar({ message: 'Remark is required', status: 'error' });
                         return;
                     }
-                    formData.append('note', note);
+                    if (next === 'pending') {
+                        formData.append('note', note);
+                    }
                     formData.append('photo', file);
 
                     var $btn = $(this).prop('disabled', true);

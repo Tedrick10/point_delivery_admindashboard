@@ -12,7 +12,9 @@
             lastCount: 0,
             $triggerBtn: null,
             imageObjectUrl: null,
-            didMutate: false
+            didMutate: false,
+            osName: '',
+            osProfileImage: ''
         };
         var csrf = $('meta[name="csrf-token"]').attr('content');
 
@@ -50,6 +52,16 @@
             }, 4000);
         }
 
+        function osAvatarHtml() {
+            var photo = msgState.osProfileImage || '';
+            var name = msgState.osName || 'OS';
+            var initial = (name.replace(/^\s+/, '').charAt(0) || 'O').toUpperCase();
+            if (photo) {
+                return '<img class="pds-item-msg__avatar" src="' + escapeHtml(photo) + '" alt="' + escapeHtml(name) + '">';
+            }
+            return '<span class="pds-item-msg__avatar pds-item-msg__avatar--letter">' + escapeHtml(initial) + '</span>';
+        }
+
         function renderMessages(messages) {
             var $list = $('#dispatchItemMessageList');
             $list.empty();
@@ -79,6 +91,7 @@
 
                 $list.append(
                     '<div class="pds-item-msg pds-item-msg--' + side + '">' +
+                    (side === 'client' ? osAvatarHtml() : '') +
                     '<div class="pds-item-msg__bubble">' +
                     '<div class="pds-item-msg__meta">' + escapeHtml(label) + ' · ' + escapeHtml(m.created_at || '') + '</div>' +
                     bodyHtml +
@@ -104,6 +117,12 @@
             if (!msgState.listUrl) return;
             $.getJSON(msgState.listUrl)
                 .done(function (res) {
+                    if (res.os_name) {
+                        msgState.osName = res.os_name;
+                    }
+                    if (typeof res.os_profile_image !== 'undefined') {
+                        msgState.osProfileImage = res.os_profile_image || '';
+                    }
                     renderMessages(res.messages || []);
                     clearUnreadBadge();
                     if (res.os_name || res.customer_name) {
@@ -183,6 +202,8 @@
 
             var osName = $btn.data('os-name') || '';
             var customer = $btn.data('customer') || '';
+            msgState.osName = osName;
+            msgState.osProfileImage = $btn.attr('data-os-profile-image') || '';
             var titleBits = [];
             if (osName) titleBits.push(osName);
             if (customer) titleBits.push(customer);

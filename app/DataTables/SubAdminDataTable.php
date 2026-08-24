@@ -97,7 +97,7 @@ class SubAdminDataTable extends DataTable
      */
     public function query(User $model)
     {
-        $model = User::whereNotIn('user_type', ['admin','client','delivery_man']);
+        $model = User::whereNotIn('user_type', ['admin','client','delivery_man','super_admin']);
 
         if (request('employee_type')) {
             $employeeType = EmployeeType::find(request('employee_type'));

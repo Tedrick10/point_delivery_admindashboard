@@ -563,7 +563,7 @@ function imageExtention($media)
 function checkMenuRoleAndPermission($menu)
 {
     if (auth()->check()) {
-        if ($menu->data('role') == null && auth()->user()->hasRole('admin')) {
+        if ($menu->data('role') == null && (auth()->user()->hasRole('admin') || isSuperAdmin())) {
             return true;
         }
 
@@ -1380,25 +1380,98 @@ function pushNotificationsEnabled(): bool
     return (bool) $notificationSettings['global']['IS_PUSH_NOTIFICATION_ENABLED'];
 }
 
+function isSuperAdmin(?User $user = null): bool
+{
+    $user = $user ?? auth()->user();
+    if (!$user) {
+        return false;
+    }
+
+    if (($user->user_type ?? '') === 'super_admin') {
+        return true;
+    }
+
+    return method_exists($user, 'hasRole') && $user->hasRole('super_admin');
+}
+
+/**
+ * Branch-bound admin (one account per branch). Sees only their branch data.
+ */
+function isBranchAdmin(?User $user = null): bool
+{
+    $user = $user ?? auth()->user();
+    if (!$user) {
+        return false;
+    }
+
+    if (isSuperAdmin($user)) {
+        return false;
+    }
+
+    return ($user->user_type ?? '') === 'admin' && (int) ($user->branch_id ?? 0) > 0;
+}
+
+/**
+ * Can select any branch / see network-wide data (Super Admin, or legacy unbound admin).
+ */
+function canAccessAllBranches(?User $user = null): bool
+{
+    $user = $user ?? auth()->user();
+    if (!$user) {
+        return false;
+    }
+
+    if (isSuperAdmin($user)) {
+        return true;
+    }
+
+    if (in_array((string) ($user->user_type ?? ''), ['admin', 'demo_admin'], true)
+        && (int) ($user->branch_id ?? 0) <= 0
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Forced branch id for scoped panel users; null when user can see all branches.
+ */
+function forcedBranchId(?User $user = null): ?int
+{
+    $user = $user ?? auth()->user();
+    if (!$user || canAccessAllBranches($user)) {
+        return null;
+    }
+
+    $branchId = (int) ($user->branch_id ?? 0);
+
+    return $branchId > 0 ? $branchId : null;
+}
+
 function isAdminPanelUser(?User $user): bool
 {
     if (!$user) {
         return false;
     }
 
+    if (isSuperAdmin($user)) {
+        return true;
+    }
+
     if ($user->user_type === 'admin') {
         return true;
     }
 
-    return !in_array($user->user_type, ['client', 'delivery_man'], true);
+    return !in_array($user->user_type, ['client', 'delivery_man', 'super_admin'], true);
 }
 
 function getPanelStaffUsers()
 {
     return User::query()
         ->where(function ($query) {
-            $query->where('user_type', 'admin')
-                ->orWhereNotIn('user_type', ['client', 'delivery_man', 'admin']);
+            $query->whereIn('user_type', ['admin', 'super_admin'])
+                ->orWhereNotIn('user_type', ['client', 'delivery_man', 'admin', 'super_admin']);
         })
         ->get()
         ->unique('id');
@@ -4590,6 +4663,11 @@ function registrationUsernameFromPhone(string $phone): string
     return preg_replace('/\s+/', '', trim($phone));
 }
 
+function sanitizeRegistrationUsername(string $username): string
+{
+    return preg_replace('/\s+/', '', trim($username));
+}
+
 function buildUserOsProfileFromArray(array $data): array
 {
     $osProfile = [
@@ -4681,6 +4759,80 @@ function resolveDispatchOsName(?\App\Models\Order $order): string
     $name = $pickup['name'] ?? optional($order->client)->name ?? '';
 
     return trim((string) $name) !== '' ? trim((string) $name) : '-';
+}
+
+/**
+ * Real uploaded profile photo URL, or null when the user has no photo
+ * (skips the default /images/user/1.jpg placeholder).
+ */
+function resolveUploadedProfileImageUrl($model, bool $absolute = false): ?string
+{
+    if ($model === null) {
+        return null;
+    }
+
+    $media = $model->getFirstMedia('profile_image');
+    if (! getFileExistsCheck($media)) {
+        return null;
+    }
+
+    $url = $absolute ? mediaAbsoluteUrl($media) : mediaPublicUrl($media);
+
+    return is_string($url) && $url !== '' ? $url : null;
+}
+
+function resolveNameInitial(?string $name, string $fallback = 'O'): string
+{
+    $name = trim((string) $name);
+    if ($name === '' || $name === '-') {
+        return $fallback;
+    }
+
+    return mb_strtoupper(mb_substr($name, 0, 1));
+}
+
+function storeDispatchItemProofPhoto(\App\Models\DispatchOrderItem $item, $file, string $type): int
+{
+    if (! $file) {
+        return 0;
+    }
+
+    $profpicture = \App\Models\Profofpictures::create([
+        'order_id' => $item->order_id,
+        'type' => $type,
+    ]);
+    $profpicture->addMedia($file)->toMediaCollection('prof_file');
+    $media = $profpicture->getMedia('prof_file')->first();
+
+    return $media ? (int) $media->id : 0;
+}
+
+function dispatchItemProofPhotoUrl($item, string $kind = 'pending'): ?string
+{
+    if (! $item) {
+        return null;
+    }
+
+    $idField = $kind === 'delivered' ? 'delivered_photo_id' : 'pending_photo_id';
+    $relation = $kind === 'delivered' ? 'deliveredPhotoMedia' : 'pendingPhotoMedia';
+    $photoId = (int) ($item->{$idField} ?? 0);
+    if ($photoId <= 0) {
+        return null;
+    }
+
+    $media = $item->relationLoaded($relation)
+        ? $item->{$relation}
+        : $item->{$relation}()->first();
+
+    if (! $media) {
+        return null;
+    }
+
+    if (function_exists('mediaPublicUrl')) {
+        return mediaPublicUrl($media) ?: mediaAbsoluteUrl($media);
+    }
+
+    return mediaAbsoluteUrl($media);
 }
 
 /**

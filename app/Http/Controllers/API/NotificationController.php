@@ -16,7 +16,16 @@ class NotificationController extends Controller
     protected function allowedTypesForUser($user): ?array
     {
         return match ((string) ($user->user_type ?? '')) {
-            'client' => ['item_pending', 'item_delivered', 'pickup_ready', 'os_settlement', 'item_message'],
+            'client' => [
+                'item_pending',
+                'item_delivered',
+                'pickup_ready',
+                'os_settlement',
+                'os_receive_pay',
+                'os_receive_approved',
+                'os_receive_rejected',
+                'item_message',
+            ],
             'delivery_man' => ['pickup_assigned', 'delivery_assigned'],
             default => null,
         };

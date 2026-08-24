@@ -56,7 +56,12 @@ class HomeController extends Controller
      */
     public function index(Request $request)
     {
+        if (isSuperAdmin(auth()->user())) {
+            return redirect()->route('super-admin.dashboard');
+        }
+
         $auth_user = auth()->user();
+        $forcedBranchId = forcedBranchId($auth_user);
         $params = [
             'from_date' => request('from_date') ?? null,
             'to_date' => request('to_date') ?? null,
@@ -93,6 +98,9 @@ class HomeController extends Controller
             } else {
                 $deliverymanQuery->whereBetween('created_at', [$params['from_date'], $params['to_date']]);
             }
+        }
+        if ($forcedBranchId) {
+            $deliverymanQuery->where('branch_id', $forcedBranchId);
         }
 
         $recent_order = $ordersQuery->whereDate('date', '<=', Carbon::now()->format('Y-m-d'))->whereNotIn('status', ['pending'])->orderBy('date', 'desc')->paginate(10);

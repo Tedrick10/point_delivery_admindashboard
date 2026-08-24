@@ -45,8 +45,9 @@ class DispatchItemMessageController extends Controller
             ->keyBy('id');
 
         $osName = trim((string) ($user->name ?? ''));
+        $osProfileImage = resolveUploadedProfileImageUrl($user, true);
 
-        $data = $threads->map(function ($row) use ($items, $lastMessages, $osName) {
+        $data = $threads->map(function ($row) use ($items, $lastMessages, $osName, $osProfileImage) {
             $item = $items->get($row->dispatch_order_item_id);
             $last = $lastMessages->get($row->last_message_id);
             $lastText = trim((string) ($last?->message ?? ''));
@@ -61,6 +62,7 @@ class DispatchItemMessageController extends Controller
                 'order_id' => $item?->order_id,
                 'parcel_id' => $item?->code ?: ('#'.$row->dispatch_order_item_id),
                 'os_name' => $osName !== '' ? $osName : null,
+                'os_profile_image' => $osProfileImage,
                 'customer_name' => trim((string) ($item?->customer_name ?? '')) ?: null,
                 'customer_phone' => trim((string) ($item?->customer_phone ?? '')) ?: null,
                 'message_count' => (int) $row->message_count,
@@ -141,6 +143,8 @@ class DispatchItemMessageController extends Controller
                 'parcel_id' => $item->code ?: ('#'.$item->id),
                 'customer_name' => trim((string) ($item->customer_name ?? '')) ?: null,
                 'customer_phone' => trim((string) ($item->customer_phone ?? '')) ?: null,
+                'os_name' => trim((string) ($user->name ?? '')) ?: null,
+                'os_profile_image' => resolveUploadedProfileImageUrl($user, true),
             ],
         ]);
     }

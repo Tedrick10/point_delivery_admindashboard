@@ -13,6 +13,7 @@ class OsSettlementBatch extends Model
         'to_date',
         'amount',
         'payment_method',
+        'settlement_side',
         'delivery_format',
         'kpay_name',
         'kpay_no',

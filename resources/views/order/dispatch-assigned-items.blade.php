@@ -69,6 +69,8 @@
                             @php
                                 $order = $item->order;
                                 $osName = resolveDispatchOsName($order);
+                                $osProfileImage = resolveUploadedProfileImageUrl(optional($order)->client);
+                                $osInitial = resolveNameInitial($osName !== '-' ? $osName : '');
                                 $deliveryRider = optional($item->deliveryMan)->name ?? '-';
                                 $parcelId = $item->code ?: ('#'.$item->id);
                                 $customerName = trim((string) ($item->customer_name ?? ''));
@@ -81,9 +83,6 @@
                                 $time = $item->last_chat_at
                                     ? \Carbon\Carbon::parse($item->last_chat_at)->timezone('Asia/Yangon')->format('d-m H:i')
                                     : '';
-                                $initial = $hasCustomer
-                                    ? mb_strtoupper(mb_substr($customerName !== '' ? $customerName : $customerPhone, 0, 1))
-                                    : mb_strtoupper(mb_substr((string) $parcelId, 0, 1));
                             @endphp
                             <div
                                 class="pds-msg-thread-card {{ $unread > 0 ? 'is-unread' : '' }} {{ $needsReply ? 'is-unanswered' : 'is-answered' }}"
@@ -96,7 +95,13 @@
                                 data-unanswered="{{ $needsReply }}"
                                 data-answered="{{ $needsReply ? 0 : 1 }}"
                             >
-                                <div class="pds-msg-thread-card__avatar" aria-hidden="true">{{ $initial }}</div>
+                                <div class="pds-msg-thread-card__avatar {{ $osProfileImage ? 'has-photo' : '' }}" title="{{ $osName !== '-' ? $osName : 'OS' }}" aria-hidden="true">
+                                    @if($osProfileImage)
+                                        <img src="{{ $osProfileImage }}" alt="{{ $osName !== '-' ? $osName : 'OS' }}">
+                                    @else
+                                        {{ $osInitial }}
+                                    @endif
+                                </div>
                                 <div class="pds-msg-thread-card__body">
                                     <div class="pds-msg-thread-card__line1">
                                         <strong class="pds-msg-thread-card__parcel">{{ $parcelId }}</strong>
@@ -170,9 +175,20 @@
                 align-items: center;
                 justify-content: center;
                 flex-shrink: 0;
+                overflow: hidden;
                 background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
                 color: #fff;
                 font-weight: 800;
+                font-size: 1rem;
+            }
+            .pds-msg-thread-card__avatar.has-photo {
+                background: #e2e8f0;
+            }
+            .pds-msg-thread-card__avatar img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                display: block;
             }
             .pds-msg-thread-card__body { flex: 1; min-width: 0; }
             .pds-msg-thread-card__line1 {

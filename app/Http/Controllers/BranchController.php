@@ -11,6 +11,10 @@ class BranchController extends Controller
 {
     public function index(BranchDataTable $dataTable)
     {
+        if (isBranchAdmin()) {
+            return redirect()->route('home')->withErrors(__('message.access_denied'));
+        }
+
         if (! auth()->user()->can('branch-list')) {
             $message = __('message.demo_permission_denied');
 

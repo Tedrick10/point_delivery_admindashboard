@@ -34,6 +34,10 @@ class DispatchOrderItemResource extends JsonResource
             'photo_url' => $photoUrl,
             'pending_photo_id' => (int) ($this->pending_photo_id ?? 0),
             'pending_photo_url' => $this->resolvePendingPhotoUrl(),
+            'delivered_photo_id' => (int) ($this->delivered_photo_id ?? 0),
+            'delivered_photo_url' => $this->resolveDeliveredPhotoUrl(),
+            'delivered_type' => $this->delivered_type,
+            'gate_amount' => (float) ($this->gate_amount ?? 0),
             'advance_paid' => (float) ($this->advance_paid ?? 0),
             'os_paid' => (float) ($this->os_paid ?? 0),
             'os_to_pay' => $this->resource instanceof DispatchOrderItem
@@ -49,6 +53,10 @@ class DispatchOrderItemResource extends JsonResource
             'delivery_locked' => (bool) ($this->delivery_locked ?? false),
             'assigned_name' => optional($this->deliveryMan)->name,
             'assigned_phone' => optional($this->deliveryMan)->riderAssignedPhone(),
+            'delivery_man_id' => $this->delivery_man_id ? (int) $this->delivery_man_id : null,
+            'can_rate_rider' => $this->resolveCanRateRider($request),
+            'my_rider_rating' => $this->resolveMyRiderRating($request),
+            'rating_presets' => \App\Models\Ratings::presetComments(),
             'status_label' => app(DispatchOrderWorkflowService::class)
                 ->clientItemStatusLabel($this->resource),
             'allowed_actions' => app(DispatchOrderWorkflowService::class)
@@ -126,5 +134,62 @@ class DispatchOrderItemResource extends JsonResource
         }
 
         return null;
+    }
+
+    protected function resolveDeliveredPhotoUrl(): ?string
+    {
+        $photoId = (int) ($this->delivered_photo_id ?? 0);
+        if ($photoId <= 0) {
+            return null;
+        }
+
+        $media = $this->relationLoaded('deliveredPhotoMedia')
+            ? $this->deliveredPhotoMedia
+            : app(PhotoOrderDispatchService::class)->findPhotoMedia($photoId);
+
+        if ($media && getFileExistsCheck($media)) {
+            return mediaAbsoluteUrl($media);
+        }
+
+        return null;
+    }
+
+    protected function resolveCanRateRider($request): bool
+    {
+        $user = $request->user();
+        if (! $user || ($user->user_type ?? '') !== 'client') {
+            return false;
+        }
+        if (($this->status ?? '') !== 'completed' || empty($this->delivery_man_id)) {
+            return false;
+        }
+        if ($this->relationLoaded('order') && $this->order) {
+            return (int) $this->order->client_id === (int) $user->id;
+        }
+
+        return true;
+    }
+
+    protected function resolveMyRiderRating($request): ?array
+    {
+        $user = $request->user();
+        if (! $user) {
+            return null;
+        }
+
+        $rating = \App\Models\Ratings::query()
+            ->where('dispatch_order_item_id', $this->id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (! $rating) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $rating->id,
+            'rating' => (float) $rating->rating,
+            'comment' => $rating->comment,
+        ];
     }
 }

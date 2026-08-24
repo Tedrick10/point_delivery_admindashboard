@@ -21,6 +21,9 @@ class AssignUserRole
 
         if ($user && !$user->roles->count()) {
             switch ($user->user_type) {
+                case 'super_admin':
+                    $user->assignRole('super_admin');
+                    break;
                 case 'admin':
                     $user->assignRole('admin');
                     break;

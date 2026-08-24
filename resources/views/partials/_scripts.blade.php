@@ -21,6 +21,7 @@ if (window.PDS_MYANMAR_NRC_DATA_URL) {
 
 <script src="{{ asset('js/morris.js') }}"></script>
 <script src="{{ asset('vendor/tinymce/js/tinymce/tinymce.min.js') }}"></script>
+<script src="{{ asset('js/legal-page.js') }}?v=1"></script>
 <script src="{{ asset('vendor/confirmJS/jquery-confirm.min.js') }}"></script>
 <script src="{{ asset('js/jquery.validate.min.js') }}"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/izitoast/1.4.0/css/iziToast.min.css" />

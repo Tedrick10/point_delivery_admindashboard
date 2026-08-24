@@ -48,6 +48,15 @@ class RoleTableSeeder extends Seeder
                 'created_at' => Carbon::now()->format('Y-m-d H:i:s'),
                 'updated_at' => NULL,
             ),
+            3 =>
+            array (
+                'id' => 4,
+                'name' => 'super_admin',
+                'guard_name' => 'web',
+                'status' => 1,
+                'created_at' => Carbon::now()->format('Y-m-d H:i:s'),
+                'updated_at' => NULL,
+            ),
         ));
     }
 }

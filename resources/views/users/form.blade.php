@@ -21,7 +21,10 @@
                     <div class="card-body pds-page-body pds-user-reg-body">
                         <div class="pds-user-reg-layout">
                             <aside class="pds-user-reg-aside">
-                                @include('partials._profile_upload', ['profileImage' => $profileImage ?? null])
+                                @include('partials._profile_upload', [
+                                    'profileImage' => $profileImage ?? null,
+                                    'profileTitle' => __('message.profile'),
+                                ])
                             </aside>
 
                             <div class="pds-user-reg-main">
@@ -33,10 +36,6 @@
                                 @endif
 
                                 <div class="pds-user-reg-footer">
-                                    <div class="custom-control custom-checkbox">
-                                        <input type="checkbox" class="custom-control-input" name="is_vip" value="1" id="is_vip" {{ old('is_vip', optional($data ?? null)->is_vip) ? 'checked' : '' }}>
-                                        <label class="custom-control-label" for="is_vip">{{ __('message.is_vip') }}</label>
-                                    </div>
                                     {!! html()->submit(isset($id) ? __('message.update') : __('message.save'))->class('btn btn-primary pds-user-reg-save') !!}
                                 </div>
                             </div>
@@ -65,11 +64,10 @@
 
             var formRules = {
                 name: { required: true },
-                'os_profile[date_of_birth]': { required: true },
+                username: { required: true, minlength: 3 },
                 'os_profile[address_unit]': { required: true },
                 'os_profile[state_division]': { required: true },
                 'os_profile[township]': { required: true },
-                'os_profile[street]': { required: true },
                 'os_profile[kpay_name]': { required: true },
                 'os_profile[kpay_no]': { required: true },
             };
@@ -104,6 +102,7 @@
 
             formValidation("#user_form", formRules, {
                 name: { required: "{{ __('message.please_enter_name') }}" },
+                username: { required: "{{ __('message.please_enter_username') }}" },
                 contact_number: { required: "{{ __('message.please_enter_contact_number') }}" },
                 password: {
                     required: "{{ __('message.please_enter_password') }}",
@@ -186,11 +185,6 @@
             }
 
             initUserRegPhone();
-
-            if (window.PdsMyanmarNrc && $('#user_reg_nrc_box').length) {
-                window.PdsMyanmarNrc.reset('user_reg_nrc');
-                window.PdsMyanmarNrc.init('user_reg_nrc');
-            }
         });
     </script>
     @endsection

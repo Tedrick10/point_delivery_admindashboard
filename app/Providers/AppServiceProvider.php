@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\SuperAdminDashboardService;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\URL;
 
@@ -45,5 +47,15 @@ class AppServiceProvider extends ServiceProvider
                 URL::forceRootUrl($request->getSchemeAndHttpHost());
             }
         }
+
+        View::composer(['super-admin.*', 'super-admin.*.*'], function ($view) {
+            if (! auth()->check() || ! isSuperAdmin(auth()->user())) {
+                return;
+            }
+            $service = app(SuperAdminDashboardService::class);
+            $period = $service->periodFromRequest(request());
+            $view->with('saPeriod', $period);
+            $view->with('saShared', $service->sharedBar($period));
+        });
     }
 }

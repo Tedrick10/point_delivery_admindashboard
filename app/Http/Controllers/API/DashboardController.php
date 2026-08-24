@@ -32,8 +32,8 @@ class DashboardController extends Controller
     {
         $data['app_setting'] = AppSetting::first();
 
-        $data['terms_condition'] = Setting::where('type','terms_condition')->where('key','terms_condition')->first();
-        $data['privacy_policy'] = Setting::where('type','privacy_policy')->where('key','privacy_policy')->first();
+        $data['terms_condition'] = SettingData('terms_condition', 'terms_condition');
+        $data['privacy_policy'] = SettingData('privacy_policy', 'privacy_policy');
 
         $currency_code = SettingData('CURRENCY', 'CURRENCY_CODE') ?? 'USD';
         $currency = currencyArray($currency_code);
@@ -77,8 +77,8 @@ class DashboardController extends Controller
     {
         $data['app_seeting'] = AppSetting::first();
 
-        $data['terms_condition'] = Setting::where('type','terms_condition')->where('key','terms_condition')->first();
-        $data['privacy_policy'] = Setting::where('type','privacy_policy')->where('key','privacy_policy')->first();
+        $data['terms_condition'] = SettingData('terms_condition', 'terms_condition');
+        $data['privacy_policy'] = SettingData('privacy_policy', 'privacy_policy');
 
         $currency_code = SettingData('CURRENCY', 'CURRENCY_CODE') ?? 'USD';
         $currency = currencyArray($currency_code);

@@ -8,7 +8,7 @@ use App\Models\User;
 
 class EmployeeTypeService
 {
-    protected array $protectedRoles = ['admin', 'client', 'delivery_man', 'demo_admin'];
+    protected array $protectedRoles = ['admin', 'client', 'delivery_man', 'demo_admin', 'super_admin'];
 
     public function resolveEmployeeTypeId(array $data): ?int
     {

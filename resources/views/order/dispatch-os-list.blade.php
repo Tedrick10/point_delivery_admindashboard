@@ -11,7 +11,7 @@
                     <p class="pds-rider-hero__subtitle">{{ __('message.os_list_settlement_subtitle') }}</p>
                 </div>
                 <div class="pds-rider-hero__stat">
-                    <span class="pds-rider-hero__stat-value">{{ $rows->count() }}</span>
+                    <span class="pds-rider-hero__stat-value">{{ ($payToOsRows->count() ?? 0) + ($receiveFromOsRows->count() ?? 0) }}</span>
                     <span class="pds-rider-hero__stat-label">{{ __('message.online_shopping') }}</span>
                 </div>
             </div>
@@ -51,149 +51,162 @@
                 </div>
             </form>
 
-            @if($rows->isNotEmpty())
-                <div class="pds-os-settlement-bulk-bar">
-                    <div class="pds-os-settlement-bulk-bar__hint">
-                        <i class="fas fa-info-circle" aria-hidden="true"></i>
-                        <span>{{ __('message.os_settlement_bulk_hint') }}</span>
-                    </div>
-                    <div class="pds-os-settlement-bulk-bar__actions">
-                        <div class="pds-os-pay-method pds-os-pay-method--bulk" id="osBulkPayMethod" data-method="kpay" title="{{ __('message.payment_method') }}">
-                            <button type="button" class="pds-os-pay-method__btn is-active" data-method="kpay">Kpay</button>
-                            <button type="button" class="pds-os-pay-method__btn" data-method="cash">{{ __('message.cash') }}</button>
-                        </div>
-                        <button type="button" class="pds-os-finish-all-btn" id="osSettlementFinishAll" disabled>
-                            <i class="fas fa-check-double" aria-hidden="true"></i>
-                            <span>{{ __('message.finished_all') }}</span>
-                        </button>
-                    </div>
-                </div>
-            @endif
+            @php
+                $payToOsRows = $payToOsRows ?? collect();
+                $receiveFromOsRows = $receiveFromOsRows ?? collect();
+                $defaultTab = request('tab') === 'receive'
+                    ? 'receive'
+                    : (request('tab') === 'pay'
+                        ? 'pay'
+                        : ($payToOsRows->isNotEmpty() || $receiveFromOsRows->isEmpty() ? 'pay' : 'receive'));
+            @endphp
 
             <div class="pds-rider-body">
-                @if($rows->isEmpty())
-                    <div class="pds-rider-empty">
-                        <div class="pds-rider-empty__icon"><i class="fas fa-store"></i></div>
-                        <p>{{ __('message.os_settlement_no_rows') }}</p>
+                    @if(!empty($usingOsSettlementDemo))
+                        <div class="pds-os-settlement-demo-banner" role="status">
+                            <i class="fas fa-info-circle" aria-hidden="true"></i>
+                            <span>{{ __('message.os_settlement_demo_banner') }}</span>
+                        </div>
+                    @endif
+                    <div class="pds-os-settlement-tabs" role="tablist" aria-label="{{ __('message.os_list') }}">
+                        <button
+                            type="button"
+                            class="pds-os-settlement-tab {{ $defaultTab === 'pay' ? 'is-active' : '' }}"
+                            data-tab="pay"
+                            role="tab"
+                            aria-selected="{{ $defaultTab === 'pay' ? 'true' : 'false' }}"
+                        >
+                            <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                            <span>{{ __('message.os_settlement_pay_to_os') }}</span>
+                            <em class="js-os-tab-count" data-tab-count="pay">{{ $payToOsRows->count() }}</em>
+                        </button>
+                        <button
+                            type="button"
+                            class="pds-os-settlement-tab {{ $defaultTab === 'receive' ? 'is-active' : '' }}"
+                            data-tab="receive"
+                            role="tab"
+                            aria-selected="{{ $defaultTab === 'receive' ? 'true' : 'false' }}"
+                        >
+                            <i class="fas fa-hand-holding-usd" aria-hidden="true"></i>
+                            <span>{{ __('message.os_settlement_receive_from_os') }}</span>
+                            <em class="js-os-tab-count" data-tab-count="receive">{{ $receiveFromOsRows->count() }}</em>
+                        </button>
                     </div>
-                @else
-                    <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell">
-                        <table class="table pds-rider-list-table pds-os-settlement-table" id="osSettlementTable">
-                            <thead>
-                                <tr>
-                                    <th class="pds-rider-col-no">{{ __('message.no') }}</th>
-                                    <th class="pds-os-settlement-col-os">{{ __('message.os_name') }}</th>
-                                    <th class="pds-os-settlement-col-amount text-right">{{ __('message.amount') }}</th>
-                                    <th class="pds-os-settlement-col-kpay">{{ __('message.kpay_name') }}</th>
-                                    <th class="pds-os-settlement-col-kpay">{{ __('message.kpay_no') }}</th>
-                                    <th class="pds-os-settlement-col-slip">{{ __('message.kpay_slip') }}</th>
-                                    <th class="pds-os-settlement-col-method">{{ __('message.payment_method') }}</th>
-                                    <th class="pds-os-settlement-col-preview">{{ __('message.show_slip_completed') }}</th>
-                                    <th class="pds-os-settlement-col-action">{{ __('message.action') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($rows as $index => $row)
-                                    @php
-                                        $initial = mb_strtoupper(mb_substr(trim($row->name) ?: 'O', 0, 1));
-                                    @endphp
-                                    <tr
-                                        class="pds-os-settlement-row"
-                                        data-os-id="{{ $row->id }}"
-                                        data-has-kpay="{{ $row->has_kpay_slip ? '1' : '0' }}"
-                                        data-is-finished="0"
-                                        data-payment-method="kpay"
-                                    >
-                                        <td class="pds-rider-col-no">{{ $index + 1 }}</td>
-                                        <td class="pds-os-settlement-col-os">
-                                            <div class="pds-rider-person">
-                                                <span class="pds-rider-avatar pds-os-settlement-avatar" aria-hidden="true">{{ $initial }}</span>
-                                                <div class="pds-rider-person__meta">
-                                                    <div class="pds-dispatch-rider-list-name">{{ $row->name }}</div>
-                                                    @if($row->phone && $row->phone !== '-')
-                                                        <div class="pds-dispatch-rider-list-phone">{{ $row->phone }}</div>
-                                                    @endif
-                                                    <span class="pds-os-settlement-badge">{{ $row->item_count }} {{ __('message.items') }}</span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="pds-os-settlement-col-amount text-right">
-                                            <span class="pds-os-amount-pill {{ $row->amount < 0 ? 'is-negative' : '' }}">
-                                                {{ number_format($row->amount) }}
-                                            </span>
-                                        </td>
-                                        <td class="pds-os-settlement-col-kpay">
-                                            @if($row->kpay_name)
-                                                <span class="pds-os-kpay-value">{{ $row->kpay_name }}</span>
-                                            @else
-                                                <span class="pds-os-kpay-empty">—</span>
-                                            @endif
-                                        </td>
-                                        <td class="pds-os-settlement-col-kpay">
-                                            @if($row->kpay_no)
-                                                <span class="pds-os-kpay-value pds-os-kpay-value--mono">{{ $row->kpay_no }}</span>
-                                            @else
-                                                <span class="pds-os-kpay-empty">—</span>
-                                            @endif
-                                        </td>
-                                        <td class="pds-os-settlement-col-slip pds-os-kpay-upload-cell">
-                                            <div class="pds-os-kpay-upload-card">
-                                                @if($row->kpay_slip_url)
-                                                    <a href="{{ $row->kpay_slip_url }}" target="_blank" rel="noopener" class="pds-os-kpay-preview">
-                                                        <img src="{{ $row->kpay_slip_url }}" alt="KBZ Pay Slip" class="pds-os-kpay-thumb">
-                                                    </a>
-                                                @else
-                                                    <div class="pds-os-kpay-placeholder">
-                                                        <i class="fas fa-image" aria-hidden="true"></i>
-                                                        <span>{{ __('message.upload_kpay_slip') }}</span>
-                                                    </div>
-                                                @endif
-                                                <label class="pds-os-kpay-upload-btn" title="{{ __('message.upload_kpay_slip') }}">
-                                                    <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i>
-                                                    <input
-                                                        type="file"
-                                                        class="pds-os-kpay-file-input"
-                                                        accept="image/*"
-                                                        data-os-id="{{ $row->id }}"
-                                                    >
-                                                </label>
-                                            </div>
-                                        </td>
-                                        <td class="pds-os-settlement-col-method">
-                                            <div class="pds-os-pay-method js-os-row-pay-method" data-method="kpay">
-                                                <button type="button" class="pds-os-pay-method__btn is-active" data-method="kpay">Kpay</button>
-                                                <button type="button" class="pds-os-pay-method__btn" data-method="cash">{{ __('message.cash') }}</button>
-                                            </div>
-                                        </td>
-                                        <td class="pds-os-settlement-col-preview">
-                                            <button
-                                                type="button"
-                                                class="pds-os-slip-preview-btn"
-                                                data-os-id="{{ $row->id }}"
-                                                title="{{ __('message.show_slip_completed') }}"
-                                            >
-                                                <i class="fas fa-eye" aria-hidden="true"></i>
-                                                <span>{{ __('message.show_slip_completed') }}</span>
-                                            </button>
-                                        </td>
-                                        <td class="pds-os-settlement-col-action">
-                                            <button
-                                                type="button"
-                                                class="pds-os-finish-btn {{ $row->has_kpay_slip ? '' : 'is-disabled' }}"
-                                                data-os-id="{{ $row->id }}"
-                                                data-has-kpay="{{ $row->has_kpay_slip ? '1' : '0' }}"
-                                                @disabled(!$row->has_kpay_slip)
-                                            >
-                                                <i class="fas fa-check" aria-hidden="true"></i>
-                                                <span>{{ __('message.finished') }}</span>
-                                            </button>
-                                        </td>
+
+                    <div
+                        class="pds-os-settlement-panel pds-os-settlement-section {{ $defaultTab === 'pay' ? 'is-active' : '' }}"
+                        data-panel="pay"
+                        data-section="pay"
+                        role="tabpanel"
+                    >
+                        <div class="pds-os-settlement-bulk-bar" data-section="pay" @if($payToOsRows->isEmpty()) style="display:none" @endif>
+                            <div class="pds-os-settlement-bulk-bar__hint">
+                                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                                <span>{{ __('message.os_settlement_bulk_hint') }}</span>
+                            </div>
+                            <div class="pds-os-settlement-bulk-bar__actions">
+                                <button type="button" class="pds-os-finish-all-btn" id="osSettlementFinishAllPay" disabled>
+                                    <i class="fas fa-check-double" aria-hidden="true"></i>
+                                    <span>{{ __('message.finished_all') }}</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell">
+                            <table class="table pds-rider-list-table pds-os-settlement-table" id="osSettlementPayTable">
+                                <thead>
+                                    <tr>
+                                        <th class="pds-rider-col-no">{{ __('message.no') }}</th>
+                                        <th class="pds-os-settlement-col-os">{{ __('message.os_name') }}</th>
+                                        <th class="pds-os-settlement-col-amount text-right">{{ __('message.amount') }}</th>
+                                        <th class="pds-os-settlement-col-kpay">{{ __('message.kpay_name') }}</th>
+                                        <th class="pds-os-settlement-col-kpay">{{ __('message.kpay_no') }}</th>
+                                        <th class="pds-os-settlement-col-slip">{{ __('message.kpay_slip') }}</th>
+                                        <th class="pds-os-settlement-col-method">{{ __('message.payment_method') }}</th>
+                                        <th class="pds-os-settlement-col-preview">{{ __('message.show_slip_completed') }}</th>
+                                        <th class="pds-os-settlement-col-action">{{ __('message.action') }}</th>
                                     </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    @forelse($payToOsRows as $index => $row)
+                                        @include('order.partials._dispatch-os-settlement-row', ['row' => $row, 'index' => $index, 'section' => 'pay'])
+                                    @empty
+                                        <tr class="pds-os-settlement-empty-row">
+                                            <td colspan="9" class="pds-os-settlement-empty-cell">
+                                                {{ __('message.os_settlement_pay_empty') }}
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                @endif
+
+                    <div
+                        class="pds-os-settlement-panel pds-os-settlement-section {{ $defaultTab === 'receive' ? 'is-active' : '' }}"
+                        data-panel="receive"
+                        data-section="receive"
+                        role="tabpanel"
+                    >
+                        <div class="pds-os-receive-bulk-upload" id="osReceiveBulkUpload" @if($receiveFromOsRows->isEmpty()) style="display:none" @endif>
+                            <div class="pds-os-receive-bulk-upload__preview" id="osReceiveBulkPreview" hidden>
+                                <img src="" alt="" id="osReceiveBulkPreviewImg">
+                            </div>
+                            <div class="pds-os-receive-bulk-upload__copy">
+                                <strong>{{ __('message.os_settlement_bulk_proof_title') }}</strong>
+                                <span>{{ __('message.os_settlement_bulk_proof_hint') }}</span>
+                            </div>
+                            <label class="pds-os-receive-bulk-upload__btn" for="osReceiveBulkProofInput">
+                                <i class="fas fa-qrcode" aria-hidden="true"></i>
+                                <span>{{ __('message.upload_os_settlement_qr') }}</span>
+                                <input
+                                    type="file"
+                                    id="osReceiveBulkProofInput"
+                                    accept="image/*"
+                                    hidden
+                                >
+                            </label>
+                            <div class="pds-os-receive-bulk-upload__status" id="osReceiveBulkStatus" hidden></div>
+                        </div>
+
+                        <div class="pds-os-settlement-bulk-bar pds-os-settlement-bulk-bar--receive" data-section="receive" @if($receiveFromOsRows->isEmpty()) style="display:none" @endif>
+                            <div class="pds-os-settlement-bulk-bar__hint">
+                                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                                <span>{{ __('message.os_settlement_receive_bulk_hint') }}</span>
+                            </div>
+                            <div class="pds-os-settlement-bulk-bar__actions">
+                                <button type="button" class="pds-os-finish-all-btn" id="osSettlementFinishAllReceive" disabled>
+                                    <i class="fas fa-check-double" aria-hidden="true"></i>
+                                    <span>{{ __('message.finished_all') }}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell">
+                            <table class="table pds-rider-list-table pds-os-settlement-table" id="osSettlementReceiveTable">
+                                <thead>
+                                    <tr>
+                                        <th class="pds-rider-col-no">{{ __('message.no') }}</th>
+                                        <th class="pds-os-settlement-col-os">{{ __('message.os_name') }}</th>
+                                        <th class="pds-os-settlement-col-amount text-right">{{ __('message.amount') }}</th>
+                                        <th class="pds-os-settlement-col-slip">{{ __('message.os_settlement_qr') }}</th>
+                                        <th class="pds-os-settlement-col-preview">{{ __('message.show_slip_completed') }}</th>
+                                        <th class="pds-os-settlement-col-action">{{ __('message.action') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($receiveFromOsRows as $index => $row)
+                                        @include('order.partials._dispatch-os-settlement-row', ['row' => $row, 'index' => $index, 'section' => 'receive'])
+                                    @empty
+                                        <tr class="pds-os-settlement-empty-row">
+                                            <td colspan="6" class="pds-os-settlement-empty-cell">
+                                                {{ __('message.os_settlement_receive_empty') }}
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
             </div>
         </div>
     </div>
@@ -253,6 +266,21 @@
                 $('#osListPrevDay').on('click', function () { shiftDay(-1); });
                 $('#osListNextDay').on('click', function () { shiftDay(1); });
 
+                function switchOsSettlementTab(tab) {
+                    tab = tab === 'receive' ? 'receive' : 'pay';
+                    $('.pds-os-settlement-tab').each(function () {
+                        var isActive = $(this).attr('data-tab') === tab;
+                        $(this).toggleClass('is-active', isActive).attr('aria-selected', isActive ? 'true' : 'false');
+                    });
+                    $('.pds-os-settlement-panel').each(function () {
+                        $(this).toggleClass('is-active', $(this).attr('data-panel') === tab);
+                    });
+                }
+
+                $(document).on('click', '.pds-os-settlement-tab', function () {
+                    switchOsSettlementTab($(this).attr('data-tab'));
+                });
+
                 function notify(message, status) {
                     status = status || 'error';
                     if (status === 'success') {
@@ -273,6 +301,10 @@
 
                 function syncRowFinishState($row) {
                     if (String($row.attr('data-is-finished')) === '1') return;
+                    if (String($row.attr('data-is-demo')) === '1') {
+                        $row.find('.pds-os-finish-btn').addClass('is-disabled').prop('disabled', true);
+                        return;
+                    }
                     var method = $row.attr('data-payment-method') === 'cash' ? 'cash' : 'kpay';
                     var hasKpay = String($row.attr('data-has-kpay')) === '1';
                     var $btn = $row.find('.pds-os-finish-btn');
@@ -283,42 +315,119 @@
                 }
 
                 function updateFinishAllState() {
-                    var $rows = $('#osSettlementTable tbody tr[data-is-finished="0"]');
-                    var canFinish = $rows.length > 0;
-                    if (canFinish) {
-                        $rows.each(function () {
+                    function canFinishRows($rows) {
+                        var real = $rows.filter(function () {
+                            return String($(this).attr('data-is-demo')) !== '1';
+                        });
+                        if (! real.length) return false;
+                        var ok = true;
+                        real.each(function () {
                             if (String($(this).attr('data-has-kpay')) !== '1') {
-                                canFinish = false;
+                                ok = false;
                                 return false;
                             }
                         });
+                        return ok;
                     }
-                    $('#osSettlementFinishAll').prop('disabled', !canFinish);
+                    $('#osSettlementFinishAllPay').prop(
+                        'disabled',
+                        !canFinishRows($('#osSettlementPayTable tbody tr.pds-os-settlement-row[data-is-finished="0"]'))
+                    );
+                    $('#osSettlementFinishAllReceive').prop(
+                        'disabled',
+                        !canFinishRows($('#osSettlementReceiveTable tbody tr.pds-os-settlement-row[data-is-finished="0"]'))
+                    );
                 }
 
                 function setRowKpay($row, url) {
                     $row.attr('data-has-kpay', '1');
                     var $card = $row.find('.pds-os-kpay-upload-card');
+                    var alt = $row.attr('data-section') === 'receive' ? 'QR' : 'Proof Image';
                     var $preview = $card.find('.pds-os-kpay-preview');
                     if ($preview.length) {
-                        $preview.attr('href', url).find('img').attr('src', url);
+                        $preview.attr('href', url).find('img').attr('src', url).attr('alt', alt);
                     } else {
                         $card.find('.pds-os-kpay-placeholder').replaceWith(
-                            '<a href="' + url + '" target="_blank" rel="noopener" class="pds-os-kpay-preview"><img src="' + url + '" alt="KBZ Pay Slip" class="pds-os-kpay-thumb"></a>'
+                            '<a href="' + url + '" target="_blank" rel="noopener" class="pds-os-kpay-preview"'
+                            + ' onclick="event.preventDefault(); event.stopPropagation(); window.open(this.href, \'_blank\', \'noopener\');">'
+                            + '<img src="' + url + '" alt="' + alt + '" class="pds-os-kpay-thumb"></a>'
                         );
                     }
                     syncRowFinishState($row);
                     updateFinishAllState();
                 }
 
-                function renumberOsSettlementRows() {
-                    $('#osSettlementTable tbody tr').each(function (i) {
+                function uploadProofForRow($row, file) {
+                    return new Promise(function (resolve, reject) {
+                        var osId = parseInt($row.data('os-id'), 10);
+                        if (!osId && osId !== 0) {
+                            reject(new Error('missing os'));
+                            return;
+                        }
+                        var formData = new FormData();
+                        formData.append('_token', csrf);
+                        formData.append('from_date', filterFrom);
+                        formData.append('to_date', filterTo);
+                        formData.append('kpay_slip', file);
+                        $.ajax({
+                            url: uploadUrlTemplate.replace('__OS__', osId),
+                            type: 'POST',
+                            data: formData,
+                            processData: false,
+                            contentType: false,
+                            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                            success: function (res) {
+                                if (res.kpay_slip_url) {
+                                    setRowKpay($row, res.kpay_slip_url);
+                                }
+                                resolve(res);
+                            },
+                            error: function (xhr) {
+                                var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                                    ? xhr.responseJSON.message
+                                    : @json(__('message.something_went_wrong'));
+                                reject(new Error(msg));
+                            },
+                        });
+                    });
+                }
+
+                function syncTabCounts() {
+                    var payCount = $('#osSettlementPayTable tbody tr.pds-os-settlement-row').length;
+                    var receiveCount = $('#osSettlementReceiveTable tbody tr.pds-os-settlement-row').length;
+                    $('.js-os-tab-count[data-tab-count="pay"]').text(payCount);
+                    $('.js-os-tab-count[data-tab-count="receive"]').text(receiveCount);
+                    $('.pds-rider-hero__stat-value').text(payCount + receiveCount);
+                }
+
+                function renumberOsSettlementRows($table) {
+                    var $dataRows = $table.find('tbody tr.pds-os-settlement-row');
+                    $dataRows.each(function (i) {
                         $(this).find('td.pds-rider-col-no').first().text(i + 1);
                     });
-                    var count = $('#osSettlementTable tbody tr').length;
-                    $('.pds-rider-hero__stat-value').text(count);
+                    var $section = $table.closest('.pds-os-settlement-section');
+                    var sectionKey = String($section.attr('data-section') || '');
+                    var count = $dataRows.length;
                     if (count === 0) {
-                        $('.pds-os-settlement-bulk-bar').addClass('d-none');
+                        if (sectionKey === 'pay') {
+                            $section.find('.pds-os-settlement-bulk-bar[data-section="pay"]').hide();
+                        }
+                        if (sectionKey === 'receive') {
+                            $section.find('#osReceiveBulkUpload, .pds-os-settlement-bulk-bar[data-section="receive"]').hide();
+                        }
+                        var emptyMsg = sectionKey === 'receive'
+                            ? @json(__('message.os_settlement_receive_empty'))
+                            : @json(__('message.os_settlement_pay_empty'));
+                        var colSpan = sectionKey === 'receive' ? 6 : 9;
+                        $table.find('tbody').html(
+                            '<tr class="pds-os-settlement-empty-row"><td colspan="' + colSpan + '" class="pds-os-settlement-empty-cell">' + emptyMsg + '</td></tr>'
+                        );
+                    }
+                    syncTabCounts();
+                    var total = $('#osSettlementPayTable tbody tr.pds-os-settlement-row').length
+                        + $('#osSettlementReceiveTable tbody tr.pds-os-settlement-row').length;
+                    if (total === 0) {
+                        $('.pds-os-settlement-tabs').remove();
                         var emptyHtml = '<div class="pds-rider-empty">'
                             + '<div class="pds-rider-empty__icon"><i class="fas fa-store"></i></div>'
                             + '<p>' + @json(__('message.os_settlement_no_rows')) + '</p>'
@@ -328,9 +437,10 @@
                 }
 
                 function markRowFinished($row) {
+                    var $table = $row.closest('table');
                     $row.fadeOut(180, function () {
                         $(this).remove();
-                        renumberOsSettlementRows();
+                        renumberOsSettlementRows($table);
                         updateFinishAllState();
                     });
                 }
@@ -351,36 +461,72 @@
                     var input = this;
                     var file = input.files && input.files[0];
                     if (!file) return;
-                    var osId = $(input).data('os-id');
                     var $row = $(input).closest('tr');
-                    var formData = new FormData();
-                    formData.append('_token', csrf);
-                    formData.append('from_date', filterFrom);
-                    formData.append('to_date', filterTo);
-                    formData.append('kpay_slip', file);
-
-                    $.ajax({
-                        url: uploadUrlTemplate.replace('__OS__', osId),
-                        type: 'POST',
-                        data: formData,
-                        processData: false,
-                        contentType: false,
-                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
-                        success: function (res) {
-                            if (res.kpay_slip_url) {
-                                setRowKpay($row, res.kpay_slip_url);
-                            }
-                            input.value = '';
-                        },
-                        error: function (xhr) {
-                            var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : @json(__('message.something_went_wrong'));
-                            notify(msg, 'error');
-                            input.value = '';
-                        },
+                    uploadProofForRow($row, file).then(function () {
+                        input.value = '';
+                    }).catch(function (err) {
+                        notify(err.message || @json(__('message.something_went_wrong')), 'error');
+                        input.value = '';
                     });
                 });
 
+                $('#osReceiveBulkProofInput').on('change', function () {
+                    var input = this;
+                    var file = input.files && input.files[0];
+                    if (!file) return;
+
+                    var $rows = $('#osSettlementReceiveTable tbody tr.pds-os-settlement-row[data-is-finished="0"]');
+                    if (! $rows.length) {
+                        input.value = '';
+                        return;
+                    }
+
+                    var $zone = $('#osReceiveBulkUpload');
+                    var $status = $('#osReceiveBulkStatus');
+                    var $preview = $('#osReceiveBulkPreview');
+                    var $previewImg = $('#osReceiveBulkPreviewImg');
+                    var localUrl = URL.createObjectURL(file);
+                    $previewImg.attr('src', localUrl);
+                    $preview.prop('hidden', false);
+                    $zone.addClass('is-uploading');
+                    $status.prop('hidden', false).text(@json(__('message.os_settlement_bulk_proof_uploading')));
+
+                    var index = 0;
+                    var failed = 0;
+
+                    function next() {
+                        if (index >= $rows.length) {
+                            $zone.removeClass('is-uploading');
+                            input.value = '';
+                            if (failed > 0) {
+                                $status.text(@json(__('message.os_settlement_bulk_proof_partial')));
+                                notify(@json(__('message.os_settlement_bulk_proof_partial')), 'error');
+                            } else {
+                                $status.text(@json(__('message.os_settlement_bulk_proof_done')));
+                            }
+                            updateFinishAllState();
+                            return;
+                        }
+                        var $row = $($rows[index]);
+                        index += 1;
+                        $status.text(
+                            @json(__('message.os_settlement_bulk_proof_progress'))
+                                .replace(':current', String(index))
+                                .replace(':total', String($rows.length))
+                        );
+                        uploadProofForRow($row, file).then(function () {
+                            next();
+                        }).catch(function () {
+                            failed += 1;
+                            next();
+                        });
+                    }
+
+                    next();
+                });
+
                 function finishOneOs(osId, $row, $btn, paymentMethod) {
+                    var settlementSide = $row.attr('data-section') === 'receive' ? 'receive' : 'pay';
                     $btn.prop('disabled', true);
                     $.ajax({
                         url: finishUrlTemplate.replace('__OS__', osId),
@@ -391,6 +537,7 @@
                             to_date: filterTo,
                             delivery_format: 'table',
                             payment_method: paymentMethod || 'kpay',
+                            settlement_side: settlementSide,
                         },
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
                         success: function (res) {
@@ -405,8 +552,11 @@
                     });
                 }
 
-                function finishAllOs(osIds, $btn, paymentMethod) {
+                function finishAllOs(items, $btn, section) {
+                    var label = $btn.find('span').first();
+                    var originalText = label.text();
                     $btn.prop('disabled', true);
+                    label.text(@json(__('message.processing')));
                     $.ajax({
                         url: finishAllUrl,
                         type: 'POST',
@@ -414,20 +564,30 @@
                             _token: csrf,
                             from_date: filterFrom,
                             to_date: filterTo,
-                            os_ids: osIds,
+                            items: items,
                             delivery_format: 'table',
-                            payment_method: paymentMethod || 'kpay',
+                            settlement_side: section,
                         },
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
                         success: function (res) {
-                            $('#osSettlementTable tbody tr[data-is-finished="0"]').each(function () {
-                                markRowFinished($(this));
+                            var finishedIds = (res.finished_os_ids || []).map(function (id) { return String(id); });
+                            var selector = section === 'receive'
+                                ? '#osSettlementReceiveTable tbody tr.pds-os-settlement-row[data-is-finished="0"]'
+                                : '#osSettlementPayTable tbody tr.pds-os-settlement-row[data-is-finished="0"]';
+                            $(selector).each(function () {
+                                var $row = $(this);
+                                if (!finishedIds.length || finishedIds.indexOf(String($row.data('os-id'))) !== -1) {
+                                    markRowFinished($row);
+                                }
                             });
                             if (res.message) notify(res.message, 'success');
+                            // Reload so badges / empty tabs stay accurate after Finish All.
+                            setTimeout(function () { window.location.reload(); }, 400);
                         },
                         error: function (xhr) {
                             var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : @json(__('message.something_went_wrong'));
                             notify(msg, 'error');
+                            label.text(originalText);
                             updateFinishAllState();
                         },
                     });
@@ -436,28 +596,60 @@
                 $(document).on('click', '.pds-os-finish-btn:not(:disabled)', function () {
                     var $btn = $(this);
                     var $row = $btn.closest('tr');
+                    if (String($row.attr('data-is-demo')) === '1' || String($btn.attr('data-is-demo')) === '1') {
+                        notify(@json(__('message.os_settlement_demo_action_blocked')), 'error');
+                        return;
+                    }
                     var osId = $btn.data('os-id');
-                    var method = $row.attr('data-payment-method') === 'cash' ? 'cash' : 'kpay';
+                    var method = $row.attr('data-section') === 'receive'
+                        ? 'cash'
+                        : ($row.attr('data-payment-method') === 'cash' ? 'cash' : 'kpay');
                     finishOneOs(osId, $row, $btn, method);
                 });
 
-                $('#osSettlementFinishAll').on('click', function () {
+                $(document).on('click', '#osSettlementFinishAllPay', function () {
                     if ($(this).prop('disabled')) return;
-                    var method = $('#osBulkPayMethod').attr('data-method') === 'cash' ? 'cash' : 'kpay';
-                    var osIds = [];
-                    $('#osSettlementTable tbody tr[data-is-finished="0"]').each(function () {
-                        osIds.push(parseInt($(this).data('os-id'), 10));
+                    var items = [];
+                    $('#osSettlementPayTable tbody tr.pds-os-settlement-row[data-is-finished="0"]').each(function () {
+                        var $row = $(this);
+                        if (String($row.attr('data-is-demo')) === '1') return;
+                        items.push({
+                            os_id: parseInt($row.data('os-id'), 10),
+                            payment_method: $row.attr('data-payment-method') === 'cash' ? 'cash' : 'kpay',
+                            settlement_side: 'pay',
+                        });
                     });
-                    if (!osIds.length) return;
-                    finishAllOs(osIds, $(this), method);
+                    if (!items.length) return;
+                    finishAllOs(items, $(this), 'pay');
+                });
+
+                $(document).on('click', '#osSettlementFinishAllReceive', function () {
+                    if ($(this).prop('disabled')) return;
+                    var items = [];
+                    $('#osSettlementReceiveTable tbody tr.pds-os-settlement-row[data-is-finished="0"]').each(function () {
+                        var $row = $(this);
+                        if (String($row.attr('data-is-demo')) === '1') return;
+                        items.push({
+                            os_id: parseInt($row.data('os-id'), 10),
+                            payment_method: 'cash',
+                            settlement_side: 'receive',
+                        });
+                    });
+                    if (!items.length) return;
+                    finishAllOs(items, $(this), 'receive');
                 });
 
                 $(document).on('click', '.pds-os-slip-preview-btn', function () {
+                    if (String($(this).attr('data-is-demo')) === '1' || $(this).prop('disabled')) {
+                        notify(@json(__('message.os_settlement_demo_action_blocked')), 'error');
+                        return;
+                    }
                     var osId = $(this).data('os-id');
+                    var settlementSide = $(this).closest('tr').attr('data-section') === 'receive' ? 'receive' : 'pay';
                     $.ajax({
                         url: slipPreviewUrlTemplate.replace('__OS__', osId),
                         type: 'GET',
-                        data: { from_date: filterFrom, to_date: filterTo },
+                        data: { from_date: filterFrom, to_date: filterTo, settlement_side: settlementSide },
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
                         success: function (res) {
                             $('#osSettlementSlipModalHost').html(res.html || '');
@@ -499,7 +691,7 @@
                     });
                 });
 
-                $('#osSettlementTable tbody tr[data-is-finished="0"]').each(function () {
+                $('.pds-os-settlement-table tbody tr[data-is-finished="0"]').each(function () {
                     syncRowFinishState($(this));
                 });
                 updateFinishAllState();

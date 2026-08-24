@@ -65,6 +65,30 @@
             </span>
         </div>
     @endif
+    @php
+        $deliveredPhotoUrl = function_exists('dispatchItemProofPhotoUrl')
+            ? dispatchItemProofPhotoUrl($item, 'delivered')
+            : null;
+        $deliveredType = trim((string) ($item->delivered_type ?? ''));
+    @endphp
+    @if($deliveredPhotoUrl || $deliveredType !== '')
+        <div class="pds-follow-up-details-item pds-follow-up-details-item-wide">
+            <span class="pds-follow-up-details-label">{{ __('message.delivered_image') }}</span>
+            <span class="pds-follow-up-details-value">
+                @if($deliveredType === 'gate')
+                    {{ __('message.delivered_type_gate') }}
+                    · {{ __('message.transport_fee') }} {{ number_format((float) ($item->gate_amount ?? 0)) }}
+                @elseif($deliveredType === 'other')
+                    {{ __('message.delivered_type_other') }}
+                @endif
+                @if($deliveredPhotoUrl)
+                    <a href="{{ $deliveredPhotoUrl }}" target="_blank" rel="noopener" class="pds-follow-up-pending-photo d-block mt-2">
+                        <img src="{{ $deliveredPhotoUrl }}" alt="{{ __('message.delivered_image') }}" style="max-width: 160px; max-height: 120px; border-radius: 10px; object-fit: cover; border: 1px solid #e5e7eb;">
+                    </a>
+                @endif
+            </span>
+        </div>
+    @endif
 </div>
 
 <div class="pds-follow-up-audit">

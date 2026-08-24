@@ -319,7 +319,11 @@ class FronthomeController extends Controller
     public function adminLogin()
     {        
         if (Auth::check()) {
-            return redirect()->route('frontend-section');
+            if (isSuperAdmin(Auth::user())) {
+                return redirect()->route('super-admin.dashboard');
+            }
+
+            return redirect()->route('home');
         }
         $walkthrough_data = FrontendData::where('type', 'walkthrough')->get();
         return view('frontend-website.admin.login', compact('walkthrough_data'));
@@ -352,6 +356,11 @@ class FronthomeController extends Controller
         $role = $user->getRoleNames()->first();
 
         if ($request->filled('admin_login') && $request->admin_login === "admin_login") {
+            if (isSuperAdmin($user) || $role === 'super_admin') {
+                Auth::logout();
+                return redirect()->route('super-admin.login')
+                    ->withErrors(['email' => 'Use the Super Admin login page for this account.']);
+            }
             switch ($role) {
                 case 'admin':
                     return redirect()->route('home');

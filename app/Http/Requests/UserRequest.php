@@ -49,11 +49,17 @@ class UserRequest extends FormRequest
         }
 
         if ($this->requiresOsProfile()) {
-            $rules['os_profile.date_of_birth'] = 'required|date';
+            $rules['username'] = [
+                'required',
+                'string',
+                'min:3',
+                'max:50',
+                'regex:/^[A-Za-z0-9._-]+$/',
+                'unique:users,username,'.$user_id,
+            ];
             $rules['os_profile.address_unit'] = 'required|string|max:255';
             $rules['os_profile.state_division'] = 'required|string|max:255';
             $rules['os_profile.township'] = 'required|string|max:255';
-            $rules['os_profile.street'] = 'required|string|max:255';
         }
 
         if (!$user_id) {
@@ -62,8 +68,6 @@ class UserRequest extends FormRequest
                 : 'required|string|min:6';
 
             if ($this->requiresOsProfile()) {
-                $rules['os_profile.nrc_region'] = 'required|string|max:20';
-                $rules['os_profile.nrc_number'] = 'required|string|max:20';
                 $rules['os_profile.kpay_name'] = 'required|string|max:255';
                 $rules['os_profile.kpay_no'] = 'required|string|max:50';
             }
@@ -104,6 +108,7 @@ class UserRequest extends FormRequest
             'email.unique' => 'This email is already registered.',
             'contact_number.unique' => __('message.contact_number_already_taken'),
             'username.unique' => __('message.username_taken'),
+            'username.regex' => __('message.username_invalid'),
         ];
     }
 

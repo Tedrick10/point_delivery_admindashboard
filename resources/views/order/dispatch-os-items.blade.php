@@ -183,7 +183,10 @@
                                         <td class="text-right pds-rider-money">{{ $advancePaid == 0.0 ? '0' : number_format($advancePaid) }}</td>
                                         <td class="text-right pds-rider-money">{{ number_format($itemValue) }}</td>
                                         <td class="text-right pds-rider-money">{!! formatDispatchDeliAmountHtml($item, $deliAmount) !!}</td>
-                                        <td class="text-right pds-rider-money js-item-gate-amount">{{ number_format($gateAmount) }}</td>
+                                        <td class="text-right pds-rider-money js-item-gate-amount">
+                                            {{ number_format($gateAmount) }}
+                                            @include('order.partials._dispatch-item-delivered-proof', ['item' => $item])
+                                        </td>
                                         <td class="text-right pds-rider-money js-item-os-to-pay js-item-os-to-pay-slip {{ $osToPaySlip['is_receive'] ? 'pds-os-to-pay-negative' : '' }}">
                                             {{ $osToPaySlip['formatted'] }}
                                         </td>

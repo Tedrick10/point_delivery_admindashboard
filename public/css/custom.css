@@ -752,14 +752,40 @@ body.pds-admin .dataTables_wrapper .dataTables_scroll {
 }
 
 /* Admin list pages — restore vertical scroll (backend.css sets overflow:hidden on .content-page) */
-body.pds-admin .content-page {
+html {
+    height: auto !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+
+body.pds-admin,
+body.pds-admin#app {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 100vh !important;
+    position: relative !important;
+}
+
+body.pds-admin .content-page,
+body.pds-admin .content-page.pds-content-shell {
     overflow: visible !important;
     max-height: none !important;
+    height: auto !important;
 }
 
 body.pds-admin .content-page .card.card-block.card-height,
 body.pds-admin .content-page .card.card-block.card-stretch {
     height: auto !important;
+}
+
+/* Table shells must remain scrollable even when rounded wrappers set overflow:hidden */
+body.pds-admin .pds-rider-table-shell--scroll,
+body.pds-admin .pds-cash-payout-shell.pds-rider-table-shell--scroll {
+    overflow: auto !important;
+    max-height: calc(100vh - 260px) !important;
+    -webkit-overflow-scrolling: touch;
 }
 
 body.pds-admin .dataTables_wrapper .dataTables_scrollHead table,

@@ -190,7 +190,10 @@
                                         <td class="text-right pds-rider-money">{!! formatDispatchDeliAmountHtml($item, $deliAmount) !!}</td>
                                         <td class="text-right pds-rider-money">{{ number_format($custGet) }}</td>
                                         <td class="text-right pds-rider-money">{{ number_format($custPaid) }}</td>
-                                        <td class="text-right pds-rider-money js-item-gate-amount">{{ number_format($gateAmount) }}</td>
+                                        <td class="text-right pds-rider-money js-item-gate-amount">
+                                            {{ number_format($gateAmount) }}
+                                            @include('order.partials._dispatch-item-delivered-proof', ['item' => $item])
+                                        </td>
                                         <td class="text-right pds-rider-money js-item-os-to-pay js-item-os-to-pay-signed {{ $osToPayDisplay < 0 ? 'pds-os-to-pay-negative' : '' }}">
                                             {{ number_format($osToPayDisplay) }}
                                         </td>
@@ -268,6 +271,75 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('message.cancel') }}</button>
                     <button type="button" class="btn btn-primary" id="riderPendingRemarkConfirm">{{ __('message.update') }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="riderDeliveredTypeModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content pds-delivered-modal">
+                <div class="pds-delivered-modal__head">
+                    <div class="pds-delivered-modal__brand">
+                        <span class="pds-delivered-modal__icon" aria-hidden="true">
+                            <i class="fas fa-check-circle"></i>
+                        </span>
+                        <div>
+                            <h5 class="pds-delivered-modal__title">{{ __('message.delivered') }}</h5>
+                            <p class="pds-delivered-modal__sub">{{ __('message.delivered_type_choose_hint') }}</p>
+                        </div>
+                    </div>
+                    <button type="button" class="pds-delivered-modal__close" data-dismiss="modal" aria-label="Close">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <div class="pds-delivered-modal__body">
+                    <div class="pds-delivered-modal__section-label">{{ __('message.delivered_type_choose') }}</div>
+                    <div class="pds-delivered-modal__choices" role="radiogroup" aria-label="{{ __('message.delivered_type_choose') }}">
+                        <label class="pds-delivered-choice is-active" data-delivered-choice="other">
+                            <input type="radio" name="rider_delivered_type" value="other" checked>
+                            <span class="pds-delivered-choice__icon" aria-hidden="true"><i class="fas fa-map-marker-alt"></i></span>
+                            <span class="pds-delivered-choice__copy">
+                                <strong>{{ __('message.delivered_type_other') }}</strong>
+                                <em>{{ __('message.delivered_type_other_hint') }}</em>
+                            </span>
+                            <span class="pds-delivered-choice__check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                        </label>
+                        <label class="pds-delivered-choice" data-delivered-choice="gate">
+                            <input type="radio" name="rider_delivered_type" value="gate">
+                            <span class="pds-delivered-choice__icon is-gate" aria-hidden="true"><i class="fas fa-archway"></i></span>
+                            <span class="pds-delivered-choice__copy">
+                                <strong>{{ __('message.delivered_type_gate') }}</strong>
+                                <em>{{ __('message.delivered_type_gate_hint') }}</em>
+                            </span>
+                            <span class="pds-delivered-choice__check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                        </label>
+                    </div>
+
+                    <div class="pds-delivered-modal__gate" id="riderDeliveredGateAmountWrap" hidden>
+                        <label for="riderDeliveredGateAmount">{{ __('message.gate_amount') }}</label>
+                        <div class="pds-delivered-modal__gate-input">
+                            <span>Ks</span>
+                            <input type="number" min="0" step="1" id="riderDeliveredGateAmount" value="0" inputmode="numeric">
+                        </div>
+                    </div>
+
+                    <div class="pds-delivered-modal__section-label">{{ __('message.delivered_photo') }}</div>
+                    <label class="pds-delivered-upload" for="riderDeliveredPhotoInput" id="riderDeliveredUploadLabel">
+                        <input type="file" id="riderDeliveredPhotoInput" accept="image/*" hidden>
+                        <span class="pds-delivered-upload__icon" aria-hidden="true"><i class="fas fa-cloud-upload-alt"></i></span>
+                        <span class="pds-delivered-upload__title" id="riderDeliveredUploadTitle">{{ __('message.delivered_photo_pick') }}</span>
+                        <span class="pds-delivered-upload__hint">{{ __('message.delivered_photo_hint') }}</span>
+                    </label>
+                </div>
+
+                <div class="pds-delivered-modal__foot">
+                    <button type="button" class="pds-delivered-modal__btn pds-delivered-modal__btn--ghost" data-dismiss="modal">{{ __('message.cancel') }}</button>
+                    <button type="button" class="pds-delivered-modal__btn pds-delivered-modal__btn--primary" id="riderDeliveredTypeConfirm">
+                        <i class="fas fa-check" aria-hidden="true"></i>
+                        <span>{{ __('message.update') }}</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -409,7 +481,7 @@
 
                 updateSelectedTotal();
 
-                function submitBulkUpdate(toStatus, remark, photoFile) {
+                function submitBulkUpdate(toStatus, remark, photoFile, deliveredType, gateAmount, deliveredPhotoFile) {
                     var ids = selectedItemIds();
                     if (!ids.length) {
                         notify(@json(__('message.select_items_to_assign')), 'error');
@@ -427,6 +499,15 @@
                     }
                     if (photoFile) {
                         formData.append('pending_photo', photoFile);
+                    }
+                    if (deliveredType) {
+                        formData.append('delivered_type', deliveredType);
+                    }
+                    if (gateAmount !== null && gateAmount !== undefined && gateAmount !== '') {
+                        formData.append('gate_amount', gateAmount);
+                    }
+                    if (deliveredPhotoFile) {
+                        formData.append('delivered_photo', deliveredPhotoFile);
                     }
 
                     var $btn = $('#riderItemsBulkUpdate');
@@ -463,6 +544,30 @@
                     });
                 }
 
+                function syncDeliveredGateAmountVisibility() {
+                    var type = String($('input[name="rider_delivered_type"]:checked').val() || 'other');
+                    $('#riderDeliveredGateAmountWrap').prop('hidden', type !== 'gate');
+                    $('.pds-delivered-choice').removeClass('is-active');
+                    $('.pds-delivered-choice[data-delivered-choice="' + type + '"]').addClass('is-active');
+                }
+
+                function resetDeliveredUploadLabel() {
+                    $('#riderDeliveredUploadLabel').removeClass('has-file');
+                    $('#riderDeliveredUploadTitle').text(@json(__('message.delivered_photo_pick')));
+                }
+
+                $(document).on('change', 'input[name="rider_delivered_type"]', syncDeliveredGateAmountVisibility);
+
+                $(document).on('change', '#riderDeliveredPhotoInput', function () {
+                    var file = this.files && this.files[0] ? this.files[0] : null;
+                    if (!file) {
+                        resetDeliveredUploadLabel();
+                        return;
+                    }
+                    $('#riderDeliveredUploadLabel').addClass('has-file');
+                    $('#riderDeliveredUploadTitle').text(file.name);
+                });
+
                 $(document).on('click', '#riderItemsBulkUpdate', function (e) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -486,7 +591,17 @@
                         return;
                     }
 
-                    submitBulkUpdate(action, null, null);
+                    if (action === 'completed') {
+                        $('input[name="rider_delivered_type"][value="other"]').prop('checked', true);
+                        $('#riderDeliveredGateAmount').val('0');
+                        $('#riderDeliveredPhotoInput').val('');
+                        resetDeliveredUploadLabel();
+                        syncDeliveredGateAmountVisibility();
+                        $('#riderDeliveredTypeModal').modal('show');
+                        return;
+                    }
+
+                    submitBulkUpdate(action, null, null, null, null, null);
                 });
 
                 $(document).on('click', '#riderPendingRemarkConfirm', function (e) {
@@ -503,7 +618,38 @@
                         return;
                     }
                     $('#riderPendingRemarkModal').modal('hide');
-                    submitBulkUpdate('pending', remark, photoFile);
+                    submitBulkUpdate('pending', remark, photoFile, null, null, null);
+                });
+
+                $(document).on('click', '#riderDeliveredTypeConfirm', function (e) {
+                    e.preventDefault();
+                    var deliveredType = String($('input[name="rider_delivered_type"]:checked').val() || '').trim();
+                    var photoInput = document.getElementById('riderDeliveredPhotoInput');
+                    var photoFile = photoInput && photoInput.files && photoInput.files[0] ? photoInput.files[0] : null;
+                    var gateAmount = $('#riderDeliveredGateAmount').val();
+
+                    if (deliveredType !== 'gate' && deliveredType !== 'other') {
+                        notify(@json(__('message.delivered_type_required')), 'error');
+                        return;
+                    }
+                    if (!photoFile) {
+                        notify(@json(__('message.delivered_photo_required')), 'error');
+                        return;
+                    }
+                    if (deliveredType === 'gate' && (gateAmount === '' || gateAmount === null || Number(gateAmount) < 0)) {
+                        notify(@json(__('message.gate_amount_required')), 'error');
+                        return;
+                    }
+
+                    $('#riderDeliveredTypeModal').modal('hide');
+                    submitBulkUpdate(
+                        'completed',
+                        null,
+                        null,
+                        deliveredType,
+                        deliveredType === 'gate' ? gateAmount : null,
+                        photoFile
+                    );
                 });
             });
         </script>

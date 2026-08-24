@@ -60,7 +60,12 @@ class AuthenticatedSessionController extends Controller
         }
 
         if (isset($request->admin_login) && $request->admin_login === "admin_login") {
-            if ($user->hasRole('admin')) {
+            if (isSuperAdmin($user) || $user->hasRole('super_admin')) {
+                Auth::logout();
+                return redirect()->route('super-admin.login')
+                    ->withErrors(['email' => 'Use the Super Admin login page for this account.']);
+            }
+            if ($user->hasRole('admin') || ($user->user_type ?? '') === 'admin') {
                 return redirect()->route('home');
             } elseif ($user->hasRole('delivery_man')) {
                 Auth::logout();
@@ -94,13 +99,26 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request)
     {
+        $sessionId = $request->session()->getId();
+
+        try {
+            \App\Models\AdminLoginDevice::query()
+                ->where('session_id', $sessionId)
+                ->where('is_active', true)
+                ->update([
+                    'is_active' => false,
+                    'logout_at' => now(),
+                ]);
+        } catch (\Throwable $e) {
+            // Device tracking is best-effort; logout must still succeed.
+        }
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();
-
         $request->session()->regenerateToken();
 
-        return redirect('/');
+        return redirect()->route('admin-login');
     }
 
     function getCountryDetailsByCode($code)

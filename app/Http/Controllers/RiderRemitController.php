@@ -26,11 +26,10 @@ class RiderRemitController extends Controller
 
         $loginUser = auth()->user();
         $branches = Branch::query()->where('status', 1)->orderBy('name')->get(['id', 'name']);
-        if (! in_array((string) ($loginUser->user_type ?? ''), ['admin', 'demo_admin'], true)
-            && (int) ($loginUser->branch_id ?? 0) > 0
-        ) {
-            $branches = $branches->where('id', (int) $loginUser->branch_id)->values();
-            $branchId = (int) $loginUser->branch_id;
+        $forcedBranchId = forcedBranchId($loginUser);
+        if ($forcedBranchId) {
+            $branches = $branches->where('id', $forcedBranchId)->values();
+            $branchId = $forcedBranchId;
             $branchFilter = (string) $branchId;
         }
 
@@ -82,6 +81,11 @@ class RiderRemitController extends Controller
             ->exists();
         if (! $isRider) {
             return response()->json(['message' => __('message.something_went_wrong')], 422);
+        }
+
+        $forcedBranchId = forcedBranchId(auth()->user());
+        if ($forcedBranchId) {
+            $data['branch_id'] = $forcedBranchId;
         }
 
         $row = $service->save($data, (int) auth()->id());

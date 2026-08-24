@@ -100,9 +100,27 @@
     .pds-item-msg {
         display: flex;
         margin-bottom: 0.65rem;
+        align-items: flex-end;
+        gap: 8px;
     }
     .pds-item-msg--admin { justify-content: flex-end; }
     .pds-item-msg--client { justify-content: flex-start; }
+    .pds-item-msg__avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        object-fit: cover;
+        flex-shrink: 0;
+        background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+    }
+    .pds-item-msg__avatar--letter {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 800;
+        font-size: 0.85rem;
+    }
     .pds-item-msg__bubble {
         max-width: 78%;
         padding: 0.55rem 0.75rem;

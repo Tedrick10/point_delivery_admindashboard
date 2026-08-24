@@ -399,6 +399,7 @@ class OrderController extends Controller
                 'toBranch',
                 'deliveryMan',
                 'pendingPhotoMedia',
+                'deliveredPhotoMedia',
             ])
             ->orderByDesc('received_date')
             ->orderByDesc('id')
@@ -699,7 +700,7 @@ class OrderController extends Controller
 
         $items = DispatchOrderItem::query()
             ->whereHas('messages')
-            ->with(['order.client', 'order.delivery_man', 'fromBranch', 'toBranch', 'deliveryMan'])
+            ->with(['order.client.media', 'order.delivery_man', 'fromBranch', 'toBranch', 'deliveryMan'])
             ->withCount([
                 'messages as unreplied_count' => function ($q) {
                     $q->where('sender_type', 'client')->whereNull('read_at');
@@ -731,8 +732,8 @@ class OrderController extends Controller
             $item->last_chat_at = $last?->created_at;
             $item->last_chat_sender_type = $last?->sender_type;
             if (($last?->sender_type ?? '') === 'client') {
-                $osName = trim((string) optional($item->order?->client)->name);
-                $item->last_chat_sender_label = $osName !== '' ? $osName : 'Os';
+                $osName = resolveDispatchOsName($item->order);
+                $item->last_chat_sender_label = ($osName !== '' && $osName !== '-') ? $osName : 'Os';
             } else {
                 $adminName = trim((string) optional($last?->sender)->name);
                 $item->last_chat_sender_label = $adminName !== '' ? $adminName : 'Admin';
@@ -843,6 +844,8 @@ class OrderController extends Controller
         $riderQuery = User::query()
             ->where('user_type', 'delivery_man')
             ->whereIn('id', array_keys($countsByRider) ?: [0])
+            ->withAvg('rating as average_rating', 'rating')
+            ->withCount('rating as ratings_count')
             ->orderBy('name');
 
         if ($statusFilter === 'active') {
@@ -864,13 +867,20 @@ class OrderController extends Controller
                 'total' => 0,
             ];
 
+            $avg = round((float) ($rider->average_rating ?? 0), 2);
+            $ratingCount = (int) ($rider->ratings_count ?? 0);
+
             return (object) [
                 'id' => $rider->id,
                 'name' => $rider->name,
                 'phone' => $rider->riderAssignedPhone() ?: '-',
                 'status' => (int) $rider->status,
                 'counts' => $counts,
+                'average_rating' => $avg,
+                'ratings_count' => $ratingCount,
             ];
+        })->sortByDesc(function ($rider) {
+            return ((float) $rider->average_rating * 1000) + (int) $rider->ratings_count;
         })->values();
 
         $riderOptions = User::query()
@@ -883,6 +893,7 @@ class OrderController extends Controller
         $assets = [];
         $filterFromDate = $fromDateRaw;
         $filterToDate = $toDateRaw;
+        $riderOfMonthUrl = route('deliveryman.rider-of-month');
 
         return view('order.dispatch-rider-list', compact(
             'pageTitle',
@@ -894,7 +905,8 @@ class OrderController extends Controller
             'riderFilter',
             'statusFilter',
             'fromDay',
-            'toDay'
+            'toDay',
+            'riderOfMonthUrl'
         ));
     }
 
@@ -956,7 +968,7 @@ class OrderController extends Controller
         $itemsQuery = DispatchOrderItem::query()
             ->where('delivery_man_id', $rider->id)
             ->where('status', $queryStatus)
-            ->with(['order.client', 'fromBranch', 'toBranch', 'deliveryMan', 'photoMedia', 'pendingPhotoMedia'])
+            ->with(['order.client', 'fromBranch', 'toBranch', 'deliveryMan', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia'])
             ->where(function ($dateQuery) use ($fromDay, $toDay) {
                 $dateQuery->whereBetween('received_date', [$fromDay, $toDay])
                     ->orWhere(function ($fallback) use ($fromDay, $toDay) {
@@ -1063,10 +1075,20 @@ class OrderController extends Controller
             'to_status' => 'required|string|in:courier_departed,pending,completed,admin_completed,admin_finished',
             'remark' => 'nullable|string|max:1000',
             'pending_photo' => 'nullable|image|max:10240',
+            'delivered_photo' => 'nullable|image|max:10240',
+            'delivered_type' => 'nullable|string|in:gate,other',
+            'gate_amount' => 'nullable|numeric|min:0',
         ];
         if ($toStatus === 'pending') {
             $rules['remark'] = 'required|string|max:1000';
             $rules['pending_photo'] = 'required|image|max:10240';
+        }
+        if ($toStatus === 'completed') {
+            $rules['delivered_type'] = 'required|string|in:gate,other';
+            $rules['delivered_photo'] = 'required|image|max:10240';
+            if ((string) $request->input('delivered_type') === 'gate') {
+                $rules['gate_amount'] = 'required|numeric|min:0';
+            }
         }
         $data = $request->validate($rules);
 
@@ -1160,6 +1182,23 @@ class OrderController extends Controller
             }
         }
 
+        $deliveredPhotoId = 0;
+        $deliveredType = null;
+        $gateAmount = null;
+        if ($toStatus === 'completed') {
+            $deliveredType = (string) $data['delivered_type'];
+            $deliveredPhotoId = $this->storeAdminDeliveredProofPhoto(
+                $items->first(),
+                $request->file('delivered_photo')
+            );
+            if ($deliveredPhotoId <= 0) {
+                return response()->json(['message' => __('message.delivered_photo_required')], 422);
+            }
+            if ($deliveredType === 'gate') {
+                $gateAmount = round((float) ($data['gate_amount'] ?? 0), 2);
+            }
+        }
+
         foreach ($items as $item) {
             try {
                 $workflow->assertDeliveryStatusTransition($item, $toStatus, $remark);
@@ -1178,6 +1217,11 @@ class OrderController extends Controller
             }
             if ($toStatus === 'completed') {
                 $fill['delivery_locked'] = true;
+                $fill['delivered_type'] = $deliveredType;
+                $fill['delivered_photo_id'] = $deliveredPhotoId;
+                if ($deliveredType === 'gate' && $gateAmount !== null) {
+                    $fill['gate_amount'] = $gateAmount;
+                }
             }
 
             $item->forceFill($fill)->save();
@@ -1264,6 +1308,11 @@ class OrderController extends Controller
         return $media ? (int) $media->id : 0;
     }
 
+    protected function storeAdminDeliveredProofPhoto(DispatchOrderItem $item, $file): int
+    {
+        return storeDispatchItemProofPhoto($item, $file, 'delivered_proof');
+    }
+
     /**
      * Admin OS List — day-by-day parcel counts + amounts per Online Shop.
      */
@@ -1327,10 +1376,8 @@ class OrderController extends Controller
             ->get()
             ->keyBy('os_user_id');
 
-        $rows = $osIds->map(function ($osId) use ($clients, $settlementService, $drafts, $grouped) {
-            $osId = (int) $osId;
-            $unfinishedGroup = $grouped->get($osId, collect());
-            if ($unfinishedGroup->isEmpty()) {
+        $buildOsRow = function (int $osId, $itemGroup) use ($clients, $settlementService, $drafts) {
+            if ($itemGroup->isEmpty()) {
                 return null;
             }
 
@@ -1343,8 +1390,7 @@ class OrderController extends Controller
                 $name .= ' ('.$cityName.')';
             }
 
-            $amount = (float) $unfinishedGroup->sum(static fn ($item) => $item->displayOsToPay());
-            $itemCount = $unfinishedGroup->count();
+            $amount = (float) $itemGroup->sum(static fn ($item) => $item->displayOsToPay());
             $draft = $drafts->get($osId);
             $kpaySlipUrl = $draft && $draft->kpay_slip_path
                 ? Storage::disk('public')->url($draft->kpay_slip_path)
@@ -1361,11 +1407,42 @@ class OrderController extends Controller
                 'kpay_no' => $kpayNo,
                 'kpay_slip_url' => $kpaySlipUrl,
                 'has_kpay_slip' => ! empty($kpaySlipUrl),
-                'item_count' => $itemCount,
+                'item_count' => $itemGroup->count(),
                 'is_finished' => false,
                 'batch_id' => null,
             ];
+        };
+
+        // Split by item sign (not net OS total): negative → pay, positive → receive.
+        // Same OS can appear in both tabs when it has both outgoing and incoming items.
+        $payToOsRows = $osIds->map(function ($osId) use ($grouped, $buildOsRow) {
+            $osId = (int) $osId;
+            $payItems = $grouped->get($osId, collect())
+                ->filter(static fn ($item) => (float) $item->displayOsToPay() < 0)
+                ->values();
+
+            return $buildOsRow($osId, $payItems);
         })->filter()->sortBy(static fn ($row) => mb_strtolower($row->name), SORT_NATURAL)->values();
+
+        $receiveFromOsRows = $osIds->map(function ($osId) use ($grouped, $buildOsRow) {
+            $osId = (int) $osId;
+            $receiveItems = $grouped->get($osId, collect())
+                ->filter(static fn ($item) => (float) $item->displayOsToPay() > 0)
+                ->values();
+
+            return $buildOsRow($osId, $receiveItems);
+        })->filter()->sortBy(static fn ($row) => mb_strtolower($row->name), SORT_NATURAL)->values();
+
+        // Demo rows when a tab has no real unfinished settlements (UI preview).
+        if ($payToOsRows->isEmpty()) {
+            $payToOsRows = $this->demoOsSettlementRows('pay');
+        }
+        if ($receiveFromOsRows->isEmpty()) {
+            $receiveFromOsRows = $this->demoOsSettlementRows('receive');
+        }
+        $rows = $payToOsRows->concat($receiveFromOsRows)->values();
+        $usingOsSettlementDemo = $payToOsRows->contains(fn ($r) => ! empty($r->is_demo))
+            || $receiveFromOsRows->contains(fn ($r) => ! empty($r->is_demo));
 
         $osOptions = User::query()
             ->where('user_type', 'client')
@@ -1383,20 +1460,130 @@ class OrderController extends Controller
             'pageTitle',
             'assets',
             'rows',
+            'payToOsRows',
+            'receiveFromOsRows',
             'osOptions',
             'filterFromDate',
             'filterToDate',
             'fromDay',
             'toDay',
             'osFilter',
-            'slipCompany'
+            'slipCompany',
+            'usingOsSettlementDemo'
         ));
+    }
+
+    /**
+     * Sample OS settlement rows for empty pay / receive tabs.
+     *
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    protected function demoOsSettlementRows(string $section)
+    {
+        $proofUrl = asset('images/demo/os-settlement-proof.svg');
+
+        if ($section === 'receive') {
+            return collect([
+                (object) [
+                    'id' => -9101,
+                    'name' => 'Demo OS · Mingalar Market (MDY)',
+                    'phone' => '09-700-111-001',
+                    'amount' => 185000,
+                    'kpay_name' => '',
+                    'kpay_no' => '',
+                    'kpay_slip_url' => $proofUrl,
+                    'has_kpay_slip' => true,
+                    'item_count' => 8,
+                    'is_finished' => false,
+                    'batch_id' => null,
+                    'is_demo' => true,
+                ],
+                (object) [
+                    'id' => -9102,
+                    'name' => 'Demo OS · Golden Gate Shop',
+                    'phone' => '09-700-111-002',
+                    'amount' => 94500,
+                    'kpay_name' => '',
+                    'kpay_no' => '',
+                    'kpay_slip_url' => null,
+                    'has_kpay_slip' => false,
+                    'item_count' => 4,
+                    'is_finished' => false,
+                    'batch_id' => null,
+                    'is_demo' => true,
+                ],
+                (object) [
+                    'id' => -9103,
+                    'name' => 'Demo OS · City Mart Express',
+                    'phone' => '09-700-111-003',
+                    'amount' => 262000,
+                    'kpay_name' => '',
+                    'kpay_no' => '',
+                    'kpay_slip_url' => $proofUrl,
+                    'has_kpay_slip' => true,
+                    'item_count' => 12,
+                    'is_finished' => false,
+                    'batch_id' => null,
+                    'is_demo' => true,
+                ],
+            ]);
+        }
+
+        // pay → amount negative (admin pays OS)
+        return collect([
+            (object) [
+                'id' => -9001,
+                'name' => 'Demo OS · Zin Min Oo (Yangon)',
+                'phone' => '09-250-100-111',
+                'amount' => -125000,
+                'kpay_name' => 'Zin Min Oo',
+                'kpay_no' => '09-250-100-111',
+                'kpay_slip_url' => $proofUrl,
+                'has_kpay_slip' => true,
+                'item_count' => 6,
+                'is_finished' => false,
+                'batch_id' => null,
+                'is_demo' => true,
+            ],
+            (object) [
+                'id' => -9002,
+                'name' => 'Demo OS · Aye Chan Store',
+                'phone' => '09-450-200-222',
+                'amount' => -78500,
+                'kpay_name' => 'Aye Chan',
+                'kpay_no' => '09-450-200-222',
+                'kpay_slip_url' => null,
+                'has_kpay_slip' => false,
+                'item_count' => 3,
+                'is_finished' => false,
+                'batch_id' => null,
+                'is_demo' => true,
+            ],
+            (object) [
+                'id' => -9003,
+                'name' => 'Demo OS · Shwe Pyi Fashion',
+                'phone' => '09-780-300-333',
+                'amount' => -210000,
+                'kpay_name' => 'Shwe Pyi',
+                'kpay_no' => '09-780-300-333',
+                'kpay_slip_url' => $proofUrl,
+                'has_kpay_slip' => true,
+                'item_count' => 9,
+                'is_finished' => false,
+                'batch_id' => null,
+                'is_demo' => true,
+            ],
+        ]);
     }
 
     public function dispatchOsSettlementSlipPreview(Request $request, $osId)
     {
         if (! auth()->user()->can('order-list')) {
             return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        if ((int) $osId <= 0) {
+            return response()->json(['message' => __('message.os_settlement_demo_action_blocked')], 422);
         }
 
         $yangonToday = Carbon::now('Asia/Yangon')->format('d-m-Y');
@@ -1407,7 +1594,11 @@ class OrderController extends Controller
         $osId = (int) $osId;
 
         $settlementService = app(OsSettlementService::class);
-        $items = $settlementService->completedItemsQuery($osId, $fromDay, $toDay)->get();
+        $settlementSide = $request->get('settlement_side');
+        $items = $settlementService->filterItemsBySettlementSide(
+            $settlementService->completedItemsQuery($osId, $fromDay, $toDay)->get(),
+            in_array($settlementSide, ['pay', 'receive'], true) ? $settlementSide : null
+        );
 
         $batch = null;
         if ($items->isEmpty()) {
@@ -1471,6 +1662,10 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.demo_permission_denied')], 403);
         }
 
+        if ((int) $osId <= 0) {
+            return response()->json(['message' => __('message.os_settlement_demo_action_blocked')], 422);
+        }
+
         $request->validate([
             'from_date' => 'required|string',
             'to_date' => 'required|string',
@@ -1501,17 +1696,23 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.demo_permission_denied')], 403);
         }
 
+        if ((int) $osId <= 0) {
+            return response()->json(['message' => __('message.os_settlement_demo_action_blocked')], 422);
+        }
+
         $request->validate([
             'from_date' => 'required|string',
             'to_date' => 'required|string',
             'delivery_format' => 'nullable|string|in:table',
             'payment_method' => 'required|string|in:kpay,cash',
+            'settlement_side' => 'nullable|string|in:pay,receive',
         ]);
 
         $fromDay = $this->parseDispatchDateInput($request->input('from_date'))->toDateString();
         $toDay = $this->parseDispatchDateInput($request->input('to_date'))->toDateString();
         $deliveryFormat = app(OsSettlementService::class)->normalizeDeliveryFormat($request->input('delivery_format'));
         $paymentMethod = (string) $request->input('payment_method', 'kpay');
+        $settlementSide = $request->input('settlement_side');
         $osId = (int) $osId;
 
         $osClient = $osId > 0 ? User::query()->with('city')->find($osId) : null;
@@ -1532,7 +1733,8 @@ class OrderController extends Controller
                 $osName,
                 $osClient ?? new User(),
                 $deliveryFormat,
-                $paymentMethod
+                $paymentMethod,
+                $settlementSide
             );
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -1554,38 +1756,63 @@ class OrderController extends Controller
         $request->validate([
             'from_date' => 'required|string',
             'to_date' => 'required|string',
-            'os_ids' => 'required|array|min:1',
-            'os_ids.*' => 'integer',
+            'items' => 'required|array|min:1',
+            'items.*.os_id' => 'required|integer',
+            'items.*.payment_method' => 'required|string|in:kpay,cash',
+            'items.*.settlement_side' => 'nullable|string|in:pay,receive',
             'delivery_format' => 'nullable|string|in:table',
-            'payment_method' => 'required|string|in:kpay,cash',
+            'settlement_side' => 'nullable|string|in:pay,receive',
         ]);
 
         $fromDay = $this->parseDispatchDateInput($request->input('from_date'))->toDateString();
         $toDay = $this->parseDispatchDateInput($request->input('to_date'))->toDateString();
-        $osIds = array_values(array_unique(array_map('intval', $request->input('os_ids'))));
+        $defaultSide = $request->input('settlement_side');
+        $itemsPayload = collect($request->input('items', []))
+            ->map(static function ($item) use ($defaultSide) {
+                $side = $item['settlement_side'] ?? $defaultSide;
+
+                return [
+                    'os_id' => (int) ($item['os_id'] ?? 0),
+                    'payment_method' => ((string) ($item['payment_method'] ?? 'kpay')) === 'cash' ? 'cash' : 'kpay',
+                    'settlement_side' => in_array($side, ['pay', 'receive'], true) ? $side : null,
+                ];
+            })
+            ->filter(static fn ($item) => $item['os_id'] >= 0)
+            ->unique(static fn ($item) => $item['os_id'].'|'.($item['settlement_side'] ?? 'all'))
+            ->values();
         $settlementService = app(OsSettlementService::class);
         $deliveryFormat = $settlementService->normalizeDeliveryFormat($request->input('delivery_format'));
-        $paymentMethod = (string) $request->input('payment_method', 'kpay');
         $slipCompany = $this->dispatchOsSlipCompany();
         $finished = 0;
         $errors = [];
+        $finishedIds = [];
 
-        foreach ($osIds as $osId) {
-            $items = $settlementService->completedItemsQuery($osId, $fromDay, $toDay)->count();
-            if ($items <= 0) {
-                continue;
-            }
+        $osIds = $itemsPayload->pluck('os_id')->map(static fn ($id) => (int) $id)->unique()->values()->all();
+        $clients = User::query()
+            ->with('city')
+            ->whereIn('id', array_values(array_filter($osIds, static fn ($id) => $id > 0)))
+            ->get()
+            ->keyBy('id');
+
+        @set_time_limit(180);
+
+        foreach ($itemsPayload as $itemPayload) {
+            $osId = (int) $itemPayload['os_id'];
+            $paymentMethod = (string) $itemPayload['payment_method'];
+            $settlementSide = $itemPayload['settlement_side'];
 
             if ($paymentMethod === 'kpay' || $paymentMethod === 'cash') {
                 $kpayPath = $settlementService->getDraftKpayPath($osId, $fromDay, $toDay);
                 if (! $kpayPath) {
-                    $errors[] = __('message.os_settlement_kpay_missing_for_os', ['name' => $this->resolveOsListDisplayName($osId, User::find($osId))]);
+                    $errors[] = __('message.os_settlement_kpay_missing_for_os', [
+                        'name' => $this->resolveOsListDisplayName($osId, $clients->get($osId)),
+                    ]);
 
                     continue;
                 }
             }
 
-            $osClient = $osId > 0 ? User::query()->with('city')->find($osId) : null;
+            $osClient = $osId > 0 ? ($clients->get($osId) ?? null) : null;
             $osName = $this->resolveOsListDisplayName($osId, $osClient);
 
             try {
@@ -1598,9 +1825,11 @@ class OrderController extends Controller
                     $osName,
                     $osClient ?? new User(),
                     $deliveryFormat,
-                    $paymentMethod
+                    $paymentMethod,
+                    $settlementSide
                 );
                 $finished++;
+                $finishedIds[] = $osId;
             } catch (\RuntimeException $e) {
                 $errors[] = $e->getMessage();
             }
@@ -1615,6 +1844,7 @@ class OrderController extends Controller
         return response()->json([
             'message' => __('message.os_settlement_finished_all', ['count' => $finished]),
             'finished' => $finished,
+            'finished_os_ids' => $finishedIds,
             'errors' => $errors,
         ]);
     }
@@ -1695,7 +1925,7 @@ class OrderController extends Controller
         $search = trim((string) $request->get('search', ''));
 
         $itemsQuery = DispatchOrderItem::query()
-            ->with(['order.client.city', 'order.city', 'pendingPhotoMedia'])
+            ->with(['order.client.city', 'order.city', 'pendingPhotoMedia', 'deliveredPhotoMedia'])
             ->whereHas('order', function ($q) use ($osId) {
                 if ($osId > 0) {
                     $q->where('client_id', $osId);
@@ -2166,7 +2396,7 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.demo_permission_denied')], 403);
         }
 
-        $item = DispatchOrderItem::with('order.client')->where('order_id', $orderId)->findOrFail($itemId);
+        $item = DispatchOrderItem::with('order.client.media')->where('order_id', $orderId)->findOrFail($itemId);
 
         // Admin opened the thread — mark OS replies as read.
         \App\Models\DispatchItemMessage::query()
@@ -2197,6 +2427,7 @@ class OrderController extends Controller
 
         $order = $item->order;
         $osName = resolveDispatchOsName($order);
+        $osProfileImage = resolveUploadedProfileImageUrl(optional($order)->client);
         $metaLine = trim(
             ($item->code ? '#'.$item->code : '#'.$item->id)
             .' · '
@@ -2207,6 +2438,7 @@ class OrderController extends Controller
             'item_id' => $item->id,
             'customer_name' => $item->customer_name,
             'os_name' => $osName !== '-' ? $osName : null,
+            'os_profile_image' => $osProfileImage,
             'meta_line' => $metaLine,
             'messages' => $messages,
         ]);
@@ -4414,24 +4646,119 @@ class OrderController extends Controller
 
     public function rating(Request $request)
     {
-        $order_id = order::where('id',request('order_id'))->first();
-
-        $message = __('message.not_found_entry', ['name' => __('message.order')]);
-
-        if($order_id == '') {
-            return json_message_response( $message );
+        $user = auth()->user();
+        if (! $user) {
+            return json_message_response(__('message.unauthorized'), 401);
         }
+
+        $itemId = (int) $request->input('dispatch_order_item_id', 0);
+        if ($itemId > 0) {
+            $item = \App\Models\DispatchOrderItem::query()
+                ->with('order')
+                ->find($itemId);
+
+            if (! $item) {
+                return json_message_response(__('message.not_found_entry', ['name' => __('message.order')]), 404);
+            }
+
+            $order = $item->order;
+            $ownsItem = $order
+                && (int) $order->client_id === (int) $user->id
+                && $user->user_type === 'client';
+
+            if (! $ownsItem) {
+                return json_message_response(__('message.demo_permission_denied'), 403);
+            }
+
+            if (($item->status ?? '') !== 'completed' || empty($item->delivery_man_id)) {
+                return json_message_response(__('message.rider_rating_not_allowed'), 422);
+            }
+
+            $request->validate([
+                'rating' => 'required|numeric|min:1|max:5',
+                'comment' => 'nullable|string|max:1000',
+            ]);
+
+            \App\Models\Ratings::updateOrCreate(
+                [
+                    'dispatch_order_item_id' => $item->id,
+                    'user_id' => $user->id,
+                ],
+                [
+                    'order_id' => $item->order_id,
+                    'review_user_id' => (int) $item->delivery_man_id,
+                    'rating' => (float) $request->input('rating'),
+                    'comment' => trim((string) $request->input('comment', '')),
+                    'rating_by' => $user->user_type,
+                ]
+            );
+
+            return json_message_response(__('message.rated_successfully'));
+        }
+
+        $order = Order::query()->find((int) $request->input('order_id'));
+
+        if (! $order) {
+            return json_message_response(__('message.not_found_entry', ['name' => __('message.order')]), 404);
+        }
+
+        // OS rates pickup rider after Pick Up Completed.
+        if ($user->user_type === 'client') {
+            $ownsOrder = (int) $order->client_id === (int) $user->id;
+            $pickupDone = in_array((string) $order->status, [
+                'courier_picked_up',
+                'courier_departed',
+                'completed',
+            ], true);
+            $hasRider = ! empty($order->delivery_man_id);
+
+            if (! $ownsOrder) {
+                return json_message_response(__('message.demo_permission_denied'), 403);
+            }
+            if (! $pickupDone || ! $hasRider) {
+                return json_message_response(__('message.rider_rating_pickup_not_allowed'), 422);
+            }
+
+            $request->validate([
+                'rating' => 'required|numeric|min:1|max:5',
+                'comment' => 'nullable|string|max:1000',
+            ]);
+
+            $existing = Ratings::query()
+                ->where('order_id', $order->id)
+                ->where('user_id', $user->id)
+                ->whereNull('dispatch_order_item_id')
+                ->first();
+
+            $payload = [
+                'user_id' => $user->id,
+                'review_user_id' => (int) $order->delivery_man_id,
+                'order_id' => $order->id,
+                'dispatch_order_item_id' => null,
+                'rating' => (float) $request->input('rating'),
+                'comment' => trim((string) $request->input('comment', '')),
+                'rating_by' => $user->user_type,
+            ];
+
+            if ($existing) {
+                $existing->fill($payload)->save();
+            } else {
+                Ratings::query()->create($payload);
+            }
+
+            return json_message_response(__('message.rated_successfully'));
+        }
+
         $data = $request->all();
-
-        $data['user_id'] = auth()->user()->id;
-        if(auth()->user()->user_type == 'client'){
-            $data['review_user_id'] = $order_id->delivery_man_id;
-        }else{
-            $data['review_user_id'] = $order_id->client_id;
+        $data['user_id'] = $user->id;
+        if ($user->user_type == 'client') {
+            $data['review_user_id'] = $order->delivery_man_id;
+        } else {
+            $data['review_user_id'] = $order->client_id;
         }
 
-        $data['rating_by'] = auth()->user()->user_type;
-         Ratings::updateOrCreate([ 'id' => $request->id ], $data);
+        $data['rating_by'] = $user->user_type;
+        Ratings::updateOrCreate(['id' => $request->id], $data);
 
         $message = __('message.rated_successfully');
 

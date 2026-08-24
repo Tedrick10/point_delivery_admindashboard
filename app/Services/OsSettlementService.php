@@ -188,6 +188,25 @@ class OsSettlementService
         return $draft?->kpay_slip_path;
     }
 
+    public function filterItemsBySettlementSide($items, ?string $settlementSide)
+    {
+        $side = in_array($settlementSide, ['pay', 'receive'], true) ? $settlementSide : null;
+        if ($side === null) {
+            return $items;
+        }
+
+        return $items
+            ->filter(static function ($item) use ($side) {
+                $amount = (float) $item->displayOsToPay();
+                if ($side === 'pay') {
+                    return $amount < 0;
+                }
+
+                return $amount > 0;
+            })
+            ->values();
+    }
+
     public function finishOs(
         int $osId,
         string $fromDay,
@@ -197,9 +216,11 @@ class OsSettlementService
         string $osName,
         User $osClient,
         string $deliveryFormat = 'table',
-        string $paymentMethod = 'kpay'
+        string $paymentMethod = 'kpay',
+        ?string $settlementSide = null
     ): OsSettlementBatch {
         $items = $this->completedItemsQuery($osId, $fromDay, $toDay)->get();
+        $items = $this->filterItemsBySettlementSide($items, $settlementSide);
         if ($items->isEmpty()) {
             throw new \RuntimeException(__('message.os_settlement_no_completed_items'));
         }
@@ -226,6 +247,7 @@ class OsSettlementService
             'to_date' => $toDay,
             'amount' => $amount,
             'payment_method' => $paymentMethod,
+            'settlement_side' => in_array($settlementSide, ['pay', 'receive'], true) ? $settlementSide : null,
             'delivery_format' => $this->normalizeDeliveryFormat($deliveryFormat),
             'kpay_name' => $this->kpayNameFromUser($osClient),
             'kpay_no' => $this->kpayNoFromUser($osClient),
@@ -243,53 +265,109 @@ class OsSettlementService
                 'updated_at' => now(),
             ]);
 
-        OsSettlementDraft::query()
-            ->where('os_user_id', $osId)
-            ->where('from_date', $fromDay)
-            ->where('to_date', $toDay)
-            ->delete();
-
-        // HTML + PNG first (fast). DomPDF must not block the OS Pay Slip notification.
-        try {
-            $this->generateLightSettlementFiles($batch, $slipCompany, $slipSender, $slipData, $toDateRaw);
-        } catch (\Throwable $e) {
-            Log::warning('os settlement light files failed', [
-                'batch_id' => $batch->id,
-                'error' => $e->getMessage(),
-            ]);
+        // Keep draft if the other settlement side still has unfinished items for this OS.
+        if (! $this->hasUnfinishedCompletedItems($osId, $fromDay, $toDay)) {
+            OsSettlementDraft::query()
+                ->where('os_user_id', $osId)
+                ->where('from_date', $fromDay)
+                ->where('to_date', $toDay)
+                ->delete();
         }
 
-        if ($osId > 0 && $osClient && (int) $osClient->id > 0) {
+        $isReceiveSide = $settlementSide === 'receive';
+        $receiveId = null;
+
+        if ($isReceiveSide) {
+            // Receive row first (no push yet) — push runs after response with file generation.
             try {
-                $this->notifyOsSettlement($osClient, $batch);
+                $receive = app(OsReceiveSettlementService::class)->createFromBatch($batch, $finishedBy, false);
+                $receiveId = (int) $receive->id;
             } catch (\Throwable $e) {
-                Log::warning('os settlement notify failed', [
+                Log::warning('os receive settlement create failed', [
                     'batch_id' => $batch->id,
-                    'os_user_id' => $osId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        } else {
+            try {
+                app(MoneyTransferService::class)->recordFromSettlementBatch($batch);
+            } catch (\Throwable $e) {
+                Log::warning('os settlement money transfer failed', [
+                    'batch_id' => $batch->id,
                     'error' => $e->getMessage(),
                 ]);
             }
         }
 
-        try {
-            app(MoneyTransferService::class)->recordFromSettlementBatch($batch);
-        } catch (\Throwable $e) {
-            Log::warning('os settlement money transfer failed', [
-                'batch_id' => $batch->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
         $batchId = (int) $batch->id;
-        dispatch(function () use ($batchId, $slipCompany, $slipSender, $slipData, $toDateRaw) {
-            @set_time_limit(120);
+        $osClientId = ($osId > 0 && $osClient && (int) $osClient->id > 0) ? (int) $osClient->id : 0;
+
+        // Slip files + FCM are slow (especially Finish All × N OS). Do them after the HTTP response.
+        dispatch(function () use (
+            $batchId,
+            $osClientId,
+            $isReceiveSide,
+            $receiveId,
+            $slipCompany,
+            $slipSender,
+            $slipData,
+            $toDateRaw
+        ) {
+            @set_time_limit(180);
             $freshBatch = OsSettlementBatch::query()->find($batchId);
             if (! $freshBatch) {
                 return;
             }
+
+            try {
+                app(OsSettlementService::class)->generateLightSettlementFiles(
+                    $freshBatch,
+                    $slipCompany,
+                    $slipSender,
+                    $slipData,
+                    $toDateRaw
+                );
+            } catch (\Throwable $e) {
+                Log::warning('os settlement light files failed', [
+                    'batch_id' => $batchId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            if ($isReceiveSide) {
+                if ($receiveId > 0 && $osClientId > 0) {
+                    try {
+                        $receive = \App\Models\OsReceiveSettlement::query()->find($receiveId);
+                        $osUser = User::query()->find($osClientId);
+                        if ($receive && $osUser) {
+                            app(OsReceiveSettlementService::class)->notifyPending($osUser, $receive);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('os receive pending notify failed', [
+                            'batch_id' => $batchId,
+                            'receive_id' => $receiveId,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            } elseif ($osClientId > 0) {
+                try {
+                    $osUser = User::query()->find($osClientId);
+                    if ($osUser) {
+                        app(OsSettlementService::class)->notifyOsSettlement($osUser, $freshBatch->fresh());
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('os settlement notify failed', [
+                        'batch_id' => $batchId,
+                        'os_user_id' => $osClientId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             try {
                 app(OsSettlementService::class)->generatePdfSettlementFiles(
-                    $freshBatch,
+                    $freshBatch->fresh(),
                     $slipCompany,
                     $slipSender,
                     $slipData,
@@ -304,6 +382,14 @@ class OsSettlementService
         })->afterResponse();
 
         return $batch->fresh();
+    }
+
+    /**
+     * Lightweight unfinished check (no eager loads) used after finishing one side.
+     */
+    public function hasUnfinishedCompletedItems(int $osId, string $fromDay, string $toDay): bool
+    {
+        return $this->completedItemsQuery($osId, $fromDay, $toDay)->exists();
     }
 
     public function generateSettlementFiles(
@@ -333,7 +419,7 @@ class OsSettlementService
         ];
     }
 
-    protected function generateLightSettlementFiles(
+    public function generateLightSettlementFiles(
         OsSettlementBatch $batch,
         array $slipCompany,
         array $slipSender,

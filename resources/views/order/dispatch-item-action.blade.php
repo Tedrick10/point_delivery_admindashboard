@@ -5,6 +5,7 @@
         ? app(\App\Services\DispatchOrderWorkflowService::class)->canAdminEditDispatchItemInfo($order, $item)
         : false;
     $osName = $order ? resolveDispatchOsName($order) : '-';
+    $osProfileImage = resolveUploadedProfileImageUrl(optional($order)->client);
     $unreadClientReplies = \App\Models\DispatchItemMessage::query()
         ->where('dispatch_order_item_id', $item->id)
         ->where('sender_type', 'client')
@@ -23,6 +24,7 @@
            data-order-id="{{ $orderId }}"
            data-item-id="{{ $item->id }}"
            data-os-name="{{ e($osName !== '-' ? $osName : '') }}"
+           data-os-profile-image="{{ e($osProfileImage ?? '') }}"
            data-customer="{{ e($item->customer_name ?? '') }}"
            data-meta="{{ e($metaLine) }}"
            data-list-url="{{ route('order.dispatch.item.messages', [$orderId, $item->id]) }}"

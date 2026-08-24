@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             ModelHasPermissionsTableSeeder::class,
             AppSettingTableSeeder::class,
             FrontendWebsiteSeeder::class,
+            PrivacyTermsSeeder::class,
             StaffRoleSeeder::class,
             MailSeeders::class,
             SmsSeeders::class,

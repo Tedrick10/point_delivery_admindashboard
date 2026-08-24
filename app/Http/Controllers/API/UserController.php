@@ -87,12 +87,20 @@ class UserController extends Controller
         $decryptedPassword = $this->decryptData($request->input('password'));
         $decryptedPlayerId = $this->decryptData($request->input('player_id'));
         $decryptedfcmToken = $this->decryptData($request->input('fcm_token'));
+        $decryptedUsername = $request->has('username') ? $this->decryptData($request->input('username')) : '';
 
-        $loginValue = trim($decryptedEmail);
-        $user = User::where('email', $loginValue)
-            ->orWhere('username', $loginValue)
-            ->orWhere('contact_number', $loginValue)
-            ->first();
+        $loginValue = trim($decryptedUsername !== '' ? $decryptedUsername : $decryptedEmail);
+        $normalizedPhone = $loginValue !== '' ? normalizeContactNumber($loginValue) : '';
+
+        $user = User::where(function ($query) use ($loginValue, $normalizedPhone) {
+            $query->where('username', $loginValue)
+                ->orWhere('email', $loginValue)
+                ->orWhere('contact_number', $loginValue);
+            if ($normalizedPhone !== '' && $normalizedPhone !== $loginValue) {
+                $query->orWhere('username', $normalizedPhone)
+                    ->orWhere('contact_number', $normalizedPhone);
+            }
+        })->first();
 
         if ($user && \Hash::check($decryptedPassword, $user->password)) {
             Auth::login($user);
@@ -146,12 +154,12 @@ class UserController extends Controller
         $validator = Validator::make($decryptedData, [
             'name' => $isClient ? 'required|string|max:255' : 'sometimes|nullable|string|max:255',
             'username' => [
-                'sometimes',
                 'required',
+                'string',
+                'min:3',
+                'max:50',
+                'regex:/^[A-Za-z0-9._-]+$/',
                 function ($attribute, $value, $fail) {
-                    if (filter_var($value, FILTER_VALIDATE_EMAIL)) {
-                        return;
-                    }
                     if (User::where('username', $value)->exists()) {
                         $fail(__('message.username_taken'));
                     }
@@ -168,6 +176,9 @@ class UserController extends Controller
             'nrc' => 'sometimes|nullable|string|max:100',
             'kpay_name' => $isClient ? 'required|string|max:255' : 'sometimes|nullable|string|max:255',
             'kpay_no' => $isClient ? 'required|string|max:50' : 'sometimes|nullable|string|max:50',
+        ], [
+            'username.regex' => __('message.username_invalid'),
+            'username.min' => __('message.username_invalid'),
         ]);
 
         // Handle Validation Failure
@@ -188,7 +199,8 @@ class UserController extends Controller
         }
 
         $phone = $input['contact_number'] ?? '';
-        $input['username'] = registrationUsernameFromPhone($input['username'] ?: $phone);
+        $input['username'] = sanitizeRegistrationUsername($input['username'] ?? '')
+            ?: registrationUsernameFromPhone($phone);
         $input['email'] = $input['email'] ?: registrationEmailFromPhone($phone);
         $input['os_profile'] = buildUserOsProfileFromArray($input);
         $input['address'] = buildUserAddressFromProfile($input['os_profile']);
@@ -705,6 +717,8 @@ class UserController extends Controller
         $data['insurance_description'] = $insurancedescription ? $insurancedescription->value : null;
         $claim_duration = Setting::where('type', 'claim_duration')->where('key', 'claim_duration')->first();
         $data['claim_duration'] = $claim_duration ? $claim_duration->value : null;
+        $data['privacy_policy'] = SettingData('privacy_policy', 'privacy_policy');
+        $data['terms_condition'] = SettingData('terms_condition', 'terms_condition');
 
         return json_custom_response($data);
     }

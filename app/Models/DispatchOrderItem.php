@@ -16,6 +16,8 @@ class DispatchOrderItem extends Model
         'order_id',
         'photo_id',
         'pending_photo_id',
+        'delivered_photo_id',
+        'delivered_type',
         'cust_photo_id',
         'cust_sign_id',
         'received_date',
@@ -54,6 +56,7 @@ class DispatchOrderItem extends Model
         'order_id' => 'integer',
         'photo_id' => 'integer',
         'pending_photo_id' => 'integer',
+        'delivered_photo_id' => 'integer',
         'cust_photo_id' => 'integer',
         'cust_sign_id' => 'integer',
         'delivery_man_id' => 'integer',
@@ -115,6 +118,11 @@ class DispatchOrderItem extends Model
     public function pendingPhotoMedia()
     {
         return $this->belongsTo(Media::class, 'pending_photo_id', 'id');
+    }
+
+    public function deliveredPhotoMedia()
+    {
+        return $this->belongsTo(Media::class, 'delivered_photo_id', 'id');
     }
 
     public function custPhotoMedia()

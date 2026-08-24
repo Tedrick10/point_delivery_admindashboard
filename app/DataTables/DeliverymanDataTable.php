@@ -214,6 +214,10 @@ class DeliverymanDataTable extends DataTable
                 ->orWhereNull('last_actived_at');
             }
         }
+        $forcedBranchId = forcedBranchId(auth()->user());
+        if ($forcedBranchId) {
+            $model->where('branch_id', $forcedBranchId);
+        }
         return $model->whereNull('deleted_at');
     }
 

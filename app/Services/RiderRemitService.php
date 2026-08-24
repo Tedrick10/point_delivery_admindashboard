@@ -108,7 +108,7 @@ class RiderRemitService
 
     public function save(array $data, int $userId): RiderRemit
     {
-        $day = $data['remit_date'];
+        $day = $this->parseDate((string) ($data['remit_date'] ?? ''))->toDateString();
         $branchId = (int) ($data['branch_id'] ?? 0);
         $riderId = (int) $data['delivery_man_id'];
         $denoms = $this->normalizeDenoms($data['denominations'] ?? []);
@@ -132,6 +132,9 @@ class RiderRemitService
                 'updated_by' => $userId,
             ]
         );
+
+        // Push day-total Rider ဆီဖိုး into Expenses for that date.
+        app(\App\Services\ExpenseRiderFuelSyncService::class)->syncDate($day, $userId);
 
         return $row->fresh('deliveryMan');
     }

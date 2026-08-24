@@ -57,6 +57,10 @@
                     <span class="pds-money-transfer-summary__label">Kpay</span>
                     <strong class="pds-money-transfer-summary__value" data-rr-summary="kpay_total">{{ number_format($summary->kpay_total) }}</strong>
                 </div>
+                <div class="pds-money-transfer-summary__card is-combined">
+                    <span class="pds-money-transfer-summary__label">{{ __('message.rider_remit_combined') }}</span>
+                    <strong class="pds-money-transfer-summary__value" data-rr-summary="combined_total">{{ number_format(($summary->cash_total ?? 0) + ($summary->kpay_total ?? 0)) }}</strong>
+                </div>
                 <div class="pds-money-transfer-summary__card {{ $summary->balanced_count === $summary->rider_count && $summary->rider_count > 0 ? 'is-ok' : 'is-warn' }}" id="rrBalanceCard">
                     <span class="pds-money-transfer-summary__label">{{ __('message.rider_remit_balanced') }}</span>
                     <strong class="pds-money-transfer-summary__value">
@@ -73,6 +77,16 @@
                         <p>{{ __('message.rider_remit_empty') }}</p>
                     </div>
                 @else
+                    @php
+                        $riderCount = $riders->count();
+                        $colCount = $riderCount + 2; // label + riders + total
+                        $sheetTotals = [];
+                        foreach ($denoms as $note) {
+                            $sheetTotals[$note] = (int) $riders->sum(function ($rider) use ($note) {
+                                return (int) ($rider->denoms[(string) $note] ?? 0);
+                            });
+                        }
+                    @endphp
                     <div class="pds-rider-remit-shell">
                         <table class="pds-rider-remit-grid" id="riderRemitGrid"
                                data-save-url="{{ route('order.rider-remit.save') }}"
@@ -81,7 +95,7 @@
                                data-can-edit="{{ $canEdit ? '1' : '0' }}">
                             <thead>
                                 <tr>
-                                    <th class="pds-rider-remit-stub">{{ __('message.rider_remit_title') }}</th>
+                                    <th class="pds-rider-remit-stub pds-rider-remit-label">{{ __('message.rider_remit_title') }}</th>
                                     @foreach($riders as $index => $rider)
                                         <th class="pds-rider-remit-col {{ $rider->balanced ? 'is-balanced' : '' }}" data-rider="{{ $rider->delivery_man_id }}">
                                             <span class="pds-rider-remit-col__no">{{ $index + 1 }}</span>
@@ -91,87 +105,109 @@
                                             @endif
                                         </th>
                                     @endforeach
+                                    <th class="pds-rider-remit-total-col">
+                                        <strong>{{ __('message.rider_remit_sheet_total') }}</strong>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr class="pds-rider-remit-row is-input">
-                                    <th>{{ __('message.rider_remit_prepaid') }}</th>
+                                    <th class="pds-rider-remit-label">{{ __('message.rider_remit_prepaid') }}</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}">
                                             <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="prepaid_amount" type="number" min="0" step="1" value="{{ $rider->prepaid_amount ?: '' }}" placeholder="0" @disabled(! $canEdit)>
                                         </td>
                                     @endforeach
+                                    <td class="pds-rider-remit-total-cell is-blank"></td>
                                 </tr>
                                 <tr class="pds-rider-remit-row is-due">
-                                    <th>{{ __('message.rider_remit_due') }}</th>
+                                    <th class="pds-rider-remit-label">{{ __('message.rider_remit_due') }}</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}" data-rr-due="{{ $rider->due_amount }}">
                                             <span class="pds-rider-remit-read">{{ number_format($rider->due_amount) }}</span>
                                         </td>
                                     @endforeach
+                                    <td class="pds-rider-remit-total-cell is-blank"></td>
                                 </tr>
                                 <tr class="pds-rider-remit-row is-input">
-                                    <th>{{ __('message.rider_remit_fuel') }}</th>
+                                    <th class="pds-rider-remit-label">{{ __('message.rider_remit_fuel') }}</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}">
                                             <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="fuel_amount" type="number" min="0" step="1" value="{{ $rider->fuel_amount ?: '' }}" placeholder="0" @disabled(! $canEdit)>
                                         </td>
                                     @endforeach
+                                    <td class="pds-rider-remit-total-cell is-blank"></td>
                                 </tr>
                                 <tr class="pds-rider-remit-row is-input">
-                                    <th>{{ __('message.rider_remit_fee') }}</th>
+                                    <th class="pds-rider-remit-label">{{ __('message.rider_remit_fee') }}</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}">
                                             <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="fee_amount" type="number" min="0" step="1" value="{{ $rider->fee_amount ?: '' }}" placeholder="0" @disabled(! $canEdit)>
                                         </td>
                                     @endforeach
+                                    <td class="pds-rider-remit-total-cell is-blank"></td>
                                 </tr>
                                 <tr class="pds-rider-remit-row is-remain">
-                                    <th>{{ __('message.rider_remit_remaining') }}</th>
+                                    <th class="pds-rider-remit-label">{{ __('message.rider_remit_remaining') }}</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}">
                                             <span class="pds-rider-remit-read js-rr-remaining">{{ number_format($rider->remaining) }}</span>
                                         </td>
                                     @endforeach
+                                    <td class="pds-rider-remit-total-cell is-blank"></td>
                                 </tr>
 
                                 <tr class="pds-rider-remit-section">
-                                    <th colspan="{{ $riders->count() + 1 }}">{{ __('message.rider_remit_notes') }}</th>
+                                    <th class="pds-rider-remit-label">{{ __('message.rider_remit_notes') }}</th>
+                                    <td colspan="{{ $riderCount }}" class="pds-rider-remit-section-span">{{ __('message.rider_remit_sheet_total') }}</td>
+                                    <td class="pds-rider-remit-total-cell is-blank"></td>
                                 </tr>
                                 @foreach($denoms as $note)
-                                    <tr class="pds-rider-remit-row is-note">
-                                        <th>{{ number_format($note) }}</th>
+                                    <tr class="pds-rider-remit-row is-note" data-note-row="{{ $note }}">
+                                        <th class="pds-rider-remit-label">{{ number_format($note) }}</th>
                                         @foreach($riders as $rider)
                                             <td data-rider="{{ $rider->delivery_man_id }}">
                                                 <input class="js-rr-denom" data-rider="{{ $rider->delivery_man_id }}" data-note="{{ $note }}" type="number" min="0" step="1" value="{{ ($rider->denoms[(string) $note] ?? 0) ?: '' }}" placeholder="0" @disabled(! $canEdit)>
                                             </td>
                                         @endforeach
+                                        <td class="pds-rider-remit-total-cell">
+                                            <span class="pds-rider-remit-read js-rr-note-total" data-note-total="{{ $note }}">{{ number_format($sheetTotals[$note] ?? 0) }}</span>
+                                        </td>
                                     </tr>
                                 @endforeach
 
                                 <tr class="pds-rider-remit-row is-money">
-                                    <th>{{ __('message.rider_remit_cash') }}</th>
+                                    <th class="pds-rider-remit-label">{{ __('message.rider_remit_cash') }}</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}">
                                             <span class="pds-rider-remit-read js-rr-cash">{{ number_format($rider->cash_total) }}</span>
                                         </td>
                                     @endforeach
+                                    <td class="pds-rider-remit-total-cell">
+                                        <span class="pds-rider-remit-read js-rr-money-total">{{ number_format($summary->cash_total) }}</span>
+                                    </td>
                                 </tr>
                                 <tr class="pds-rider-remit-row is-input is-kpay">
-                                    <th>Kpay</th>
+                                    <th class="pds-rider-remit-label">Kpay</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}">
                                             <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="kpay_amount" type="number" min="0" step="1" value="{{ $rider->kpay_amount ?: '' }}" placeholder="0" @disabled(! $canEdit)>
                                         </td>
                                     @endforeach
+                                    <td class="pds-rider-remit-total-cell">
+                                        <span class="pds-rider-remit-read js-rr-kpay-total">{{ number_format($summary->kpay_total) }}</span>
+                                    </td>
                                 </tr>
                                 <tr class="pds-rider-remit-row is-total">
-                                    <th>{{ __('message.rider_remit_combined') }}</th>
+                                    <th class="pds-rider-remit-label">{{ __('message.rider_remit_combined') }}</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}" class="{{ $rider->match_class ?? ($rider->balanced ? 'is-ok' : 'is-off') }}">
                                             <span class="pds-rider-remit-read js-rr-match">{{ $rider->match_label ?? '0' }}</span>
                                         </td>
                                     @endforeach
+                                    <td class="pds-rider-remit-total-cell">
+                                        <span class="pds-rider-remit-read js-rr-combined-total">{{ number_format(($summary->cash_total ?? 0) + ($summary->kpay_total ?? 0)) }}</span>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -257,20 +293,35 @@
                         denominations: dens
                     };
                 }
+                function refreshNoteTotals() {
+                    denoms.forEach(function (note) {
+                        var sum = 0;
+                        $grid.find('.js-rr-denom[data-note="' + note + '"]').each(function () {
+                            sum += num($(this).val());
+                        });
+                        $grid.find('.js-rr-note-total[data-note-total="' + note + '"]').text(fmt(sum));
+                    });
+                }
                 function refreshSummary() {
-                    var due = 0, cash = 0, kpay = 0, ok = 0, count = 0;
+                    var due = 0, cash = 0, kpay = 0, combined = 0, ok = 0, count = 0;
                     $grid.find('thead .pds-rider-remit-col').each(function () {
                         var id = $(this).data('rider');
                         var c = compute(id);
                         due += dueOf(id);
                         cash += c.cash;
                         kpay += c.kpay;
+                        combined += c.combined;
                         if (c.ok) ok += 1;
                         count += 1;
                     });
+                    refreshNoteTotals();
+                    $grid.find('.js-rr-money-total').text(fmt(cash));
+                    $grid.find('.js-rr-kpay-total').text(fmt(kpay));
+                    $grid.find('.js-rr-combined-total').text(fmt(combined));
                     $('[data-rr-summary="due_total"]').text(fmt(due));
                     $('[data-rr-summary="cash_total"]').text(fmt(cash));
                     $('[data-rr-summary="kpay_total"]').text(fmt(kpay));
+                    $('[data-rr-summary="combined_total"]').text(fmt(combined));
                     $('[data-rr-summary="balanced_count"]').text(ok);
                     $('[data-rr-summary="rider_count"]').text(count);
                     $('#rrBalanceCard').toggleClass('is-ok', ok === count && count > 0).toggleClass('is-warn', !(ok === count && count > 0));

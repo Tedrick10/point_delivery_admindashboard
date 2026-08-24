@@ -28,12 +28,19 @@ use App\Http\Controllers\CouponController;
 use App\Http\Controllers\DeliveryManDocumentController;
 use App\Http\Controllers\DeliveryPartnerController;
 use App\Http\Controllers\Frontendwebsite\FronthomeController;
+use App\Http\Controllers\SuperAdmin\AuthController as SuperAdminAuthController;
+use App\Http\Controllers\SuperAdmin\BranchAdminController as SuperAdminBranchAdminController;
+use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
+use App\Http\Controllers\SuperAdmin\ScreenController as SuperAdminScreenController;
 use App\Http\Controllers\WalkThroughController;
 use App\Http\Controllers\PushNotificationController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\DailyCheckListController;
 use App\Http\Controllers\MoneyTransferController;
 use App\Http\Controllers\CashPayoutController;
+use App\Http\Controllers\OsReceiveSettlementController;
+use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\ExpenseSummaryController;
 use App\Http\Controllers\RiderRemitController;
 use App\Http\Controllers\WhyDeliveryController;
 use App\Http\Controllers\WithdrawRequestController;
@@ -128,7 +135,7 @@ Route::group(['prefix' => 'auth'], function () {
 
 Route::get('api-invoice/{id}', [OrderController::class, 'ApiInvoicePdf'])->name('api-order-invoice');
 Route::get('language/{locale}', [HomeController::class, 'changeLanguage'])->name('change.language');
-Route::group(['middleware' => ['auth', 'verified', 'assign_user_role']], function () {
+Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect_super_admin']], function () {
     Route::get('/', [HomeController::class, 'index']);
     Route::get('/home', [HomeController::class, 'index'])->name('home');
     Route::get('/high_demanding_areas', [HomeController::class, 'highDemanding_areas'])->name('high_demanding_areas');
@@ -224,6 +231,8 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role']], functio
     Route::delete('sub-admin-force-delete/{id?}', [SubAdminController::class, 'action'])->name('sub-admin.force.delete');
 
     Route::resource('deliveryman', DeliverymanController::class);
+    Route::get('deliveryman-rider-of-month', [DeliverymanController::class, 'riderOfTheMonth'])->name('deliveryman.rider-of-month');
+    Route::get('deliveryman/{id}/reviews', [DeliverymanController::class, 'reviews'])->name('deliveryman.reviews');
     Route::post('deliveryman/{id}/contact-number', [DeliverymanController::class, 'updateContactNumber'])->name('deliveryman.contact-number');
     Route::get('deliveryman-view/{id?}', [DeliverymanController::class, 'show'])->name('deliveryman-view.show');
     Route::get('deliverymean-restore/{id?}', [DeliverymanController::class, 'action'])->name('deliveryman.restore');
@@ -264,6 +273,16 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role']], functio
     Route::get('cash-payout', [CashPayoutController::class, 'index'])->name('order.cash-payout');
     Route::post('cash-payout/{id}/assign', [CashPayoutController::class, 'assign'])->name('order.cash-payout.assign');
     Route::post('cash-payout/{id}/status', [CashPayoutController::class, 'updateStatus'])->name('order.cash-payout.status');
+    Route::get('os-receive', [OsReceiveSettlementController::class, 'index'])->name('order.os-receive');
+    Route::post('os-receive/{id}/approve', [OsReceiveSettlementController::class, 'approve'])->name('order.os-receive.approve');
+    Route::post('os-receive/{id}/reject', [OsReceiveSettlementController::class, 'reject'])->name('order.os-receive.reject');
+    Route::get('expenses', [ExpenseController::class, 'index'])->name('order.expenses');
+    Route::get('expenses/rider-fuel-total', [ExpenseController::class, 'riderFuelTotal'])->name('order.expenses.rider-fuel-total');
+    Route::post('expenses', [ExpenseController::class, 'store'])->name('order.expenses.store');
+    Route::put('expenses/{id}', [ExpenseController::class, 'update'])->name('order.expenses.update');
+    Route::post('expenses/{id}/generate', [ExpenseController::class, 'generate'])->name('order.expenses.generate');
+    Route::delete('expenses/{id}', [ExpenseController::class, 'destroy'])->name('order.expenses.destroy');
+    Route::get('expense-summary', [ExpenseSummaryController::class, 'index'])->name('order.expense-summary');
     Route::get('rider-remit', [RiderRemitController::class, 'index'])->name('order.rider-remit');
     Route::post('rider-remit/save', [RiderRemitController::class, 'save'])->name('order.rider-remit.save');
     Route::get('dispatch-os-list/{osId}/slip-preview', [OrderController::class, 'dispatchOsSettlementSlipPreview'])->name('order.dispatch.os-slip-preview');
@@ -529,9 +548,30 @@ Route::any('/paytr-failed', [App\Http\Controllers\API\PaymentController::class, 
 Route::get('/ajax-list', [HomeController::class, 'getAjaxList'])->name('ajax-list');
 
 Route::get('/', function () {
-    return Auth::check()
-        ? redirect()->route('home')
-        : redirect()->route('admin-login');
+    if (! Auth::check()) {
+        return redirect()->route('admin-login');
+    }
+    if (isSuperAdmin(Auth::user())) {
+        return redirect()->route('super-admin.dashboard');
+    }
+
+    return redirect()->route('home');
+});
+
+Route::prefix('super-admin')->name('super-admin.')->group(function () {
+    Route::middleware('guest')->group(function () {
+        Route::get('login', [SuperAdminAuthController::class, 'showLogin'])->name('login');
+        Route::post('login', [SuperAdminAuthController::class, 'login'])->name('login.store');
+    });
+
+    Route::middleware(['auth', 'super_admin'])->group(function () {
+        Route::post('logout', [SuperAdminAuthController::class, 'logout'])->name('logout');
+        Route::get('/', [SuperAdminDashboardController::class, 'index'])->name('dashboard');
+        Route::get('dashboard', [SuperAdminDashboardController::class, 'index']);
+        Route::get('screens', [SuperAdminScreenController::class, 'hub'])->name('screens.hub');
+        Route::get('screens/{screen}', [SuperAdminScreenController::class, 'show'])->name('screens.show');
+        Route::resource('branch-admins', SuperAdminBranchAdminController::class)->except(['show']);
+    });
 });
 
 $admin_routes = env('SECURE_ADMIN_ROUTE') ? env('SECURE_ADMIN_ROUTE') : 'adminHub';

@@ -103,6 +103,9 @@ Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function ()
 
     Route::get('os-settlement/{id}', [API\OsSettlementController::class, 'show']);
     Route::get('os-settlement/{id}/download/{format}', [API\OsSettlementController::class, 'download']);
+    Route::get('os-receive/unsettled-summary', [API\OsReceiveSettlementController::class, 'unsettledSummary']);
+    Route::get('os-receive/{id}', [API\OsReceiveSettlementController::class, 'show']);
+    Route::post('os-receive/{id}/upload-payslip', [API\OsReceiveSettlementController::class, 'uploadPayslip']);
 
     Route::get('user-list', [API\UserController::class, 'userList']);
     Route::get('reference-list', [API\ReferenceController::class, 'getList']);

@@ -263,10 +263,13 @@ class ClientController extends Controller
 
         $osProfile = prepareUserOsProfileFromRequest($request);
         $address = buildUserAddressFromProfile($osProfile);
-        $username = registrationUsernameFromPhone($request->contact_number);
+        $username = sanitizeRegistrationUsername((string) $request->username);
+        if ($username === '') {
+            $username = registrationUsernameFromPhone($request->contact_number);
+        }
         $email = registrationEmailFromPhone($request->contact_number);
 
-        $payload = $request->only(['name', 'contact_number', 'is_vip']);
+        $payload = $request->only(['name', 'contact_number']);
         $payload['password'] = bcrypt($request->password);
         $payload['username'] = $username;
         $payload['email'] = $email;
@@ -277,7 +280,7 @@ class ClientController extends Controller
         $payload['referral_code'] = generateRandomCode();
         $payload['created_by_admin'] = $request->created_by_admin ?? 1;
         $payload['is_temp_password'] = $request->is_temp_password ?? 1;
-        $payload['is_vip'] = $request->has('is_vip') ? 1 : 0;
+        $payload['is_vip'] = 0;
 
         if ($is_email_verification == 0) {
             $payload['email_verified_at'] = now();
@@ -415,11 +418,11 @@ class ClientController extends Controller
             'password' => 'nullable|string|min:6|confirmed',
         ]);
 
-        $osProfile = prepareUserOsProfileFromRequest($request);
-        $payload = $request->only(['name', 'is_vip']);
+        $existingProfile = is_array($user->os_profile) ? $user->os_profile : [];
+        $osProfile = array_merge($existingProfile, prepareUserOsProfileFromRequest($request));
+        $payload = $request->only(['name']);
         $payload['address'] = buildUserAddressFromProfile($osProfile);
         $payload['os_profile'] = $osProfile;
-        $payload['is_vip'] = $request->has('is_vip') ? 1 : 0;
 
         if ($request->filled('password')) {
             $payload['password'] = bcrypt($request->password);

@@ -248,7 +248,7 @@
             <div class="login-card__app-name">{{ SettingData('app_content', 'app_name') }}</div>
         </div>
 
-        <h1 class="login-card__title">{{ __('message.login') }}</h1>
+        <h1 class="login-card__title">Branch Admin</h1>
         <p class="login-card__subtitle">{{ __('message.Please_enter_your_login_credentials') }}</p>
 
         <x-auth-session-status class="mb-3" :status="session('status')" />
@@ -295,6 +295,7 @@
 
         <div class="login-footer">
             &copy; {{ date('Y') }} {{ SettingData('app_content', 'app_name') }}
+            <div class="mt-2"><a href="{{ route('super-admin.login') }}" style="color:#0d9488;font-weight:600;text-decoration:none;">Super Admin login</a></div>
         </div>
     </div>
 

@@ -5,7 +5,12 @@
                 <div class="pds-dashboard-hero pds-hero-animate">
                     <div class="pds-dashboard-hero-content">
                         <p class="pds-dashboard-eyebrow mb-1">{{ __('message.dashboard') }}</p>
-                        <h2 class="pds-dashboard-title mb-0">{{ __('message.dashboard') }}</h2>
+                        <h2 class="pds-dashboard-title mb-0">
+                            {{ __('message.dashboard') }}
+                            @if(isBranchAdmin() && auth()->user()->branch)
+                                <span class="text-muted" style="font-size:0.55em;font-weight:600;">· {{ auth()->user()->branch->name }}</span>
+                            @endif
+                        </h2>
                     </div>
                     <div class="pds-dashboard-hero-glow" aria-hidden="true"></div>
                 </div>

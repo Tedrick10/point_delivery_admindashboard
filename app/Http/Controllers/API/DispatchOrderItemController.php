@@ -706,7 +706,7 @@ class DispatchOrderItemController extends Controller
         $query = DispatchOrderItem::query()
             ->where('delivery_man_id', $user->id)
             ->whereIn('status', $statuses)
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
         $this->applyDeliveryListDayFilter($query, $fromDay, $toDay);
@@ -792,7 +792,7 @@ class DispatchOrderItemController extends Controller
             ->whereHas('order', function ($q) use ($user) {
                 $q->where('client_id', $user->id);
             })
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
         $this->applyDeliveryListDayFilter($query, $fromDay, $toDay);
@@ -878,7 +878,7 @@ class DispatchOrderItemController extends Controller
         }
 
         $items = $query
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id')
             ->get();
@@ -924,7 +924,7 @@ class DispatchOrderItemController extends Controller
             ->whereHas('order', function ($q) use ($user) {
                 $q->where('client_id', $user->id);
             })
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city'])
             ->first();
 
         if (! $item) {
@@ -958,7 +958,7 @@ class DispatchOrderItemController extends Controller
             ->where('id', $itemId)
             ->where('delivery_man_id', $user->id)
             ->whereIn('status', $workflow->deliveryItemStatuses())
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city'])
             ->first();
 
         if (! $item) {
@@ -1042,10 +1042,20 @@ class DispatchOrderItemController extends Controller
             'status' => 'required|string|in:courier_departed,pending,completed',
             'remark' => 'nullable|string|max:1000',
             'pending_photo' => 'nullable|image|max:10240',
+            'delivered_photo' => 'nullable|image|max:10240',
+            'delivered_type' => 'nullable|string|in:gate,other',
+            'gate_amount' => 'nullable|numeric|min:0',
         ];
         if ($toStatus === 'pending') {
             $rules['remark'] = 'required|string|max:1000';
             $rules['pending_photo'] = 'required|image|max:10240';
+        }
+        if ($toStatus === 'completed') {
+            $rules['delivered_type'] = 'required|string|in:gate,other';
+            $rules['delivered_photo'] = 'required|image|max:10240';
+            if ((string) $request->input('delivered_type') === 'gate') {
+                $rules['gate_amount'] = 'required|numeric|min:0';
+            }
         }
         $request->validate($rules);
 
@@ -1082,6 +1092,25 @@ class DispatchOrderItemController extends Controller
         // Any transition to Delivered is final — lock so status cannot change again.
         if ($toStatus === 'completed') {
             $fill['delivery_locked'] = true;
+            $deliveredType = (string) $request->input('delivered_type');
+            $fill['delivered_type'] = $deliveredType;
+            if (! $request->hasFile('delivered_photo')) {
+                return json_custom_response([
+                    'status' => false,
+                    'message' => 'Delivered photo is required.',
+                ], 422);
+            }
+            $deliveredPhotoId = storeDispatchItemProofPhoto($item, $request->file('delivered_photo'), 'delivered_proof');
+            if ($deliveredPhotoId <= 0) {
+                return json_custom_response([
+                    'status' => false,
+                    'message' => 'Unable to save delivered photo.',
+                ], 422);
+            }
+            $fill['delivered_photo_id'] = $deliveredPhotoId;
+            if ($deliveredType === 'gate') {
+                $fill['gate_amount'] = round((float) $request->input('gate_amount', 0), 2);
+            }
         }
 
         if ($toStatus === 'pending') {
@@ -1091,7 +1120,7 @@ class DispatchOrderItemController extends Controller
                     'message' => 'Pending photo is required.',
                 ], 422);
             }
-            $pendingPhotoId = $this->storePendingRemarkPhoto($item, $request->file('pending_photo'));
+            $pendingPhotoId = storeDispatchItemProofPhoto($item, $request->file('pending_photo'), 'pending_remark');
             if ($pendingPhotoId <= 0) {
                 return json_custom_response([
                     'status' => false,
@@ -1102,7 +1131,7 @@ class DispatchOrderItemController extends Controller
         }
 
         $item->forceFill($fill)->save();
-        $item = $item->fresh(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveryMan', 'order.city']);
+        $item = $item->fresh(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city']);
 
         $order = $item->order;
         if ($order) {
@@ -1163,25 +1192,6 @@ class DispatchOrderItemController extends Controller
             'message' => __('message.delivery_item_status_updated'),
             'data' => new DispatchOrderItemResource($item),
         ]);
-    }
-
-    /**
-     * Store pending-remark image on Profofpictures and return Spatie media id.
-     */
-    protected function storePendingRemarkPhoto(DispatchOrderItem $item, $file): int
-    {
-        if (! $file) {
-            return 0;
-        }
-
-        $profpicture = \App\Models\Profofpictures::create([
-            'order_id' => $item->order_id,
-            'type' => 'pending_remark',
-        ]);
-        $profpicture->addMedia($file)->toMediaCollection('prof_file');
-        $media = $profpicture->getMedia('prof_file')->first();
-
-        return $media ? (int) $media->id : 0;
     }
 
     /**

@@ -1,6 +1,7 @@
 @php
     $previewId = $previewId ?? 'profile_image_preview';
     $defaultImage = asset('images/user/1.jpg');
+    $profileTitle = $profileTitle ?? __('message.profile_image');
 @endphp
 
 <div class="pds-profile-upload">
@@ -19,6 +20,6 @@
                class="pds-profile-upload__input custom-file-input"
                data--target="{{ $previewId }}">
     </div>
-    <p class="pds-profile-upload__title">{{ __('message.profile_image') }}</p>
+    <p class="pds-profile-upload__title">{{ $profileTitle }}</p>
     <p class="pds-profile-upload__hint">{{ __('message.choose_profile_image') }}</p>
 </div>

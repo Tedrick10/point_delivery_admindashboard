@@ -30,7 +30,10 @@ class OrderDetailResource extends JsonResource
          if ($this->milisecond != null) {
             $claims = Claims::where('traking_no', $this->milisecond)->first();
          }
-         $rating = Ratings::where('user_id', auth()->user()->id)->where('order_id', $this->id)->first();
+         $rating = Ratings::where('user_id', auth()->user()->id)
+             ->where('order_id', $this->id)
+             ->whereNull('dispatch_order_item_id')
+             ->first();
          $pickupService = app(\App\Services\PickupParcelDispatchService::class);
         return [
             'order_tracking_id'              => $this->milisecond,
@@ -64,6 +67,13 @@ class OrderDetailResource extends JsonResource
             'delivery_man_id'                => $this->delivery_man_id,
             'delivery_man_name'              => optional($this->delivery_man)->name,
             'delivery_man_contact_number'    => optional($this->delivery_man)->riderAssignedPhone(),
+            'can_rate_rider'                 => $this->resolveCanRatePickupRider($request),
+            'my_rider_rating'                => $rating ? [
+                'id' => (int) $rating->id,
+                'rating' => (float) $rating->rating,
+                'comment' => $rating->comment,
+            ] : null,
+            'rating_presets'                 => Ratings::presetComments(),
             'fixed_charges'                  => $this->fixed_charges,
             'extra_charges'                  => $this->extra_charges,
             'total_amount'                   => $this->total_amount,
@@ -133,5 +143,25 @@ class OrderDetailResource extends JsonResource
             ->with(['fromBranch', 'toBranch', 'photoMedia'])
             ->orderBy('id')
             ->get();
+    }
+
+    protected function resolveCanRatePickupRider($request): bool
+    {
+        $user = $request->user();
+        if (! $user || ($user->user_type ?? '') !== 'client') {
+            return false;
+        }
+        if ((int) $this->client_id !== (int) $user->id) {
+            return false;
+        }
+        if (empty($this->delivery_man_id)) {
+            return false;
+        }
+
+        return in_array((string) $this->status, [
+            'courier_picked_up',
+            'courier_departed',
+            'completed',
+        ], true);
     }
 }
