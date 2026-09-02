@@ -79,6 +79,58 @@
                 <p class="sa-fuel-default-panel__err">{{ $message }}</p>
             @enderror
         </section>
+
+        <section class="sa-module-panel sa-late-fine-staff-panel">
+            <header class="sa-module-panel__head">
+                <h3>{{ __('message.sa_rider_fuel_title') }}</h3>
+                <span>{{ ($riderFuelStaff ?? collect())->count() }} {{ __('message.hr_people') }}</span>
+            </header>
+            <p class="sa-fuel-default-panel__hint">{{ __('message.sa_rider_fuel_hint') }}</p>
+            <div class="sa-module-table-wrap">
+                <table class="sa-module-table sa-late-fine-staff-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>{{ __('message.name') }}</th>
+                            <th>{{ __('message.rider_remit_fuel') }}</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse(($riderFuelStaff ?? collect()) as $i => $member)
+                            <tr data-rider-id="{{ $member->id }}">
+                                <td>{{ $i + 1 }}</td>
+                                <td><strong>{{ $member->name }}</strong></td>
+                                <td>
+                                    <form method="POST"
+                                          action="{{ route('super-admin.rider-remit.rider.fuel', $member->id) }}"
+                                          class="sa-late-fine-allowance-form sa-rider-fuel-form">
+                                        @csrf
+                                        @method('PUT')
+                                        <input type="number"
+                                               name="fuel_amount"
+                                               min="0"
+                                               step="1"
+                                               value="{{ (int) ($member->fuel_amount ?: 0) }}"
+                                               required
+                                               inputmode="numeric"
+                                               class="sa-late-fine-allowance-input">
+                                        <button type="submit" class="sa-module-hero__btn sa-late-fine-allowance-btn">
+                                            {{ __('message.save') }}
+                                        </button>
+                                    </form>
+                                </td>
+                                <td class="sa-late-fine-allowance-status" aria-live="polite"></td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="4">{{ __('message.hr_no_rider_accounts_hint') }}</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
     @endif
 
     @if(($screenKey ?? '') === 'late-fine')
@@ -245,6 +297,63 @@
         </section>
     @endif
 
+    @if(($screenKey ?? '') === 'office-salary')
+        @php
+            $officeSalaryDefault = (int) ($defaultOfficeSalary ?? 600000);
+        @endphp
+        <section class="sa-module-panel sa-late-fine-staff-panel">
+            <header class="sa-module-panel__head">
+                <h3>{{ __('message.sa_office_salary_title') }}</h3>
+                <span>{{ $officeSalaryStaff->count() }} {{ __('message.hr_people') }}</span>
+            </header>
+            <p class="sa-fuel-default-panel__hint">{{ __('message.sa_office_salary_hint') }}</p>
+            <div class="sa-module-table-wrap">
+                <table class="sa-module-table sa-late-fine-staff-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>{{ __('message.name') }}</th>
+                            <th>{{ __('message.hr_monthly_salary') }}</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($officeSalaryStaff as $i => $member)
+                            <tr data-staff-id="{{ $member->id }}">
+                                <td>{{ $i + 1 }}</td>
+                                <td><strong>{{ $member->name }}</strong></td>
+                                <td>
+                                    <form method="POST"
+                                          action="{{ route('super-admin.office-salary.staff.monthly-salary', $member->id) }}"
+                                          class="sa-late-fine-allowance-form sa-office-salary-form">
+                                        @csrf
+                                        @method('PUT')
+                                        <input type="number"
+                                               name="monthly_salary"
+                                               min="0"
+                                               step="1"
+                                               value="{{ (int) ($member->monthly_salary ?: $officeSalaryDefault) }}"
+                                               required
+                                               inputmode="numeric"
+                                               class="sa-late-fine-allowance-input">
+                                        <button type="submit" class="sa-module-hero__btn sa-late-fine-allowance-btn">
+                                            {{ __('message.save') }}
+                                        </button>
+                                    </form>
+                                </td>
+                                <td class="sa-late-fine-allowance-status" aria-live="polite"></td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="4">{{ __('message.hr_no_office_accounts_hint') }}</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    @endif
+
     <div class="sa-module-page__grid">
         @if(!empty($metrics))
         <section class="sa-module-panel">
@@ -305,7 +414,7 @@
 </div>
 @endsection
 
-@if(($screenKey ?? '') === 'late-fine' || ($screenKey ?? '') === 'rider-salary')
+@if(($screenKey ?? '') === 'late-fine' || ($screenKey ?? '') === 'rider-salary' || ($screenKey ?? '') === 'office-salary' || ($screenKey ?? '') === 'rider-remit')
 @push('scripts')
 <script>
 (function () {
@@ -346,8 +455,10 @@
         });
     }
 
-    bindSaStaffForms('.sa-late-fine-allowance-form:not(.sa-rider-way-rate-form)', 'allowance_minutes');
+    bindSaStaffForms('.sa-late-fine-allowance-form:not(.sa-rider-way-rate-form):not(.sa-rider-fuel-form):not(.sa-office-salary-form)', 'allowance_minutes');
     bindSaStaffForms('.sa-rider-way-rate-form', 'way_rate');
+    bindSaStaffForms('.sa-office-salary-form', 'monthly_salary');
+    bindSaStaffForms('.sa-rider-fuel-form', 'fuel_amount');
 })();
 </script>
 @endpush

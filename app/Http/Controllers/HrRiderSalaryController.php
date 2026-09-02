@@ -26,9 +26,19 @@ class HrRiderSalaryController extends Controller
         $nextMonth = $month->copy()->addMonth()->format('Y-m');
         $monthValue = $month->format('Y-m');
         $monthLabel = $month->format('F Y');
-        $sumWayPay = round((float) $rows->sum(fn ($r) => $r->way_pay), 2);
-        $sumDeduction = round((float) $rows->sum(fn ($r) => $r->total_deduction), 2);
-        $sumNetPay = round((float) $rows->sum(fn ($r) => $r->net_pay), 2);
+        $colTotals = [
+            'way_count' => (int) $rows->sum('way_count'),
+            'total_salary' => round((float) $rows->sum(fn ($r) => $r->total_salary), 2),
+            'late_minute_amount' => round((float) $rows->sum('late_minute_amount'), 2),
+            'fine_amount' => round((float) $rows->sum('fine_amount'), 2),
+            'bag_deduction' => round((float) $rows->sum('bag_deduction'), 2),
+            'deposit' => round((float) $rows->sum('deposit'), 2),
+            'total_deduction' => round((float) $rows->sum(fn ($r) => $r->total_deduction), 2),
+            'net_pay' => round((float) $rows->sum(fn ($r) => $r->net_pay), 2),
+        ];
+        $sumWayPay = $colTotals['total_salary'];
+        $sumDeduction = $colTotals['total_deduction'];
+        $sumNetPay = $colTotals['net_pay'];
 
         return view('hr.rider-salary', compact(
             'pageTitle',
@@ -39,6 +49,7 @@ class HrRiderSalaryController extends Controller
             'monthValue',
             'monthLabel',
             'rows',
+            'colTotals',
             'sumWayPay',
             'sumDeduction',
             'sumNetPay'
@@ -57,21 +68,20 @@ class HrRiderSalaryController extends Controller
         }
 
         $data = $request->validate([
-            'way_count' => 'nullable|integer|min:0',
             'late_minute_amount' => 'nullable|numeric',
             'fine_amount' => 'nullable|numeric|min:0',
-            'bag_deduction' => 'nullable|numeric|min:0',
-            'personal_expense' => 'nullable|numeric|min:0',
             'deposit' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        // 1 way စာ → Super Admin only (read-only on this sheet)
+        // way_count → auto from Delivered items; 1 way စာ → Super Admin only
+        // bag_deduction → synced from Late Fine bag section
         foreach ($data as $key => $value) {
             if ($value !== null) {
                 $row->{$key} = $value;
             }
         }
+        $row->personal_expense = 0;
         $row->save();
 
         return response()->json([
@@ -79,7 +89,7 @@ class HrRiderSalaryController extends Controller
             'message' => __('message.update_form', ['form' => __('message.hr_rider_salary_title')]),
             'data' => [
                 'id' => $row->id,
-                'way_pay' => $row->way_pay,
+                'way_count' => (int) $row->way_count,
                 'total_salary' => $row->total_salary,
                 'total_deduction' => $row->total_deduction,
                 'net_pay' => $row->net_pay,

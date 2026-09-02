@@ -65,11 +65,26 @@ class HrOfficeSalaryRow extends Model
     }
 
     /**
-     * Google Sheet: ဆင်းခဲ့သည့်ရက် = ရှိသည့်ရက် − နားရက်
+     * ဆင်းခဲ့သည့်ရက် — month-to-date for the current month (Asia/Yangon),
+     * full month for past periods, 0 for future periods.
+     * Formula: elapsed calendar days − နားရက်
      */
     public function getWorkedDaysAttribute(): int
     {
-        return max(0, $this->days_in_month - (int) $this->rest_days);
+        $period = Carbon::parse($this->period_month, 'Asia/Yangon')->startOfMonth();
+        $today = Carbon::now('Asia/Yangon')->startOfDay();
+        $daysInMonth = $period->daysInMonth;
+        $rest = (int) $this->rest_days;
+
+        if ($today->lt($period)) {
+            $elapsed = 0;
+        } elseif ($today->format('Y-m') === $period->format('Y-m')) {
+            $elapsed = min((int) $today->day, $daysInMonth);
+        } else {
+            $elapsed = $daysInMonth;
+        }
+
+        return max(0, $elapsed - $rest);
     }
 
     /**
@@ -102,7 +117,7 @@ class HrOfficeSalaryRow extends Model
     }
 
     /**
-     * Total နှုတ်ငွေ = Late Amount + Fine Amount + bag + personal + Deposit
+     * Total နှုတ်ငွေ = Late Minute + Fine Amount + bag + Deposit
      */
     public function getTotalDeductionAttribute(): float
     {
@@ -110,7 +125,6 @@ class HrOfficeSalaryRow extends Model
             (float) $this->late_minute_amount
             + (float) $this->fine_amount
             + (float) $this->bag_deduction
-            + (float) $this->personal_expense
             + (float) $this->deposit,
             2
         );

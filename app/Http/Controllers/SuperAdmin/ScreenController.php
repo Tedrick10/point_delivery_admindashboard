@@ -37,6 +37,8 @@ class ScreenController extends Controller
         $lateFineDefaults = null;
         $lateFineStaff = collect();
         $riderSalaryStaff = collect();
+        $officeSalaryStaff = collect();
+        $riderFuelStaff = collect();
         if ($screen === 'late-fine') {
             $payroll = app(HrPayrollService::class);
             $lateFineDefaults = [
@@ -58,6 +60,17 @@ class ScreenController extends Controller
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(['id', 'name', 'staff_group', 'way_rate', 'sort_order']);
+        } elseif ($screen === 'office-salary') {
+            $payroll = app(HrPayrollService::class);
+            $payroll->syncStaffFromAccounts();
+            $officeSalaryStaff = HrStaff::query()
+                ->active()
+                ->where('staff_group', 'office')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'name', 'staff_group', 'monthly_salary', 'sort_order']);
+        } elseif ($screen === 'rider-remit') {
+            $riderFuelStaff = app(RiderRemitService::class)->fuelControlRiders();
         }
 
         return view('super-admin.screens.show', [
@@ -70,9 +83,14 @@ class ScreenController extends Controller
             'defaultFuel' => $screen === 'rider-remit'
                 ? app(RiderRemitService::class)->defaultFuelAmount()
                 : null,
+            'defaultOfficeSalary' => $screen === 'office-salary'
+                ? app(HrPayrollService::class)->defaultOfficeMonthlySalary()
+                : null,
             'lateFineDefaults' => $lateFineDefaults,
             'lateFineStaff' => $lateFineStaff,
             'riderSalaryStaff' => $riderSalaryStaff,
+            'officeSalaryStaff' => $officeSalaryStaff,
+            'riderFuelStaff' => $riderFuelStaff,
         ]);
     }
 }

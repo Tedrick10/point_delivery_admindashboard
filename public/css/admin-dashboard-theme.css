@@ -15121,73 +15121,32 @@ body.pds-admin .pds-rider-remit-grid tbody td {
 }
 
 body.pds-admin .pds-rider-remit-row.is-prepaid td,
-body.pds-admin .pds-rider-remit-row.is-fuel td,
-body.pds-admin .pds-rider-remit-row.is-fee td,
 body.pds-admin .pds-rider-remit-row.is-kpay td,
 body.pds-admin .pds-rider-remit-row.is-note td {
     background: #fff;
 }
 
 body.pds-admin .pds-rider-remit-row.is-prepaid .pds-rider-remit-label,
-body.pds-admin .pds-rider-remit-row.is-fuel .pds-rider-remit-label,
-body.pds-admin .pds-rider-remit-row.is-fee .pds-rider-remit-label,
 body.pds-admin .pds-rider-remit-row.is-kpay .pds-rider-remit-label {
     background: #fffaf3 !important;
     color: #1a202c;
 }
 
-body.pds-admin .pds-rr-fuel-cell {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.3rem;
-}
-
-body.pds-admin .pds-rr-fuel-cell .js-rr-fuel {
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: calc(100% - 1.85rem);
-}
-
-body.pds-admin .pds-rr-fuel-edit-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    width: 1.55rem;
-    height: 1.55rem;
-    padding: 0;
-    border: 1px solid rgba(234, 88, 12, 0.35);
-    border-radius: 999px;
-    background: #fff7ed;
-    color: #9a3412;
-    cursor: pointer;
-    line-height: 1;
-    transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
-}
-
-body.pds-admin .pds-rr-fuel-edit-btn:hover,
-body.pds-admin .pds-rr-fuel-edit-btn.is-active {
-    background: #ea580c;
-    border-color: #ea580c;
-    color: #fff;
-    box-shadow: 0 4px 12px rgba(234, 88, 12, 0.28);
-}
-
-body.pds-admin .pds-rr-fuel-edit-btn i {
-    font-size: 0.68rem;
-}
-
-body.pds-admin .pds-rider-remit-row.is-fuel .js-rr-fuel[readonly] {
+body.pds-admin .pds-rider-remit-row.is-fuel td,
+body.pds-admin .pds-rider-remit-row.is-fee td {
     background: #f8fafc;
-    color: #0f172a;
-    cursor: default;
-    opacity: 1;
 }
 
-body.pds-admin .pds-rider-remit-row.is-fuel .js-rr-fuel:not([readonly]):not([disabled]) {
-    background: #fff;
-    box-shadow: inset 0 0 0 1.5px rgba(234, 88, 12, 0.45);
+body.pds-admin .pds-rider-remit-row.is-fuel .pds-rider-remit-label,
+body.pds-admin .pds-rider-remit-row.is-fee .pds-rider-remit-label {
+    background: #f1f5f9 !important;
+    color: #475569;
+}
+
+body.pds-admin .pds-rider-remit-row.is-fuel .pds-rider-remit-read,
+body.pds-admin .pds-rider-remit-row.is-fee .pds-rider-remit-read {
+    font-weight: 700;
+    color: #0f172a;
 }
 
 body.pds-admin .pds-rider-remit-row.is-due td {

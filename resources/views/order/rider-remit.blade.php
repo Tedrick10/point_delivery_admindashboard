@@ -141,47 +141,22 @@
                                         <span class="pds-rider-remit-read js-rr-due-total">{{ number_format($summary->due_total) }}</span>
                                     </td>
                                 </tr>
-                                <tr class="pds-rider-remit-row is-input is-fuel">
+                                <tr class="pds-rider-remit-row is-fuel">
                                     <th class="pds-rider-remit-label">{{ __('message.rider_remit_fuel') }}</th>
                                     @foreach($riders as $rider)
-                                        @php
-                                            $fuelVal = (float) ($rider->fuel_amount ?? 0);
-                                            $fuelDisplay = $fuelVal > 0 ? (int) $fuelVal : '';
-                                            $fuelEditable = $canEdit && ($rider->can_edit ?? true);
-                                        @endphp
-                                        <td data-rider="{{ $rider->delivery_man_id }}">
-                                            <div class="pds-rr-fuel-cell">
-                                                <input class="js-rr-field js-rr-fuel"
-                                                       data-rider="{{ $rider->delivery_man_id }}"
-                                                       data-field="fuel_amount"
-                                                       type="number"
-                                                       min="0"
-                                                       step="1"
-                                                       value="{{ $fuelDisplay }}"
-                                                       placeholder="0"
-                                                       readonly
-                                                       @disabled(! $fuelEditable)>
-                                                @if($fuelEditable)
-                                                    <button type="button"
-                                                            class="pds-rr-fuel-edit-btn js-rr-fuel-unlock"
-                                                            data-rider="{{ $rider->delivery_man_id }}"
-                                                            title="{{ __('message.rider_remit_fuel_edit') }}"
-                                                            aria-label="{{ __('message.rider_remit_fuel_edit') }}">
-                                                        <i class="fas fa-pencil-alt" aria-hidden="true"></i>
-                                                    </button>
-                                                @endif
-                                            </div>
+                                        <td data-rider="{{ $rider->delivery_man_id }}" data-rr-fuel="{{ (float) ($rider->fuel_amount ?? 0) }}">
+                                            <span class="pds-rider-remit-read js-rr-fuel">{{ number_format((float) ($rider->fuel_amount ?? 0)) }}</span>
                                         </td>
                                     @endforeach
                                     <td class="pds-rider-remit-total-cell">
                                         <span class="pds-rider-remit-read js-rr-fuel-total">{{ number_format($summary->fuel_total ?? 0) }}</span>
                                     </td>
                                 </tr>
-                                <tr class="pds-rider-remit-row is-input is-fee">
+                                <tr class="pds-rider-remit-row is-fee">
                                     <th class="pds-rider-remit-label">{{ __('message.rider_remit_fee') }}</th>
                                     @foreach($riders as $rider)
-                                        <td data-rider="{{ $rider->delivery_man_id }}">
-                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="fee_amount" type="number" min="0" step="1" value="{{ $rider->fee_amount ?: '' }}" placeholder="0" data-gate="{{ $rider->gate_amount ?? 0 }}" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
+                                        <td data-rider="{{ $rider->delivery_man_id }}" data-rr-fee="{{ (float) ($rider->fee_amount ?? 0) }}">
+                                            <span class="pds-rider-remit-read js-rr-fee">{{ number_format((float) ($rider->fee_amount ?? 0)) }}</span>
                                         </td>
                                     @endforeach
                                     <td class="pds-rider-remit-total-cell">
@@ -374,7 +349,6 @@
                 var canEdit = String($grid.data('can-edit')) === '1';
                 var denoms = @json($denoms);
                 var timers = {};
-                var defaultFuel = {{ (int) ($defaultFuel ?? \App\Services\RiderRemitService::DEFAULT_FUEL_AMOUNT) }};
 
                 function num(v) {
                     var n = parseFloat(String(v == null ? '' : v).replace(/,/g, ''));
@@ -384,12 +358,10 @@
                     return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
                 }
                 function fuelOf(riderId) {
-                    var $input = $grid.find('.js-rr-fuel[data-rider="' + riderId + '"]');
-                    var v = num($input.val());
-                    if (v <= 0 && canEditRider(riderId) && itemCountOf(riderId) >= 1) {
-                        return defaultFuel;
-                    }
-                    return v;
+                    return num(col(riderId).filter('[data-rr-fuel]').attr('data-rr-fuel'));
+                }
+                function feeOf(riderId) {
+                    return num(col(riderId).filter('[data-rr-fee]').attr('data-rr-fee'));
                 }
                 function col(riderId) {
                     return $grid.find('[data-rider="' + riderId + '"]');
@@ -408,7 +380,7 @@
                     }
                     var prepaid = num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="prepaid_amount"]').val());
                     var fuel = fuelOf(riderId);
-                    var fee = num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="fee_amount"]').val());
+                    var fee = feeOf(riderId);
                     var kpay = num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="kpay_amount"]').val());
                     var cash = 0;
                     denoms.forEach(function (note) {
@@ -439,8 +411,6 @@
                         branch_id: branchId,
                         delivery_man_id: riderId,
                         prepaid_amount: num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="prepaid_amount"]').val()),
-                        fuel_amount: fuelOf(riderId),
-                        fee_amount: num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="fee_amount"]').val()),
                         kpay_amount: num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="kpay_amount"]').val()),
                         denominations: dens
                     };
@@ -526,7 +496,6 @@
                 }
 
                 $grid.on('input change', '.js-rr-field, .js-rr-denom', function () {
-                    if ($(this).is('.js-rr-fuel[readonly]')) return;
                     schedule($(this).data('rider'));
                 });
 
@@ -534,15 +503,11 @@
                     if (e.key !== 'Enter') return;
                     e.preventDefault();
                     var $el = $(this);
-                    if ($el.is('.js-rr-fuel[readonly]') || $el.is(':disabled')) return;
+                    if ($el.is(':disabled')) return;
                     var riderId = $el.data('rider');
                     if (!canEdit || !canEditRider(riderId)) return;
                     clearTimeout(timers[riderId]);
                     saveRider(riderId);
-                    if ($el.is('.js-rr-fuel')) {
-                        $el.prop('readonly', true);
-                        $grid.find('.js-rr-fuel-unlock[data-rider="' + riderId + '"]').removeClass('is-active');
-                    }
                     var el = $el.get(0);
                     if (el) {
                         if (typeof el.setSelectionRange === 'function') {
@@ -554,32 +519,6 @@
                     if (window.getSelection) {
                         var sel = window.getSelection();
                         if (sel && sel.removeAllRanges) sel.removeAllRanges();
-                    }
-                });
-
-                $grid.on('click', '.js-rr-fuel-unlock', function (e) {
-                    e.preventDefault();
-                    if (!canEdit) return;
-                    var riderId = $(this).data('rider');
-                    if (!canEditRider(riderId)) return;
-                    var $btn = $(this);
-                    var $input = $grid.find('.js-rr-fuel[data-rider="' + riderId + '"]');
-                    if (!$input.length || $input.is(':disabled')) return;
-                    $btn.addClass('is-active');
-                    $input.prop('readonly', false);
-                    if (num($input.val()) <= 0 && itemCountOf(riderId) >= 1) {
-                        $input.val(defaultFuel);
-                    }
-                    $input.trigger('focus').select();
-                    refreshSummary();
-                });
-
-                // Ensure default fuel shows in inputs for Delivered riders.
-                $grid.find('.js-rr-fuel').each(function () {
-                    var $input = $(this);
-                    var riderId = $input.data('rider');
-                    if (!$input.is(':disabled') && canEditRider(riderId) && num($input.val()) <= 0 && itemCountOf(riderId) >= 1) {
-                        $input.val(defaultFuel);
                     }
                 });
 

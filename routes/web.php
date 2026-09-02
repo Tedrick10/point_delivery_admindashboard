@@ -34,6 +34,7 @@ use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardCo
 use App\Http\Controllers\SuperAdmin\LateFineSettingsController as SuperAdminLateFineSettingsController;
 use App\Http\Controllers\SuperAdmin\RiderRemitSettingsController as SuperAdminRiderRemitSettingsController;
 use App\Http\Controllers\SuperAdmin\RiderSalarySettingsController as SuperAdminRiderSalarySettingsController;
+use App\Http\Controllers\SuperAdmin\OfficeSalarySettingsController as SuperAdminOfficeSalarySettingsController;
 use App\Http\Controllers\SuperAdmin\ScreenController as SuperAdminScreenController;
 use App\Http\Controllers\WalkThroughController;
 use App\Http\Controllers\PushNotificationController;
@@ -304,6 +305,8 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::put('hr/late-fine/row/{id}', [HrLateFineController::class, 'updateRow'])->name('hr.late-fine.row.update');
     Route::post('hr/late-fine/item', [HrLateFineController::class, 'storeItem'])->name('hr.late-fine.item.store');
     Route::delete('hr/late-fine/item/{id}', [HrLateFineController::class, 'destroyItem'])->name('hr.late-fine.item.destroy');
+    Route::post('hr/late-fine/bag-item', [HrLateFineController::class, 'storeBagItem'])->name('hr.late-fine.bag.store');
+    Route::delete('hr/late-fine/bag-item/{id}', [HrLateFineController::class, 'destroyBagItem'])->name('hr.late-fine.bag.destroy');
     Route::get('hr/office-salary', [HrOfficeSalaryController::class, 'index'])->name('hr.office-salary.index');
     Route::put('hr/office-salary/row/{id}', [HrOfficeSalaryController::class, 'updateRow'])->name('hr.office-salary.row.update');
     Route::post('hr/office-salary/sync', [HrOfficeSalaryController::class, 'syncFromLateFine'])->name('hr.office-salary.sync');
@@ -605,12 +608,16 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
         Route::get('screens/{screen}', [SuperAdminScreenController::class, 'show'])->name('screens.show');
         Route::post('rider-remit/default-fuel', [SuperAdminRiderRemitSettingsController::class, 'saveDefaultFuel'])
             ->name('rider-remit.default-fuel');
+        Route::put('rider-remit/riders/{id}/fuel', [SuperAdminRiderRemitSettingsController::class, 'updateRiderFuel'])
+            ->name('rider-remit.rider.fuel');
         Route::post('late-fine/defaults', [SuperAdminLateFineSettingsController::class, 'saveDefaults'])
             ->name('late-fine.defaults');
         Route::put('late-fine/staff/{id}/allowance', [SuperAdminLateFineSettingsController::class, 'updateAllowance'])
             ->name('late-fine.staff.allowance');
         Route::put('rider-salary/staff/{id}/way-rate', [SuperAdminRiderSalarySettingsController::class, 'updateWayRate'])
             ->name('rider-salary.staff.way-rate');
+        Route::put('office-salary/staff/{id}/monthly-salary', [SuperAdminOfficeSalarySettingsController::class, 'updateMonthlySalary'])
+            ->name('office-salary.staff.monthly-salary');
         Route::resource('branch-admins', SuperAdminBranchAdminController::class)->except(['show']);
     });
 });

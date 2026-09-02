@@ -198,6 +198,11 @@ class SuperAdminDashboardService
                 ['label' => __('message.hr_way_rate'), 'value' => __('message.sa_late_fine_metric_per_staff'), 'money' => false, 'raw' => true],
                 ['label' => __('message.hr_group_rider'), 'value' => \App\Models\HrStaff::query()->active()->where('staff_group', 'rider')->count(), 'money' => false],
             ],
+            'office-salary' => [
+                ['label' => __('message.hr_monthly_salary'), 'value' => __('message.sa_late_fine_metric_per_staff'), 'money' => false, 'raw' => true],
+                ['label' => __('message.hr_group_office'), 'value' => \App\Models\HrStaff::query()->active()->where('staff_group', 'office')->count(), 'money' => false],
+                ['label' => __('message.hr_day_rate'), 'value' => __('message.sa_office_day_rate_auto'), 'money' => false, 'raw' => true],
+            ],
             default => [],
         };
 

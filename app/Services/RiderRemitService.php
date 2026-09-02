@@ -39,6 +39,116 @@ class RiderRemitService
     }
 
     /**
+     * Effective ဆီဖိုး for a rider (per-rider override, else global default).
+     */
+    public function riderFuelAmount(int $riderId): float
+    {
+        if ($riderId > 0) {
+            $raw = SettingData('rider_remit', 'rider_fuel_'.$riderId);
+            if ($raw !== null && $raw !== '') {
+                $amount = (float) $raw;
+
+                return $amount >= 0 ? round($amount, 2) : $this->defaultFuelAmount();
+            }
+        }
+
+        return $this->defaultFuelAmount();
+    }
+
+    public function setRiderFuelAmount(int $riderId, float $amount): float
+    {
+        $riderId = (int) $riderId;
+        $amount = max(0, round($amount, 2));
+
+        \App\Models\Setting::query()->updateOrCreate(
+            ['type' => 'rider_remit', 'key' => 'rider_fuel_'.$riderId],
+            ['value' => (string) $amount]
+        );
+
+        $this->applyRiderFuelToOpenRemits($riderId, $amount);
+
+        return $amount;
+    }
+
+    /**
+     * Push a rider's ဆီဖိုး into all open (unsubmitted) remit rows.
+     */
+    public function applyRiderFuelToOpenRemits(int $riderId, float $newFuel): int
+    {
+        $riderId = (int) $riderId;
+        $newFuel = max(0, round($newFuel, 2));
+        if ($riderId < 1) {
+            return 0;
+        }
+
+        $days = RiderRemit::query()
+            ->where('delivery_man_id', $riderId)
+            ->whereNull('submitted_at')
+            ->pluck('remit_date')
+            ->map(fn ($d) => $d instanceof \Carbon\Carbon ? $d->toDateString() : (string) $d)
+            ->filter()
+            ->unique()
+            ->values();
+
+        $updated = RiderRemit::query()
+            ->where('delivery_man_id', $riderId)
+            ->whereNull('submitted_at')
+            ->update([
+                'fuel_amount' => $newFuel,
+                'updated_by' => auth()->id(),
+            ]);
+
+        if ($updated > 0) {
+            $userId = (int) (auth()->id() ?? 0);
+            foreach ($days as $day) {
+                app(\App\Services\ExpenseRiderFuelSyncService::class)->syncDate($day, $userId ?: null);
+            }
+        }
+
+        return (int) $updated;
+    }
+
+    /**
+     * Active delivery riders for Super Admin ဆီဖိုး controls.
+     *
+     * @return \Illuminate\Support\Collection<int, object{id:int,name:string,fuel_amount:float}>
+     */
+    public function fuelControlRiders(): Collection
+    {
+        return User::query()
+            ->where('user_type', 'delivery_man')
+            ->where('status', 1)
+            ->orderBy('name')
+            ->get(['id', 'name', 'username', 'contact_number', 'rider_work_on', 'rider_work_off_date'])
+            ->filter(fn (User $user) => $this->isDisplayableRider($user))
+            ->map(fn (User $user) => (object) [
+                'id' => (int) $user->id,
+                'name' => $this->displayName($user, (int) $user->id),
+                'fuel_amount' => $this->riderFuelAmount((int) $user->id),
+            ])
+            ->values();
+    }
+
+    protected function resolveFuelAmount(int $riderId, ?float $savedFuel, int $itemCount): float
+    {
+        $saved = round((float) ($savedFuel ?? 0), 2);
+        if ($saved > 0) {
+            return $saved;
+        }
+
+        return $itemCount >= 1 ? $this->riderFuelAmount($riderId) : 0.0;
+    }
+
+    protected function resolveFeeAmount($savedFee, float $gate): float
+    {
+        if ($savedFee !== null && (float) $savedFee > 0) {
+            return round((float) $savedFee, 2);
+        }
+
+        return round($gate, 2);
+    }
+
+    /**
      * Apply new default fuel to open remits still on the previous auto value (or 0).
      */
     public function applyDefaultFuelToOpenRemits(string $day, ?int $branchId, float $oldDefault, float $newDefault): int
@@ -47,10 +157,20 @@ class RiderRemitService
             return 0;
         }
 
+        $customRiderIds = \App\Models\Setting::query()
+            ->where('type', 'rider_remit')
+            ->where('key', 'like', 'rider_fuel_%')
+            ->pluck('key')
+            ->map(fn ($key) => (int) str_replace('rider_fuel_', '', (string) $key))
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->all();
+
         $updated = RiderRemit::query()
             ->whereDate('remit_date', $day)
             ->where('branch_id', $this->branchStore($branchId))
             ->whereNull('submitted_at')
+            ->when($customRiderIds !== [], fn ($q) => $q->whereNotIn('delivery_man_id', $customRiderIds))
             ->where(function ($q) use ($oldDefault) {
                 $q->where('fuel_amount', '<=', 0)
                     ->orWhereRaw('ABS(fuel_amount - ?) < 0.001', [$oldDefault]);
@@ -110,7 +230,6 @@ class RiderRemitService
     {
         $branchStore = $this->branchStore($branchId);
         $dues = $this->dueByRider($branchId, $day);
-        $defaultFuel = $this->defaultFuelAmount();
         $updated = 0;
 
         foreach ($dues as $dueRow) {
@@ -131,8 +250,8 @@ class RiderRemitService
             $savedFee = $open?->fee_amount;
             $savedDue = (float) ($open?->due_amount ?? 0);
 
-            $fuel = $savedFuel > 0 ? $savedFuel : $defaultFuel;
-            $fee = $savedFee !== null && (float) $savedFee > 0 ? (float) $savedFee : $gate;
+            $fuel = $this->resolveFuelAmount($riderId, $savedFuel, $itemCount);
+            $fee = $this->resolveFeeAmount($savedFee, $gate);
             $nextDue = $savedDue > 0 ? $savedDue : $due;
 
             if ($open && abs($savedFuel - $fuel) < 0.001 && abs((float) $savedFee - $fee) < 0.001 && abs($savedDue - $nextDue) < 0.001) {
@@ -219,17 +338,11 @@ class RiderRemitService
             $denoms = $this->normalizeDenoms($remit?->denominations);
 
             $prepaid = (float) ($remit?->prepaid_amount ?? 0);
-            // Delivered ways → auto ဆီဖိုး from configured default until a positive saved value exists.
-            $defaultFuel = $this->defaultFuelAmount();
+            // Delivered ways → auto ဆီဖိုး from rider/global default until a positive saved value exists.
             $savedFuel = (float) ($remit?->fuel_amount ?? 0);
-            $fuel = $itemCount >= 1 && $savedFuel <= 0
-                ? $defaultFuel
-                : $savedFuel;
+            $fuel = $this->resolveFuelAmount($riderId, $savedFuel, $itemCount);
             // Auto-fill တန်ဆာခ from Rider List Gate when unset / still 0.
-            $savedFee = $remit?->fee_amount;
-            $fee = $savedFee !== null && (float) $savedFee > 0
-                ? (float) $savedFee
-                : $gate;
+            $fee = $this->resolveFeeAmount($remit?->fee_amount, $gate);
             $kpay = (float) ($remit?->kpay_amount ?? 0);
             $cash = $this->cashFromDenoms($denoms);
             $remaining = round($due - $prepaid - $fuel - $fee, 2);
@@ -512,20 +625,19 @@ class RiderRemitService
         $dues = $this->dueByRider($branchId > 0 ? $branchId : null, $day);
         $due = (float) ($dues->get($riderId)?->due ?? 0);
         $gate = (float) ($dues->get($riderId)?->gate ?? 0);
-        $feePosted = array_key_exists('fee_amount', $data)
-            ? round((float) $data['fee_amount'], 2)
-            : null;
-        $fee = $feePosted !== null ? $feePosted : $gate;
 
         $this->assertRiderCanEnterData($branchId, $riderId, $day);
 
         $before = $open;
 
         $itemCount = (int) ($dues->get($riderId)?->item_count ?? 0);
-        $fuel = round((float) ($data['fuel_amount'] ?? 0), 2);
-        if ($itemCount >= 1 && $fuel <= 0) {
-            $fuel = $this->defaultFuelAmount();
-        }
+        // ဆီဖိုး / တန်ဆာခ are system-controlled (SA / Gate) — never overwrite from sheet posts.
+        $fuel = $this->resolveFuelAmount(
+            $riderId,
+            $open !== null ? (float) $open->fuel_amount : null,
+            $itemCount
+        );
+        $fee = $this->resolveFeeAmount($open?->fee_amount, $gate);
 
         $row = RiderRemit::query()->updateOrCreate(
             [
@@ -609,8 +721,8 @@ class RiderRemitService
 
             $due = (float) ($riderRow?->due_amount ?? 0);
             $prepaid = round((float) ($rowData['prepaid_amount'] ?? 0), 2);
-            $fuel = round((float) ($rowData['fuel_amount'] ?? 0), 2);
-            $fee = round((float) ($rowData['fee_amount'] ?? 0), 2);
+            $fuel = round((float) ($riderRow?->fuel_amount ?? 0), 2);
+            $fee = round((float) ($riderRow?->fee_amount ?? 0), 2);
             $kpay = round((float) ($rowData['kpay_amount'] ?? 0), 2);
             $denoms = $this->normalizeDenoms($rowData['denominations'] ?? []);
             $remaining = round($due - $prepaid - $fuel - $fee, 2);

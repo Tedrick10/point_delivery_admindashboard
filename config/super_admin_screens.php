@@ -84,6 +84,13 @@ return [
         'workspace' => null,
         'links' => [],
     ],
+    'office-salary' => [
+        'title_key' => 'sa_screen_office_salary',
+        'subtitle_key' => 'sa_screen_office_salary_sub',
+        'icon' => 'fa-briefcase',
+        'workspace' => null,
+        'links' => [],
+    ],
     'rider-salary' => [
         'title_key' => 'sa_screen_rider_salary',
         'subtitle_key' => 'sa_screen_rider_salary_sub',

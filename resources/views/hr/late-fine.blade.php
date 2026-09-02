@@ -29,35 +29,27 @@
             </div>
         </div>
 
-        <div class="pds-hr-panel mb-3">
+        <div class="pds-hr-panel pds-hr-panel--late mb-3">
             <div class="table-responsive">
-                <table class="table pds-hr-table mb-0" id="late-fine-table">
+                <table class="table pds-hr-table pds-hr-table--late mb-0" id="late-fine-table">
                     <thead>
                     <tr>
                         <th class="pds-hr-col-no">#</th>
-                        <th>{{ __('message.name') }}</th>
+                        <th class="pds-hr-col-name">{{ __('message.name') }}</th>
                         <th>{{ __('message.hr_late_minutes') }}</th>
                         <th>{{ __('message.hr_allowance_minutes') }}</th>
                         <th>{{ __('message.hr_fine_minutes') }}</th>
                         <th>1မိနစ်/{{ (int) ($finePerMinuteDefault ?? ($rows->first()->fine_per_minute ?? 100)) }}</th>
                         <th>{{ __('message.hr_fine_amount') }}</th>
-                        <th class="pds-hr-th-fp">
-                            <span class="pds-hr-th-stack">
-                                <span class="pds-hr-th-kicker"><i class="fas fa-fingerprint" aria-hidden="true"></i> {{ __('message.hr_absent_dates_kicker') }}</span>
-                                <span class="pds-hr-th-main">{{ __('message.hr_absent_dates') }}</span>
-                            </span>
+                        <th>
+                            {{ __('message.hr_absent_dates') }}
+                            <span class="pds-hr-th-sub">{{ __('message.hr_absent_dates_kicker') }}</span>
                         </th>
-                        <th class="pds-hr-th-fp">
-                            <span class="pds-hr-th-stack">
-                                <span class="pds-hr-th-kicker"><i class="fas fa-fingerprint" aria-hidden="true"></i> {{ __('message.hr_absent_days_kicker') }}</span>
-                                <span class="pds-hr-th-main">{{ __('message.hr_absent_days') }}</span>
-                            </span>
+                        <th>
+                            {{ __('message.hr_absent_days') }}
+                            <span class="pds-hr-th-sub">{{ __('message.hr_absent_days_kicker') }}</span>
                         </th>
-                        <th class="pds-hr-th-fp pds-hr-th-fp--fine">
-                            <span class="pds-hr-th-stack">
-                                <span class="pds-hr-th-main">{{ __('message.hr_absent_fine') }}</span>
-                            </span>
-                        </th>
+                        <th>{{ __('message.hr_absent_fine') }}</th>
                         <th>{{ __('message.hr_total_fine') }}</th>
                         <th>{{ __('message.total') }}</th>
                     </tr>
@@ -73,7 +65,7 @@
                         @endphp
                         <tr data-row-id="{{ $row->id }}">
                             <td class="pds-hr-col-no">{{ $i + 1 }}</td>
-                            <td>
+                            <td class="pds-hr-col-name">
                                 <div class="pds-hr-person">
                                     <span class="pds-hr-avatar{{ $isRider ? ' is-rider' : '' }}">{{ $initial }}</span>
                                     <div>
@@ -82,16 +74,26 @@
                                     </div>
                                 </div>
                             </td>
-                            <td><input type="number" min="0" class="pds-hr-input late-input" data-field="late_minutes" value="{{ $row->late_minutes }}" @disabled(! $canEdit)></td>
-                            <td class="pds-hr-num pds-hr-readonly" title="{{ __('message.hr_readonly_super_admin') }}">{{ (int) $row->allowance_minutes }}</td>
-                            <td class="js-fine-minutes pds-hr-num">{{ $row->fine_minutes }}</td>
-                            <td class="pds-hr-num pds-hr-readonly" title="{{ __('message.hr_readonly_super_admin') }}">{{ (int) $row->fine_per_minute }}</td>
-                            <td class="js-late-fine-amount pds-hr-num">{{ number_format($row->late_fine_amount) }}</td>
-                            <td><input type="text" class="pds-hr-input late-input" data-field="absent_dates" value="{{ $row->absent_dates }}" placeholder="8/9/10" @disabled(! $canEdit)></td>
-                            <td><input type="number" min="0" class="pds-hr-input late-input" data-field="absent_days" value="{{ $row->absent_days }}" @disabled(! $canEdit)></td>
-                            <td class="js-absent-fine pds-hr-num">{{ number_format($row->absent_fine_amount) }}</td>
-                            <td class="js-total-fine pds-hr-num pds-hr-num--strong">{{ number_format($row->total_fine) }}</td>
-                            <td class="js-grand-total pds-hr-num pds-hr-num--accent">{{ number_format($row->sheet_total) }}</td>
+                            <td>
+                                <input type="number" min="0" class="pds-hr-input late-input" data-field="late_minutes" value="{{ $row->late_minutes }}" @disabled(! $canEdit)>
+                            </td>
+                            <td>
+                                <span class="pds-hr-cell pds-hr-cell--muted" title="{{ __('message.hr_readonly_super_admin') }}">{{ (int) $row->allowance_minutes }}</span>
+                            </td>
+                            <td><span class="js-fine-minutes pds-hr-cell">{{ $row->fine_minutes }}</span></td>
+                            <td>
+                                <span class="pds-hr-cell pds-hr-cell--muted" title="{{ __('message.hr_readonly_super_admin') }}">{{ (int) $row->fine_per_minute }}</span>
+                            </td>
+                            <td><span class="js-late-fine-amount pds-hr-cell">{{ number_format($row->late_fine_amount) }}</span></td>
+                            <td>
+                                <input type="text" class="pds-hr-input pds-hr-input--wide late-input" data-field="absent_dates" value="{{ $row->absent_dates }}" placeholder="8/9/10" @disabled(! $canEdit)>
+                            </td>
+                            <td>
+                                <input type="number" min="0" class="pds-hr-input late-input" data-field="absent_days" value="{{ $row->absent_days }}" @disabled(! $canEdit)>
+                            </td>
+                            <td><span class="js-absent-fine pds-hr-cell">{{ number_format($row->absent_fine_amount) }}</span></td>
+                            <td><span class="js-total-fine pds-hr-cell pds-hr-cell--strong">{{ number_format($row->total_fine) }}</span></td>
+                            <td><span class="js-grand-total pds-hr-cell pds-hr-cell--strong" style="color:var(--hr-orange)">{{ number_format($row->sheet_total) }}</span></td>
                         </tr>
                     @empty
                         <tr>
@@ -101,10 +103,12 @@
                     </tbody>
                     @if($rows->isNotEmpty())
                         <tfoot>
-                        <tr>
-                            <td colspan="10" class="text-right">{{ __('message.total') }}</td>
-                            <td class="pds-hr-num pds-hr-num--strong">{{ number_format($sum_total_fine) }}</td>
-                            <td class="pds-hr-num pds-hr-num--accent">{{ number_format($sum_grand) }}</td>
+                        <tr class="pds-hr-tfoot">
+                            <td class="pds-hr-col-no"></td>
+                            <td class="pds-hr-col-name pds-hr-tfoot__label">{{ __('message.total') }}</td>
+                            <td colspan="8"></td>
+                            <td><span class="pds-hr-cell pds-hr-cell--strong">{{ number_format($sum_total_fine) }}</span></td>
+                            <td><span class="pds-hr-cell pds-hr-cell--strong" style="color:var(--hr-orange)">{{ number_format($sum_grand) }}</span></td>
                         </tr>
                         </tfoot>
                     @endif
@@ -117,8 +121,8 @@
                 <div class="pds-hr-extra__title-wrap">
                     <span class="pds-hr-extra__icon"><i class="fas fa-receipt" aria-hidden="true"></i></span>
                     <div>
-                        <h5>{{ __('message.hr_late_fine_item') }}</h5>
-                        <p>{{ __('message.hr_late_fine_item_hint') }}</p>
+                        <h5 class="pds-hr-extra__title">{{ __('message.hr_late_fine_item') }}</h5>
+                        <p class="pds-hr-extra__hint">{{ __('message.hr_late_fine_item_hint') }}</p>
                     </div>
                 </div>
                 <div class="pds-hr-extra__total-pill">
@@ -144,10 +148,18 @@
                             @endforeach
                         </select>
                     </div>
+                    <div class="pds-hr-extra__field pds-hr-extra__field--date">
+                        <label><i class="fas fa-calendar-alt"></i> {{ __('message.hr_extra_fine_date') }}</label>
+                        <input type="date"
+                               name="fine_date"
+                               class="pds-hr-extra__control"
+                               value="{{ now('Asia/Yangon')->toDateString() }}"
+                               required>
+                    </div>
                     <div class="pds-hr-extra__field pds-hr-extra__field--grow">
                         <label><i class="fas fa-align-left"></i> {{ __('message.hr_extra_fine_about') }}</label>
                         <input type="text" name="description" class="pds-hr-extra__control" required
-                               placeholder="ဥပမာ — 30.10.2022 / Way Change နောက်ကျ">
+                               placeholder="{{ __('message.hr_extra_fine_about_placeholder') }}">
                     </div>
                     <div class="pds-hr-extra__field pds-hr-extra__field--amount">
                         <label><i class="fas fa-coins"></i> {{ __('message.hr_extra_fine_amount') }}</label>
@@ -166,6 +178,7 @@
                 <div class="pds-hr-extra__list-head">
                     <span class="pds-hr-extra__col-no">#</span>
                     <span class="pds-hr-extra__col-name">{{ __('message.name') }}</span>
+                    <span class="pds-hr-extra__col-date">{{ __('message.hr_extra_fine_date') }}</span>
                     <span class="pds-hr-extra__col-about">{{ __('message.hr_extra_fine_about') }}</span>
                     <span class="pds-hr-extra__col-fine">{{ __('message.hr_extra_fine_amount') }}</span>
                     @if($canEdit)
@@ -177,6 +190,9 @@
                     @php
                         $itemName = $item->staff?->name ?? ($item->staff_code ?: '—');
                         $itemInitial = strtoupper(substr(preg_replace('/\s+/', '', (string) $itemName), 0, 1) ?: '?');
+                        $itemDate = $item->fine_date
+                            ? $item->fine_date->timezone('Asia/Yangon')->format('d-m-Y')
+                            : '—';
                     @endphp
                     <div class="pds-hr-extra__row">
                         <span class="pds-hr-extra__col-no">{{ $i + 1 }}</span>
@@ -184,6 +200,7 @@
                             <span class="pds-hr-extra__avatar">{{ $itemInitial }}</span>
                             <span class="pds-hr-extra__name">{{ $itemName }}</span>
                         </span>
+                        <span class="pds-hr-extra__col-date">{{ $itemDate }}</span>
                         <span class="pds-hr-extra__col-about">{{ $item->description }}</span>
                         <span class="pds-hr-extra__col-fine">
                             <span class="pds-hr-extra__amount">{{ number_format($item->amount) }}</span>
@@ -216,6 +233,128 @@
                     <div class="pds-hr-extra__footer">
                         <span>{{ __('message.hr_extra_fine_total') }}</span>
                         <strong>{{ number_format($sum_incidents) }}</strong>
+                    </div>
+                @endif
+            </div>
+        </div>
+
+        <div class="pds-hr-panel pds-hr-extra pds-hr-extra--bag mb-3">
+            <div class="pds-hr-extra__head">
+                <div class="pds-hr-extra__title-wrap">
+                    <span class="pds-hr-extra__icon"><i class="fas fa-wallet" aria-hidden="true"></i></span>
+                    <div>
+                        <h5 class="pds-hr-extra__title">{{ __('message.hr_bag_deduction') }}</h5>
+                        <p class="pds-hr-extra__hint">{{ __('message.hr_bag_deduction_hint') }}</p>
+                    </div>
+                </div>
+                <div class="pds-hr-extra__total-pill">
+                    <span class="pds-hr-extra__total-pill-label">{{ __('message.total') }}</span>
+                    <span class="pds-hr-extra__total-pill-value">{{ number_format($sum_bag_deductions) }}</span>
+                </div>
+            </div>
+
+            @if($canEdit)
+                <form method="POST" action="{{ route('hr.late-fine.bag.store') }}" class="pds-hr-extra__form" id="bag-deduction-form">
+                    @csrf
+                    <input type="hidden" name="month" value="{{ $monthValue }}">
+                    <div class="pds-hr-extra__field">
+                        <label><i class="fas fa-user"></i> {{ __('message.name') }}</label>
+                        <select name="staff_id" id="bag-deduction-staff" class="pds-hr-extra__control pds-hr-extra__select2" required>
+                            <option value="">{{ __('message.name') }} ရွေးပါ</option>
+                            @foreach($staffOptions as $opt)
+                                <option value="{{ $opt->id }}"
+                                        data-group="{{ $opt->staff_group === 'rider' ? 'rider' : 'office' }}">
+                                    {{ $opt->name }}
+                                    · {{ $opt->staff_group === 'rider' ? __('message.hr_group_rider') : __('message.hr_group_office') }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="pds-hr-extra__field pds-hr-extra__field--date">
+                        <label><i class="fas fa-calendar-alt"></i> {{ __('message.hr_extra_fine_date') }}</label>
+                        <input type="date"
+                               name="item_date"
+                               class="pds-hr-extra__control"
+                               value="{{ now('Asia/Yangon')->toDateString() }}"
+                               required>
+                    </div>
+                    <div class="pds-hr-extra__field pds-hr-extra__field--grow">
+                        <label><i class="fas fa-align-left"></i> {{ __('message.hr_extra_fine_about') }}</label>
+                        <input type="text" name="description" class="pds-hr-extra__control" required
+                               placeholder="{{ __('message.hr_bag_about_placeholder') }}">
+                    </div>
+                    <div class="pds-hr-extra__field pds-hr-extra__field--amount">
+                        <label><i class="fas fa-coins"></i> {{ __('message.amount') }}</label>
+                        <input type="number" min="0" step="1" name="amount" class="pds-hr-extra__control" required placeholder="0">
+                    </div>
+                    <div class="pds-hr-extra__field pds-hr-extra__field--action">
+                        <button class="pds-hr-extra__add-btn" type="submit">
+                            <i class="fas fa-plus"></i>
+                            <span>{{ __('message.add') }}</span>
+                        </button>
+                    </div>
+                </form>
+            @endif
+
+            <div class="pds-hr-extra__list{{ $canEdit ? '' : ' is-readonly' }}">
+                <div class="pds-hr-extra__list-head">
+                    <span class="pds-hr-extra__col-no">#</span>
+                    <span class="pds-hr-extra__col-name">{{ __('message.name') }}</span>
+                    <span class="pds-hr-extra__col-date">{{ __('message.hr_extra_fine_date') }}</span>
+                    <span class="pds-hr-extra__col-about">{{ __('message.hr_extra_fine_about') }}</span>
+                    <span class="pds-hr-extra__col-fine">{{ __('message.amount') }}</span>
+                    @if($canEdit)
+                        <span class="pds-hr-extra__col-action"></span>
+                    @endif
+                </div>
+
+                @forelse($bagItems as $i => $bag)
+                    @php
+                        $bagName = $bag->staff?->name ?? ($bag->staff_code ?: '—');
+                        $bagInitial = strtoupper(substr(preg_replace('/\s+/', '', (string) $bagName), 0, 1) ?: '?');
+                        $bagDate = $bag->item_date
+                            ? $bag->item_date->timezone('Asia/Yangon')->format('d-m-Y')
+                            : '—';
+                    @endphp
+                    <div class="pds-hr-extra__row">
+                        <span class="pds-hr-extra__col-no">{{ $i + 1 }}</span>
+                        <span class="pds-hr-extra__col-name">
+                            <span class="pds-hr-extra__avatar">{{ $bagInitial }}</span>
+                            <span class="pds-hr-extra__name">{{ $bagName }}</span>
+                        </span>
+                        <span class="pds-hr-extra__col-date">{{ $bagDate }}</span>
+                        <span class="pds-hr-extra__col-about">{{ $bag->description }}</span>
+                        <span class="pds-hr-extra__col-fine">
+                            <span class="pds-hr-extra__amount">{{ number_format($bag->amount) }}</span>
+                        </span>
+                        @if($canEdit)
+                            <span class="pds-hr-extra__col-action">
+                                {{ html()->form('DELETE', route('hr.late-fine.bag.destroy', $bag->id))->attribute('data--submit', 'bagitem' . $bag->id)->class('d-inline')->open() }}
+                                    <a href="javascript:void(0)"
+                                       class="pds-hr-extra__delete"
+                                       data--submit="bagitem{{ $bag->id }}"
+                                       data--confirmation="true"
+                                       data-title="{{ __('message.delete_form_title', ['form' => __('message.hr_bag_deduction')]) }}"
+                                       data-message="{{ __('message.delete_msg') }}"
+                                       title="{{ __('message.delete') }}">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </a>
+                                {{ html()->form()->close() }}
+                            </span>
+                        @endif
+                    </div>
+                @empty
+                    <div class="pds-hr-extra__empty">
+                        <span class="pds-hr-extra__empty-icon"><i class="fas fa-inbox"></i></span>
+                        <strong>{{ __('message.no_record_found') }}</strong>
+                        <p>{{ __('message.hr_bag_deduction_hint') }}</p>
+                    </div>
+                @endforelse
+
+                @if($bagItems->isNotEmpty())
+                    <div class="pds-hr-extra__footer">
+                        <span>{{ __('message.hr_bag_deduction_total') }}</span>
+                        <strong>{{ number_format($sum_bag_deductions) }}</strong>
                     </div>
                 @endif
             </div>
@@ -300,11 +439,10 @@
                     }
 
                     if ($.fn.select2) {
-                        $('#extra-fine-staff').select2({
+                        var staffSelectOpts = {
                             width: '100%',
                             placeholder: '{{ __('message.name') }} ရွေးပါ',
                             allowClear: true,
-                            dropdownParent: $('.pds-hr-extra__form'),
                             matcher: function (params, data) {
                                 if ($.trim(params.term || '') === '') {
                                     return data;
@@ -316,7 +454,13 @@
                                 var text = (data.text || '').toLowerCase();
                                 return text.indexOf(term) > -1 ? data : null;
                             }
-                        });
+                        };
+                        $('#extra-fine-staff').select2($.extend({}, staffSelectOpts, {
+                            dropdownParent: $('#extra-fine-staff').closest('.pds-hr-extra__form')
+                        }));
+                        $('#bag-deduction-staff').select2($.extend({}, staffSelectOpts, {
+                            dropdownParent: $('#bag-deduction-form')
+                        }));
                     }
 
                     $('#late-fine-table').on('input', '.late-input:not([data-field="absent_dates"])', function () {

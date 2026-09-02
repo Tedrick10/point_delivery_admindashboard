@@ -20,7 +20,9 @@ class HrLateFineController extends Controller
         $service->syncStaffFromAccounts();
         $rows = $service->ensureLateFineRows($month); // All: office + rider
         $items = $service->lateFineItems($month);
+        $bagItems = $service->bagDeductionItems($month);
         $totals = $service->lateFineTotals($rows, $items);
+        $sum_bag_deductions = round((float) $bagItems->sum('amount'), 2);
 
         $staffOptions = HrStaff::query()
             ->with('user')
@@ -46,6 +48,8 @@ class HrLateFineController extends Controller
             'monthValue',
             'monthLabel',
             'items',
+            'bagItems',
+            'sum_bag_deductions',
             'staffOptions',
             'finePerMinuteDefault'
         ), $totals));
@@ -120,6 +124,7 @@ class HrLateFineController extends Controller
             'month' => 'required|date_format:Y-m',
             'staff_id' => 'nullable|exists:hr_staff,id',
             'staff_code' => 'nullable|string|max:50',
+            'fine_date' => 'required|date',
             'description' => 'required|string|max:500',
             'amount' => 'required|numeric|min:0',
         ]);
@@ -130,10 +135,13 @@ class HrLateFineController extends Controller
             $staff = HrStaff::where('code', strtoupper(trim($data['staff_code'])))->first();
         }
 
+        $fineDate = \Carbon\Carbon::parse($data['fine_date'], 'Asia/Yangon')->startOfDay();
+
         HrLateFineItem::create([
             'period_month' => $month->toDateString(),
             'staff_id' => $staff?->id,
             'staff_code' => $staff?->code ?? strtoupper(trim((string) ($data['staff_code'] ?? ''))),
+            'fine_date' => $fineDate->toDateString(),
             'description' => trim($data['description']),
             'amount' => (float) $data['amount'],
             'sort_order' => (int) HrLateFineItem::whereDate('period_month', $month->toDateString())->max('sort_order') + 1,
@@ -169,5 +177,65 @@ class HrLateFineController extends Controller
 
         return redirect()->route('hr.late-fine.index', ['month' => $month->format('Y-m')])
             ->withSuccess(__('message.delete_form', ['form' => __('message.hr_late_fine_item')]));
+    }
+
+    public function storeBagItem(Request $request, HrPayrollService $service)
+    {
+        if (! auth()->user()->can('hr-payroll-add') && auth()->user()->user_type !== 'admin') {
+            return redirect()->back()->withErrors(__('message.demo_permission_denied'));
+        }
+
+        $data = $request->validate([
+            'month' => 'required|date_format:Y-m',
+            'staff_id' => 'required|exists:hr_staff,id',
+            'item_date' => 'required|date',
+            'description' => 'required|string|max:500',
+            'amount' => 'required|numeric|min:0',
+        ]);
+
+        $month = $service->parseMonth($data['month']);
+        $staff = HrStaff::findOrFail($data['staff_id']);
+        $itemDate = \Carbon\Carbon::parse($data['item_date'], 'Asia/Yangon')->startOfDay();
+
+        \App\Models\HrBagDeductionItem::create([
+            'period_month' => $month->toDateString(),
+            'staff_id' => $staff->id,
+            'staff_code' => $staff->code,
+            'item_date' => $itemDate->toDateString(),
+            'description' => trim($data['description']),
+            'amount' => (float) $data['amount'],
+            'sort_order' => (int) \App\Models\HrBagDeductionItem::whereDate('period_month', $month->toDateString())->max('sort_order') + 1,
+        ]);
+
+        $group = $staff->staff_group;
+        if (in_array($group, ['office', 'rider'], true)) {
+            $service->ensureSalaryRows($month, $group);
+        } else {
+            $service->syncSalaryDeductionsFromLateFine($month);
+        }
+
+        return redirect()->route('hr.late-fine.index', ['month' => $month->format('Y-m')])
+            ->withSuccess(__('message.save_form', ['form' => __('message.hr_bag_deduction')]));
+    }
+
+    public function destroyBagItem($id, HrPayrollService $service)
+    {
+        if (! auth()->user()->can('hr-payroll-delete') && auth()->user()->user_type !== 'admin') {
+            return redirect()->back()->withErrors(__('message.demo_permission_denied'));
+        }
+
+        $item = \App\Models\HrBagDeductionItem::with('staff')->findOrFail($id);
+        $month = $service->parseMonth($item->period_month->format('Y-m'));
+        $group = $item->staff?->staff_group;
+        $item->delete();
+
+        if (in_array($group, ['office', 'rider'], true)) {
+            $service->ensureSalaryRows($month, $group);
+        } else {
+            $service->syncSalaryDeductionsFromLateFine($month);
+        }
+
+        return redirect()->route('hr.late-fine.index', ['month' => $month->format('Y-m')])
+            ->withSuccess(__('message.delete_form', ['form' => __('message.hr_bag_deduction')]));
     }
 }

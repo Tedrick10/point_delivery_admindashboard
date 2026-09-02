@@ -70,10 +70,247 @@
     .pds-hr-side__form { background: #f8fafc; border: 1px solid #eef2f7; border-radius: 14px; padding: 14px; margin-bottom: 14px; }
     .pds-hr-side__form .form-group { margin-bottom: 10px; }
     .pds-hr-side__form label { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
-    .pds-hr-table { margin: 0; }
+    .pds-hr-table { margin: 0; width: 100%; border-collapse: separate; border-spacing: 0; }
     .pds-hr-table thead th {
         background: #f8fafc; color: #64748b; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
         font-weight: 700; border-top: 0; border-bottom: 1px solid var(--hr-line); white-space: nowrap; padding: 12px 10px; vertical-align: middle;
+    }
+
+    /* —— Payroll salary sheets —— */
+    .pds-hr-panel--salary,
+    .pds-hr-panel--late {
+        overflow: hidden;
+    }
+    .pds-hr-panel--salary .table-responsive,
+    .pds-hr-panel--late .table-responsive {
+        overflow: auto;
+        max-height: min(72vh, 860px);
+        -webkit-overflow-scrolling: touch;
+    }
+    .pds-hr-table--salary,
+    .pds-hr-table--late {
+        min-width: 1100px;
+    }
+    .pds-hr-table--salary thead th,
+    .pds-hr-table--late thead th {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background: #0f172a;
+        color: #f8fafc;
+        text-align: center;
+        white-space: normal;
+        line-height: 1.25;
+        font-size: 11px;
+        letter-spacing: .02em;
+        text-transform: none;
+        font-weight: 700;
+        padding: 14px 10px;
+        border-bottom: 0;
+        vertical-align: middle;
+        min-width: 88px;
+        box-shadow: 0 1px 0 rgba(15, 23, 42, .35);
+    }
+    .pds-hr-table--salary thead th.pds-hr-col-no,
+    .pds-hr-table--late thead th.pds-hr-col-no {
+        min-width: 48px;
+        width: 48px;
+        left: 0;
+        z-index: 5;
+    }
+    .pds-hr-table--salary thead th.pds-hr-col-name,
+    .pds-hr-table--late thead th.pds-hr-col-name {
+        text-align: left;
+        min-width: 180px;
+        left: 48px;
+        z-index: 5;
+        white-space: nowrap;
+    }
+    .pds-hr-table--salary tbody td,
+    .pds-hr-table--salary tfoot td,
+    .pds-hr-table--late tbody td,
+    .pds-hr-table--late tfoot td {
+        text-align: center;
+        vertical-align: middle;
+        padding: 12px 10px;
+        border-bottom: 1px solid #eef2f7;
+        background: #fff;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .pds-hr-table--salary tbody tr:nth-child(even) td,
+    .pds-hr-table--late tbody tr:nth-child(even) td {
+        background: #fbfdff;
+    }
+    .pds-hr-table--salary tbody tr:hover td,
+    .pds-hr-table--late tbody tr:hover td {
+        background: #fff7ed !important;
+    }
+    .pds-hr-table--salary tbody td.pds-hr-col-no,
+    .pds-hr-table--salary tfoot td.pds-hr-col-no,
+    .pds-hr-table--late tbody td.pds-hr-col-no,
+    .pds-hr-table--late tfoot td.pds-hr-col-no {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        width: 48px;
+        color: #94a3b8;
+        font-weight: 700;
+        background: inherit;
+        box-shadow: 1px 0 0 #eef2f7;
+    }
+    .pds-hr-table--salary tbody td.pds-hr-col-name,
+    .pds-hr-table--salary tfoot td.pds-hr-col-name,
+    .pds-hr-table--late tbody td.pds-hr-col-name,
+    .pds-hr-table--late tfoot td.pds-hr-col-name {
+        position: sticky;
+        left: 48px;
+        z-index: 2;
+        text-align: left;
+        background: inherit;
+        box-shadow: 1px 0 0 #eef2f7;
+        white-space: nowrap;
+    }
+    .pds-hr-table--salary tbody tr:nth-child(even) td.pds-hr-col-no,
+    .pds-hr-table--salary tbody tr:nth-child(even) td.pds-hr-col-name,
+    .pds-hr-table--late tbody tr:nth-child(even) td.pds-hr-col-no,
+    .pds-hr-table--late tbody tr:nth-child(even) td.pds-hr-col-name {
+        background: #fbfdff;
+    }
+    .pds-hr-table--salary tbody tr:hover td.pds-hr-col-no,
+    .pds-hr-table--salary tbody tr:hover td.pds-hr-col-name,
+    .pds-hr-table--late tbody tr:hover td.pds-hr-col-no,
+    .pds-hr-table--late tbody tr:hover td.pds-hr-col-name {
+        background: #fff7ed !important;
+    }
+    .pds-hr-table--salary .pds-hr-cell,
+    .pds-hr-table--late .pds-hr-cell {
+        display: block;
+        text-align: center;
+        font-weight: 700;
+        color: #334155;
+        line-height: 1.2;
+    }
+    .pds-hr-table--salary .pds-hr-cell--muted,
+    .pds-hr-table--late .pds-hr-cell--muted {
+        color: #64748b;
+        font-weight: 600;
+    }
+    .pds-hr-table--salary .pds-hr-cell--strong,
+    .pds-hr-table--late .pds-hr-cell--strong {
+        color: var(--hr-ink);
+        font-weight: 800;
+        font-size: 14px;
+    }
+    .pds-hr-table--salary .pds-hr-cell--danger,
+    .pds-hr-table--late .pds-hr-cell--danger {
+        color: #dc2626;
+        font-weight: 800;
+    }
+    .pds-hr-table--salary .pds-hr-cell--success,
+    .pds-hr-table--late .pds-hr-cell--success {
+        color: #059669;
+        font-weight: 800;
+        font-size: 14px;
+    }
+    .pds-hr-table--salary .pds-hr-num,
+    .pds-hr-table--salary .pds-hr-readonly,
+    .pds-hr-table--late .pds-hr-num,
+    .pds-hr-table--late .pds-hr-readonly {
+        display: block;
+        text-align: center;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        padding: 0 !important;
+        min-width: 0;
+        font-weight: 700;
+        color: #334155;
+        box-shadow: none;
+    }
+    .pds-hr-table--salary .pds-hr-input,
+    .pds-hr-table--late .pds-hr-input {
+        display: block;
+        width: 100%;
+        max-width: 104px;
+        margin: 0 auto;
+        text-align: center;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 8px 6px;
+        background: #fff;
+        font-weight: 700;
+        color: var(--hr-ink);
+        box-shadow: inset 0 1px 2px rgba(15, 23, 42, .03);
+    }
+    .pds-hr-table--salary .pds-hr-input:focus,
+    .pds-hr-table--late .pds-hr-input:focus {
+        outline: none;
+        border-color: #FE6F07;
+        box-shadow: 0 0 0 3px rgba(254, 111, 7, .14);
+    }
+    .pds-hr-table--salary .pds-hr-input:disabled,
+    .pds-hr-table--late .pds-hr-input:disabled {
+        background: #f8fafc;
+        color: #94a3b8;
+    }
+    .pds-hr-table--salary .pds-hr-person,
+    .pds-hr-table--late .pds-hr-person {
+        justify-content: flex-start;
+        text-align: left;
+        min-width: 0;
+        gap: 8px;
+    }
+    .pds-hr-table--salary .pds-hr-avatar,
+    .pds-hr-table--late .pds-hr-avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 13px;
+    }
+    .pds-hr-table--salary .pds-hr-badge,
+    .pds-hr-table--late .pds-hr-badge {
+        margin-top: 2px;
+        font-size: 10px;
+        padding: 1px 7px;
+    }
+    .pds-hr-table--salary tfoot tr.pds-hr-tfoot td,
+    .pds-hr-table--late tfoot tr.pds-hr-tfoot td {
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
+        background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
+        border-top: 2px solid #fdba74;
+        border-bottom: 0;
+        color: #9a3412;
+        font-weight: 800;
+        padding-top: 14px;
+        padding-bottom: 14px;
+        box-shadow: 0 -6px 16px rgba(154, 52, 18, .06);
+    }
+    .pds-hr-table--salary tfoot tr.pds-hr-tfoot td.pds-hr-col-no,
+    .pds-hr-table--salary tfoot tr.pds-hr-tfoot td.pds-hr-col-name,
+    .pds-hr-table--late tfoot tr.pds-hr-tfoot td.pds-hr-col-no,
+    .pds-hr-table--late tfoot tr.pds-hr-tfoot td.pds-hr-col-name {
+        z-index: 4;
+        background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
+    }
+    .pds-hr-table--salary .pds-hr-tfoot__label,
+    .pds-hr-table--late .pds-hr-tfoot__label {
+        text-align: left;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        font-size: 12px;
+        color: #9a3412;
+    }
+    .pds-hr-table--salary .pds-hr-th-sub,
+    .pds-hr-table--late .pds-hr-th-sub {
+        display: block;
+        margin-top: 2px;
+        font-size: 10px;
+        font-weight: 600;
+        opacity: .72;
+        letter-spacing: 0;
     }
     .pds-hr-table thead th.pds-hr-th-fp {
         white-space: normal;
@@ -129,6 +366,19 @@
     }
     .pds-hr-table tbody tr:hover { background: #fffaf5; }
     .pds-hr-table tfoot td { background: #f8fafc; font-weight: 700; }
+    .pds-hr-table tfoot tr.pds-hr-tfoot td {
+        background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+        border-top: 2px solid #fdba74;
+        color: #9a3412;
+        padding-top: 12px;
+        padding-bottom: 12px;
+    }
+    .pds-hr-tfoot__label {
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        font-size: 12px;
+    }
     .pds-hr-table--compact thead th, .pds-hr-table--compact tbody td { padding: 8px 10px; }
     .pds-hr-readonly {
         color: #334155;
@@ -179,37 +429,80 @@
         background: #fff7ed; border: 1px solid #ffd8b0; color: #9a3412;
         border-radius: 14px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; font-weight: 600;
     }
-    .pds-hr-extra { padding: 22px 22px 0; }
+    .pds-hr-table--late {
+        min-width: 1280px;
+    }
+    .pds-hr-table--late .pds-hr-input--wide {
+        max-width: 128px;
+        min-width: 108px;
+    }
+    .pds-hr-table--late tfoot .pds-hr-col-name[colspan] {
+        text-align: right;
+        padding-right: 16px;
+    }
+
+    .pds-hr-extra {
+        padding: 0;
+        overflow: hidden;
+    }
     .pds-hr-extra__head {
         display: flex; justify-content: space-between; gap: 16px; align-items: center;
-        flex-wrap: wrap; margin-bottom: 18px;
+        flex-wrap: wrap;
+        padding: 20px 22px 18px;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        border-bottom: 0;
     }
     .pds-hr-extra__title-wrap { display: flex; align-items: flex-start; gap: 14px; }
     .pds-hr-extra__icon {
         width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; flex: 0 0 auto;
         background: linear-gradient(135deg, #FE6F07, #ff9a4a); color: #fff;
-        box-shadow: 0 10px 20px rgba(254, 111, 7, .22); font-size: 16px;
+        box-shadow: 0 10px 20px rgba(254, 111, 7, .28); font-size: 16px;
     }
-    .pds-hr-extra__head h5 { margin: 0; font-weight: 800; color: var(--hr-ink); font-size: 18px; letter-spacing: -.01em; }
-    .pds-hr-extra__head p { margin: 4px 0 0; color: var(--hr-muted); font-size: 13px; max-width: 420px; line-height: 1.45; }
+    .pds-hr-extra--bag .pds-hr-extra__icon {
+        background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+        box-shadow: 0 10px 20px rgba(14, 165, 233, .28);
+    }
+    .pds-hr-extra__head h5,
+    .pds-hr-page .pds-hr-extra__head h5,
+    .pds-hr-extra__head h5.card-title,
+    .pds-hr-extra__title {
+        margin: 0 !important;
+        font-weight: 800 !important;
+        color: #ffffff !important;
+        font-size: 18px !important;
+        letter-spacing: -.01em;
+        opacity: 1 !important;
+    }
+    .pds-hr-extra__head p,
+    .pds-hr-page .pds-hr-extra__head p,
+    .pds-hr-extra__hint {
+        margin: 4px 0 0 !important;
+        color: rgba(248, 250, 252, 0.85) !important;
+        font-size: 13px !important;
+        max-width: 460px;
+        line-height: 1.45;
+        opacity: 1 !important;
+    }
     .pds-hr-extra__total-pill {
         display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px;
-        background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
-        border: 1px solid var(--hr-line); border-radius: 16px; padding: 10px 16px;
-        box-shadow: 0 8px 18px rgba(15, 23, 42, .04);
+        background: rgba(255, 255, 255, .1);
+        border: 1px solid rgba(255, 255, 255, .18); border-radius: 16px; padding: 10px 16px;
+        backdrop-filter: blur(6px);
     }
     .pds-hr-extra__total-pill-label {
-        font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--hr-muted);
+        font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+        color: rgba(248, 250, 252, .78) !important;
     }
     .pds-hr-extra__total-pill-value {
-        font-size: 22px; font-weight: 800; color: var(--hr-orange); line-height: 1.1; font-variant-numeric: tabular-nums;
+        font-size: 22px; font-weight: 800; color: #fdba74 !important; line-height: 1.1; font-variant-numeric: tabular-nums;
     }
+    .pds-hr-extra--bag .pds-hr-extra__total-pill-value { color: #7dd3fc !important; }
     .pds-hr-extra__form {
         display: grid;
-        grid-template-columns: minmax(160px, 220px) minmax(220px, 1fr) minmax(120px, 150px) auto;
+        grid-template-columns: minmax(150px, 200px) minmax(140px, 160px) minmax(200px, 1fr) minmax(110px, 140px) auto;
         gap: 12px; align-items: end;
-        background: #f8fafc; border: 1px solid #eef2f7; border-radius: 18px;
-        padding: 16px; margin-bottom: 18px;
+        background: #f8fafc; border: 0; border-bottom: 1px solid #eef2f7; border-radius: 0;
+        padding: 18px 22px; margin-bottom: 0;
     }
     .pds-hr-extra__field label {
         display: flex; align-items: center; gap: 6px; margin-bottom: 7px;
@@ -264,7 +557,7 @@
     .pds-hr-extra__form .select2-container--default .select2-results__option[aria-selected=true] {
         background: #ffedd5; color: #9a3412;
     }
-    .pds-hr-extra__field--amount .pds-hr-extra__control { text-align: right; font-variant-numeric: tabular-nums; }
+    .pds-hr-extra__field--amount .pds-hr-extra__control { text-align: center; font-variant-numeric: tabular-nums; }
     .pds-hr-extra__add-btn {
         height: 44px; border: 0; border-radius: 12px; padding: 0 18px;
         display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -272,60 +565,78 @@
         font-weight: 700; box-shadow: 0 10px 18px rgba(254, 111, 7, .22);
         transition: transform .15s ease, box-shadow .15s ease;
     }
+    .pds-hr-extra--bag .pds-hr-extra__add-btn {
+        background: linear-gradient(135deg, #0284c7, #38bdf8);
+        box-shadow: 0 10px 18px rgba(2, 132, 199, .22);
+    }
     .pds-hr-extra__add-btn:hover {
         color: #fff; transform: translateY(-1px);
         box-shadow: 0 12px 22px rgba(254, 111, 7, .28);
     }
+    .pds-hr-extra--bag .pds-hr-extra__add-btn:hover {
+        box-shadow: 0 12px 22px rgba(2, 132, 199, .28);
+    }
     .pds-hr-extra__list {
-        border: 1px solid #eef2f7; border-radius: 18px; overflow: hidden; margin-bottom: 22px; background: #fff;
+        border: 0; border-radius: 0; overflow: hidden; margin-bottom: 0; background: #fff;
     }
     .pds-hr-extra__list-head,
     .pds-hr-extra__row,
     .pds-hr-extra__footer {
         display: grid;
-        grid-template-columns: 48px minmax(140px, 200px) minmax(220px, 1fr) 120px 52px;
-        gap: 12px; align-items: center; padding: 12px 16px;
+        grid-template-columns: 48px minmax(140px, 200px) 120px minmax(180px, 1fr) 120px 52px;
+        gap: 12px; align-items: center; padding: 13px 22px;
     }
     .pds-hr-extra__list.is-readonly .pds-hr-extra__list-head,
     .pds-hr-extra__list.is-readonly .pds-hr-extra__row,
     .pds-hr-extra__list.is-readonly .pds-hr-extra__footer {
-        grid-template-columns: 48px minmax(140px, 200px) minmax(220px, 1fr) 120px;
+        grid-template-columns: 48px minmax(140px, 200px) 120px minmax(180px, 1fr) 120px;
     }
     .pds-hr-extra__list-head {
-        background: #f8fafc; border-bottom: 1px solid #eef2f7;
-        font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #64748b;
+        background: #f1f5f9; border-bottom: 1px solid #e2e8f0;
+        font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #64748b;
+        text-align: center;
     }
+    .pds-hr-extra__list-head .pds-hr-extra__col-name { text-align: left; }
+    .pds-hr-extra__list-head .pds-hr-extra__col-about { text-align: left; }
     .pds-hr-extra__row {
         border-bottom: 1px solid #f1f5f9; transition: background .15s ease;
     }
+    .pds-hr-extra__row:nth-child(even) { background: #fbfdff; }
     .pds-hr-extra__row:last-child { border-bottom: 0; }
     .pds-hr-extra__row:hover { background: #fffaf5; }
-    .pds-hr-extra__col-no { color: #94a3b8; font-weight: 700; }
+    .pds-hr-extra__col-no { color: #94a3b8; font-weight: 700; text-align: center; }
     .pds-hr-extra__col-name { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
     .pds-hr-extra__avatar {
         width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto;
         background: #fff7ed; color: var(--hr-orange); font-size: 12px; font-weight: 800;
     }
+    .pds-hr-extra--bag .pds-hr-extra__avatar {
+        background: #e0f2fe; color: #0284c7;
+    }
     .pds-hr-extra__name {
         font-weight: 700; color: var(--hr-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pds-hr-extra__col-date {
+        color: #475569; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: center;
     }
     .pds-hr-extra__col-about {
         color: #334155; font-weight: 600; line-height: 1.4; white-space: normal;
     }
-    .pds-hr-extra__col-fine { text-align: right; }
+    .pds-hr-extra__col-fine { text-align: center; }
     .pds-hr-extra__amount {
-        display: inline-flex; min-width: 84px; justify-content: flex-end;
-        background: #fff7ed; color: #c2410c; border-radius: 999px;
-        padding: 6px 12px; font-weight: 800; font-variant-numeric: tabular-nums;
+        display: inline-flex; min-width: 88px; justify-content: center;
+        background: transparent; color: #c2410c; border-radius: 0;
+        padding: 0; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 14px;
     }
-    .pds-hr-extra__col-action { text-align: right; }
+    .pds-hr-extra--bag .pds-hr-extra__amount { color: #0369a1; }
+    .pds-hr-extra__col-action { text-align: center; }
     .pds-hr-extra__delete {
         width: 34px; height: 34px; border-radius: 10px; display: inline-grid; place-items: center;
         color: #dc2626; background: #fef2f2; text-decoration: none; transition: .15s ease;
     }
     .pds-hr-extra__delete:hover { background: #fee2e2; color: #b91c1c; text-decoration: none; }
     .pds-hr-extra__empty {
-        text-align: center; padding: 40px 20px; color: var(--hr-muted);
+        text-align: center; padding: 44px 20px; color: var(--hr-muted);
     }
     .pds-hr-extra__empty-icon {
         width: 52px; height: 52px; margin: 0 auto 12px; border-radius: 16px;
@@ -334,16 +645,21 @@
     .pds-hr-extra__empty strong { display: block; color: var(--hr-ink); margin-bottom: 4px; }
     .pds-hr-extra__empty p { margin: 0; font-size: 13px; }
     .pds-hr-extra__footer {
-        background: linear-gradient(90deg, #f8fafc, #fff7ed);
-        border-top: 1px solid #eef2f7;
-        font-weight: 700; color: #475569;
+        background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+        border-top: 2px solid #fdba74;
+        font-weight: 700; color: #9a3412;
     }
-    .pds-hr-extra__footer span { grid-column: 1 / 4; text-align: right; }
+    .pds-hr-extra--bag .pds-hr-extra__footer {
+        background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%);
+        border-top-color: #7dd3fc;
+        color: #075985;
+    }
+    .pds-hr-extra__footer span { grid-column: 1 / 5; text-align: right; }
     .pds-hr-extra__footer strong {
-        grid-column: 4; justify-self: end;
+        grid-column: 5; justify-self: center;
         min-width: 96px; text-align: center;
-        background: #dcfce7; color: #166534; border-radius: 999px;
-        padding: 8px 14px; font-size: 15px; font-variant-numeric: tabular-nums;
+        background: transparent; color: inherit; border-radius: 0;
+        padding: 0; font-size: 16px; font-variant-numeric: tabular-nums; font-weight: 800;
     }
     .pds-hr-my-salary { padding: 22px; }
     .pds-hr-my-salary__grid {
@@ -378,6 +694,7 @@
         .pds-hr-extra__col-no { display: none; }
         .pds-hr-extra__col-name { grid-column: 1 / 2; }
         .pds-hr-extra__col-fine { grid-column: 2; grid-row: 1; }
+        .pds-hr-extra__col-date { grid-column: 1 / -1; color: #64748b; font-size: 13px; }
         .pds-hr-extra__col-about { grid-column: 1 / -1; }
         .pds-hr-extra__col-action { grid-column: 2; grid-row: 1; align-self: start; margin-top: 36px; }
         .pds-hr-extra__footer span { grid-column: 1; text-align: left; }

@@ -60,14 +60,10 @@
                             <span>{{ __('message.hr_way_rate') }}</span>
                             <strong>{{ number_format($salary['way_rate']) }}</strong>
                         </div>
-                        <div class="pds-hr-my-salary__item">
-                            <span>{{ __('message.hr_way_pay') }}</span>
-                            <strong>{{ number_format($salary['way_pay']) }}</strong>
-                        </div>
                     @else
                         <div class="pds-hr-my-salary__item">
                             <span>{{ __('message.hr_monthly_salary') }}</span>
-                            <strong>{{ number_format($salary['monthly_salary']) }}</strong>
+                            <strong>{{ number_format($salary['basic_salary']) }}</strong>
                         </div>
                         <div class="pds-hr-my-salary__item">
                             <span>{{ __('message.hr_day_rate') }}</span>
@@ -85,10 +81,6 @@
                             <span>{{ __('message.hr_worked_days') }}</span>
                             <strong>{{ $salary['worked_days'] }}</strong>
                         </div>
-                        <div class="pds-hr-my-salary__item">
-                            <span>{{ __('message.hr_basic_salary') }}</span>
-                            <strong>{{ number_format($salary['basic_salary']) }}</strong>
-                        </div>
                     @endif
 
                     <div class="pds-hr-my-salary__item">
@@ -104,16 +96,8 @@
                         <strong>{{ number_format($salary['bag_deduction']) }}</strong>
                     </div>
                     <div class="pds-hr-my-salary__item">
-                        <span>{{ __('message.hr_personal_expense') }}</span>
-                        <strong>{{ number_format($salary['personal_expense']) }}</strong>
-                    </div>
-                    <div class="pds-hr-my-salary__item">
                         <span>Deposit</span>
                         <strong>{{ number_format($salary['deposit']) }}</strong>
-                    </div>
-                    <div class="pds-hr-my-salary__item pds-hr-my-salary__item--accent">
-                        <span>{{ __('message.hr_net_pay') }}</span>
-                        <strong>{{ number_format($salary['net_pay']) }}</strong>
                     </div>
                 </div>
             </div>

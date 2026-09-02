@@ -28,9 +28,22 @@ class HrOfficeSalaryController extends Controller
         $monthLabel = $month->format('F Y');
         $daysInMonth = $month->daysInMonth;
         $dayBase = max(1, $daysInMonth - 3);
-        $sumTotalSalary = round((float) $rows->sum(fn ($r) => $r->total_salary), 2);
-        $sumDeduction = round((float) $rows->sum(fn ($r) => $r->total_deduction), 2);
-        $sumNetPay = round((float) $rows->sum(fn ($r) => $r->net_pay), 2);
+        $colTotals = [
+            'monthly_salary' => round((float) $rows->sum('monthly_salary'), 2),
+            'day_rate' => round((float) $rows->sum(fn ($r) => round($r->day_rate)), 2),
+            'rest_days' => (int) $rows->sum('rest_days'),
+            'worked_days' => (int) $rows->sum(fn ($r) => $r->worked_days),
+            'total_salary' => round((float) $rows->sum(fn ($r) => $r->total_salary), 2),
+            'late_minute_amount' => round((float) $rows->sum('late_minute_amount'), 2),
+            'fine_amount' => round((float) $rows->sum('fine_amount'), 2),
+            'bag_deduction' => round((float) $rows->sum('bag_deduction'), 2),
+            'deposit' => round((float) $rows->sum('deposit'), 2),
+            'total_deduction' => round((float) $rows->sum(fn ($r) => $r->total_deduction), 2),
+            'net_pay' => round((float) $rows->sum(fn ($r) => $r->net_pay), 2),
+        ];
+        $sumTotalSalary = $colTotals['total_salary'];
+        $sumDeduction = $colTotals['total_deduction'];
+        $sumNetPay = $colTotals['net_pay'];
 
         return view('hr.office-salary', compact(
             'pageTitle',
@@ -43,6 +56,7 @@ class HrOfficeSalaryController extends Controller
             'daysInMonth',
             'dayBase',
             'rows',
+            'colTotals',
             'sumTotalSalary',
             'sumDeduction',
             'sumNetPay'
@@ -61,12 +75,9 @@ class HrOfficeSalaryController extends Controller
         }
 
         $data = $request->validate([
-            'monthly_salary' => 'nullable|numeric|min:0',
             'rest_days' => 'nullable|integer|min:0|max:31',
             'late_minute_amount' => 'nullable|numeric',
             'fine_amount' => 'nullable|numeric|min:0',
-            'bag_deduction' => 'nullable|numeric|min:0',
-            'personal_expense' => 'nullable|numeric|min:0',
             'deposit' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string|max:1000',
         ]);
@@ -76,9 +87,10 @@ class HrOfficeSalaryController extends Controller
                 $row->{$key} = $value;
             }
         }
-        // Office sheet no longer uses way pay
+        // monthly_salary / day rate → Super Admin; bag_deduction → Late Fine; no way pay / ကြိုသုံး
         $row->way_count = 0;
         $row->way_rate = 0;
+        $row->personal_expense = 0;
         $row->save();
 
         return response()->json([
@@ -88,7 +100,6 @@ class HrOfficeSalaryController extends Controller
                 'id' => $row->id,
                 'day_rate' => round($row->day_rate, 0),
                 'worked_days' => $row->worked_days,
-                'basic_salary' => $row->basic_salary,
                 'total_salary' => $row->total_salary,
                 'total_deduction' => $row->total_deduction,
                 'net_pay' => $row->net_pay,

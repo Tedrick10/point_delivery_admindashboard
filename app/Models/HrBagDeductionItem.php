@@ -5,15 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class HrLateFineItem extends Model
+class HrBagDeductionItem extends Model
 {
-    protected $table = 'hr_late_fine_items';
+    protected $table = 'hr_bag_deduction_items';
 
     protected $fillable = [
         'period_month',
         'staff_id',
         'staff_code',
-        'fine_date',
+        'item_date',
         'description',
         'amount',
         'sort_order',
@@ -23,7 +23,7 @@ class HrLateFineItem extends Model
     {
         return [
             'period_month' => 'date',
-            'fine_date' => 'date',
+            'item_date' => 'date',
             'amount' => 'float',
             'sort_order' => 'integer',
         ];

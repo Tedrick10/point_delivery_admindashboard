@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\DispatchOrderItem;
+use App\Models\HrBagDeductionItem;
 use App\Models\HrLateFineItem;
 use App\Models\HrLateFineRow;
 use App\Models\HrOfficeSalaryRow;
@@ -105,6 +107,9 @@ class HrPayrollService
             if (! $staff->code) {
                 $staff->code = $code;
             }
+            if ($group === 'office' && (float) $staff->monthly_salary <= 0) {
+                $staff->monthly_salary = $this->defaultOfficeMonthlySalary();
+            }
             $staff->save();
 
             return true;
@@ -121,7 +126,7 @@ class HrPayrollService
             'staff_group' => $group,
             'user_id' => $user->id,
             'branch_id' => $user->branch_id,
-            'monthly_salary' => 0,
+            'monthly_salary' => $group === 'office' ? $this->defaultOfficeMonthlySalary() : 0,
             'allowance_minutes' => 60,
             'way_rate' => $group === 'rider' ? 1000 : 0,
             'sort_order' => $sortOrder,
@@ -263,6 +268,11 @@ class HrPayrollService
         return $staff->fresh();
     }
 
+    public function defaultOfficeMonthlySalary(): float
+    {
+        return 600000;
+    }
+
     public function updateStaffWayRate(HrStaff $staff, float $rate): HrStaff
     {
         $rate = max(0, round($rate, 2));
@@ -278,6 +288,21 @@ class HrPayrollService
         return $staff->fresh();
     }
 
+    public function updateStaffMonthlySalary(HrStaff $staff, float $amount): HrStaff
+    {
+        $amount = max(0, round($amount, 2));
+        $staff->monthly_salary = $amount;
+        $staff->save();
+
+        if ($staff->staff_group === 'office') {
+            HrOfficeSalaryRow::query()
+                ->where('staff_id', $staff->id)
+                ->update(['monthly_salary' => $amount]);
+        }
+
+        return $staff->fresh();
+    }
+
     public function lateFineItems(Carbon $month): Collection
     {
         return HrLateFineItem::query()
@@ -286,6 +311,30 @@ class HrPayrollService
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
+    }
+
+    public function bagDeductionItems(Carbon $month): Collection
+    {
+        return HrBagDeductionItem::query()
+            ->with('staff')
+            ->whereDate('period_month', $month->toDateString())
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * @return Collection<int, float> staff_id => amount
+     */
+    public function bagDeductionTotalsByStaff(Carbon $month): Collection
+    {
+        return HrBagDeductionItem::query()
+            ->whereDate('period_month', $month->toDateString())
+            ->whereNotNull('staff_id')
+            ->selectRaw('staff_id, SUM(amount) as total_amount')
+            ->groupBy('staff_id')
+            ->pluck('total_amount', 'staff_id')
+            ->map(fn ($amount) => round((float) $amount, 2));
     }
 
     public function lateFineTotals(Collection $rows, Collection $items): array
@@ -324,6 +373,47 @@ class HrPayrollService
     }
 
     /**
+     * Monthly Delivered way counts keyed by delivery_man user id (Asia/Yangon calendar month).
+     *
+     * @return Collection<int, int>
+     */
+    public function deliveredWayCountsForMonth(Carbon $month): Collection
+    {
+        $tz = 'Asia/Yangon';
+        $startLocal = $month->copy()->timezone($tz)->startOfMonth();
+        $endLocal = $month->copy()->timezone($tz)->endOfMonth()->addDay()->startOfDay();
+        $startUtc = $startLocal->copy()->utc();
+        $endUtc = $endLocal->copy()->utc();
+        $startDate = $startLocal->toDateString();
+        $endDate = $month->copy()->timezone($tz)->endOfMonth()->toDateString();
+
+        return DispatchOrderItem::query()
+            ->where('status', 'completed')
+            ->whereNotNull('delivery_man_id')
+            ->where(function ($q) use ($startUtc, $endUtc, $startDate, $endDate) {
+                $q->where(function ($d) use ($startUtc, $endUtc) {
+                    $d->whereNotNull('delivered_at')
+                        ->where('delivered_at', '>=', $startUtc)
+                        ->where('delivered_at', '<', $endUtc);
+                })->orWhere(function ($r) use ($startDate, $endDate) {
+                    $r->whereNull('delivered_at')
+                        ->whereNotNull('rider_remit_date')
+                        ->whereDate('rider_remit_date', '>=', $startDate)
+                        ->whereDate('rider_remit_date', '<=', $endDate);
+                })->orWhere(function ($u) use ($startUtc, $endUtc) {
+                    $u->whereNull('delivered_at')
+                        ->whereNull('rider_remit_date')
+                        ->where('updated_at', '>=', $startUtc)
+                        ->where('updated_at', '<', $endUtc);
+                });
+            })
+            ->selectRaw('delivery_man_id, COUNT(*) as agg_count')
+            ->groupBy('delivery_man_id')
+            ->pluck('agg_count', 'delivery_man_id')
+            ->map(fn ($count) => (int) $count);
+    }
+
+    /**
      * @param  'office'|'rider'  $staffGroup
      */
     public function ensureSalaryRows(Carbon $month, string $staffGroup = 'office'): Collection
@@ -346,9 +436,20 @@ class HrPayrollService
             ->get()
             ->groupBy('staff_id');
 
+        $wayCounts = $staffGroup === 'rider'
+            ? $this->deliveredWayCountsForMonth($month)
+            : collect();
+
+        $bagByStaff = $this->bagDeductionTotalsByStaff($month);
+
         foreach ($staff as $member) {
             $lateRow = $lateByStaff->get($member->id);
             $deductions = $this->salaryDeductionsFromLateFine($lateRow, $incidentByStaff->get($member->id));
+            $riderUserId = (int) ($member->user_id ?? 0);
+            $autoWayCount = $staffGroup === 'rider'
+                ? (int) ($wayCounts->get($riderUserId) ?? 0)
+                : 0;
+            $bagAmount = (float) ($bagByStaff->get($member->id) ?? 0);
 
             $existing = HrOfficeSalaryRow::query()
                 ->whereDate('period_month', $period)
@@ -359,28 +460,42 @@ class HrPayrollService
                 HrOfficeSalaryRow::create([
                     'period_month' => $period,
                     'staff_id' => $member->id,
-                    'monthly_salary' => $staffGroup === 'office' ? (float) $member->monthly_salary : 0,
+                    'monthly_salary' => $staffGroup === 'office'
+                        ? (float) ($member->monthly_salary > 0 ? $member->monthly_salary : $this->defaultOfficeMonthlySalary())
+                        : 0,
                     'salary_day_base' => max(1, $month->daysInMonth - 3),
                     'rest_days' => 0,
-                    'way_count' => 0,
+                    'way_count' => $autoWayCount,
                     'way_rate' => $staffGroup === 'rider'
                         ? (float) ($member->way_rate > 0 ? $member->way_rate : 1000)
                         : 0,
                     'late_minute_amount' => $deductions['late_minute_amount'],
                     'fine_amount' => $deductions['fine_amount'],
-                    'bag_deduction' => 0,
+                    'bag_deduction' => $bagAmount,
                     'personal_expense' => 0,
                     'deposit' => 0,
                 ]);
             } else {
-                // Keep Late Amount / Fine Amount in sync with Late Time Fine sheet
+                // Keep Late Minute / Fine Amount in sync with Late Time Fine sheet
                 $existing->late_minute_amount = $deductions['late_minute_amount'];
                 $existing->fine_amount = $deductions['fine_amount'];
+                $existing->bag_deduction = $bagAmount;
+                if ($staffGroup === 'office') {
+                    $staffSalary = (float) ($member->monthly_salary > 0
+                        ? $member->monthly_salary
+                        : $this->defaultOfficeMonthlySalary());
+                    if ((float) $existing->monthly_salary !== $staffSalary) {
+                        $existing->monthly_salary = $staffSalary;
+                    }
+                    $existing->salary_day_base = max(1, $month->daysInMonth - 3);
+                }
                 if ($staffGroup === 'rider') {
                     $staffWayRate = (float) ($member->way_rate > 0 ? $member->way_rate : 1000);
                     if ((float) $existing->way_rate !== $staffWayRate) {
                         $existing->way_rate = $staffWayRate;
                     }
+                    // Month-to-date delivered ways (auto accumulate)
+                    $existing->way_count = $autoWayCount;
                 }
                 $existing->save();
             }
@@ -407,6 +522,7 @@ class HrPayrollService
             ->get();
         $lateByStaff = HrLateFineRow::query()->whereDate('period_month', $period)->get()->keyBy('staff_id');
         $incidentByStaff = HrLateFineItem::query()->whereDate('period_month', $period)->get()->groupBy('staff_id');
+        $bagByStaff = $this->bagDeductionTotalsByStaff($month);
         $updated = 0;
 
         foreach ($rows as $row) {
@@ -416,6 +532,7 @@ class HrPayrollService
             );
             $row->late_minute_amount = $deductions['late_minute_amount'];
             $row->fine_amount = $deductions['fine_amount'];
+            $row->bag_deduction = (float) ($bagByStaff->get($row->staff_id) ?? 0);
             $row->save();
             $updated++;
         }
@@ -460,8 +577,8 @@ class HrPayrollService
 
     /**
      * Map Late Fine into salary columns.
-     * Late Amount = Late Time Fine sheet late Fine Amount (fine_minutes × rate)
-     * Fine Amount = Finger Print absent fine + Extra Fine items
+     * Late Minute = Late Time Fine (fine_minutes × rate) + Finger Print absent fine
+     * Fine Amount = Extra Fine items only
      */
     protected function salaryDeductionsFromLateFine(?HrLateFineRow $lateRow, $incidentItems = null): array
     {
@@ -470,8 +587,8 @@ class HrPayrollService
         $extraFineAmount = (float) collect($incidentItems)->sum('amount');
 
         return [
-            'late_minute_amount' => round($lateFineAmount, 2),
-            'fine_amount' => round($absentFineAmount + $extraFineAmount, 2),
+            'late_minute_amount' => round($lateFineAmount + $absentFineAmount, 2),
+            'fine_amount' => round($extraFineAmount, 2),
         ];
     }
 
