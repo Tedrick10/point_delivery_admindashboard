@@ -1,20 +1,40 @@
 <link rel="shortcut icon" class="site_favicon_preview" href="{{ getSingleMedia(appSettingData('get'), 'site_favicon', null) }}" />
-<link rel="stylesheet" href="{{ asset('css/backend-bundle.min.css') }}"/>
-<link rel="stylesheet" href="{{ asset('css/backend.css') }}"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="stylesheet" href="{{ public_asset_ver('css/backend-bundle.min.css') }}"/>
+<link rel="stylesheet" href="{{ public_asset_ver('css/backend.css') }}"/>
 @if(mighty_language_direction() == 'rtl')
-    <link rel="stylesheet" href="{{ asset('css/rtl.css') }}">
+    <link rel="stylesheet" href="{{ public_asset_ver('css/rtl.css') }}">
 @endif
-<link rel="stylesheet" href="{{ asset('vendor/@fortawesome/fontawesome-free/css/all.min.css') }}"/>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-<link rel="stylesheet" href="{{ asset('vendor/remixicon/fonts/remixicon.css') }}"/>
-<link rel="stylesheet" href="{{ asset('css/vendor/select2.min.css')}}">
-<link rel="stylesheet" href="{{ asset('vendor/confirmJS/jquery-confirm.min.css') }}"/>
-<link rel="stylesheet" href="{{ asset('vendor/magnific-popup/css/magnific-popup.css') }}"/>
-<link rel="stylesheet" href="{{ asset('css/custom.css')}}">
-<link rel="stylesheet" href="{{ asset('css/admin-dashboard-theme.css') }}?v=208">
-<link rel="stylesheet" href="{{ asset('css/pds-layout.css') }}?v=13">
+<link rel="stylesheet" href="{{ public_asset_ver('vendor/@fortawesome/fontawesome-free/css/all.min.css') }}"/>
+<link rel="stylesheet" href="{{ public_asset_ver('vendor/remixicon/fonts/remixicon.css') }}"/>
+<link rel="stylesheet" href="{{ public_asset_ver('css/vendor/select2.min.css') }}">
+<link rel="stylesheet" href="{{ public_asset_ver('vendor/confirmJS/jquery-confirm.min.css') }}"/>
+<link rel="stylesheet" href="{{ public_asset_ver('vendor/magnific-popup/css/magnific-popup.css') }}"/>
+{{-- Inline PDS theme CSS so php artisan serve cannot truncate linked stylesheets. --}}
+@php
+    $pdsInlineCss = trim(
+        public_css_inline('css/custom.css')."\n".
+        public_css_inline('css/admin-dashboard-theme.css')."\n".
+        public_css_inline('css/pds-layout.css')
+    );
+@endphp
+@if($pdsInlineCss !== '')
+    <style id="pds-admin-theme-inline">{!! $pdsInlineCss !!}</style>
+@else
+    <link rel="stylesheet" href="{{ public_asset_ver('css/custom.css') }}">
+    <link rel="stylesheet" href="{{ public_asset_ver('css/admin-dashboard-theme.css') }}">
+    <link rel="stylesheet" href="{{ public_asset_ver('css/pds-layout.css') }}">
+@endif
 <style>
-    /* Logout button: kill browser default chrome even if theme CSS is cached */
+    /* Keep page content visible if enter-animations glitch. */
+    body.pds-admin .pds-page-wrap,
+    body.pds-admin .pds-motion-enter,
+    body.pds-admin .content-page {
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
     body.pds-admin .pds-profile-menu__logout-btn {
         -webkit-appearance: none !important;
         appearance: none !important;
@@ -23,7 +43,6 @@
         outline: 0 !important;
         box-shadow: none !important;
         background: transparent !important;
-        background-image: none !important;
         width: 100% !important;
         display: flex !important;
         align-items: center !important;
@@ -37,36 +56,8 @@
         cursor: pointer !important;
         text-align: left !important;
     }
-    body.pds-admin .pds-profile-menu__logout-btn:hover {
-        background: rgba(234, 88, 12, 0.08) !important;
-        color: #9a3412 !important;
-    }
-
-    /* Page + cash payout table scroll safety net */
-    html {
-        overflow-y: auto !important;
-        height: auto !important;
-    }
-    body.pds-admin,
-    body.pds-admin#app {
-        overflow-y: auto !important;
-        height: auto !important;
-        max-height: none !important;
-    }
-    body.pds-admin .content-page,
-    body.pds-admin .content-page.pds-content-shell {
-        overflow: visible !important;
-        max-height: none !important;
-        height: auto !important;
-    }
-    body.pds-admin .pds-rider-table-shell--scroll,
-    body.pds-admin .pds-cash-payout-shell {
-        overflow: auto !important;
-        max-height: calc(100vh - 260px) !important;
-        -webkit-overflow-scrolling: touch;
-    }
 </style>
 @if(isset($assets) && in_array('phone', $assets))
-    <link rel="stylesheet" href="{{ asset('vendor/intlTelInput/css/intlTelInput.css') }}">
+    <link rel="stylesheet" href="{{ public_asset_ver('vendor/intlTelInput/css/intlTelInput.css') }}">
 @endif
-<link rel="stylesheet" href="{{ asset('css/sweetalert2.min.css') }}">
+<link rel="stylesheet" href="{{ public_asset_ver('css/sweetalert2.min.css') }}">

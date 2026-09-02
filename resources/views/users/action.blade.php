@@ -57,34 +57,46 @@
                     ->id($data->id)
                     ->attribute('data-type', 'user')
                     ->attribute('data-id', $data->id) !!}
-                {!! html()->label()->for($data->id)->class('custom-control-label')->attribute('data-on-label', 'Yes')->attribute('data-off-label', 'No') !!}
+                {!! html()->label()->for($data->id)->class('custom-control-label')->attribute('data-on-label', 'On')->attribute('data-off-label', 'Off') !!}
             </div>
         </div>
     @endif
 
-    @if($action_type == 'action')
-        <div class="d-flex justify-content-end align-items-center">
-            @if($auth_user->can('users-edit'))
-                {!! html()->a(route('users.edit', $id))->class('mr-2')
-                    ->attribute('title', __('message.update_form_title', ['form' => __('message.online_shop')]))
-                    ->html('<i class="fas fa-edit text-primary"></i>') !!}
-            @endif
+    @if($action_type == 'approval_status')
+        @php
+            $current = $data->approval_status ?? 'approved';
+        @endphp
+        <select
+            class="pds-os-approval-select js-os-approval-status"
+            data-id="{{ $data->id }}"
+            data-url="{{ route('users.approval-status', $data->id) }}"
+            data-tone="{{ $current }}"
+            aria-label="{{ __('message.status') }}"
+        >
+            <option value="pending" @selected($current === 'pending')>{{ __('message.pending') }}</option>
+            <option value="approved" @selected($current === 'approved')>{{ __('message.approved') }}</option>
+            <option value="rejected" @selected($current === 'rejected')>{{ __('message.rejected') }}</option>
+        </select>
+    @endif
 
-            @if($auth_user->can('users-show'))
-                {!! html()->a(route('users.show', $id))->class('mr-2')->html('<i class="fas fa-eye text-secondary"></i>') !!}
+    @if($action_type == 'action')
+        <div class="pds-os-row-actions">
+            @if($auth_user->can('users-edit'))
+                {!! html()->a(route('users.edit', $id))->class('pds-os-row-action is-edit')
+                    ->attribute('title', __('message.update_form_title', ['form' => __('message.online_shop')]))
+                    ->html('<i class="fas fa-pen"></i>') !!}
             @endif
 
             @if($auth_user->can('users-delete'))
-                {!! html()->form('DELETE', route('users.destroy', $id))->attribute('data--submit', 'users' . $id)->open() !!}
+                {!! html()->form('DELETE', route('users.destroy', $id))->attribute('data--submit', 'users' . $id)->class('d-inline')->open() !!}
                     {!! html()->a('javascript:void(0)')
-                        ->class('mr-2 text-danger')
+                        ->class('pds-os-row-action is-delete')
                         ->attribute('data--submit', 'users' . $id)
                         ->attribute('data--confirmation', 'true')
                         ->attribute('data-title', __('message.delete_form_title', ['form' => __('message.online_shop')]))
                         ->attribute('title', __('message.delete_form_title', ['form' => __('message.online_shop')]))
                         ->attribute('data-message', __('message.delete_msg'))
                         ->html('<i class="fas fa-trash-alt"></i>') !!}
-                    
                 {!! html()->form()->close() !!}
             @endif
         </div>

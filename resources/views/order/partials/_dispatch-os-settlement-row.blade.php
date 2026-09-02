@@ -2,18 +2,16 @@
     $initial = mb_strtoupper(mb_substr(trim($row->name) ?: 'O', 0, 1));
     $section = $section ?? 'pay'; // pay | receive
     $showKpayCols = $section === 'pay';
-    $isDemo = ! empty($row->is_demo);
     $slipLabel = $section === 'receive' ? __('message.os_settlement_qr') : __('message.kpay_slip');
     $slipUploadLabel = $section === 'receive' ? __('message.upload_os_settlement_qr') : __('message.upload_kpay_slip');
 @endphp
 <tr
-    class="pds-os-settlement-row {{ $isDemo ? 'is-demo' : '' }}"
+    class="pds-os-settlement-row"
     data-os-id="{{ $row->id }}"
     data-has-kpay="{{ $row->has_kpay_slip ? '1' : '0' }}"
     data-is-finished="0"
     data-payment-method="{{ $showKpayCols ? 'kpay' : 'cash' }}"
     data-section="{{ $section }}"
-    data-is-demo="{{ $isDemo ? '1' : '0' }}"
 >
     <td class="pds-rider-col-no">{{ $index + 1 }}</td>
     <td class="pds-os-settlement-col-os">
@@ -50,7 +48,7 @@
         </td>
     @endif
     <td class="pds-os-settlement-col-slip pds-os-kpay-upload-cell">
-        <label class="pds-os-kpay-upload-card {{ $section === 'receive' ? 'pds-os-kpay-upload-card--qr' : '' }} {{ $isDemo ? 'is-demo' : '' }}" title="{{ $isDemo ? 'Demo' : $slipUploadLabel }}">
+        <label class="pds-os-kpay-upload-card {{ $section === 'receive' ? 'pds-os-kpay-upload-card--qr' : '' }}" title="{{ $slipUploadLabel }}">
             @if($row->kpay_slip_url)
                 <a href="{{ $row->kpay_slip_url }}" target="_blank" rel="noopener" class="pds-os-kpay-preview" onclick="event.preventDefault(); event.stopPropagation(); window.open(this.href, '_blank', 'noopener');">
                     <img src="{{ $row->kpay_slip_url }}" alt="{{ $slipLabel }}" class="pds-os-kpay-thumb">
@@ -58,20 +56,18 @@
             @else
                 <span class="pds-os-kpay-placeholder">
                     <i class="fas {{ $section === 'receive' ? 'fa-qrcode' : 'fa-image' }}" aria-hidden="true"></i>
-                    <span>{{ $isDemo ? 'Demo' : $slipUploadLabel }}</span>
+                    <span>{{ $slipUploadLabel }}</span>
                 </span>
             @endif
-            @unless($isDemo)
-                <span class="pds-os-kpay-upload-btn" aria-hidden="true">
-                    <i class="fas fa-cloud-upload-alt"></i>
-                </span>
-                <input
-                    type="file"
-                    class="pds-os-kpay-file-input"
-                    accept="image/*"
-                    data-os-id="{{ $row->id }}"
-                >
-            @endunless
+            <span class="pds-os-kpay-upload-btn" aria-hidden="true">
+                <i class="fas fa-cloud-upload-alt"></i>
+            </span>
+            <input
+                type="file"
+                class="pds-os-kpay-file-input"
+                accept="image/*"
+                data-os-id="{{ $row->id }}"
+            >
         </label>
     </td>
     @if($showKpayCols)
@@ -87,25 +83,22 @@
             type="button"
             class="pds-os-slip-preview-btn"
             data-os-id="{{ $row->id }}"
-            data-is-demo="{{ $isDemo ? '1' : '0' }}"
             title="{{ __('message.show_slip_completed') }}"
-            @disabled($isDemo)
         >
             <i class="fas fa-eye" aria-hidden="true"></i>
-            <span>{{ $isDemo ? 'Demo' : __('message.show_slip_completed') }}</span>
+            <span>{{ __('message.show_slip_completed') }}</span>
         </button>
     </td>
     <td class="pds-os-settlement-col-action">
         <button
             type="button"
-            class="pds-os-finish-btn {{ ($row->has_kpay_slip && ! $isDemo) ? '' : 'is-disabled' }}"
+            class="pds-os-finish-btn {{ $row->has_kpay_slip ? '' : 'is-disabled' }}"
             data-os-id="{{ $row->id }}"
             data-has-kpay="{{ $row->has_kpay_slip ? '1' : '0' }}"
-            data-is-demo="{{ $isDemo ? '1' : '0' }}"
-            @disabled($isDemo || ! $row->has_kpay_slip)
+            @disabled(! $row->has_kpay_slip)
         >
             <i class="fas fa-check" aria-hidden="true"></i>
-            <span>{{ $isDemo ? 'Demo' : __('message.finished') }}</span>
+            <span>{{ __('message.finished') }}</span>
         </button>
     </td>
 </tr>

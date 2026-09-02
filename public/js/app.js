@@ -204,12 +204,12 @@ Index Of Script
         Page Loader
         -----------------------------------------------------------------------*/
         jQuery("#load").fadeOut();
-        jQuery("#loading").delay().fadeOut("");
+        jQuery("#loading").delay(80).fadeOut(200);
         // Failsafe: never leave the full-screen loader stuck (slow/blocked navigations).
         window.setTimeout(function () {
             jQuery("#loading").stop(true, true).hide();
             jQuery("#load").stop(true, true).hide();
-        }, 4000);
+        }, 1200);
 
 
         /*---------------------------------------------------------------------

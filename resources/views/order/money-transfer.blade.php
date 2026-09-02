@@ -127,7 +127,7 @@
                     </div>
                 @else
                     <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-daily-check-shell">
-                        <table class="table pds-rider-list-table pds-daily-check-table pds-money-transfer-table" id="moneyTransferTable">
+                        <table class="table pds-rider-list-table pds-daily-check-table pds-money-transfer-table {{ $showCashCols ? 'is-cash-cols' : 'is-kpay-compact' }}" id="moneyTransferTable">
                             <thead>
                                 <tr>
                                     <th style="width:48px">{{ __('message.no') }}</th>

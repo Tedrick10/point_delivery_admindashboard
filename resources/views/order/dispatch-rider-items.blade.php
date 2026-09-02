@@ -97,6 +97,7 @@
                         $totalDeliAmount = 0.0;
                         $totalCustGet = 0.0;
                         $totalCustPaid = 0.0;
+                        $totalGateAmount = 0.0;
                         $totalOsToPay = 0.0;
                     @endphp
                     <div class="pds-rider-table-shell pds-rider-table-shell--scroll">
@@ -164,6 +165,7 @@
                                         $totalDeliAmount += $deliAmount;
                                         $totalCustGet += $custGet;
                                         $totalCustPaid += $custPaid;
+                                        $totalGateAmount += $gateAmount;
                                         $totalOsToPay += $osToPayDisplay;
                                     @endphp
                                     <tr data-cust-paid="{{ $custPaid }}">
@@ -233,7 +235,7 @@
                                     <td class="text-right pds-rider-money">{{ number_format($totalDeliAmount) }}</td>
                                     <td class="text-right pds-rider-money">{{ number_format($totalCustGet) }}</td>
                                     <td class="text-right pds-rider-money">{{ number_format($totalCustPaid) }}</td>
-                                    <td class="text-right pds-rider-money">—</td>
+                                    <td class="text-right pds-rider-money">{{ number_format($totalGateAmount) }}</td>
                                     <td class="text-right pds-rider-money {{ $totalOsToPay < 0 ? 'pds-os-to-pay-negative' : '' }}">
                                         {{ number_format($totalOsToPay) }}
                                     </td>

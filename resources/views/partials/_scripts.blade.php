@@ -1,8 +1,8 @@
 <!-- Backend Bundle JavaScript -->
-<script src="{{ asset('js/backend-bundle.min.js') }}"></script>
+<script src="{{ public_asset_ver('js/backend-bundle.min.js') }}"></script>
 <script>window.PDS_MYANMAR_NRC_DATA_URL = @json(asset('data/myanmar-nrc.json'));</script>
-<script src="{{ asset('js/myanmar-nrc-box.js') }}?v=17"></script>
-<script src="{{ asset('js/os-account-modal.js') }}?v=14"></script>
+<script src="{{ public_asset_ver('js/myanmar-nrc-box.js') }}"></script>
+<script src="{{ public_asset_ver('js/os-account-modal.js') }}"></script>
 <script>
 if (window.PDS_MYANMAR_NRC_DATA_URL) {
     $.getJSON(window.PDS_MYANMAR_NRC_DATA_URL).done(function (data) {
@@ -21,7 +21,7 @@ if (window.PDS_MYANMAR_NRC_DATA_URL) {
 
 <script src="{{ asset('js/morris.js') }}"></script>
 <script src="{{ asset('vendor/tinymce/js/tinymce/tinymce.min.js') }}"></script>
-<script src="{{ asset('js/legal-page.js') }}?v=1"></script>
+<script src="{{ public_asset_ver('js/legal-page.js') }}"></script>
 <script src="{{ asset('vendor/confirmJS/jquery-confirm.min.js') }}"></script>
 <script src="{{ asset('js/jquery.validate.min.js') }}"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/izitoast/1.4.0/css/iziToast.min.css" />
@@ -149,9 +149,9 @@ if (window.PDS_MYANMAR_NRC_DATA_URL) {
     <script src="{{ asset('vendor/intlTelInput/js/intlTelInput.min.js') }}"></script>
 @endif
 
-<script src="{{ asset('js/app.js') }}" defer></script>
-<script src="{{ asset('js/admin-animations.js') }}?v=8"></script>
-<script src="{{ asset('js/admin-number-fields.js') }}?v=2"></script>
+<script src="{{ public_asset_ver('js/app.js') }}" defer></script>
+<script src="{{ public_asset_ver('js/admin-animations.js') }}"></script>
+<script src="{{ public_asset_ver('js/admin-number-fields.js') }}"></script>
 @include('helper.app_message')
 
 
@@ -178,3 +178,4 @@ if (window.PDS_MYANMAR_NRC_DATA_URL) {
         }
     });
 </script>
+<script src="{{ public_asset_ver('js/pds-frozen-table.js') }}"></script>

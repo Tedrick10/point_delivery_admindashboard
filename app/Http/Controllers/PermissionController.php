@@ -23,18 +23,123 @@ class PermissionController extends Controller
      */
     public function index()
     {
-        $permission = Permission::orderBy('id','ASC')->whereNull('parent_id')->with('subpermission')->get();
-        $pageTitle = __('message.list_form_title',['form' => __('message.permission')  ]);
+        $pageTitle = __('message.roles_and_permission');
+        $auth_user = authSession();
 
-        $roles = Role::where('status',1)->orderBy('name','ASC');
-        if(!\Auth::user()->hasRole('admin')){
-            $roles->where('name','!=','admin');
+        $roles = Role::where('status', 1)->orderBy('name', 'ASC');
+        if (! \Auth::user()->hasRole('admin')) {
+            $roles->where('name', '!=', 'admin');
         }
         $roles = $roles->get();
 
-        $auth_user = authSession();
+        $modules = $this->adminPanelPermissionModules();
 
-        return view('permission.index',compact(['roles','permission','pageTitle','auth_user']));
+        return view('permission.index', compact('roles', 'modules', 'pageTitle', 'auth_user'));
+    }
+
+    /**
+     * Only features currently shown in the Admin Panel sidebar.
+     */
+    protected function adminPanelPermissionModules(): array
+    {
+        $catalog = [
+            'order' => [
+                'label' => __('message.order'),
+                'hint' => __('message.roles_module_order_hint'),
+                'icon' => 'fas fa-file-alt',
+            ],
+            'users' => [
+                'label' => __('message.online_shop'),
+                'hint' => __('message.roles_module_users_hint'),
+                'icon' => 'fas fa-store',
+            ],
+            'deliveryman' => [
+                'label' => __('message.delivery_man'),
+                'hint' => __('message.roles_module_deliveryman_hint'),
+                'icon' => 'fas fa-user-tie',
+            ],
+            'hr-payroll' => [
+                'label' => __('message.hr_payroll'),
+                'hint' => __('message.roles_module_payroll_hint'),
+                'icon' => 'fas fa-wallet',
+            ],
+            'subadmin' => [
+                'label' => __('message.account_creation'),
+                'hint' => __('message.roles_module_account_hint'),
+                'icon' => 'fas fa-user-plus',
+            ],
+            'role' => [
+                'label' => __('message.role'),
+                'hint' => __('message.roles_module_role_hint'),
+                'icon' => 'fas fa-user-tag',
+            ],
+            'permission' => [
+                'label' => __('message.permission'),
+                'hint' => __('message.roles_module_permission_hint'),
+                'icon' => 'fas fa-key',
+            ],
+        ];
+
+        $parents = Permission::query()
+            ->whereNull('parent_id')
+            ->whereIn('name', array_keys($catalog))
+            ->with(['subpermission' => fn ($q) => $q->orderBy('id')])
+            ->get()
+            ->keyBy('name');
+
+        $modules = [];
+        foreach ($catalog as $key => $meta) {
+            $parent = $parents->get($key);
+            if (! $parent) {
+                continue;
+            }
+
+            $actionOrder = ['list' => 1, 'show' => 2, 'add' => 3, 'edit' => 4, 'delete' => 5];
+
+            $permissions = $parent->subpermission->map(function (Permission $perm) {
+                $suffix = str_contains($perm->name, '-')
+                    ? substr($perm->name, strrpos($perm->name, '-') + 1)
+                    : $perm->name;
+
+                $action = match ($suffix) {
+                    'list' => __('message.list'),
+                    'show' => __('message.view'),
+                    'add' => __('message.add'),
+                    'edit' => __('message.edit'),
+                    'delete' => __('message.delete'),
+                    default => ucfirst($suffix),
+                };
+
+                return [
+                    'id' => $perm->id,
+                    'name' => $perm->name,
+                    'action' => $action,
+                    'suffix' => $suffix,
+                ];
+            })
+                ->sortBy(fn ($perm) => $actionOrder[$perm['suffix']] ?? 99)
+                ->map(fn ($perm) => [
+                    'id' => $perm['id'],
+                    'name' => $perm['name'],
+                    'action' => $perm['action'],
+                ])
+                ->values()
+                ->all();
+
+            if ($permissions === []) {
+                continue;
+            }
+
+            $modules[] = [
+                'key' => $key,
+                'label' => $meta['label'],
+                'hint' => $meta['hint'],
+                'icon' => $meta['icon'],
+                'permissions' => $permissions,
+            ];
+        }
+
+        return $modules;
     }
 
     /**
@@ -56,22 +161,48 @@ class PermissionController extends Controller
     public function store(Request $request)
     {
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
-        $data = isset($request->permission) ? $request->permission : [];
-        $permission_list = Permission::orderBy('name','ASC')->get()->unique('name');
-        $roles=Role::whereNotIn('name',['admin'])->get()->map(function($role) use($permission_list){
-            $role->revokePermissionTo($permission_list);
-        });
-        if(count($data)>0){
-            foreach ($data as $key => $permission){
-                foreach ($permission as $role){
-                    $permission = Permission::findOrCreate($key);
-                    $guard = Role::findOrCreate($role,'web');
-                    $guard->givePermissionTo($permission);
+
+        $managedParentNames = array_column($this->adminPanelPermissionModules(), 'key');
+        if ($managedParentNames === []) {
+            $managedParentNames = ['order', 'users', 'deliveryman', 'hr-payroll', 'subadmin', 'role', 'permission'];
+        }
+
+        $managedPermissionIds = Permission::query()
+            ->where(function ($q) use ($managedParentNames) {
+                $q->whereIn('name', $managedParentNames)
+                    ->orWhereIn('parent_id', function ($sub) use ($managedParentNames) {
+                        $sub->select('id')
+                            ->from('permissions')
+                            ->whereNull('parent_id')
+                            ->whereIn('name', $managedParentNames);
+                    });
+            })
+            ->pluck('id');
+
+        $managedPermissions = Permission::query()->whereIn('id', $managedPermissionIds)->get();
+        $submitted = is_array($request->permission) ? $request->permission : [];
+
+        $roles = Role::query()->whereNotIn('name', ['admin'])->get();
+        foreach ($roles as $role) {
+            if ($managedPermissions->isNotEmpty()) {
+                $role->revokePermissionTo($managedPermissions);
+            }
+
+            foreach ($submitted as $permissionName => $roleNames) {
+                if (! in_array($role->name, (array) $roleNames, true)) {
+                    continue;
                 }
+                $permission = Permission::findOrCreate($permissionName);
+                if (! $managedPermissionIds->contains($permission->id)) {
+                    continue;
+                }
+                $role->givePermissionTo($permission);
             }
         }
+
         Artisan::call('permission:cache-reset');
-        return redirect()->route('permission.index')->withSuccess(__('message.save_form',['form' => __('message.permission')]));
+
+        return redirect()->route('permission.index')->withSuccess(__('message.save_form', ['form' => __('message.roles_and_permission')]));
     }
 
     /**

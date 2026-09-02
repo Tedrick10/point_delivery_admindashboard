@@ -66,23 +66,6 @@
                                             ->attribute($readonly, '') }}
                                     </div>
 
-                                    @if(!isset($id))
-                                    <div class="form-group col-md-6">
-                                        {{ html()->label(__('message.password') . ' <span class="text-danger">*</span>', 'password')->class('form-control-label') }}
-                                        <div class="input-group">
-                                            {{ html()->password('password')
-                                                ->class('form-control')
-                                                ->placeholder(__('message.password'))
-                                                ->attribute('id', 'password') }}
-                                            <div class="input-group-append">
-                                                <span class="input-group-text hide-show-password" style="cursor: pointer;">
-                                                    <i class="fas fa-eye-slash"></i>
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    @endif
-
                                     <div class="form-group col-md-6">
                                         {{ html()->label(__('message.contact_number') . ' <span class="text-danger">*</span>', 'contact_number')->class('form-control-label') }}
                                         {{ html()->text('contact_number', isset($id) ? optional($data)->contact_number : old('contact_number'))
@@ -94,18 +77,37 @@
                                     </div>
 
                                     <div class="form-group col-md-6">
-                                        {{ html()->label(__('message.country'))->class('form-control-label') }}
-                                        {{ html()->select('country_id', isset($data) && $data->country ? [$data->country->id => $data->country->name] : [], old('country_id'))
-                                            ->class('select2js country_id')
-                                            ->attribute('data-placeholder', __('message.country'))
-                                            ->attribute('data-ajax--url', route('ajax-list', ['type' => 'country-list'])) }}
-                                    </div>
-
-                                    <div class="form-group col-md-6">
-                                        {{ html()->label(__('message.city'))->class('form-control-label') }}
-                                        {{ html()->select('city_id', isset($data) && $data->city ? [$data->city->id => $data->city->name] : [], old('city_id'))
-                                            ->class('select2js city_id')
-                                            ->attribute('data-placeholder', __('message.city')) }}
+                                        @if(isset($id))
+                                            {{ html()->label(__('message.new_password'), 'password')->class('form-control-label') }}
+                                            <div class="input-group">
+                                                {{ html()->password('password')
+                                                    ->class('form-control')
+                                                    ->placeholder(__('message.new_password'))
+                                                    ->attribute('id', 'password')
+                                                    ->attribute('autocomplete', 'new-password') }}
+                                                <div class="input-group-append">
+                                                    <span class="input-group-text hide-show-password" style="cursor: pointer;">
+                                                        <i class="fas fa-eye-slash"></i>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <small class="form-text text-muted">{{ __('message.leave_blank_to_keep_current_password') }}</small>
+                                        @else
+                                            {{ html()->label(__('message.password') . ' <span class="text-danger">*</span>', 'password')->class('form-control-label') }}
+                                            <div class="input-group">
+                                                {{ html()->password('password')
+                                                    ->class('form-control')
+                                                    ->placeholder(__('message.password'))
+                                                    ->attribute('id', 'password')
+                                                    ->attribute('required', true)
+                                                    ->attribute('autocomplete', 'new-password') }}
+                                                <div class="input-group-append">
+                                                    <span class="input-group-text hide-show-password" style="cursor: pointer;">
+                                                        <i class="fas fa-eye-slash"></i>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        @endif
                                     </div>
                                 </div>
                             </div>
@@ -138,34 +140,7 @@
                         eyeIcon.removeClass('fa-eye').addClass('fa-eye-slash');
                     }
                 });
-
-                $(document).on('change', '#country_id', function() {
-                    $('#city_id').empty();
-                    cityList($(this).val());
-                });
-
-                @if(isset($data) && $data->country_id)
-                    cityList({{ $data->country_id }});
-                @endif
             });
-
-            function cityList(country_id) {
-                if (!country_id) return;
-                var route = "{{ route('ajax-list', ['type' => 'extra_charge_city', 'country_id' => '']) }}" + country_id;
-                $.ajax({
-                    url: route.replace('amp;', ''),
-                    success: function(result) {
-                        $('#city_id').select2({
-                            width: '100%',
-                            placeholder: "{{ __('message.select_name', ['select' => __('message.city')]) }}",
-                            data: result.results
-                        });
-                        @if(isset($data) && $data->city_id)
-                            $('#city_id').val({{ $data->city_id }}).trigger('change');
-                        @endif
-                    }
-                });
-            }
         </script>
     @endsection
 </x-master-layout>

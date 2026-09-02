@@ -103,6 +103,15 @@ class UserController extends Controller
         })->first();
 
         if ($user && \Hash::check($decryptedPassword, $user->password)) {
+            if ($user->user_type === 'client' && ! $user->isClientApprovalApproved()) {
+                $approval = $user->approval_status ?? User::APPROVAL_PENDING;
+                $message = $approval === User::APPROVAL_REJECTED
+                    ? __('message.os_account_rejected')
+                    : __('message.os_account_pending_approval');
+
+                return json_message_response($message, 403);
+            }
+
             Auth::login($user);
             if ($decryptedPlayerId != null) {
                 $user->player_id = $decryptedPlayerId;
@@ -137,6 +146,7 @@ class UserController extends Controller
             'password' => $this->decryptData($request->input('password')),
             'player_id' => $request->has('player_id') ? $this->decryptData($request->input('player_id')) : '',
             'partner_referral_code' => $request->has('partner_referral_code') ? $this->decryptData($request->input('partner_referral_code')) : '',
+            'branch_id' => $request->has('branch_id') ? $this->decryptData($request->input('branch_id')) : null,
             'date_of_birth' => $request->has('date_of_birth') ? $this->decryptData($request->input('date_of_birth')) : '',
             'address_unit' => $request->has('address_unit') ? $this->decryptData($request->input('address_unit')) : '',
             'state_division' => $request->has('state_division') ? $this->decryptData($request->input('state_division')) : '',
@@ -151,8 +161,9 @@ class UserController extends Controller
 
         // Validation Rules
         $isClient = ($decryptedData['user_type'] ?? '') === 'client';
+        $isDeliveryMan = ($decryptedData['user_type'] ?? '') === 'delivery_man';
         $validator = Validator::make($decryptedData, [
-            'name' => $isClient ? 'required|string|max:255' : 'sometimes|nullable|string|max:255',
+            'name' => ($isClient || $isDeliveryMan) ? 'required|string|max:255' : 'sometimes|nullable|string|max:255',
             'username' => [
                 'required',
                 'string',
@@ -165,9 +176,14 @@ class UserController extends Controller
                     }
                 },
             ],
-            'email' => 'sometimes|nullable|email|unique:users,email,'.$user_id,
-            'contact_number' => 'sometimes|required|max:20|unique:users,contact_number,'.$user_id,
-            'password' => $isClient ? 'required|string|min:6' : 'sometimes|required|string|min:6',
+            'email' => $isDeliveryMan
+                ? 'required|email|unique:users,email,'.$user_id
+                : 'sometimes|nullable|email|unique:users,email,'.$user_id,
+            'contact_number' => ($isClient || $isDeliveryMan)
+                ? 'required|max:20|unique:users,contact_number,'.$user_id
+                : 'sometimes|required|max:20|unique:users,contact_number,'.$user_id,
+            'password' => ($isClient || $isDeliveryMan) ? 'required|string|min:6' : 'sometimes|required|string|min:6',
+            'branch_id' => $isDeliveryMan ? 'required|exists:branches,id' : 'sometimes|nullable|exists:branches,id',
             'date_of_birth' => 'sometimes|nullable|date',
             'address_unit' => $isClient ? 'required|string|max:255' : 'sometimes|nullable|string|max:255',
             'state_division' => $isClient ? 'required|string|max:255' : 'sometimes|nullable|string|max:255',
@@ -205,7 +221,20 @@ class UserController extends Controller
         $input['os_profile'] = buildUserOsProfileFromArray($input);
         $input['address'] = buildUserAddressFromProfile($input['os_profile']);
 
-        unset($input['date_of_birth'], $input['address_unit'], $input['state_division'], $input['township'], $input['street'], $input['nrc']);
+        if ($isDeliveryMan && ! empty($input['branch_id'])) {
+            $input['branch_id'] = (int) $input['branch_id'];
+        } else {
+            unset($input['branch_id']);
+        }
+
+        unset(
+            $input['date_of_birth'],
+            $input['address_unit'],
+            $input['state_division'],
+            $input['township'],
+            $input['street'],
+            $input['nrc']
+        );
 
         $input['user_type'] = $input['user_type'] ?? 'client';
 
@@ -219,6 +248,7 @@ class UserController extends Controller
                 return json_custom_response([ 'message' => __('message.invalid_referral_code'), 'success' => false ], 400);
             }
         }
+        unset($input['partner_referral_code']);
 
         $input['password'] = Hash::make($input['password']);
 
@@ -245,6 +275,14 @@ class UserController extends Controller
         $input['is_autoverified_mobile'] = 1;
 
         $input['referral_code'] = generateRandomCode();
+
+        // App/Website OS self-signup waits for admin approval before login works.
+        if (($input['user_type'] ?? '') === 'client') {
+            $input['approval_status'] = User::APPROVAL_PENDING;
+            $input['status'] = 0;
+            $input['created_by_admin'] = 0;
+        }
+
         $user = User::create($input);
 
         if ($user->user_type === 'delivery_man' && ! empty($input['contact_number'])) {
@@ -269,6 +307,25 @@ class UserController extends Controller
             $user->userBankAccount()->create($request->user_bank_account);
         }
 
+        if ($user->user_type === 'client' && ($user->approval_status ?? '') === User::APPROVAL_PENDING) {
+            return json_custom_response([
+                'message' => __('message.os_signup_pending_approval'),
+                'success' => true,
+                'approval_status' => User::APPROVAL_PENDING,
+                'is_email_verification' => ($is_email_verification == 0) ? true : false,
+                'is_mobile_verification' => ($is_mobile_verification == 0) ? true : false,
+                'is_document_verification' => ($is_document_verification == 0) ? true : false,
+                'data' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'username' => $user->username,
+                    'user_type' => $user->user_type,
+                    'approval_status' => $user->approval_status,
+                    'status' => (int) $user->status,
+                ],
+            ]);
+        }
+
         $message = __('message.save_form', ['form' => __('message.'.$input['user_type'])]);
         $user->api_token = $user->createToken('auth_token')->plainTextToken;
         $user->profile_image = getSingleMedia($user, 'profile_image', null);
@@ -278,6 +335,7 @@ class UserController extends Controller
         $user->email_verified_at = $user_detail->email_verified_at ?? null;
         $user->document_verified_at = $user_detail->document_verified_at ?? null;
         $user->status = $user_detail->status ?? 1;
+        $user->approval_status = $user_detail->approval_status ?? User::APPROVAL_APPROVED;
 
         return json_custom_response([
             'message' => $message,
@@ -1524,6 +1582,15 @@ class UserController extends Controller
             return json_custom_response(['message' => __('auth.failed'), 'success' => false], 402);
         }
 
+        if ($user->user_type === 'client' && ! $user->isClientApprovalApproved()) {
+            $approval = $user->approval_status ?? User::APPROVAL_PENDING;
+            $message = $approval === User::APPROVAL_REJECTED
+                ? __('message.os_account_rejected')
+                : __('message.os_account_pending_approval');
+
+            return json_message_response($message, 403);
+        }
+
         Auth::login($user);
         if ($decryptedPlayerId != null) {
             $user->player_id = $decryptedPlayerId;
@@ -1671,6 +1738,7 @@ class UserController extends Controller
             'created_by_admin' => 1,
             'is_temp_password' => 1,
             'status' => 1,
+            'approval_status' => User::APPROVAL_APPROVED,
         ]);
         $user->assignRole('client');
 

@@ -24,13 +24,6 @@
 
             <form method="GET" action="{{ route('order.dispatch.rider-list') }}" class="pds-rider-toolbar" id="riderListFilterForm">
                 <div class="pds-rider-toolbar__fields">
-                    <div class="pds-dispatch-field pds-dispatch-field-sm">
-                        <label for="rider_list_status">{{ __('message.status') }}</label>
-                        <select name="status" id="rider_list_status" class="pds-dispatch-input pds-dispatch-select">
-                            <option value="active" @selected($statusFilter === 'active')>{{ __('message.active') }}</option>
-                            <option value="all" @selected($statusFilter === 'all')>{{ __('message.all') }}</option>
-                        </select>
-                    </div>
                     <div class="pds-dispatch-field pds-dispatch-field-sm pds-rider-toolbar__grow">
                         <label for="rider_list_rider">{{ __('message.delivery_man') }}</label>
                         <select name="rider_id" id="rider_list_rider" class="pds-dispatch-input pds-dispatch-select">
@@ -42,17 +35,55 @@
                     </div>
                     <div class="pds-dispatch-field pds-dispatch-field-sm">
                         <label for="rider_list_from_date">{{ __('message.from') }}</label>
-                        <input type="text" name="from_date" id="rider_list_from_date" class="pds-dispatch-input dispatch-datepicker" value="{{ $filterFromDate }}" autocomplete="off">
+                        <div class="pds-rider-date-wrap">
+                            <input
+                                type="text"
+                                name="from_date"
+                                id="rider_list_from_date"
+                                class="pds-dispatch-input dispatch-datepicker"
+                                value="{{ $filterFromDate }}"
+                                placeholder="{{ __('message.select_date') }}"
+                                autocomplete="off"
+                                data-lpignore="true"
+                                data-form-type="other"
+                                readonly
+                            >
+                            <button type="button" class="pds-rider-date-clear" data-clear-date="rider_list_from_date" title="{{ __('message.reset') }}" aria-label="{{ __('message.reset') }}">
+                                <i class="fas fa-times" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="pds-dispatch-field pds-dispatch-field-sm">
                         <label for="rider_list_to_date">{{ __('message.to') }}</label>
-                        <input type="text" name="to_date" id="rider_list_to_date" class="pds-dispatch-input dispatch-datepicker" value="{{ $filterToDate }}" autocomplete="off">
+                        <div class="pds-rider-date-wrap">
+                            <input
+                                type="text"
+                                name="to_date"
+                                id="rider_list_to_date"
+                                class="pds-dispatch-input dispatch-datepicker"
+                                value="{{ $filterToDate }}"
+                                placeholder="{{ __('message.select_date') }}"
+                                autocomplete="off"
+                                data-lpignore="true"
+                                data-form-type="other"
+                                readonly
+                            >
+                            <button type="button" class="pds-rider-date-clear" data-clear-date="rider_list_to_date" title="{{ __('message.reset') }}" aria-label="{{ __('message.reset') }}">
+                                <i class="fas fa-times" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
-                <button type="submit" class="pds-rider-check-btn">
-                    <i class="fas fa-search" aria-hidden="true"></i>
-                    <span>{{ __('message.check') }}</span>
-                </button>
+                <div class="pds-rider-toolbar__actions">
+                    <a href="{{ route('order.dispatch.rider-list') }}" class="pds-rider-reset-btn">
+                        <i class="fas fa-eraser" aria-hidden="true"></i>
+                        <span>{{ __('message.reset') }}</span>
+                    </a>
+                    <button type="submit" class="pds-rider-check-btn">
+                        <i class="fas fa-search" aria-hidden="true"></i>
+                        <span>{{ __('message.check') }}</span>
+                    </button>
+                </div>
             </form>
 
             <div class="pds-rider-body">
@@ -62,7 +93,7 @@
                         <p>{{ __('message.no_record_found') }}</p>
                     </div>
                 @else
-                    <div class="pds-rider-table-shell">
+                    <div class="pds-rider-table-shell pds-no-freeze">
                         <table class="table pds-rider-list-table">
                             <thead>
                                 <tr>
@@ -93,10 +124,10 @@
                                 @foreach($riders as $index => $rider)
                                     @php
                                         $counts = $rider->counts;
-                                        $detailParams = [
-                                            'from_date' => $filterFromDate,
-                                            'to_date' => $filterToDate,
-                                        ];
+                                        $detailParams = array_filter([
+                                            'from_date' => $filterFromDate ?: null,
+                                            'to_date' => $filterToDate ?: null,
+                                        ]);
                                         $initial = mb_strtoupper(mb_substr(trim($rider->name) ?: 'R', 0, 1));
                                         $avg = (float) ($rider->average_rating ?? 0);
                                         $ratingCount = (int) ($rider->ratings_count ?? 0);
@@ -225,12 +256,68 @@
     @section('bottom_script')
         <script>
             $(document).ready(function () {
-                if (typeof flatpickr !== 'undefined') {
-                    flatpickr('.dispatch-datepicker', {
+                var hasDateFilter = @json((bool) ($hasDateFilter ?? false));
+                var riderDatePickers = {};
+
+                function bindRiderDatePicker(selector) {
+                    var el = document.querySelector(selector);
+                    if (!el || typeof flatpickr === 'undefined') {
+                        return null;
+                    }
+
+                    var picker = flatpickr(el, {
                         dateFormat: 'd-m-Y',
                         allowInput: true,
+                        defaultDate: null,
+                        disableMobile: true,
+                        onOpen: function (selectedDates, dateStr, instance) {
+                            instance.input.removeAttribute('readonly');
+                        },
+                        onClose: function (selectedDates, dateStr, instance) {
+                            if (!$.trim(instance.input.value || '')) {
+                                instance.clear();
+                            }
+                            instance.input.setAttribute('readonly', 'readonly');
+                        },
+                    });
+
+                    if (!hasDateFilter) {
+                        picker.clear();
+                        el.value = '';
+                    }
+
+                    riderDatePickers[el.id] = picker;
+                    return picker;
+                }
+
+                bindRiderDatePicker('#rider_list_from_date');
+                bindRiderDatePicker('#rider_list_to_date');
+
+                // Defeat browser autofill that rewrites empty From/To fields.
+                if (!hasDateFilter) {
+                    [0, 50, 200, 500].forEach(function (delay) {
+                        setTimeout(function () {
+                            Object.keys(riderDatePickers).forEach(function (id) {
+                                var picker = riderDatePickers[id];
+                                if (!picker) return;
+                                picker.clear();
+                                picker.input.value = '';
+                            });
+                        }, delay);
                     });
                 }
+
+                $(document).on('click', '[data-clear-date]', function () {
+                    var id = $(this).attr('data-clear-date');
+                    var picker = riderDatePickers[id];
+                    if (picker) {
+                        picker.clear();
+                        picker.input.value = '';
+                        picker.input.focus();
+                    } else {
+                        $('#' + id).val('').focus();
+                    }
+                });
 
                 var riderOfMonthUrl = @json($riderOfMonthUrl ?? route('deliveryman.rider-of-month'));
                 var reviewsUrlTpl = @json(url('deliveryman/__ID__/reviews'));

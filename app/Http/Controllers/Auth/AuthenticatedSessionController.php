@@ -31,7 +31,10 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request)
     {
-        $user = User::where('email', $request->email)->first();
+        $email = strtolower(trim((string) $request->input('email', '')));
+        $request->merge(['email' => $email]);
+
+        $user = User::whereRaw('LOWER(TRIM(email)) = ?', [$email])->first();
         if (!$user || empty($user)) {
 
             if (isset($request->signinModal) && $request->signinModal === 'signinModal') {
@@ -55,6 +58,23 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
         $request->session()->regenerate();
         $user = Auth::user();
+
+        if ($user && $user->user_type === 'client' && ! $user->isClientApprovalApproved()) {
+            $approval = $user->approval_status ?? 'pending';
+            $message = $approval === 'rejected'
+                ? __('message.os_account_rejected')
+                : __('message.os_account_pending_approval');
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            if (isset($request->signinModal) && $request->signinModal === 'signinModal') {
+                return redirect()->route('frontend-section')->withErrors($message);
+            }
+
+            return redirect()->route('admin-login')->withErrors($message);
+        }
+
         if ($user->user_type != 'client') {
             $this->saveLoginHistory($user);
         }

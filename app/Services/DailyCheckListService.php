@@ -44,6 +44,8 @@ class DailyCheckListService
         foreach ($modes as $partyType) {
             $items = $this->baseItemsQuery($fromDay, $toDay, $branchId)
                 ->when($partyType === DailyCheckInvoice::PARTY_OS, function ($q) use ($osId) {
+                    // OS only after ငွေရှင်းတမ်း Finish (admin_finished_at).
+                    $q->whereNotNull('admin_finished_at');
                     $q->whereHas('order');
                     if ($osId !== null) {
                         if ($osId > 0) {
@@ -58,6 +60,7 @@ class DailyCheckListService
                     }
                 })
                 ->when($partyType === DailyCheckInvoice::PARTY_RIDER, function ($q) use ($riderId) {
+                    // Completed stays on Rider even after Finish; OS is additive.
                     $q->whereNotNull('delivery_man_id');
                     if ($riderId !== null && $riderId > 0) {
                         $q->where('delivery_man_id', $riderId);
@@ -168,6 +171,7 @@ class DailyCheckListService
         $items = DispatchOrderItem::query()
             ->with(['order.client.city', 'toBranch', 'fromBranch', 'deliveryMan', 'photoMedia', 'custPhotoMedia', 'custSignMedia'])
             ->whereIn('id', $ids)
+            ->when($invoice->isOs(), fn ($q) => $q->whereNotNull('admin_finished_at'))
             ->get()
             ->sortBy(fn ($item) => array_search((int) $item->id, array_map('intval', $ids), true) ?: 9999)
             ->values();
@@ -311,31 +315,30 @@ class DailyCheckListService
         ];
     }
 
+    /**
+     * OS Daily Check invoices for a list date (by invoice received_date).
+     * Used by Summary Income Card — does not re-filter by admin_completed_at window.
+     *
+     * @return Collection<int, object>
+     */
+    public function osInvoiceRowsForDate(string $day, ?int $branchId = null): Collection
+    {
+        // Live OS rows for the day (settled only) — keeps Summary Income in sync.
+        return $this->listRows($day, $day, DailyCheckInvoice::PARTY_OS, $branchId, null, null);
+    }
+
     protected function baseItemsQuery(string $fromDay, string $toDay, ?int $branchId)
     {
-        // Production Daily Check List shows invoices created after OS/Rider "Finished".
-        // Local equivalent: completed items with admin_finished_at set.
+        // Completed onwards. Invoice date = Completed calendar day − 1 (Yangon), no 9AM cutoff.
+        // Day D sheet = Completed during Yangon day D+1. From–To uses first start → last end.
+        $boundsStart = dailyCheckListDayBounds($fromDay)['start'];
+        $boundsEnd = dailyCheckListDayBounds($toDay)['end'];
+
         return DispatchOrderItem::query()
             ->where('status', 'completed')
             ->whereNotNull('admin_completed_at')
-            ->whereNotNull('admin_finished_at')
-            ->where(function ($dateQuery) use ($fromDay, $toDay) {
-                $dateQuery->whereBetween('received_date', [$fromDay, $toDay])
-                    ->orWhere(function ($fallback) use ($fromDay, $toDay) {
-                        $fallback->whereNull('received_date')
-                            ->where(function ($assigned) use ($fromDay, $toDay) {
-                                $assigned->where(function ($q) use ($fromDay, $toDay) {
-                                    $q->whereNotNull('assigned_at')
-                                        ->whereDate('assigned_at', '>=', $fromDay)
-                                        ->whereDate('assigned_at', '<=', $toDay);
-                                })->orWhere(function ($q) use ($fromDay, $toDay) {
-                                    $q->whereNull('assigned_at')
-                                        ->whereDate('created_at', '>=', $fromDay)
-                                        ->whereDate('created_at', '<=', $toDay);
-                                });
-                            });
-                    });
-            })
+            ->where('admin_completed_at', '>=', $boundsStart)
+            ->where('admin_completed_at', '<', $boundsEnd)
             ->when($branchId && $branchId > 0, function ($q) use ($branchId) {
                 $q->where(function ($inner) use ($branchId) {
                     $inner->where('from_branch_id', $branchId)
@@ -353,6 +356,7 @@ class DailyCheckListService
 
         $items = $this->baseItemsQuery($day, $day, null)
             ->when($invoice->isOs(), function ($q) use ($invoice) {
+                $q->whereNotNull('admin_finished_at');
                 $partyId = (int) $invoice->party_user_id;
                 if ($partyId > 0) {
                     $q->whereHas('order', fn ($oq) => $oq->where('client_id', $partyId));
@@ -413,7 +417,8 @@ class DailyCheckListService
         // Production greens Payment when amount == osPayment (settled).
         $osPayment = $invoice->remitted_date ? $amount : 0.0;
         $paymentInfo = $this->partyBankPaymentInfo($invoice, $amount);
-        $paySplit = $this->resolveKpayCashAmounts($items, $partyType, $methodByItemId);
+        // Payment type (KBZ / Cash) after ငွေရှင်းတမ်း — known settlement method only.
+        $paySplit = $this->resolveKpayCashAmounts($items, $methodByItemId);
         $osToPayDisplay = $this->formatAmountWithPayMethod($osToPay, $paySplit);
 
         $userName = $invoice->remittedByUser?->name
@@ -502,7 +507,7 @@ class DailyCheckListService
 
     /**
      * Split OsToPay into KBZ Pay / Cash Pay portions from settlement payment_method.
-     * Unmatched items count as Cash Pay.
+     * Only known settlement methods count — unmatched stays unlabeled (plain amount).
      *
      * @param  Collection<int, DispatchOrderItem>  $items
      * @param  Collection<int, string>|null  $methodByItemId
@@ -510,7 +515,6 @@ class DailyCheckListService
      */
     protected function resolveKpayCashAmounts(
         Collection $items,
-        string $partyType,
         ?Collection $methodByItemId = null
     ): array {
         $kpay = 0.0;
@@ -522,7 +526,7 @@ class DailyCheckListService
             $method = $methodByItemId->get((int) $item->id);
             if ($method === 'kpay') {
                 $kpay += $portion;
-            } else {
+            } elseif ($method === 'cash') {
                 $cash += $portion;
             }
         }
@@ -696,14 +700,10 @@ class DailyCheckListService
 
     protected function itemDay(DispatchOrderItem $item): string
     {
-        if ($item->received_date) {
-            return Carbon::parse($item->received_date)->toDateString();
-        }
-        if ($item->assigned_at) {
-            return Carbon::parse($item->assigned_at)->toDateString();
-        }
+        // Invoice day = Yangon calendar day of Completed − 1 (no 9AM cutoff).
+        $at = $item->admin_completed_at ?: $item->admin_finished_at ?: $item->updated_at;
 
-        return Carbon::parse($item->created_at)->toDateString();
+        return dailyCheckListDate($at ? Carbon::parse($at) : null)->toDateString();
     }
 
     protected function generateInvoiceNo(): string

@@ -62,12 +62,6 @@
             @endphp
 
             <div class="pds-rider-body">
-                    @if(!empty($usingOsSettlementDemo))
-                        <div class="pds-os-settlement-demo-banner" role="status">
-                            <i class="fas fa-info-circle" aria-hidden="true"></i>
-                            <span>{{ __('message.os_settlement_demo_banner') }}</span>
-                        </div>
-                    @endif
                     <div class="pds-os-settlement-tabs" role="tablist" aria-label="{{ __('message.os_list') }}">
                         <button
                             type="button"
@@ -111,33 +105,33 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell">
-                            <table class="table pds-rider-list-table pds-os-settlement-table" id="osSettlementPayTable">
-                                <thead>
-                                    <tr>
-                                        <th class="pds-rider-col-no">{{ __('message.no') }}</th>
-                                        <th class="pds-os-settlement-col-os">{{ __('message.os_name') }}</th>
-                                        <th class="pds-os-settlement-col-amount text-right">{{ __('message.amount') }}</th>
-                                        <th class="pds-os-settlement-col-kpay">{{ __('message.kpay_name') }}</th>
-                                        <th class="pds-os-settlement-col-kpay">{{ __('message.kpay_no') }}</th>
-                                        <th class="pds-os-settlement-col-slip">{{ __('message.kpay_slip') }}</th>
-                                        <th class="pds-os-settlement-col-method">{{ __('message.payment_method') }}</th>
-                                        <th class="pds-os-settlement-col-preview">{{ __('message.show_slip_completed') }}</th>
-                                        <th class="pds-os-settlement-col-action">{{ __('message.action') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($payToOsRows as $index => $row)
-                                        @include('order.partials._dispatch-os-settlement-row', ['row' => $row, 'index' => $index, 'section' => 'pay'])
-                                    @empty
-                                        <tr class="pds-os-settlement-empty-row">
-                                            <td colspan="9" class="pds-os-settlement-empty-cell">
-                                                {{ __('message.os_settlement_pay_empty') }}
-                                            </td>
+                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell pds-no-freeze">
+                            @if($payToOsRows->isEmpty())
+                                <div class="pds-os-settlement-section__empty">
+                                    <p>{{ __('message.os_settlement_pay_empty') }}</p>
+                                </div>
+                            @else
+                                <table class="table pds-rider-list-table pds-os-settlement-table" id="osSettlementPayTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="pds-rider-col-no">{{ __('message.no') }}</th>
+                                            <th class="pds-os-settlement-col-os">{{ __('message.os_name') }}</th>
+                                            <th class="pds-os-settlement-col-amount text-right">{{ __('message.amount') }}</th>
+                                            <th class="pds-os-settlement-col-kpay">{{ __('message.kpay_name') }}</th>
+                                            <th class="pds-os-settlement-col-kpay">{{ __('message.kpay_no') }}</th>
+                                            <th class="pds-os-settlement-col-slip">{{ __('message.kpay_slip') }}</th>
+                                            <th class="pds-os-settlement-col-method">{{ __('message.payment_method') }}</th>
+                                            <th class="pds-os-settlement-col-preview">{{ __('message.show_slip_completed') }}</th>
+                                            <th class="pds-os-settlement-col-action">{{ __('message.action') }}</th>
                                         </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($payToOsRows as $index => $row)
+                                            @include('order.partials._dispatch-os-settlement-row', ['row' => $row, 'index' => $index, 'section' => 'pay'])
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            @endif
                         </div>
                     </div>
 
@@ -181,30 +175,30 @@
                             </div>
                         </div>
 
-                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell">
-                            <table class="table pds-rider-list-table pds-os-settlement-table" id="osSettlementReceiveTable">
-                                <thead>
-                                    <tr>
-                                        <th class="pds-rider-col-no">{{ __('message.no') }}</th>
-                                        <th class="pds-os-settlement-col-os">{{ __('message.os_name') }}</th>
-                                        <th class="pds-os-settlement-col-amount text-right">{{ __('message.amount') }}</th>
-                                        <th class="pds-os-settlement-col-slip">{{ __('message.os_settlement_qr') }}</th>
-                                        <th class="pds-os-settlement-col-preview">{{ __('message.show_slip_completed') }}</th>
-                                        <th class="pds-os-settlement-col-action">{{ __('message.action') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($receiveFromOsRows as $index => $row)
-                                        @include('order.partials._dispatch-os-settlement-row', ['row' => $row, 'index' => $index, 'section' => 'receive'])
-                                    @empty
-                                        <tr class="pds-os-settlement-empty-row">
-                                            <td colspan="6" class="pds-os-settlement-empty-cell">
-                                                {{ __('message.os_settlement_receive_empty') }}
-                                            </td>
+                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell pds-no-freeze">
+                            @if($receiveFromOsRows->isEmpty())
+                                <div class="pds-os-settlement-section__empty pds-os-settlement-section__empty--receive">
+                                    <p>{{ __('message.os_settlement_receive_empty') }}</p>
+                                </div>
+                            @else
+                                <table class="table pds-rider-list-table pds-os-settlement-table" id="osSettlementReceiveTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="pds-rider-col-no">{{ __('message.no') }}</th>
+                                            <th class="pds-os-settlement-col-os">{{ __('message.os_name') }}</th>
+                                            <th class="pds-os-settlement-col-amount text-right">{{ __('message.amount') }}</th>
+                                            <th class="pds-os-settlement-col-slip">{{ __('message.os_settlement_qr') }}</th>
+                                            <th class="pds-os-settlement-col-preview">{{ __('message.show_slip_completed') }}</th>
+                                            <th class="pds-os-settlement-col-action">{{ __('message.action') }}</th>
                                         </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($receiveFromOsRows as $index => $row)
+                                            @include('order.partials._dispatch-os-settlement-row', ['row' => $row, 'index' => $index, 'section' => 'receive'])
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            @endif
                         </div>
                     </div>
             </div>
@@ -279,6 +273,9 @@
 
                 $(document).on('click', '.pds-os-settlement-tab', function () {
                     switchOsSettlementTab($(this).attr('data-tab'));
+                    if (typeof window.pdsResyncFrozenTables === 'function') {
+                        window.requestAnimationFrame(window.pdsResyncFrozenTables);
+                    }
                 });
 
                 function notify(message, status) {
@@ -301,10 +298,6 @@
 
                 function syncRowFinishState($row) {
                     if (String($row.attr('data-is-finished')) === '1') return;
-                    if (String($row.attr('data-is-demo')) === '1') {
-                        $row.find('.pds-os-finish-btn').addClass('is-disabled').prop('disabled', true);
-                        return;
-                    }
                     var method = $row.attr('data-payment-method') === 'cash' ? 'cash' : 'kpay';
                     var hasKpay = String($row.attr('data-has-kpay')) === '1';
                     var $btn = $row.find('.pds-os-finish-btn');
@@ -316,12 +309,9 @@
 
                 function updateFinishAllState() {
                     function canFinishRows($rows) {
-                        var real = $rows.filter(function () {
-                            return String($(this).attr('data-is-demo')) !== '1';
-                        });
-                        if (! real.length) return false;
+                        if (! $rows.length) return false;
                         var ok = true;
-                        real.each(function () {
+                        $rows.each(function () {
                             if (String($(this).attr('data-has-kpay')) !== '1') {
                                 ok = false;
                                 return false;
@@ -407,8 +397,7 @@
                     });
                     var $section = $table.closest('.pds-os-settlement-section');
                     var sectionKey = String($section.attr('data-section') || '');
-                    var count = $dataRows.length;
-                    if (count === 0) {
+                    if ($dataRows.length === 0) {
                         if (sectionKey === 'pay') {
                             $section.find('.pds-os-settlement-bulk-bar[data-section="pay"]').hide();
                         }
@@ -418,15 +407,16 @@
                         var emptyMsg = sectionKey === 'receive'
                             ? @json(__('message.os_settlement_receive_empty'))
                             : @json(__('message.os_settlement_pay_empty'));
-                        var colSpan = sectionKey === 'receive' ? 6 : 9;
-                        $table.find('tbody').html(
-                            '<tr class="pds-os-settlement-empty-row"><td colspan="' + colSpan + '" class="pds-os-settlement-empty-cell">' + emptyMsg + '</td></tr>'
-                        );
+                        var emptyClass = sectionKey === 'receive'
+                            ? 'pds-os-settlement-section__empty pds-os-settlement-section__empty--receive'
+                            : 'pds-os-settlement-section__empty';
+                        var $shell = $table.closest('.pds-os-settlement-shell');
+                        if ($shell.length) {
+                            $shell.html('<div class="' + emptyClass + '"><p>' + emptyMsg + '</p></div>');
+                        }
                     }
                     syncTabCounts();
-                    var total = $('#osSettlementPayTable tbody tr.pds-os-settlement-row').length
-                        + $('#osSettlementReceiveTable tbody tr.pds-os-settlement-row').length;
-                    if (total === 0) {
+                    if ($('.pds-os-settlement-row').length === 0) {
                         $('.pds-os-settlement-tabs').remove();
                         var emptyHtml = '<div class="pds-rider-empty">'
                             + '<div class="pds-rider-empty__icon"><i class="fas fa-store"></i></div>'
@@ -596,10 +586,6 @@
                 $(document).on('click', '.pds-os-finish-btn:not(:disabled)', function () {
                     var $btn = $(this);
                     var $row = $btn.closest('tr');
-                    if (String($row.attr('data-is-demo')) === '1' || String($btn.attr('data-is-demo')) === '1') {
-                        notify(@json(__('message.os_settlement_demo_action_blocked')), 'error');
-                        return;
-                    }
                     var osId = $btn.data('os-id');
                     var method = $row.attr('data-section') === 'receive'
                         ? 'cash'
@@ -612,7 +598,6 @@
                     var items = [];
                     $('#osSettlementPayTable tbody tr.pds-os-settlement-row[data-is-finished="0"]').each(function () {
                         var $row = $(this);
-                        if (String($row.attr('data-is-demo')) === '1') return;
                         items.push({
                             os_id: parseInt($row.data('os-id'), 10),
                             payment_method: $row.attr('data-payment-method') === 'cash' ? 'cash' : 'kpay',
@@ -628,7 +613,6 @@
                     var items = [];
                     $('#osSettlementReceiveTable tbody tr.pds-os-settlement-row[data-is-finished="0"]').each(function () {
                         var $row = $(this);
-                        if (String($row.attr('data-is-demo')) === '1') return;
                         items.push({
                             os_id: parseInt($row.data('os-id'), 10),
                             payment_method: 'cash',
@@ -640,8 +624,7 @@
                 });
 
                 $(document).on('click', '.pds-os-slip-preview-btn', function () {
-                    if (String($(this).attr('data-is-demo')) === '1' || $(this).prop('disabled')) {
-                        notify(@json(__('message.os_settlement_demo_action_blocked')), 'error');
+                    if ($(this).prop('disabled')) {
                         return;
                     }
                     var osId = $(this).data('os-id');

@@ -77,4 +77,18 @@ return [
             ['route' => 'order.expense-summary', 'label_key' => 'sa_link_summary_table'],
         ],
     ],
+    'late-fine' => [
+        'title_key' => 'sa_screen_late_fine',
+        'subtitle_key' => 'sa_screen_late_fine_sub',
+        'icon' => 'fa-user-clock',
+        'workspace' => null,
+        'links' => [],
+    ],
+    'rider-salary' => [
+        'title_key' => 'sa_screen_rider_salary',
+        'subtitle_key' => 'sa_screen_rider_salary_sub',
+        'icon' => 'fa-motorcycle',
+        'workspace' => null,
+        'links' => [],
+    ],
 ];

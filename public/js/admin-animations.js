@@ -3,46 +3,64 @@
 
     var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    function initLoader() {
+    function hideLoader() {
         var loading = document.getElementById('loading');
         var loader = document.getElementById('loader');
         if (!loading && !loader) {
             return;
         }
 
-        function hideLoader() {
-            var target = loading || loader;
-            if (prefersReducedMotion) {
-                target.style.display = 'none';
-                if (loading && loader) loader.style.display = 'none';
-                return;
-            }
-            target.style.transition = 'opacity 0.5s ease, visibility 0.5s ease';
-            target.style.opacity = '0';
-            target.style.visibility = 'hidden';
-            setTimeout(function () {
-                target.style.display = 'none';
-                if (loading && loader) loader.style.display = 'none';
-            }, 520);
+        var target = loading || loader;
+        if (prefersReducedMotion) {
+            target.style.display = 'none';
+            if (loading && loader) loader.style.display = 'none';
+            return;
         }
+        target.style.transition = 'opacity 0.35s ease, visibility 0.35s ease';
+        target.style.opacity = '0';
+        target.style.visibility = 'hidden';
+        window.setTimeout(function () {
+            target.style.display = 'none';
+            if (loading && loader) loader.style.display = 'none';
+        }, 360);
+    }
 
-        window.addEventListener('load', hideLoader);
+    function initLoader() {
+        // Hide even if window "load" already fired (common with cached assets / soft reloads).
+        if (document.readyState === 'complete') {
+            hideLoader();
+        } else {
+            window.addEventListener('load', hideLoader);
+        }
+        // Absolute failsafe — never leave the splash covering the app.
+        window.setTimeout(hideLoader, 1500);
+    }
+
+    function enableMotion() {
+        if (prefersReducedMotion) {
+            return;
+        }
+        document.body.classList.add('js-motion-ready');
+    }
+
+    function forceVisible(selector, className) {
+        document.querySelectorAll(selector).forEach(function (el) {
+            el.classList.add(className);
+        });
     }
 
     function initDashboardAnimations() {
         if (prefersReducedMotion) {
-            document.querySelectorAll('.pds-dashboard-panel.pds-panel-animate').forEach(function (panel) {
-                panel.classList.add('pds-panel-visible');
-            });
-            document.querySelectorAll('.pds-stats-grid > [class*="col-"]').forEach(function (cell) {
-                cell.classList.add('pds-stat-visible');
-            });
+            forceVisible('.pds-dashboard-panel.pds-panel-animate', 'pds-panel-visible');
+            forceVisible('.pds-stats-grid > [class*="col-"]', 'pds-stat-visible');
             return;
         }
 
+        enableMotion();
+
         var panels = document.querySelectorAll('.pds-dashboard-panel.pds-panel-animate');
         panels.forEach(function (panel, i) {
-            panel.style.transitionDelay = (0.18 + i * 0.1) + 's';
+            panel.style.transitionDelay = (0.08 + i * 0.06) + 's';
             if ('IntersectionObserver' in window) {
                 var panelObserver = new IntersectionObserver(function (entries) {
                     entries.forEach(function (entry) {
@@ -51,7 +69,7 @@
                             panelObserver.unobserve(entry.target);
                         }
                     });
-                }, { threshold: 0.08, rootMargin: '0px 0px -4% 0px' });
+                }, { threshold: 0.02, rootMargin: '0px 0px 8% 0px' });
                 panelObserver.observe(panel);
             } else {
                 panel.classList.add('pds-panel-visible');
@@ -62,13 +80,11 @@
             var cells = grid.querySelectorAll(':scope > [class*="col-"]');
             cells.forEach(function (cell, i) {
                 cell.classList.add('pds-stat-animate');
-                cell.style.transitionDelay = Math.min(i * 0.05, 0.35) + 's';
+                cell.style.transitionDelay = Math.min(i * 0.04, 0.3) + 's';
             });
 
             if (!('IntersectionObserver' in window)) {
-                cells.forEach(function (cell) {
-                    cell.classList.add('pds-stat-visible');
-                });
+                forceVisible('.pds-stats-grid > [class*="col-"]', 'pds-stat-visible');
                 return;
             }
 
@@ -79,12 +95,18 @@
                         statObserver.unobserve(entry.target);
                     }
                 });
-            }, { threshold: 0.05, rootMargin: '0px 0px -2% 0px' });
+            }, { threshold: 0.02, rootMargin: '0px 0px 8% 0px' });
 
             cells.forEach(function (cell) {
                 statObserver.observe(cell);
             });
         });
+
+        // Failsafe: never leave panels/stats invisible if observer never fires.
+        window.setTimeout(function () {
+            forceVisible('.pds-dashboard-panel.pds-panel-animate', 'pds-panel-visible');
+            forceVisible('.pds-stats-grid > [class*="col-"].pds-stat-animate', 'pds-stat-visible');
+        }, 900);
     }
 
     function initCardReveal() {
@@ -113,9 +135,10 @@
             return;
         }
 
+        enableMotion();
         cards.forEach(function (card, i) {
             card.classList.add('pds-admin-reveal', 'pds-admin-visible');
-            card.style.transitionDelay = Math.min(i * 0.05, 0.4) + 's';
+            card.style.transitionDelay = Math.min(i * 0.04, 0.3) + 's';
         });
     }
 
@@ -229,11 +252,15 @@
             document.querySelectorAll('.pds-order-detail .pds-order-animate').forEach(function (el) {
                 el.style.opacity = '1';
                 el.style.transform = 'none';
+                el.classList.add('pds-order-visible');
             });
             return;
         }
 
+        enableMotion();
+
         if (!('IntersectionObserver' in window)) {
+            forceVisible('.pds-order-detail .pds-order-animate', 'pds-order-visible');
             return;
         }
 
@@ -254,11 +281,16 @@
 
         document.querySelectorAll('.pds-order-detail .pds-order-main-card, .pds-order-detail .pds-order-user-card, .pds-order-detail .pds-order-history-card').forEach(function (card, i) {
             card.style.animation = 'pdsOrderReveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) ' + (0.15 + i * 0.08) + 's both';
+            card.classList.add('pds-order-visible');
             observer.observe(card);
         });
+
+        window.setTimeout(function () {
+            forceVisible('.pds-order-detail .pds-order-animate', 'pds-order-visible');
+        }, 900);
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
+    function boot() {
         initLoader();
         initSidebar();
         initMobileSidebarDrawer();
@@ -275,9 +307,24 @@
             });
         }
 
-        setTimeout(function () {
+        window.setTimeout(function () {
             initTableRows();
             initLegacyPageEnhancements();
         }, 500);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot);
+    } else {
+        boot();
+    }
+
+    // Back/forward cache restore — re-hide loader and force content visible.
+    window.addEventListener('pageshow', function () {
+        hideLoader();
+        forceVisible('.pds-dashboard-panel.pds-panel-animate', 'pds-panel-visible');
+        forceVisible('.pds-stats-grid > [class*="col-"].pds-stat-animate', 'pds-stat-visible');
+        forceVisible('.pds-admin-reveal', 'pds-admin-visible');
+        forceVisible('.pds-order-detail .pds-order-animate', 'pds-order-visible');
     });
 })();

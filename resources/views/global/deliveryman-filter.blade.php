@@ -1,5 +1,5 @@
 <x-master-layout :assets="$assets ?? []">
-    <div class="container-fluid pds-page-wrap pds-motion-enter">
+    <div class="container-fluid pds-page-wrap pds-motion-enter pds-deliveryman-list-page">
         <div class="row">
             <div class="col-lg-12">
                 <div class="card card-block card-stretch card-height pds-page-card">
@@ -17,7 +17,7 @@
                         </div>
                     </div>
 
-                    <div class="card-body pds-page-body">
+                    <div class="card-body pds-page-body pds-deliveryman-list-body">
                         @if(isset($multi_checkbox_delete))
                             <div class="pds-bulk-actions mb-2">
                                 {!! $multi_checkbox_delete !!}
@@ -26,8 +26,8 @@
 
                         @include('global.deliveryman-datatable')
 
-                        <div class="pds-table-shell">
-                            {{ $dataTable->table(['class' => 'table w-100 pds-datatable'], false) }}
+                        <div class="pds-table-shell pds-deliveryman-table-shell">
+                            {{ $dataTable->table(['class' => 'table w-100 pds-datatable pds-deliveryman-datatable'], false) }}
                         </div>
                     </div>
                 </div>
@@ -38,16 +38,17 @@
     @section('bottom_script')
         {{ $dataTable->scripts() }}
         <style>
-            .pds-inline-contact {
+            body.pds-admin .pds-deliveryman-list-page .pds-inline-contact {
                 cursor: pointer;
                 border-bottom: 1px dashed transparent;
                 display: inline-block;
                 min-width: 7rem;
+                white-space: nowrap;
             }
-            .pds-inline-contact:hover {
-                border-bottom-color: #6c757d;
+            body.pds-admin .pds-deliveryman-list-page .pds-inline-contact:hover {
+                border-bottom-color: #94a3b8;
             }
-            .pds-inline-contact-input {
+            body.pds-admin .pds-deliveryman-list-page .pds-inline-contact-input {
                 width: 100%;
                 min-width: 9rem;
                 max-width: 12rem;
@@ -57,7 +58,7 @@
                 font-size: inherit;
                 line-height: 1.4;
             }
-            .pds-inline-contact-input.is-invalid {
+            body.pds-admin .pds-deliveryman-list-page .pds-inline-contact-input.is-invalid {
                 border-color: #dc3545;
             }
         </style>
@@ -67,6 +68,7 @@
 
                 var $table = $('table.pds-datatable');
                 var contactUpdateUrl = @json(url('deliveryman'));
+                var workStatusUrl = @json(url('deliveryman'));
                 var csrfToken = $('meta[name="csrf-token"]').attr('content');
 
                 function contactCells() {
@@ -221,6 +223,49 @@
                             $input.replaceWith($span);
                         }
                     }, 120);
+                });
+
+                $table.on('change', '.js-dm-work-toggle', function() {
+                    const $input = $(this);
+                    if ($input.data('saving')) {
+                        return;
+                    }
+                    const id = $input.data('id');
+                    const workOn = $input.prop('checked') ? 1 : 0;
+                    const previous = !workOn;
+                    const $switch = $input.closest('.pds-dm-work-switch');
+                    $input.data('saving', true).prop('disabled', true);
+
+                    $.ajax({
+                        url: workStatusUrl + '/' + id + '/work-status',
+                        method: 'POST',
+                        data: {
+                            work_on: workOn,
+                            _token: csrfToken,
+                        },
+                        success: function(res) {
+                            const on = !!res.work_on;
+                            $input.prop('checked', on);
+                            $switch.toggleClass('is-on', on).toggleClass('is-off', !on);
+                            $switch.find('.pds-dm-work-switch__label').text(res.label || (on ? 'On' : 'Off'));
+                            $switch.attr('title', on ? @json(__('message.rider_work_on_hint')) : @json(__('message.rider_work_off_hint')));
+                            if (typeof Snackbar !== 'undefined' && res.message) {
+                                Snackbar.show({ text: res.message, pos: 'bottom-center' });
+                            }
+                        },
+                        error: function(xhr) {
+                            $input.prop('checked', previous);
+                            const msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Unable to update work status';
+                            if (typeof Snackbar !== 'undefined') {
+                                Snackbar.show({ text: msg, pos: 'bottom-center', backgroundColor: '#dc3545' });
+                            } else {
+                                alert(msg);
+                            }
+                        },
+                        complete: function() {
+                            $input.data('saving', false).prop('disabled', false);
+                        },
+                    });
                 });
             });
         </script>

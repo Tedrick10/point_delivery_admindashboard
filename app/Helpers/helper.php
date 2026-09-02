@@ -278,6 +278,111 @@ function isSameDayOrderCutoffPassed(?Carbon $now = null): bool
 }
 
 /**
+ * Rider ငွေအပ် sheet date for a newly Delivered parcel (Asia/Yangon).
+ *
+ * Until this rider has any admin Completed stamp on the Yangon calendar day of $at
+ * → previous calendar day (မနေ့က). After Completed → that calendar day (ဒီနေ့).
+ *
+ * (Replaces the old 09:00 AM cutoff.)
+ */
+function resolveRiderRemitDate(?int $riderId, ?Carbon $at = null): string
+{
+    $tz = 'Asia/Yangon';
+    $at = ($at ?? Carbon::now($tz))->copy()->timezone($tz);
+    $today = $at->toDateString();
+    $yesterday = $at->copy()->subDay()->toDateString();
+
+    if (! $riderId || $riderId < 1) {
+        return $yesterday;
+    }
+
+    if (riderHasAdminCompletedOnDay((int) $riderId, $today)) {
+        return $today;
+    }
+
+    return $yesterday;
+}
+
+/**
+ * True when the rider has at least one item with admin_completed_at on Yangon day $dayYmd.
+ */
+function riderHasAdminCompletedOnDay(int $riderId, string $dayYmd): bool
+{
+    $tz = 'Asia/Yangon';
+    $start = Carbon::parse($dayYmd, $tz)->startOfDay()->utc();
+    $end = Carbon::parse($dayYmd, $tz)->addDay()->startOfDay()->utc();
+
+    return \App\Models\DispatchOrderItem::query()
+        ->where('delivery_man_id', $riderId)
+        ->whereNotNull('admin_completed_at')
+        ->where('admin_completed_at', '>=', $start)
+        ->where('admin_completed_at', '<', $end)
+        ->exists();
+}
+
+/**
+ * @deprecated Use resolveRiderRemitDate() — kept for call-site compatibility.
+ * Without a rider id this returns the Yangon calendar day of $at (no 9AM shift).
+ */
+function riderRemitBusinessDate(?Carbon $at = null): Carbon
+{
+    $tz = 'Asia/Yangon';
+    $at = ($at ?? Carbon::now($tz))->copy()->timezone($tz);
+
+    return $at->copy()->startOfDay();
+}
+
+/**
+ * Yangon calendar-day UTC bounds (for legacy delivered_at filters).
+ *
+ * @return array{start: Carbon, end: Carbon}
+ */
+function riderRemitBusinessDayBounds(string $dayYmd): array
+{
+    $tz = 'Asia/Yangon';
+    $start = Carbon::parse($dayYmd, $tz)->startOfDay();
+    $end = $start->copy()->addDay();
+
+    return [
+        'start' => $start->copy()->utc(),
+        'end' => $end->copy()->utc(),
+    ];
+}
+
+/**
+ * Daily Check List invoice day (Asia/Yangon).
+ *
+ * Completed on calendar day C always maps to C − 1 (no 9AM cutoff).
+ * Example: Completed on 28th → Daily Check date 27th.
+ */
+function dailyCheckListDate(?Carbon $at = null): Carbon
+{
+    $tz = 'Asia/Yangon';
+    $at = ($at ?? Carbon::now($tz))->copy()->timezone($tz);
+
+    return $at->copy()->subDay()->startOfDay();
+}
+
+/**
+ * UTC bounds for Daily Check List day D on admin_completed_at.
+ *
+ * Day D sheet = Completed anytime during Yangon calendar day D+1.
+ *
+ * @return array{start: Carbon, end: Carbon}
+ */
+function dailyCheckListDayBounds(string $dayYmd): array
+{
+    $tz = 'Asia/Yangon';
+    $start = Carbon::parse($dayYmd, $tz)->addDay()->startOfDay();
+    $end = $start->copy()->addDay();
+
+    return [
+        'start' => $start->copy()->utc(),
+        'end' => $end->copy()->utc(),
+    ];
+}
+
+/**
  * Received/pickup datetime so Admin "today" Order List hides the order until next calendar day.
  */
 function nextDayOrderReceivedDatetime(?Carbon $now = null): string
@@ -5161,6 +5266,46 @@ function formatDispatchItemSize($value): string
     return 'Size(' . normalizeDispatchItemSize($value) . ')';
 }
 
+/**
+ * Resolve default From/To branch id (MDY To MDY).
+ */
+function resolveDefaultDispatchBranchId(?string $preferredName = null): ?int
+{
+    $preferredName = trim((string) ($preferredName
+        ?? config('dispatch_item_cities.default_from_branch', 'MDY To MDY')));
+
+    $candidates = array_values(array_unique(array_filter([
+        $preferredName,
+        config('dispatch_item_cities.default_from_branch', 'MDY To MDY'),
+        config('dispatch_item_cities.default_to_branch', 'MDY To MDY'),
+        'MDY To MDY',
+        'MDY',
+    ])));
+
+    foreach ($candidates as $name) {
+        $id = \App\Models\Branch::query()
+            ->where('status', 1)
+            ->where('name', $name)
+            ->value('id');
+        if ($id) {
+            return (int) $id;
+        }
+    }
+
+    foreach ($candidates as $name) {
+        $id = \App\Models\Branch::query()
+            ->where('status', 1)
+            ->where('name', 'like', '%' . $name . '%')
+            ->orderBy('id')
+            ->value('id');
+        if ($id) {
+            return (int) $id;
+        }
+    }
+
+    return null;
+}
+
 function expandOrderDeliveryRecipients(\App\Models\Order $order): array
 {
     $flat = [];
@@ -5186,8 +5331,9 @@ function resolveDispatchItemCustomerPrefill(\App\Models\Order $order, ?\App\Mode
         ];
     }
 
-    // Photo orders: leave Customer Name/Phone/Address empty for Admin to fill from photo.
-    if ((int) ($order->is_photo_order ?? 0) === 1) {
+    // Photo/Text orders: leave Customer Name/Phone/Address empty for Admin/client to fill.
+    // Text order delivery_point often mirrors OS pickup and must not prefill Customer.
+    if ((int) ($order->is_photo_order ?? 0) === 1 || (int) ($order->is_text_order ?? 0) === 1) {
         return [
             'customer_name' => '',
             'customer_phone' => '',
@@ -5216,11 +5362,36 @@ function resolveDispatchItemCustomerPrefill(\App\Models\Order $order, ?\App\Mode
     }
 
     $delivery = is_array($order->delivery_point) ? $order->delivery_point : [];
+    $pickup = is_array($order->pickup_point) ? $order->pickup_point : [];
+
+    $customerName = trim((string) ($delivery['name'] ?? ''));
+    $customerPhone = normalizeContactNumber($delivery['contact_number'] ?? '');
+    $customerAddress = trim((string) ($delivery['address'] ?? ''));
+
+    // Ignore delivery values that are just a copy of Online Shop pickup.
+    $pName = trim((string) ($pickup['name'] ?? ''));
+    $pPhone = normalizeContactNumber($pickup['contact_number'] ?? '');
+    $pAddr = trim((string) ($pickup['address'] ?? ''));
+    if (
+        ($pName !== '' && mb_strtolower($customerName) === mb_strtolower($pName))
+        || ($pAddr !== '' && mb_strtolower($customerAddress) === mb_strtolower($pAddr))
+    ) {
+        if (
+            ($pPhone === '' || $customerPhone === '' || $customerPhone === $pPhone)
+            && ($pAddr === '' || $customerAddress === '' || mb_strtolower($customerAddress) === mb_strtolower($pAddr))
+        ) {
+            return [
+                'customer_name' => '',
+                'customer_phone' => '',
+                'customer_address' => '',
+            ];
+        }
+    }
 
     return [
-        'customer_name' => trim((string) ($delivery['name'] ?? '')),
-        'customer_phone' => normalizeContactNumber($delivery['contact_number'] ?? ''),
-        'customer_address' => trim((string) ($delivery['address'] ?? '')),
+        'customer_name' => $customerName,
+        'customer_phone' => $customerPhone,
+        'customer_address' => $customerAddress,
     ];
 }
 
@@ -5276,5 +5447,40 @@ function collectGatePassImages(\App\Models\Order $order): array
     }
 
     return $images;
+}
+
+/**
+ * Public asset URL with automatic cache-bust (?v=filemtime).
+ * Uses same-origin root-relative paths so localhost vs 127.0.0.1 never mismatches.
+ */
+if (! function_exists('public_asset_ver')) {
+    function public_asset_ver(string $relativePath): string
+    {
+        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+        $fullPath = public_path($relativePath);
+        $version = is_file($fullPath) ? (string) filemtime($fullPath) : (string) time();
+
+        return '/'.$relativePath.'?v='.$version;
+    }
+}
+
+/**
+ * Read a public CSS file for safe <style> inlining (avoids truncated CSS under php artisan serve).
+ */
+if (! function_exists('public_css_inline')) {
+    function public_css_inline(string $relativePath): string
+    {
+        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+        $fullPath = public_path($relativePath);
+        if (! is_file($fullPath)) {
+            return '';
+        }
+
+        $css = (string) file_get_contents($fullPath);
+        // Prevent </style> in comments/content from breaking the inline block.
+        $css = str_replace('</style>', '<\/style>', $css);
+
+        return $css;
+    }
 }
 

@@ -122,6 +122,10 @@ class RoleController extends Controller
             return redirect()->back()->withErrors($result['message']);
         }
 
+        if (request('redirect_to') === 'permission') {
+            return redirect()->route('permission.index')->withSuccess($result['message']);
+        }
+
         return redirect()->route('role.index')->withSuccess($result['message']);
     }
 }

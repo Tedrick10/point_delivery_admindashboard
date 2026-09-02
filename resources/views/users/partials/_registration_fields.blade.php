@@ -81,7 +81,7 @@
         </h6>
         <div class="pds-dispatch-grid pds-dispatch-grid-2">
             <div class="pds-dispatch-field">
-                <label for="reg_name">{{ __('message.os_name') }} <span class="text-danger">*</span></label>
+                <label for="reg_name">{{ __('message.reg_os_name') }} <span class="text-danger">*</span></label>
                 <input type="text" name="name" id="reg_name" class="pds-dispatch-input"
                        placeholder="{{ __('message.reg_placeholder_os_name') }}"
                        value="{{ old('name', optional($data ?? null)->name) }}" required>
@@ -160,6 +160,29 @@
                 <input type="text" name="os_profile[kpay_no]" id="reg_kpay_no" class="pds-dispatch-input"
                        placeholder="{{ __('message.reg_placeholder_kbz_pay_number') }}"
                        value="{{ old('os_profile.kpay_no', $profile['kpay_no'] ?? '') }}" required>
+            </div>
+        </div>
+    </div>
+
+    <div class="pds-user-reg-section">
+        <h6 class="pds-user-reg-section__title">
+            <i class="fas fa-clipboard-check"></i>
+            <span>{{ __('message.status') }}</span>
+        </h6>
+        <div class="pds-dispatch-grid pds-dispatch-grid-2">
+            <div class="pds-dispatch-field">
+                <label for="reg_approval_status">{{ __('message.status') }} <span class="text-danger">*</span></label>
+                @php
+                    $approvalValue = old(
+                        'approval_status',
+                        optional($data ?? null)->approval_status ?? \App\Models\User::APPROVAL_APPROVED
+                    );
+                @endphp
+                <select name="approval_status" id="reg_approval_status" class="pds-dispatch-input pds-dispatch-select" required>
+                    <option value="pending" @selected($approvalValue === 'pending')>{{ __('message.pending') }}</option>
+                    <option value="approved" @selected($approvalValue === 'approved')>{{ __('message.approved') }}</option>
+                    <option value="rejected" @selected($approvalValue === 'rejected')>{{ __('message.rejected') }}</option>
+                </select>
             </div>
         </div>
     </div>

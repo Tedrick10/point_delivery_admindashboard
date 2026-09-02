@@ -23,14 +23,9 @@ class DeliverymanDataTable extends DataTable
             ->editColumn('checkbox', function ($row) {
                 return '<input type="checkbox" class=" select-table-row-checked-values" id="datatable-row-' . $row->id . '" name="datatable_ids[]" value="' . $row->id . '" onclick="dataTableRowCheck(' . $row->id . ')">';
             })
-            ->editColumn('status', function ($data) {
-                $action_type = 'status';
-                $deleted_at = null;
-                return view('deliveryman.action', compact('data', 'action_type', 'deleted_at'))->render();
-            })
 
             ->editColumn('created_at', function ($row) {
-                return dateAgoFormate($row->created_at, true);
+                return '<span class="pds-dm-date">' . e(dateAgoFormate($row->created_at, true)) . '</span>';
             })
             ->order(function ($query) {
                 if (request()->has('order')) {
@@ -71,7 +66,9 @@ class DeliverymanDataTable extends DataTable
 
                 return '<div class="pds-table-user">'
                     . '<img src="' . e($img ?: $fallback) . '" alt="" class="pds-table-user__avatar">'
+                    . '<div class="pds-table-user__meta">'
                     . '<a href="' . $url . '" class="pds-table-user__name">' . $name . '</a>'
+                    . '</div>'
                     . '</div>';
             })
             ->filterColumn('deliveryman', function($query, $keyword) {
@@ -95,11 +92,33 @@ class DeliverymanDataTable extends DataTable
                     . e($display)
                     . '</span>';
             })
-            ->editColumn('email', function($query) {
-                return auth()->user()->hasRole('admin') ? maskSensitiveInfo('email', $query->email) : maskSensitiveInfo('email', $query->email);
+            ->editColumn('email', function ($query) {
+                $email = auth()->user()->hasRole('admin')
+                    ? maskSensitiveInfo('email', $query->email)
+                    : maskSensitiveInfo('email', $query->email);
+
+                return '<span class="pds-dm-email" title="' . e($email) . '">' . e($email) . '</span>';
             })
             ->editColumn('last_actived_at', function ($query) {
-                return dateAgoFormate($query->last_actived_at, true) ?? '-';
+                $label = dateAgoFormate($query->last_actived_at, true) ?? '-';
+
+                return '<span class="pds-dm-date">' . e($label) . '</span>';
+            })
+            ->addColumn('rider_work_on', function ($row) {
+                $on = (bool) ($row->isRiderWorkOn());
+                $canEdit = auth()->user()->can('deliveryman-edit');
+
+                if (! $canEdit) {
+                    return $on
+                        ? '<span class="pds-dm-work-badge is-on">' . e(__('message.rider_work_on')) . '</span>'
+                        : '<span class="pds-dm-work-badge is-off">' . e(__('message.rider_work_off')) . '</span>';
+                }
+
+                return '<label class="pds-dm-work-switch' . ($on ? ' is-on' : ' is-off') . '" title="' . e($on ? __('message.rider_work_on_hint') : __('message.rider_work_off_hint')) . '">'
+                    . '<input type="checkbox" class="js-dm-work-toggle" data-id="' . (int) $row->id . '" ' . ($on ? 'checked' : '') . '>'
+                    . '<span class="pds-dm-work-switch__track" aria-hidden="true"></span>'
+                    . '<span class="pds-dm-work-switch__label">' . e($on ? __('message.rider_work_on') : __('message.rider_work_off')) . '</span>'
+                    . '</label>';
             })
 
             ->addColumn('action', function ($row) {
@@ -154,7 +173,7 @@ class DeliverymanDataTable extends DataTable
                     return view('deliveryman.action', compact('data', 'action_type', 'deleted_at'))->render();
                 }
             })
-            ->rawColumns(['checkbox', 'action', 'status', 'deliveryman', 'contact_number', 'is_autoverified_email','is_autoverified_mobile','is_autoverified_document']);
+            ->rawColumns(['checkbox', 'action', 'deliveryman', 'contact_number', 'email', 'created_at', 'last_actived_at', 'rider_work_on', 'is_autoverified_email','is_autoverified_mobile','is_autoverified_document']);
     }
 
     /**
@@ -165,6 +184,12 @@ class DeliverymanDataTable extends DataTable
      */
     public function query(User $model)
     {
+        try {
+            app(\App\Services\RiderWorkStatusService::class)->resetExpiredOffRiders();
+        } catch (\Throwable $e) {
+            // Keep the list usable even if reset fails.
+        }
+
         $model = User::whereIn('user_type', ['delivery_man'])->where('user_type', '!=', 'admin');
         $city = request()->input('city_id');
         $country = request()->input('country_id');
@@ -216,7 +241,10 @@ class DeliverymanDataTable extends DataTable
         }
         $forcedBranchId = forcedBranchId(auth()->user());
         if ($forcedBranchId) {
-            $model->where('branch_id', $forcedBranchId);
+            $model->where(function ($query) use ($forcedBranchId) {
+                $query->where('branch_id', $forcedBranchId)
+                    ->orWhereNull('branch_id');
+            });
         }
         return $model->whereNull('deleted_at');
     }
@@ -235,27 +263,25 @@ class DeliverymanDataTable extends DataTable
                 ->searchable(false)
                 ->orderable(false)
                 ->title('<input type="checkbox" class ="select-all-table" name="select_all" id="select-all-table">')
-                ->width(40),
+                ->width(40)
+                ->addClass('pds-dm-col-check text-center'),
             Column::make('DT_RowIndex')
                 ->searchable(false)
                 ->title(__('message.srno'))
-                ->addClass('text-capitalize')
-                ->orderable(false),
-            ['data' => 'deliveryman', 'name' => 'deliveryman', 'title' => __('message.name'), 'orderable' => false,'class' => 'text-capitalize'],
-            ['data' => 'email', 'name' => 'email', 'title' => __('message.email')],
-            ['data' => 'city_id', 'name' => 'city_id', 'title' => __('message.city')],
-            ['data' => 'country_id', 'name' => 'country_id', 'title' => __('message.country')],
-            ['data' => 'contact_number', 'name' => 'contact_number', 'title' => __('message.contact_number')],
-            ['data' => 'created_at', 'name' => 'created_at', 'title' => __('message.created_at')],
-            ['data' => 'last_actived_at', 'name' => 'last_actived_at', 'title' => __('message.last_active')],
+                ->addClass('pds-dm-col-no text-center')
+                ->orderable(false)
+                ->width(52),
+            ['data' => 'deliveryman', 'name' => 'deliveryman', 'title' => __('message.name'), 'orderable' => false, 'class' => 'pds-dm-col-name text-capitalize'],
+            ['data' => 'email', 'name' => 'email', 'title' => __('message.email'), 'class' => 'pds-dm-col-email'],
+            ['data' => 'city_id', 'name' => 'city_id', 'title' => __('message.city'), 'class' => 'pds-dm-col-city'],
+            ['data' => 'country_id', 'name' => 'country_id', 'title' => __('message.country'), 'class' => 'pds-dm-col-country'],
+            ['data' => 'contact_number', 'name' => 'contact_number', 'title' => __('message.contact_number'), 'class' => 'pds-dm-col-phone'],
+            ['data' => 'created_at', 'name' => 'created_at', 'title' => __('message.created_at'), 'class' => 'pds-dm-col-date'],
+            ['data' => 'last_actived_at', 'name' => 'last_actived_at', 'title' => __('message.last_active'), 'class' => 'pds-dm-col-date'],
+            ['data' => 'rider_work_on', 'name' => 'rider_work_on', 'title' => __('message.rider_work_status'), 'orderable' => false, 'searchable' => false, 'class' => 'pds-dm-col-work text-center'],
         ];
 
-        if ($status === 'active' || $status === 'inactive') {
-            $columns[] = Column::make('status', 'status')
-                ->title(__('message.status'))
-                ->visible(true)
-                ->orderable(false);
-        } elseif ($status === 'pending') {
+        if ($status === 'pending') {
             $columns[] = Column::make('is_autoverified_email', 'is_autoverified_email')
                 ->title(__('message.email') . ' ' . __('message.is_verify'))
                 ->visible(true)
@@ -270,20 +296,23 @@ class DeliverymanDataTable extends DataTable
                 ->title(__('message.document') . ' ' . __('message.is_verify'))
                 ->visible(true)
                 ->orderable(false);
-        } else {
-            $columns[] = Column::make('status', 'status')
-                ->title(__('message.status'))
-                ->visible(true)
-                ->orderable(false);
         }
 
         $columns[] = Column::computed('action')
             ->exportable(false)
             ->printable(false)
             ->title(__('message.action'))
-            ->width(60)
-            ->addClass('text-center hide-search');
+            ->width(118)
+            ->addClass('pds-dm-col-action text-center hide-search');
 
         return $columns;
+    }
+
+    public function getBuilderParameters(): array
+    {
+        $params = parent::getBuilderParameters();
+        $params['scrollX'] = false;
+
+        return $params;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\DispatchOrderItem;
 use App\Models\ExpenseCard;
 use App\Models\ExpenseItem;
 use App\Models\RiderRemit;
@@ -17,25 +18,121 @@ class ExpenseRiderFuelSyncService
     }
 
     /**
-     * Sum all riders' ဆီဖိုး for the day and upsert Expense "Rider ဆီဖိုး".
+     * Expense card date for a Rider ငွေအပ် day (same calendar day).
      */
-    public function syncDate(string $day, ?int $userId = null): void
+    public function expenseDateForRemitDay(string $remitDay): string
     {
-        $day = Carbon::parse($day)->toDateString();
-        $total = round((float) RiderRemit::query()
-            ->whereDate('remit_date', $day)
-            ->sum('fuel_amount'), 2);
+        return Carbon::parse($remitDay)->toDateString();
+    }
 
+    /**
+     * Rider ငွေအပ် day that feeds an Expense card date (same calendar day).
+     */
+    public function remitDateForExpenseDay(string $expenseDay): string
+    {
+        return Carbon::parse($expenseDay)->toDateString();
+    }
+
+    /**
+     * Sum Rider ဆီဖိုး for remit day and upsert onto Expense card for the same day.
+     */
+    public function syncDate(string $remitDay, ?int $userId = null): void
+    {
+        $this->syncRemitDate($remitDay, $userId);
+    }
+
+    public function syncRemitDate(string $remitDay, ?int $userId = null): void
+    {
+        $remitDay = Carbon::parse($remitDay)->toDateString();
+        $total = $this->fuelTotalForRemitDay($remitDay);
+        $this->upsertFuelOnExpenseDay($remitDay, $total, $userId);
+    }
+
+    public function syncExpenseDate(string $expenseDay, ?int $userId = null): void
+    {
+        $expenseDay = Carbon::parse($expenseDay)->toDateString();
+        $total = $this->fuelTotalForRemitDay($expenseDay);
+        $this->upsertFuelOnExpenseDay($expenseDay, $total, $userId);
+    }
+
+    public function fuelTotalForRemitDay(string $remitDay): float
+    {
+        return round((float) RiderRemit::query()
+            ->whereDate('remit_date', Carbon::parse($remitDay)->toDateString())
+            ->sum('fuel_amount'), 2);
+    }
+
+    public function fuelTotalForExpenseDay(string $expenseDay): float
+    {
+        return $this->fuelTotalForRemitDay($this->remitDateForExpenseDay($expenseDay));
+    }
+
+    /**
+     * Sync every Expense day in [from, to].
+     */
+    public function syncDateRange(string $from, string $to, ?int $userId = null): void
+    {
+        $from = Carbon::parse($from)->toDateString();
+        $to = Carbon::parse($to)->toDateString();
+        $subject = $this->subject();
+        $remitService = app(RiderRemitService::class);
+
+        $remitDays = RiderRemit::query()
+            ->whereBetween('remit_date', [$from, $to])
+            ->selectRaw('DATE(remit_date) as d')
+            ->groupBy('d')
+            ->pluck('d')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString());
+
+        $itemDays = DispatchOrderItem::query()
+            ->where('status', 'completed')
+            ->whereNotNull('rider_remit_date')
+            ->whereBetween('rider_remit_date', [$from, $to])
+            ->selectRaw('DATE(rider_remit_date) as d')
+            ->groupBy('d')
+            ->pluck('d')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString());
+
+        $cardDays = ExpenseCard::query()
+            ->whereBetween('expense_date', [$from, $to])
+            ->whereHas('items', function ($q) use ($subject) {
+                $q->where('source', ExpenseItem::SOURCE_RIDER_FUEL)
+                    ->orWhere('subject', $subject)
+                    ->orWhere('subject', 'Rider ဆီဖိုး')
+                    ->orWhere('subject', 'Rider fuel cost');
+            })
+            ->pluck('expense_date')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString());
+
+        $days = $remitDays
+            ->merge($itemDays)
+            ->merge($cardDays)
+            ->unique()
+            ->filter()
+            ->values();
+
+        foreach ($days as $day) {
+            $remitService->ensureOpenRemitDefaults((string) $day, null, $userId);
+            $this->syncExpenseDate((string) $day, $userId);
+        }
+    }
+
+    protected function upsertFuelOnExpenseDay(string $expenseDay, float $total, ?int $userId = null): void
+    {
         try {
-            DB::transaction(function () use ($day, $total, $userId) {
+            DB::transaction(function () use ($expenseDay, $total, $userId) {
                 $card = ExpenseCard::query()->firstOrCreate(
-                    ['expense_date' => $day],
+                    ['expense_date' => $expenseDay],
                     [
                         'total_amount' => 0,
                         'created_by' => $userId,
                         'updated_by' => $userId,
                     ]
                 );
+
+                if ($card->isGenerated()) {
+                    return;
+                }
 
                 $item = $this->findRiderFuelItem($card);
                 $subject = $this->subject();
@@ -76,41 +173,9 @@ class ExpenseRiderFuelSyncService
             });
         } catch (\Throwable $e) {
             Log::warning('expense rider fuel sync failed', [
-                'day' => $day,
+                'expense_day' => $expenseDay,
                 'error' => $e->getMessage(),
             ]);
-        }
-    }
-
-    /**
-     * Sync every date in [from, to] that has rider remits (or already has a rider-fuel item).
-     */
-    public function syncDateRange(string $from, string $to, ?int $userId = null): void
-    {
-        $from = Carbon::parse($from)->toDateString();
-        $to = Carbon::parse($to)->toDateString();
-        $subject = $this->subject();
-
-        $remitDays = RiderRemit::query()
-            ->whereBetween('remit_date', [$from, $to])
-            ->selectRaw('DATE(remit_date) as d')
-            ->groupBy('d')
-            ->pluck('d');
-
-        $cardDays = ExpenseCard::query()
-            ->whereBetween('expense_date', [$from, $to])
-            ->whereHas('items', function ($q) use ($subject) {
-                $q->where('source', ExpenseItem::SOURCE_RIDER_FUEL)
-                    ->orWhere('subject', $subject)
-                    ->orWhere('subject', 'Rider ဆီဖိုး')
-                    ->orWhere('subject', 'Rider fuel cost');
-            })
-            ->pluck('expense_date')
-            ->map(fn ($d) => Carbon::parse($d)->toDateString());
-
-        $days = $remitDays->merge($cardDays)->unique()->filter()->values();
-        foreach ($days as $day) {
-            $this->syncDate((string) $day, $userId);
         }
     }
 

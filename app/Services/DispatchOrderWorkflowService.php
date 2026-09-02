@@ -808,8 +808,8 @@ class DispatchOrderWorkflowService
     {
         $status = (string) ($item->status ?? '');
 
-        // Delivered is always final — no reverse to On Way or other states.
-        if ($status === 'completed' || ! empty($item->delivery_locked)) {
+        // Delivered is final. Stale delivery_locked on non-delivered items must not block.
+        if ($status === 'completed') {
             return [];
         }
 
@@ -1002,7 +1002,12 @@ class DispatchOrderWorkflowService
         }
 
         $itemQuery->whereIn('status', ['courier_assigned', 'courier_departed'])
-            ->update(['status' => 'completed']);
+            ->update([
+                'status' => 'completed',
+                'delivered_at' => now(),
+                'rider_remit_at' => null,
+                'rider_remit_date' => resolveRiderRemitDate((int) $deliveryManId),
+            ]);
     }
 
     public function markItemAdminUpdated(DispatchOrderItem $item): void

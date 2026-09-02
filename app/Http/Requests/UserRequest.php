@@ -73,6 +73,10 @@ class UserRequest extends FormRequest
             }
         }
 
+        if ($this->requiresOsProfile()) {
+            $rules['approval_status'] = 'sometimes|in:pending,approved,rejected';
+        }
+
         return $rules;
     }
 

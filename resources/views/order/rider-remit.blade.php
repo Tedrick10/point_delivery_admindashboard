@@ -36,6 +36,13 @@
                         </select>
                     </div>
                     <div class="pds-daily-check-toolbar__actions">
+                        <button type="button" class="pds-rider-remit-audit-btn" id="rrAuditBtn"
+                                data-logs-url="{{ route('order.rider-remit.logs') }}"
+                                data-date="{{ $day }}"
+                                data-branch="{{ $storeBranchId }}">
+                            <i class="fas fa-clipboard-list" aria-hidden="true"></i>
+                            <span>{{ __('message.rider_remit_audit_log') }}</span>
+                        </button>
                         <button type="submit" class="pds-daily-check-search-btn" title="{{ __('message.check') }}">
                             <i class="fas fa-search" aria-hidden="true"></i>
                             <span>{{ __('message.check') }}</span>
@@ -97,12 +104,13 @@
                                 <tr>
                                     <th class="pds-rider-remit-stub pds-rider-remit-label">{{ __('message.rider_remit_title') }}</th>
                                     @foreach($riders as $index => $rider)
-                                        <th class="pds-rider-remit-col {{ $rider->balanced ? 'is-balanced' : '' }}" data-rider="{{ $rider->delivery_man_id }}">
-                                            <span class="pds-rider-remit-col__no">{{ $index + 1 }}</span>
-                                            <strong>{{ $rider->name }}</strong>
-                                            @if($rider->item_count > 0)
-                                                <small>{{ $rider->item_count }} {{ __('message.items') }}</small>
-                                            @endif
+                                        <th class="pds-rider-remit-col {{ $rider->balanced ? 'is-balanced' : '' }} {{ !($rider->has_ways ?? true) ? 'is-rider-no-ways' : '' }}" data-rider="{{ $rider->delivery_man_id }}" data-item-count="{{ (int) $rider->item_count }}" data-can-edit="{{ ($rider->can_edit ?? false) ? '1' : '0' }}">
+                                            <div class="pds-rider-remit-col-inner">
+                                                <strong>{{ $rider->name }}</strong>
+                                                <small class="pds-rider-remit-col__ways" title="{{ __('message.rider_remit_delivered_way_hint') }}">
+                                                    <b>{{ (int) $rider->item_count }}</b>
+                                                </small>
+                                            </div>
                                         </th>
                                     @endforeach
                                     <th class="pds-rider-remit-total-col">
@@ -111,14 +119,16 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr class="pds-rider-remit-row is-input">
+                                <tr class="pds-rider-remit-row is-input is-prepaid">
                                     <th class="pds-rider-remit-label">{{ __('message.rider_remit_prepaid') }}</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}">
-                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="prepaid_amount" type="number" min="0" step="1" value="{{ $rider->prepaid_amount ?: '' }}" placeholder="0" @disabled(! $canEdit)>
+                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="prepaid_amount" type="number" min="0" step="1" value="{{ $rider->prepaid_amount ?: '' }}" placeholder="0" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
                                         </td>
                                     @endforeach
-                                    <td class="pds-rider-remit-total-cell is-blank"></td>
+                                    <td class="pds-rider-remit-total-cell">
+                                        <span class="pds-rider-remit-read js-rr-prepaid-total">{{ number_format($summary->prepaid_total ?? $riders->sum('prepaid_amount')) }}</span>
+                                    </td>
                                 </tr>
                                 <tr class="pds-rider-remit-row is-due">
                                     <th class="pds-rider-remit-label">{{ __('message.rider_remit_due') }}</th>
@@ -127,25 +137,56 @@
                                             <span class="pds-rider-remit-read">{{ number_format($rider->due_amount) }}</span>
                                         </td>
                                     @endforeach
-                                    <td class="pds-rider-remit-total-cell is-blank"></td>
+                                    <td class="pds-rider-remit-total-cell">
+                                        <span class="pds-rider-remit-read js-rr-due-total">{{ number_format($summary->due_total) }}</span>
+                                    </td>
                                 </tr>
-                                <tr class="pds-rider-remit-row is-input">
+                                <tr class="pds-rider-remit-row is-input is-fuel">
                                     <th class="pds-rider-remit-label">{{ __('message.rider_remit_fuel') }}</th>
                                     @foreach($riders as $rider)
+                                        @php
+                                            $fuelVal = (float) ($rider->fuel_amount ?? 0);
+                                            $fuelDisplay = $fuelVal > 0 ? (int) $fuelVal : '';
+                                            $fuelEditable = $canEdit && ($rider->can_edit ?? true);
+                                        @endphp
                                         <td data-rider="{{ $rider->delivery_man_id }}">
-                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="fuel_amount" type="number" min="0" step="1" value="{{ $rider->fuel_amount ?: '' }}" placeholder="0" @disabled(! $canEdit)>
+                                            <div class="pds-rr-fuel-cell">
+                                                <input class="js-rr-field js-rr-fuel"
+                                                       data-rider="{{ $rider->delivery_man_id }}"
+                                                       data-field="fuel_amount"
+                                                       type="number"
+                                                       min="0"
+                                                       step="1"
+                                                       value="{{ $fuelDisplay }}"
+                                                       placeholder="0"
+                                                       readonly
+                                                       @disabled(! $fuelEditable)>
+                                                @if($fuelEditable)
+                                                    <button type="button"
+                                                            class="pds-rr-fuel-edit-btn js-rr-fuel-unlock"
+                                                            data-rider="{{ $rider->delivery_man_id }}"
+                                                            title="{{ __('message.rider_remit_fuel_edit') }}"
+                                                            aria-label="{{ __('message.rider_remit_fuel_edit') }}">
+                                                        <i class="fas fa-pencil-alt" aria-hidden="true"></i>
+                                                    </button>
+                                                @endif
+                                            </div>
                                         </td>
                                     @endforeach
-                                    <td class="pds-rider-remit-total-cell is-blank"></td>
+                                    <td class="pds-rider-remit-total-cell">
+                                        <span class="pds-rider-remit-read js-rr-fuel-total">{{ number_format($summary->fuel_total ?? 0) }}</span>
+                                    </td>
                                 </tr>
-                                <tr class="pds-rider-remit-row is-input">
+                                <tr class="pds-rider-remit-row is-input is-fee">
                                     <th class="pds-rider-remit-label">{{ __('message.rider_remit_fee') }}</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}">
-                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="fee_amount" type="number" min="0" step="1" value="{{ $rider->fee_amount ?: '' }}" placeholder="0" @disabled(! $canEdit)>
+                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="fee_amount" type="number" min="0" step="1" value="{{ $rider->fee_amount ?: '' }}" placeholder="0" data-gate="{{ $rider->gate_amount ?? 0 }}" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
                                         </td>
                                     @endforeach
-                                    <td class="pds-rider-remit-total-cell is-blank"></td>
+                                    <td class="pds-rider-remit-total-cell">
+                                        <span class="pds-rider-remit-read js-rr-fee-total">{{ number_format($summary->fee_total ?? 0) }}</span>
+                                    </td>
                                 </tr>
                                 <tr class="pds-rider-remit-row is-remain">
                                     <th class="pds-rider-remit-label">{{ __('message.rider_remit_remaining') }}</th>
@@ -154,12 +195,14 @@
                                             <span class="pds-rider-remit-read js-rr-remaining">{{ number_format($rider->remaining) }}</span>
                                         </td>
                                     @endforeach
-                                    <td class="pds-rider-remit-total-cell is-blank"></td>
+                                    <td class="pds-rider-remit-total-cell">
+                                        <span class="pds-rider-remit-read js-rr-remaining-total">{{ number_format($summary->remaining_total) }}</span>
+                                    </td>
                                 </tr>
 
                                 <tr class="pds-rider-remit-section">
                                     <th class="pds-rider-remit-label">{{ __('message.rider_remit_notes') }}</th>
-                                    <td colspan="{{ $riderCount }}" class="pds-rider-remit-section-span">{{ __('message.rider_remit_sheet_total') }}</td>
+                                    <td colspan="{{ $riderCount }}" class="pds-rider-remit-section-span"></td>
                                     <td class="pds-rider-remit-total-cell is-blank"></td>
                                 </tr>
                                 @foreach($denoms as $note)
@@ -167,7 +210,7 @@
                                         <th class="pds-rider-remit-label">{{ number_format($note) }}</th>
                                         @foreach($riders as $rider)
                                             <td data-rider="{{ $rider->delivery_man_id }}">
-                                                <input class="js-rr-denom" data-rider="{{ $rider->delivery_man_id }}" data-note="{{ $note }}" type="number" min="0" step="1" value="{{ ($rider->denoms[(string) $note] ?? 0) ?: '' }}" placeholder="0" @disabled(! $canEdit)>
+                                                <input class="js-rr-denom" data-rider="{{ $rider->delivery_man_id }}" data-note="{{ $note }}" type="number" min="0" step="1" value="{{ ($rider->denoms[(string) $note] ?? 0) ?: '' }}" placeholder="0" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
                                             </td>
                                         @endforeach
                                         <td class="pds-rider-remit-total-cell">
@@ -191,7 +234,7 @@
                                     <th class="pds-rider-remit-label">Kpay</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}">
-                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="kpay_amount" type="number" min="0" step="1" value="{{ $rider->kpay_amount ?: '' }}" placeholder="0" @disabled(! $canEdit)>
+                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="kpay_amount" type="number" min="0" step="1" value="{{ $rider->kpay_amount ?: '' }}" placeholder="0" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
                                         </td>
                                     @endforeach
                                     <td class="pds-rider-remit-total-cell">
@@ -212,8 +255,28 @@
                             </tbody>
                         </table>
                     </div>
-                    <p class="pds-rider-remit-hint">{{ __('message.rider_remit_hint') }}</p>
+                    <div class="pds-rider-remit-footer">
+                        <p class="pds-rider-remit-hint">{{ __('message.rider_remit_hint') }}</p>
+                    </div>
                 @endif
+            </div>
+        </div>
+    </div>
+
+    <div class="pds-rider-remit-audit" id="rrAuditModal" hidden>
+        <div class="pds-rider-remit-audit__backdrop" data-rr-audit-close></div>
+        <div class="pds-rider-remit-audit__panel" role="dialog" aria-modal="true" aria-labelledby="rrAuditTitle">
+            <div class="pds-rider-remit-audit__head">
+                <div>
+                    <h5 id="rrAuditTitle">{{ __('message.rider_remit_audit_log') }}</h5>
+                    <p>{{ $filterDate }}</p>
+                </div>
+                <button type="button" class="pds-rider-remit-audit__close" data-rr-audit-close aria-label="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="pds-rider-remit-audit__body" id="rrAuditBody">
+                <p class="pds-rider-remit-audit__empty">{{ __('message.rider_remit_audit_empty') }}</p>
             </div>
         </div>
     </div>
@@ -230,6 +293,78 @@
                 if (typeof flatpickr !== 'undefined') {
                     flatpickr('.dispatch-datepicker', { dateFormat: 'd-m-Y', allowInput: true });
                 }
+
+                (function bindAuditLog() {
+                    var $btn = $('#rrAuditBtn');
+                    var $modal = $('#rrAuditModal');
+                    var $body = $('#rrAuditBody');
+                    if (! $btn.length || ! $modal.length) return;
+                    var emptyText = @json(__('message.rider_remit_audit_empty'));
+                    var fromText = @json(__('message.rider_remit_audit_from'));
+                    var toText = @json(__('message.rider_remit_audit_to'));
+
+                    function closeAudit() {
+                        $modal.attr('hidden', true);
+                    }
+                    function openAudit() {
+                        $modal.removeAttr('hidden');
+                        $body.html('<p class="pds-rider-remit-audit__loading"><i class="fas fa-spinner fa-spin"></i></p>');
+                        $.ajax({
+                            url: $btn.data('logs-url'),
+                            type: 'GET',
+                            data: {
+                                date: $btn.data('date'),
+                                branch_id: $btn.data('branch')
+                            },
+                            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                            success: function (res) {
+                                var logs = (res && res.logs) ? res.logs : [];
+                                if (! logs.length) {
+                                    $body.html('<p class="pds-rider-remit-audit__empty">' + emptyText + '</p>');
+                                    return;
+                                }
+                                var html = '<ol class="pds-rider-remit-audit__list">';
+                                logs.forEach(function (row, index) {
+                                    var isSubmit = row.action === 'submitted';
+                                    html += '<li class="pds-rider-remit-audit__item' + (isSubmit ? ' is-submit' : '') + '">';
+                                    html += '<span class="pds-rider-remit-audit__index">' + (index + 1) + '</span>';
+                                    html += '<div class="pds-rider-remit-audit__card">';
+                                    html += '<div class="pds-rider-remit-audit__meta">';
+                                    html += '<strong>' + $('<div>').text(row.actor || '-').html() + '</strong>';
+                                    html += '<time>' + $('<div>').text(row.time || '').html() + '</time>';
+                                    html += '</div>';
+                                    html += '<p>' + $('<div>').text(row.message || '').html() + '</p>';
+                                    if (! isSubmit && row.old_value != null && row.new_value != null) {
+                                        html += '<div class="pds-rider-remit-audit__change">';
+                                        html += '<span>' + $('<div>').text(fromText).html() + ' <b>' + $('<div>').text(String(row.old_value)).html() + '</b></span>';
+                                        html += '<i class="fas fa-arrow-right" aria-hidden="true"></i>';
+                                        html += '<span>' + $('<div>').text(toText).html() + ' <b>' + $('<div>').text(String(row.new_value)).html() + '</b></span>';
+                                        html += '</div>';
+                                    }
+                                    html += '</div></li>';
+                                });
+                                html += '</ol>';
+                                $body.html(html);
+                            },
+                            error: function (xhr) {
+                                var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : @json(__('message.something_went_wrong'));
+                                $body.html('<p class="pds-rider-remit-audit__empty">' + $('<div>').text(msg).html() + '</p>');
+                            }
+                        });
+                    }
+
+                    $btn.on('click', function (e) {
+                        e.preventDefault();
+                        openAudit();
+                    });
+                    $modal.on('click', '[data-rr-audit-close]', closeAudit);
+                    $(document).on('keydown.rrAudit', function (e) {
+                        if (e.key === 'Escape' && ! $modal.is('[hidden]')) {
+                            closeAudit();
+                        }
+                    });
+                })();
+
                 var $grid = $('#riderRemitGrid');
                 if (! $grid.length) return;
                 var csrf = $('meta[name="csrf-token"]').attr('content');
@@ -239,6 +374,7 @@
                 var canEdit = String($grid.data('can-edit')) === '1';
                 var denoms = @json($denoms);
                 var timers = {};
+                var defaultFuel = {{ (int) ($defaultFuel ?? \App\Services\RiderRemitService::DEFAULT_FUEL_AMOUNT) }};
 
                 function num(v) {
                     var n = parseFloat(String(v == null ? '' : v).replace(/,/g, ''));
@@ -247,6 +383,14 @@
                 function fmt(n) {
                     return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
                 }
+                function fuelOf(riderId) {
+                    var $input = $grid.find('.js-rr-fuel[data-rider="' + riderId + '"]');
+                    var v = num($input.val());
+                    if (v <= 0 && canEditRider(riderId) && itemCountOf(riderId) >= 1) {
+                        return defaultFuel;
+                    }
+                    return v;
+                }
                 function col(riderId) {
                     return $grid.find('[data-rider="' + riderId + '"]');
                 }
@@ -254,8 +398,16 @@
                     return num(col(riderId).filter('[data-rr-due]').attr('data-rr-due'));
                 }
                 function compute(riderId) {
+                    if (!canEditRider(riderId)) {
+                        $grid.find('tr.is-total td[data-rider="' + riderId + '"]')
+                            .removeClass('is-ok is-off is-short is-over is-off-rider')
+                            .addClass('is-ok')
+                            .find('.js-rr-match').text('0');
+                        $grid.find('thead .pds-rider-remit-col[data-rider="' + riderId + '"]').removeClass('is-balanced');
+                        return { prepaid: 0, fuel: 0, fee: 0, kpay: 0, remaining: dueOf(riderId), cash: 0, combined: 0, ok: true };
+                    }
                     var prepaid = num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="prepaid_amount"]').val());
-                    var fuel = num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="fuel_amount"]').val());
+                    var fuel = fuelOf(riderId);
                     var fee = num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="fee_amount"]').val());
                     var kpay = num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="kpay_amount"]').val());
                     var cash = 0;
@@ -271,7 +423,7 @@
                     col(riderId).find('.js-rr-cash').text(fmt(cash));
                     $grid.find('thead .pds-rider-remit-col[data-rider="' + riderId + '"]').toggleClass('is-balanced', ok);
                     $grid.find('tr.is-total td[data-rider="' + riderId + '"]')
-                        .removeClass('is-ok is-off is-short is-over')
+                        .removeClass('is-ok is-off is-short is-over is-off-rider')
                         .addClass(ok ? 'is-ok' : (diff > 0 ? 'is-over' : 'is-off'))
                         .find('.js-rr-match').text(matchLabel);
                     return { prepaid: prepaid, fuel: fuel, fee: fee, kpay: kpay, remaining: remaining, cash: cash, combined: combined, ok: ok };
@@ -287,11 +439,25 @@
                         branch_id: branchId,
                         delivery_man_id: riderId,
                         prepaid_amount: num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="prepaid_amount"]').val()),
-                        fuel_amount: num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="fuel_amount"]').val()),
+                        fuel_amount: fuelOf(riderId),
                         fee_amount: num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="fee_amount"]').val()),
                         kpay_amount: num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="kpay_amount"]').val()),
                         denominations: dens
                     };
+                }
+                function itemCountOf(riderId) {
+                    return num($grid.find('thead .pds-rider-remit-col[data-rider="' + riderId + '"]').data('item-count'));
+                }
+                function canEditRider(riderId) {
+                    return String($grid.find('thead .pds-rider-remit-col[data-rider="' + riderId + '"]').data('can-edit')) === '1';
+                }
+                function syncColumnStyles() {
+                    $grid.find('thead .pds-rider-remit-col').each(function () {
+                        var id = $(this).data('rider');
+                        var noWays = itemCountOf(id) < 1;
+                        $(this).removeClass('is-rider-off').toggleClass('is-rider-no-ways', noWays);
+                        $grid.find('tbody td[data-rider="' + id + '"]').removeClass('is-rider-off-cell').toggleClass('is-rider-no-ways-cell', noWays);
+                    });
                 }
                 function refreshNoteTotals() {
                     denoms.forEach(function (note) {
@@ -303,7 +469,7 @@
                     });
                 }
                 function refreshSummary() {
-                    var due = 0, cash = 0, kpay = 0, combined = 0, ok = 0, count = 0;
+                    var due = 0, cash = 0, kpay = 0, combined = 0, prepaid = 0, fuel = 0, fee = 0, remaining = 0, ok = 0, count = 0;
                     $grid.find('thead .pds-rider-remit-col').each(function () {
                         var id = $(this).data('rider');
                         var c = compute(id);
@@ -311,10 +477,19 @@
                         cash += c.cash;
                         kpay += c.kpay;
                         combined += c.combined;
+                        prepaid += c.prepaid;
+                        fuel += c.fuel;
+                        fee += c.fee;
+                        remaining += c.remaining;
                         if (c.ok) ok += 1;
                         count += 1;
                     });
                     refreshNoteTotals();
+                    $grid.find('.js-rr-due-total').text(fmt(due));
+                    $grid.find('.js-rr-prepaid-total').text(fmt(prepaid));
+                    $grid.find('.js-rr-fuel-total').text(fmt(fuel));
+                    $grid.find('.js-rr-fee-total').text(fmt(fee));
+                    $grid.find('.js-rr-remaining-total').text(fmt(remaining));
                     $grid.find('.js-rr-money-total').text(fmt(cash));
                     $grid.find('.js-rr-kpay-total').text(fmt(kpay));
                     $grid.find('.js-rr-combined-total').text(fmt(combined));
@@ -325,9 +500,10 @@
                     $('[data-rr-summary="balanced_count"]').text(ok);
                     $('[data-rr-summary="rider_count"]').text(count);
                     $('#rrBalanceCard').toggleClass('is-ok', ok === count && count > 0).toggleClass('is-warn', !(ok === count && count > 0));
+                    syncColumnStyles();
                 }
                 function saveRider(riderId) {
-                    if (! canEdit) return;
+                    if (! canEdit || ! canEditRider(riderId)) return;
                     compute(riderId);
                     refreshSummary();
                     $.ajax({
@@ -342,6 +518,7 @@
                     });
                 }
                 function schedule(riderId) {
+                    if (! canEditRider(riderId)) return;
                     compute(riderId);
                     refreshSummary();
                     clearTimeout(timers[riderId]);
@@ -349,8 +526,63 @@
                 }
 
                 $grid.on('input change', '.js-rr-field, .js-rr-denom', function () {
+                    if ($(this).is('.js-rr-fuel[readonly]')) return;
                     schedule($(this).data('rider'));
                 });
+
+                $grid.on('keydown', '.js-rr-field, .js-rr-denom', function (e) {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    var $el = $(this);
+                    if ($el.is('.js-rr-fuel[readonly]') || $el.is(':disabled')) return;
+                    var riderId = $el.data('rider');
+                    if (!canEdit || !canEditRider(riderId)) return;
+                    clearTimeout(timers[riderId]);
+                    saveRider(riderId);
+                    if ($el.is('.js-rr-fuel')) {
+                        $el.prop('readonly', true);
+                        $grid.find('.js-rr-fuel-unlock[data-rider="' + riderId + '"]').removeClass('is-active');
+                    }
+                    var el = $el.get(0);
+                    if (el) {
+                        if (typeof el.setSelectionRange === 'function') {
+                            var len = String(el.value || '').length;
+                            el.setSelectionRange(len, len);
+                        }
+                        el.blur();
+                    }
+                    if (window.getSelection) {
+                        var sel = window.getSelection();
+                        if (sel && sel.removeAllRanges) sel.removeAllRanges();
+                    }
+                });
+
+                $grid.on('click', '.js-rr-fuel-unlock', function (e) {
+                    e.preventDefault();
+                    if (!canEdit) return;
+                    var riderId = $(this).data('rider');
+                    if (!canEditRider(riderId)) return;
+                    var $btn = $(this);
+                    var $input = $grid.find('.js-rr-fuel[data-rider="' + riderId + '"]');
+                    if (!$input.length || $input.is(':disabled')) return;
+                    $btn.addClass('is-active');
+                    $input.prop('readonly', false);
+                    if (num($input.val()) <= 0 && itemCountOf(riderId) >= 1) {
+                        $input.val(defaultFuel);
+                    }
+                    $input.trigger('focus').select();
+                    refreshSummary();
+                });
+
+                // Ensure default fuel shows in inputs for Delivered riders.
+                $grid.find('.js-rr-fuel').each(function () {
+                    var $input = $(this);
+                    var riderId = $input.data('rider');
+                    if (!$input.is(':disabled') && canEditRider(riderId) && num($input.val()) <= 0 && itemCountOf(riderId) >= 1) {
+                        $input.val(defaultFuel);
+                    }
+                });
+
                 refreshSummary();
         })();
         </script>

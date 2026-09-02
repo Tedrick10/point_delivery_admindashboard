@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\RiderWorkStatusService;
 use App\Services\SuperAdminDashboardService;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -45,6 +46,14 @@ class AppServiceProvider extends ServiceProvider
             $request = request();
             if ($request->getHttpHost()) {
                 URL::forceRootUrl($request->getSchemeAndHttpHost());
+            }
+        }
+
+        if (! $this->app->runningInConsole() && ! $this->app->runningUnitTests()) {
+            try {
+                app(RiderWorkStatusService::class)->resetExpiredOffRiders();
+            } catch (\Throwable $e) {
+                // Ignore if users table is not ready yet.
             }
         }
 

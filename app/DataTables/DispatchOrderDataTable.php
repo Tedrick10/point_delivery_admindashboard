@@ -21,6 +21,7 @@ class DispatchOrderDataTable extends OrderDataTable
             $this->pickupRiders = User::select('id', 'name')
                 ->where('user_type', 'delivery_man')
                 ->where('status', 1)
+                ->availableForAssign()
                 ->orderBy('name')
                 ->get();
         }
@@ -84,7 +85,7 @@ class DispatchOrderDataTable extends OrderDataTable
                 return '<span data-toggle="tooltip" title="' . e($address) . '">' . stringLong($address, 'title', 18) . '</span>';
             })
             ->editColumn('order_count', function ($row) {
-                return 1;
+                return max(0, (int) ($row->total_parcel ?? 0));
             })
             ->editColumn('item_count', function ($row) use ($workflow) {
                 $this->ensureDispatchItemsSynced($row);
@@ -270,6 +271,9 @@ class DispatchOrderDataTable extends OrderDataTable
     public function getBuilderParameters(): array
     {
         $params = parent::getBuilderParameters();
+        // scrollX clones a separate header table; combined with pds-frozen-table it
+        // shifts body cells under the wrong headers on Order List.
+        $params['scrollX'] = false;
         $params['dom'] = '<"pds-dispatch-dt-top" f>rt<"d-flex" <"flex-grow-1" l><"p-2" i><"mt-4" p>><"clear">';
         $params['searching'] = false;
         $params['order'] = [[1, 'desc']];

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Branch;
 use App\Models\RiderRemit;
+use App\Services\RiderRemitAuditService;
 use App\Services\RiderRemitService;
 use Illuminate\Http\Request;
 
@@ -33,6 +34,7 @@ class RiderRemitController extends Controller
             $branchFilter = (string) $branchId;
         }
 
+        $service->ensureOpenRemitDefaults($day, $branchId, (int) auth()->id());
         $sheet = $service->sheet($day, $branchId);
         $pageTitle = __('message.rider_remit_title');
         $assets = [];
@@ -42,6 +44,7 @@ class RiderRemitController extends Controller
         $riders = $sheet['riders'];
         $summary = $sheet['summary'];
         $storeBranchId = $branchId && $branchId > 0 ? $branchId : 0;
+        $defaultFuel = $service->defaultFuelAmount();
 
         return view('order.rider-remit', compact(
             'pageTitle',
@@ -54,8 +57,48 @@ class RiderRemitController extends Controller
             'canEdit',
             'denoms',
             'day',
-            'storeBranchId'
+            'storeBranchId',
+            'defaultFuel'
         ));
+    }
+
+    public function saveDefaultFuel(Request $request, RiderRemitService $service)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $data = $request->validate([
+            'fuel_amount' => 'required|numeric|min:0',
+            'remit_date' => 'nullable|date',
+            'branch_id' => 'nullable|integer|min:0',
+        ]);
+
+        $oldDefault = $service->defaultFuelAmount();
+        $newDefault = $service->setDefaultFuelAmount((float) $data['fuel_amount']);
+
+        $applied = 0;
+        $dayRaw = trim((string) ($data['remit_date'] ?? ''));
+        if ($dayRaw !== '') {
+            $day = $service->parseDate($dayRaw)->toDateString();
+            $branchId = isset($data['branch_id']) ? (int) $data['branch_id'] : null;
+            $forcedBranchId = forcedBranchId(auth()->user());
+            if ($forcedBranchId) {
+                $branchId = $forcedBranchId;
+            }
+            $applied = $service->applyDefaultFuelToOpenRemits(
+                $day,
+                $branchId && $branchId > 0 ? $branchId : null,
+                $oldDefault,
+                $newDefault
+            );
+        }
+
+        return response()->json([
+            'message' => __('message.updated_successfully'),
+            'default_fuel' => $newDefault,
+            'applied' => $applied,
+        ]);
     }
 
     public function save(Request $request, RiderRemitService $service)
@@ -97,6 +140,70 @@ class RiderRemitController extends Controller
             'message' => __('message.updated_successfully'),
             'rider' => $rider,
             'summary' => $sheet['summary'],
+        ]);
+    }
+
+    public function submit(Request $request, RiderRemitService $service)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        if (env('APP_DEMO')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $data = $request->validate([
+            'remit_date' => 'required|date',
+            'branch_id' => 'nullable|integer|min:0',
+            'riders' => 'required|array|min:1',
+            'riders.*.delivery_man_id' => 'required|integer|exists:users,id',
+            'riders.*.prepaid_amount' => 'nullable|numeric|min:0',
+            'riders.*.fuel_amount' => 'nullable|numeric|min:0',
+            'riders.*.fee_amount' => 'nullable|numeric|min:0',
+            'riders.*.kpay_amount' => 'nullable|numeric|min:0',
+            'riders.*.denominations' => 'nullable|array',
+        ]);
+
+        $day = $service->parseDate((string) $data['remit_date'])->toDateString();
+        $branchId = (int) ($data['branch_id'] ?? 0);
+        $forcedBranchId = forcedBranchId(auth()->user());
+        if ($forcedBranchId) {
+            $branchId = $forcedBranchId;
+        }
+
+        $sheet = $service->submitAll(
+            $day,
+            $branchId > 0 ? $branchId : null,
+            $data['riders'],
+            (int) auth()->id()
+        );
+
+        return response()->json([
+            'message' => __('message.rider_remit_submit_success'),
+            'summary' => $sheet['summary'],
+        ]);
+    }
+
+    public function logs(Request $request, RiderRemitService $service, RiderRemitAuditService $audit)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $day = $service->parseDate(trim((string) $request->get('date', now('Asia/Yangon')->format('d-m-Y'))))->toDateString();
+        $branchFilter = $request->get('branch_id', 'all');
+        $branchId = $branchFilter === 'all' || $branchFilter === '' || $branchFilter === null
+            ? 0
+            : (int) $branchFilter;
+
+        $forcedBranchId = forcedBranchId(auth()->user());
+        if ($forcedBranchId) {
+            $branchId = $forcedBranchId;
+        }
+
+        return response()->json([
+            'logs' => $audit->timeline($day, $branchId),
         ]);
     }
 }

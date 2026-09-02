@@ -3,9 +3,16 @@
         <div class="pds-dispatch-to-assign-screen">
             <div class="pds-dispatch-to-assign-topbar">
                 <div class="pds-dispatch-to-assign-topbar-copy">
+                    <span class="pds-dispatch-to-assign-eyebrow">
+                        <i class="fas fa-route" aria-hidden="true"></i>
+                        {{ __('message.order') }}
+                    </span>
                     <h4 class="pds-dispatch-to-assign-heading">{{ $pageTitle ?? __('message.to_assign') }}</h4>
                     <p class="pds-dispatch-to-assign-subtitle">
-                        {{ __('message.item_count') }} = <strong id="toAssignItemCount">{{ $items->count() }}</strong>
+                        <span class="pds-dispatch-to-assign-count-pill">
+                            {{ __('message.item_count') }}
+                            <strong id="toAssignItemCount">{{ $items->count() }}</strong>
+                        </span>
                     </p>
                 </div>
                 <div class="pds-dispatch-to-assign-topbar-actions">
@@ -17,7 +24,7 @@
 
             <div class="pds-dispatch-to-assign-filter">
                 <div class="pds-dispatch-to-assign-filter-grid">
-                    <div class="pds-dispatch-field pds-dispatch-field-sm">
+                    <div class="pds-dispatch-field pds-dispatch-field-sm pds-follow-up-filter-status">
                         <label for="to_assign_status">{{ __('message.status') }}</label>
                         <select id="to_assign_status" class="pds-dispatch-input pds-dispatch-select">
                             <option value="">{{ __('message.all') }}</option>
@@ -35,17 +42,19 @@
                     <div class="pds-dispatch-to-assign-os-filter">
                         <div class="pds-dispatch-field pds-dispatch-field-sm">
                             <label for="to_assign_os_name">{{ __('message.os_name') }}</label>
-                            <input type="text" id="to_assign_os_name" class="pds-dispatch-input" placeholder="{{ __('message.os_name') }}" autocomplete="off">
+                            <div class="pds-follow-up-os-input-wrap">
+                                <input type="text" id="to_assign_os_name" class="pds-dispatch-input" placeholder="{{ __('message.os_name') }}" autocomplete="off">
+                                <button type="button" class="pds-dispatch-to-assign-os-search-btn" id="openToAssignOsSearch" title="{{ __('message.to_find_os_name') }}">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
                         </div>
-                        <button type="button" class="pds-dispatch-to-assign-os-search-btn" id="openToAssignOsSearch" title="{{ __('message.to_find_os_name') }}">
-                            <i class="fas fa-search"></i>
-                        </button>
                     </div>
                     <div class="pds-dispatch-field pds-dispatch-field-sm">
                         <label for="to_assign_pickup_rider">{{ __('message.pickup_rider') }}</label>
                         <input type="text" id="to_assign_pickup_rider" class="pds-dispatch-input" placeholder="{{ __('message.pickup_rider') }}" autocomplete="off">
                     </div>
-                    <div class="pds-dispatch-field pds-dispatch-field-sm">
+                    <div class="pds-dispatch-field pds-dispatch-field-sm pds-follow-up-filter-customer">
                         <label for="to_assign_customer_search">{{ __('message.customer_name') }} / {{ __('message.phone') }}</label>
                         <input type="text" id="to_assign_customer_search" class="pds-dispatch-input" placeholder="{{ __('message.customer_name') }} / {{ __('message.phone') }}" autocomplete="off">
                     </div>
@@ -103,38 +112,43 @@
                                         data-follow-up-status="{{ $workflow->followUpStatusKey($item) }}"
                                     >
                                         <td class="to-assign-row-no">{{ $index + 1 }}</td>
-                                        <td>{{ $osName }}</td>
-                                        <td>{{ $osPhone }}</td>
-                                        <td class="pds-follow-up-address-cell" title="{{ $osAddress }}">{{ stringLong($osAddress, 'title', 28) ?: '-' }}</td>
-                                        <td>{{ $item->customer_name ?: '-' }}</td>
-                                        <td>{{ $item->customer_phone ?: '-' }}</td>
-                                        <td class="pds-follow-up-address-cell" title="{{ $item->customer_address }}">{{ stringLong($item->customer_address ?? '', 'title', 28) ?: '-' }}</td>
-                                        <td>
+                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--name" title="{{ $osName }}">{{ $osName }}</span></td>
+                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--phone">{{ $osPhone }}</span></td>
+                                        <td class="pds-follow-up-address-cell" title="{{ $osAddress }}">
+                                            <span class="pds-follow-up-cell pds-follow-up-cell--address">{{ stringLong($osAddress, 'title', 36) ?: '-' }}</span>
+                                        </td>
+                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--name" title="{{ $item->customer_name }}">{{ $item->customer_name ?: '-' }}</span></td>
+                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--phone">{{ $item->customer_phone ?: '-' }}</span></td>
+                                        <td class="pds-follow-up-address-cell" title="{{ $item->customer_address }}">
+                                            <span class="pds-follow-up-cell pds-follow-up-cell--address">{{ stringLong($item->customer_address ?? '', 'title', 36) ?: '-' }}</span>
+                                        </td>
+                                        <td class="pds-follow-up-status-cell">
                                             @if($order)
                                                 @include('order.dispatch-admin-status', ['order' => $order])
                                             @else
                                                 -
                                             @endif
                                         </td>
-                                        <td>
+                                        <td class="pds-follow-up-status-cell">
                                             @if($order)
                                                 @include('order.dispatch-rider-status', ['order' => $order])
                                             @else
                                                 -
                                             @endif
                                         </td>
-                                        <td>
-                                            <span class="pds-dispatch-status {{ $workflow->followUpItemStatusClass($item) }}">{{ $workflow->followUpItemStatusLabel($item) }}</span>
+                                        <td class="pds-follow-up-status-cell">
+                                            <span class="pds-dispatch-status {{ $workflow->followUpItemStatusClass($item) }}" title="{{ $workflow->followUpItemStatusLabel($item) }}">{{ $workflow->followUpItemStatusLabel($item) }}</span>
                                         </td>
-                                        <td>{{ number_format((float) $item->item_value) }}</td>
-                                        <td class="text-right">{!! formatDispatchDeliAmountHtml($item) !!}</td>
-                                        <td>{{ $pickupRider }}</td>
-                                        <td>{{ $deliveryRider }}</td>
-                                        <td>
+                                        <td class="pds-follow-up-num-cell">{{ number_format((float) $item->item_value) }}</td>
+                                        <td class="text-right pds-follow-up-num-cell">{!! formatDispatchDeliAmountHtml($item) !!}</td>
+                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--rider" title="{{ $pickupRider }}">{{ $pickupRider }}</span></td>
+                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--rider" title="{{ $deliveryRider }}">{{ $deliveryRider }}</span></td>
+                                        <td class="pds-follow-up-actions-cell">
                                             <button type="button"
                                                     class="pds-follow-up-details-btn"
                                                     data-target="#followUpDetails-{{ $item->id }}">
-                                                {{ __('message.details') }}
+                                                <i class="fas fa-eye" aria-hidden="true"></i>
+                                                <span>{{ __('message.details') }}</span>
                                             </button>
                                             <div class="d-none" id="followUpDetails-{{ $item->id }}">
                                                 @include('order.partials._follow_up_details_content', ['item' => $item])

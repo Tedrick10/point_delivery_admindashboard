@@ -12,8 +12,13 @@
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap">
 
         <!-- Styles -->
-        <link rel="stylesheet" href="{{ asset('css/backend.css') }}">
-        <link rel="stylesheet" href="{{ asset('css/admin-dashboard-theme.css') }}">
+        <link rel="stylesheet" href="{{ public_asset_ver('css/backend.css') }}">
+        @php $guestTheme = public_css_inline('css/admin-dashboard-theme.css'); @endphp
+        @if($guestTheme !== '')
+            <style id="pds-admin-theme-inline">{!! $guestTheme !!}</style>
+        @else
+            <link rel="stylesheet" href="{{ public_asset_ver('css/admin-dashboard-theme.css') }}">
+        @endif
 
         @if(mighty_language_direction() == 'rtl')
         <link rel="stylesheet" href="{{ asset('css/rtl.css') }}">

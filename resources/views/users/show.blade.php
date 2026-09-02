@@ -1,229 +1,194 @@
 <x-master-layout>
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-lg-12">
-                <div class="card card-block card-stretch">
-                    <div class="card-body p-0">
-                        <div class="d-flex justify-content-between align-items-center p-3">
-                            <h5 class="font-weight-bold">{{ $pageTitle }}</h5>
-                            <div class="float-right">
-                                <a href="{{ route('users.index') }}" class="float-right btn btn-sm btn-primary m-2 mt-1 p-1"><i class="fa fa-angle-double-left"></i> {{ __('message.back') }}</a>
+    <div class="container-fluid pds-page-wrap pds-motion-enter pds-os-profile-page">
+        <div class="pds-os-profile-hero">
+                <div class="pds-os-profile-hero__copy">
+                    <div class="pds-os-profile-hero__eyebrow">
+                        <span>{{ __('message.online_shop') }}</span>
+                    </div>
+                    <h4 class="pds-os-profile-hero__title">{{ $pageTitle }}</h4>
+                </div>
+            <a href="{{ route('users.index') }}" class="pds-os-profile-back">
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                <span>{{ __('message.back') }}</span>
+            </a>
+        </div>
+
+        <div class="pds-os-profile-screen">
+            <nav class="pds-os-profile-tabs" aria-label="{{ __('message.online_shop') }}">
+                <a href="{{ route('users-view.show', $data->id) }}" class="pds-os-profile-tab {{ $type == 'detail' ? 'is-active': '' }}">{{ __('message.profile') }}</a>
+                <a href="{{ route('users-view.show', [ 'id' => $data->id, 'type' => 'wallethistory']) }}" class="pds-os-profile-tab {{ $type == 'wallethistory' ? 'is-active': '' }}">{{ __('message.wallet') }}</a>
+                <a href="{{ route('users-view.show', [ 'id' => $data->id, 'type' => 'orderhistory']) }}" class="pds-os-profile-tab {{ $type == 'orderhistory' ? 'is-active': '' }}">{{ __('message.order') }}</a>
+                <a href="{{ route('users-view.show', [ 'id' => $data->id, 'type' => 'withdrawrequest']) }}" class="pds-os-profile-tab {{ $type == 'withdrawrequest' ? 'is-active': '' }}">{{ __('message.withdrawrequest') }}</a>
+                <a href="{{ route('users-view.show', [ 'id' => $data->id, 'type' => 'useraddress']) }}" class="pds-os-profile-tab {{ $type == 'useraddress' ? 'is-active': '' }}">{{ __('message.address') }}</a>
+                <a href="{{ route('users-view.show', [ 'id' => $data->id, 'type' => 'claimsinfo']) }}" class="pds-os-profile-tab {{ $type == 'claimsinfo' ? 'is-active': '' }}">{{ __('message.claimsinfo') }}</a>
+            </nav>
+
+            <div class="pds-os-profile-body">
+                @if( $type == 'detail' )
+                    @php
+                        $approval = $data->approval_status ?? 'approved';
+                        $approvalTone = match ($approval) {
+                            'pending' => 'pending',
+                            'rejected' => 'rejected',
+                            default => 'approved',
+                        };
+                    @endphp
+                    <div class="pds-os-profile-grid">
+                        <aside class="pds-os-profile-card">
+                            <div class="pds-os-profile-card__banner"></div>
+                            <div class="pds-os-profile-card__avatar-wrap">
+                                <img class="pds-os-profile-card__avatar profile_image_preview" src="{{ getSingleMedia($data,'profile_image', null) }}" alt="">
                             </div>
+                            <h3 class="pds-os-profile-card__name">{{ optional($data)->name }}</h3>
+                            <span class="pds-os-approval-pill is-{{ $approvalTone }}">{{ __('message.'.$approval) }}</span>
+
+                            <ul class="pds-os-profile-meta">
+                                <li>
+                                    <span class="pds-os-profile-meta__icon"><i class="fas fa-envelope"></i></span>
+                                    <span>{{ auth()->user()->hasRole('admin') ? maskSensitiveInfo('email',optional($data)->email) : maskSensitiveInfo('email',optional($data)->email) }}</span>
+                                </li>
+                                <li>
+                                    <span class="pds-os-profile-meta__icon"><i class="fas fa-phone-alt"></i></span>
+                                    <span>{{ auth()->user()->hasRole('admin') ? maskSensitiveInfo('contact_number',optional($data)->contact_number) : maskSensitiveInfo('contact_number',optional($data)->contact_number) }}</span>
+                                </li>
+                                <li>
+                                    <span class="pds-os-profile-meta__icon"><i class="fas fa-map-marker-alt"></i></span>
+                                    <span>
+                                        {{ auth()->user()->hasRole('admin') ? (optional($data->city)->name ?: '—') : maskSensitiveInfo('city',optional($data->city)->name) }}
+                                        ·
+                                        {{ auth()->user()->hasRole('admin') ? (optional($data->country)->name ?: '—') : maskSensitiveInfo('country',optional($data->country)->name) }}
+                                    </span>
+                                </li>
+                                <li>
+                                    <span class="pds-os-profile-meta__icon"><i class="fas fa-clock"></i></span>
+                                    <span>{{ __('message.last_active') }} · {{ auth()->user()->hasRole('admin') ? (dateAgoFormate($data->last_actived_at) ?: '—') : '—' }}</span>
+                                </li>
+                            </ul>
+
+                            @if(auth()->user()->can('users-edit'))
+                                <div class="pds-os-profile-card__approve">
+                                    <label for="osProfileApproval">{{ __('message.status') }}</label>
+                                    <select
+                                        id="osProfileApproval"
+                                        class="pds-os-approval-select js-os-approval-status"
+                                        data-id="{{ $data->id }}"
+                                        data-url="{{ route('users.approval-status', $data->id) }}"
+                                        data-tone="{{ $approval }}"
+                                    >
+                                        <option value="pending" @selected($approval === 'pending')>{{ __('message.pending') }}</option>
+                                        <option value="approved" @selected($approval === 'approved')>{{ __('message.approved') }}</option>
+                                        <option value="rejected" @selected($approval === 'rejected')>{{ __('message.rejected') }}</option>
+                                    </select>
+                                </div>
+                            @endif
+                        </aside>
+
+                        <div class="pds-os-profile-panels">
+                            <section class="pds-os-profile-panel">
+                                <header class="pds-os-profile-panel__head">
+                                    <h5>{{ __('message.verification_detail')}}</h5>
+                                </header>
+                                <div class="table-responsive">
+                                    <table class="table pds-os-profile-table mb-0" role="grid">
+                                        <thead>
+                                            <tr>
+                                                <th>{{ __('message.type') }}</th>
+                                                <th>{{ __('message.is_auto_verified') }}</th>
+                                                <th>{{ __('message.verified_date') }}</th>
+                                                <th>{{ __('message.action') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>{{__('message.email')}}</td>
+                                                <td>
+                                                    <span class="pds-os-verify-chip {{ $user->is_autoverified_email == 1 ? 'is-yes' : 'is-no' }}">
+                                                        {{ $user->is_autoverified_email == 1 ? __('message.yes') : __('message.no') }}
+                                                    </span>
+                                                </td>
+                                                <td>{{ dateAgoFormate($user->email_verified_at) ?: '—' }}</td>
+                                                <td>
+                                                    @if($user->email_verified_at !=null)
+                                                        <button type="button" class="pds-os-reverify-btn update-verification" data-type="email" data-id="{{ $user->id }}">{{__('message.re_verification')}}</button>
+                                                    @else
+                                                        —
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td>{{__('message.mobile')}}</td>
+                                                <td>
+                                                    <span class="pds-os-verify-chip {{ $user->is_autoverified_mobile == 1 ? 'is-yes' : 'is-no' }}">
+                                                        {{ $user->is_autoverified_mobile == 1 ? __('message.yes') : __('message.no') }}
+                                                    </span>
+                                                </td>
+                                                <td>{{ dateAgoFormate($user->otp_verify_at) ?: '—' }}</td>
+                                                <td>
+                                                    @if($user->otp_verify_at !=null)
+                                                        <button type="button" class="pds-os-reverify-btn update-verification" data-type="mobile" data-id="{{ $user->id }}">{{__('message.re_verification')}}</button>
+                                                    @else
+                                                        —
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <form id="update-form" action="{{ route('update-verification', ['user' => $user]) }}" method="POST" style="display: none;">
+                                        @csrf
+                                        <input type="hidden" name="type" id="update-type">
+                                        <input type="hidden" name="id" id="update-id">
+                                        <input type="hidden" name="confirm" id="update-confirm">
+                                    </form>
+                                </div>
+                            </section>
+
+                            <section class="pds-os-profile-panel">
+                                <header class="pds-os-profile-panel__head">
+                                    <h5>{{ __('message.bank_details')}}</h5>
+                                </header>
+                                @forelse ($bank_detail as $value)
+                                    <div class="pds-os-bank-grid">
+                                        <div>
+                                            <span class="pds-os-bank-label">{{ __('message.bank_name') }}</span>
+                                            <strong>{{ optional($value)->bank_name ?: '—' }}</strong>
+                                        </div>
+                                        <div>
+                                            <span class="pds-os-bank-label">{{ __('message.bank_account_holder_name') }}</span>
+                                            <strong>{{ optional($value)->account_holder_name ?: '—' }}</strong>
+                                        </div>
+                                        <div>
+                                            <span class="pds-os-bank-label">{{ __('message.account_number') }}</span>
+                                            <strong>{{ optional($value)->account_number ?: '—' }}</strong>
+                                        </div>
+                                        <div>
+                                            <span class="pds-os-bank-label">{{ __('message.bank_ifsc_code') }}</span>
+                                            <strong>{{ optional($value)->bank_code ?: '—' }}</strong>
+                                        </div>
+                                        <div>
+                                            <span class="pds-os-bank-label">{{ __('message.bank_address') }}</span>
+                                            <strong>{{ optional($value)->bank_address ?: '—' }}</strong>
+                                        </div>
+                                        <div>
+                                            <span class="pds-os-bank-label">{{ __('message.routing_number') }}</span>
+                                            <strong>{{ optional($value)->routing_number ?: '—' }}</strong>
+                                        </div>
+                                        <div>
+                                            <span class="pds-os-bank-label">{{ __('message.bank_iban') }}</span>
+                                            <strong>{{ optional($value)->bank_iban ?: '—' }}</strong>
+                                        </div>
+                                        <div>
+                                            <span class="pds-os-bank-label">{{ __('message.bank_swift') }}</span>
+                                            <strong>{{ optional($value)->bank_swift ?: '—' }}</strong>
+                                        </div>
+                                    </div>
+                                @empty
+                                    <p class="pds-os-profile-empty">{{ __('message.no_record_found') }}</p>
+                                @endforelse
+                            </section>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col-lg-12">
-                <div class="card">
-                    <div class="card-body">
-                        <ul class="nav nav-tabs" role="tablist">
-                            <li class="nav-item">
-                                <a href="{{ route('users-view.show', $data->id) }}" class="nav-link {{ $type == 'detail' ? 'active': '' }}"> {{ __('message.profile') }} </a>
-                            </li>
-                            <li class="nav-item">
-                                <a href="{{ route('users-view.show', [ 'id' => $data->id, 'type' => 'wallethistory']) }}" class="nav-link {{ $type == 'wallethistory' ? 'active': '' }}"> {{ __('message.wallet') }} </a>
-                            </li>
-                            <li class="nav-item">
-                                <a href="{{ route('users-view.show', [ 'id' => $data->id, 'type' => 'orderhistory']) }}" class="nav-link {{ $type == 'orderhistory' ? 'active': '' }}"> {{ __('message.order') }} </a>
-                            </li>
-                            <li class="nav-item">
-                                <a href="{{ route('users-view.show', [ 'id' => $data->id, 'type' => 'withdrawrequest']) }}" class="nav-link {{ $type == 'withdrawrequest' ? 'active': '' }}"> {{ __('message.withdrawrequest') }} </a>
-                            </li>
-                            <li class="nav-item">
-                                <a href="{{ route('users-view.show', [ 'id' => $data->id, 'type' => 'useraddress']) }}" class="nav-link {{ $type == 'useraddress' ? 'active': '' }}"> {{ __('message.address') }} </a>
-                            </li>
-                            <li class="nav-item">
-                                <a href="{{ route('users-view.show', [ 'id' => $data->id, 'type' => 'claimsinfo']) }}" class="nav-link {{ $type == 'claimsinfo' ? 'active': '' }}"> {{ __('message.claimsinfo') }} </a>
-                            </li>
-                            <li class="nav-item">
-                                <a href="{{ route('users-view.show', [ 'id' => $data->id, 'type' => 'rating']) }}" class="nav-link {{ $type == 'rating' ? 'active': '' }}"> {{ __('message.rating') }} </a>
-                            </li>
-                        </ul>
-                        <div class="tab-content">
-                            <div class="row">
-                                @if( $type == 'detail' )
-                                    <div class="col-lg-4">
-                                        <div class="card card-block p-card">
-                                            <div class="profile-box">
-                                                <div class="profile-card rounded">
-                                                    <img class="rounded-circle avatar-100 d-block mx-auto image-fluid mb-3 profile_image_preview" src=" {{ getSingleMedia($data,'profile_image', null) }}" alt="profile-pic">
-                                                    <h3 class="font-600 text-white text-center mb-0">{{ optional($data)->name }}</h3>
-                                                    <p class="text-white text-center mb-5">
-                                                        @php
-                                                            $status = 'warning';
-                                                            $status_name = 'inactive';
-                                                            switch ($data->status) {
-                                                                case 0:
-                                                                    $status = 'warning';
-                                                                    $status_name = __('message.inactive');
-                                                                    break;
-                                                                case 1:
-                                                                    $status = 'success';
-                                                                    $status_name = __('message.active');
-                                                                    break;
-                                                            }
-                                                        @endphp
-                                                        <span class="text-capitalize badge bg-{{$status}}">{{$status_name}}</span>
-                                                    </p>
-                                                </div>
-                                                <div class="pro-content rounded">
-                                                    <div class="d-flex align-items-center mb-3">
-                                                        <div class="p-icon mr-3">
-                                                            <i class="fas fa-envelope"></i>
-                                                        </div>
-                                                        <p class="mb-0 eml">{{ auth()->user()->hasRole('admin') ? maskSensitiveInfo('email',optional($data)->email) : maskSensitiveInfo('email',optional($data)->email) }}</p>
-                                                    </div>
-                                                    <div class="d-flex align-items-center mb-3">
-                                                        <div class="p-icon mr-3">
-                                                            <i class="fas fa-phone-alt"></i>
-                                                        </div>
-                                                        <p class="mb-0">{{ auth()->user()->hasRole('admin') ? maskSensitiveInfo('contact_number',optional($data)->contact_number) : maskSensitiveInfo('contact_number',optional($data)->contact_number) }}</p>
-                                                    </div>
-                                                    <div class="d-flex align-items-center mb-3">
-                                                        <div class="p-icon mr-3">
-                                                            <i class="fas fa-map"></i>
-                                                        </div>
-                                                        <p class="mb-0">{{ auth()->user()->hasRole('admin') ? optional($data->city)->name : maskSensitiveInfo('city',optional($data->city)->name) }}</p> , <p class="mb-0">{{ auth()->user()->hasRole('admin') ? optional($data->country)->name : maskSensitiveInfo('country',optional($data->country)->name) }}</p>
-                                                    </div>
-                                                    <div class="d-flex align-items-center mb-3">
-                                                        <div class="p-icon mr-3">
-                                                            <i class="fa fa-code-branch"></i>
-                                                        </div>
-                                                        <p class="mb-0">{{ __('message.app_version') . ' : ' . (auth()->user()->hasRole('admin') ? ($data->app_version ? : '0') : '0')}}</p>
-                                                    </div>
-                                                    <div class="d-flex align-items-center mb-3">
-                                                        <div class="p-icon mr-3">
-                                                            <i class="fa fa-cogs"></i>
-                                                        </div>
-                                                        <p class="mb-0">{{ __('message.app_source') . '  : ' . (auth()->user()->hasRole('admin') ? ($data->app_source ? : 'N/A') : 'N/A')}}</p>
-                                                    </div>
-                                                    <div class="d-flex align-items-center mb-3">
-                                                        <div class="p-icon mr-3">
-                                                            <i class="fa-solid fa-clock-rotate-left"></i>
-                                                        </div>
-                                                        <p class="mb-0">{{ __('message.last_active') . '  : ' . (auth()->user()->hasRole('admin') ? (dateAgoFormate($data->last_actived_at) ? : 'N/A') : 'N/A')}}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-8">
-                                        <div class="row">
-                                            <div class="card card-block mr-3">
-                                                <div class="header-title ml-3 mt-3 d-flex justify-content-between align-items-center">
-                                                    <h4 class="card-title mb-0">{{ __('message.verification_detail')}}</h4>
-                                                </div>
-                                                <hr>
-                                                <div class="row col-md-12">
-                                                    <div class="card-body p-0">
-                                                        <div class="table-responsive">
-                                                            <table id="verification-table" class="table mb-0 table-bordered text-center mb-2 ml-1" role="grid">
-                                                                <thead>
-                                                                    <tr>
-                                                                        <th scope='col'>{{ __('message.type') }}</th>
-                                                                        <th scope='col'>{{ __('message.is_auto_verified') }}</th>
-                                                                        <th scope='col'>{{ __('message.verified_date') }}</th>
-                                                                        <th scope='col'>{{ __('message.action') }}</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    <tr>
-                                                                        <td>{{__('message.email')}}</td>
-                                                                        <td>{{ ($user->is_autoverified_email == 1 ? 'yes' :'no') }}</td>
-                                                                        <td>{{ dateAgoFormate($user->email_verified_at) }}</td>
-                                                                        <td>
-                                                                            @if($user->email_verified_at !=null)
-                                                                                <button type="button" class="btn btn-sm btn-primary update-verification" data-type="email" data-id="{{ $user->id }}">{{__('message.re_verification')}}</button>
-                                                                            @else
-                                                                                {{'-'}}
-                                                                            @endif
-                                                                        </td>
-                                                                    </tr>
-                                                                    <tr>
-                                                                        <td>{{__('message.mobile')}}</td>
-                                                                        <td>{{ ($user->is_autoverified_mobile == 1 ? 'yes' :'no') }}</td>
-                                                                        <td>{{ dateAgoFormate($user->otp_verify_at) }}</td>
-                                                                        <td>
-                                                                            @if($user->otp_verify_at !=null)
-                                                                                <button type="button" class="btn btn-sm btn-primary update-verification" data-type="mobile" data-id="{{ $user->id }}">{{__('message.re_verification')}}</button>
-                                                                            @else
-                                                                                {{'-'}}
-                                                                            @endif
-                                                                        </td>
-                                                                    </tr>
-                                                                </tbody>
-                                                            </table>
-                                                            <form id="update-form" action="{{ route('update-verification', ['user' => $user]) }}" method="POST" style="display: none;">
-                                                                @csrf
-                                                                <input type="hidden" name="type" id="update-type">
-                                                                <input type="hidden" name="id" id="update-id">
-                                                                <input type="hidden" name="confirm" id="update-confirm">
-                                                            </form>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="card card-block mr-3">
-                                                <div class="header-title ml-3 mt-3">
-                                                    <h4 class="card-title">{{ __('message.bank_details')}}</h4>
-                                                </div>
-                                                <hr>
-                                                @foreach ($bank_detail  as $value)
-                                                <div class="row">
-                                                    <div class="form-group col-md-3 ">
-                                                        {!! html()->label(__('message.bank_name'))->class('form-control-label text-secondary ml-2') !!}
-                                                        <h6 class="ml-2">{{ optional($value)->bank_name }}</h6>
-                                                    </div>
-
-                                                    <div class="form-group col-md-3">
-                                                        {!! html()->label(__('message.bank_account_holder_name'))->class('form-control-label text-secondary ml-2') !!}
-                                                        <h6 class="ml-2"> {{optional($value)->account_holder_name }}</h6>
-                                                    </div>
-
-                                                    <div class="form-group col-md-3">
-                                                        {!! html()->label(__('message.account_number'))->class('form-control-label text-secondary ml-2') !!}
-                                                        <h6 class="ml-2"> {{optional($value)->account_number }}</h6>
-                                                    </div>
-
-                                                    <div class="form-group col-md-3">
-                                                        {!! html()->label(__('message.bank_ifsc_code'))->class('form-control-label text-secondary ml-2') !!}
-                                                        <h6 class="ml-2"> {{optional($value)->bank_code }}</h6>
-                                                    </div>
-                                                </div>
-                                                <hr>
-                                                <div class="row">
-                                                    <div class="row col-md-12">
-                                                        <div class="form-group col-md-3">
-                                                            {!! html()->label(__('message.bank_address'))->class('form-control-label text-secondary ml-2') !!}
-                                                            <h6 class="ml-2">{{optional($value)->bank_address }}</h6>
-                                                        </div>
-
-                                                        <div class="form-group col-md-3">
-                                                            {!! html()->label(__('message.routing_number'))->class('form-control-label text-secondary ml-2') !!}
-                                                            <h6 class="ml-2"> {{optional($value)->routing_number }}</h6>
-                                                        </div>
-
-                                                        <div class="form-group col-md-3">
-                                                            {!! html()->label(__('message.bank_iban'))->class('form-control-label text-secondary ml-2') !!}
-                                                            <h6 class="ml-2"> {{optional($value)->bank_iban }}</h6>
-                                                        </div>
-
-                                                        <div class="form-group col-md-3">
-                                                            {!! html()->label(__('message.bank_swift'))->class('form-control-label text-secondary ml-2') !!}
-                                                            <h6 class="ml-2"> {{optional($value)->bank_swift }}</h6>
-                                                        </div>
-                                                            <hr>
-                                                    </div>
-                                                </div>
-                                                @endforeach
-                                            </div>
-                                        </div>
-                                    </div>
-                                @endif
+                @else
+                    <div class="row">
                                 @if( $type == 'wallethistory' )
                                     <div class="col-md-12">
                                         <div class="row">
@@ -642,24 +607,13 @@
                                     </div>
                                 </div>
                                 @endif
-                                @if( $type == 'rating' )
-                                    <div class="card card-block">
-                                        <div class="card-body">
-                                            {{ $dataTable->table(['class' => 'table  w-100'],false) }}
-                                        </div>
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
                     </div>
-                </div>
+                @endif
             </div>
         </div>
     </div>
     @section('bottom_script')
-    {{ in_array($type,['rating']) ? $dataTable->scripts() : '' }}
     <script>
-
            $("#basic-table").DataTable({
                 "dom":  '<"row align-items-center"<"col-md-2"><"col-md-6" B><"col-md-4"f>><"table-responsive my-3" rt><"d-flex" <"flex-grow-1" l><"p-2" i><"mt-4" p>><"clear">',
                 "order": [[0, "desc"]]
@@ -684,6 +638,38 @@
                         } else if (result.isDenied) {
                             $('#update-confirm').val('no');
                         }
+                    });
+                });
+
+                $(document).on('change', '.js-os-approval-status', function () {
+                    var $el = $(this);
+                    $el.prop('disabled', true);
+                    $el.attr('data-tone', $el.val());
+                    $.ajax({
+                        url: $el.data('url'),
+                        method: 'POST',
+                        data: {
+                            _token: '{{ csrf_token() }}',
+                            approval_status: $el.val()
+                        }
+                    }).done(function (res) {
+                        if (typeof SnackBar === 'function') {
+                            SnackBar({ message: res.message || 'Updated', status: 'success' });
+                        }
+                        var tone = res.approval_status || $el.val();
+                        $('.pds-os-approval-pill')
+                            .removeClass('is-pending is-approved is-rejected')
+                            .addClass('is-' + tone)
+                            .text(res.label || tone);
+                    }).fail(function (xhr) {
+                        var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Update failed';
+                        if (typeof SnackBar === 'function') {
+                            SnackBar({ message: msg, status: 'error' });
+                        } else {
+                            alert(msg);
+                        }
+                    }).always(function () {
+                        $el.prop('disabled', false);
                     });
                 });
             });

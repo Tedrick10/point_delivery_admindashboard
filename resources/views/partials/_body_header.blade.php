@@ -11,8 +11,6 @@
                 </a>
             </div>
 
-            @include('partials._header_main_nav')
-
             <div class="mm-search-bar device-search m-auto"></div>
             <div class="d-flex align-items-center pds-topbar-actions">
                 @if(SettingData('emergency','alert_icon') == 1)

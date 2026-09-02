@@ -42,6 +42,7 @@ class UserResource extends JsonResource
             'email'                     => $this->email,
             'username'                  => $this->username,
             'status'                    => $this->status,
+            'approval_status'           => $this->approval_status ?? 'approved',
             'user_type'                 => $this->user_type,
             'country_id'                => $this->country_id,
             'country_name'              => optional($this->country)->name,

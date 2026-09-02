@@ -41,6 +41,10 @@ class ClientController extends Controller
         $pageTitle = __('message.list_form_title', ['form' => __('message.online_shop')]);
         $auth_user = authSession();
         $assets = ['datatable'];
+        $approvalTab = request('status');
+        if (! in_array($approvalTab, ['pending', 'approved', 'rejected'], true)) {
+            return redirect()->route('users.index', array_merge(request()->query(), ['status' => 'pending']));
+        }
         $params = null;
         $params = [
             'city_id' => request('city_id') ?? null,
@@ -58,19 +62,26 @@ class ClientController extends Controller
         $selectedCountryId = request('country_id');
         $country = Country::pluck('name', 'id')->prepend(__('message.select_name', ['select' => __('message.country')]), '')->toArray();
 
-        if(request('status') == 'active') {
-            $pageTitle = __('message.active_list_form_title',['form' => __('message.online_shop')] );
-        } elseif (request('status') == 'inactive') {
-            $pageTitle = __('message.inactive_list_form_title',['form' => __('message.online_shop')] );
-        } elseif (request('status') == 'pending') {
-            $pageTitle = __('message.pending_list_form_title',['form' => __('message.online_shop')] );
+        $osCountQuery = User::query()->where('user_type', 'client')->withTrashed();
+        $approvalCounts = [
+            'pending' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_PENDING)->count(),
+            'approved' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_APPROVED)->count(),
+            'rejected' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_REJECTED)->count(),
+        ];
+
+        if ($approvalTab === 'approved') {
+            $pageTitle = __('message.active_list_form_title', ['form' => __('message.online_shop')]);
+        } elseif ($approvalTab === 'rejected') {
+            $pageTitle = __('message.inactive_list_form_title', ['form' => __('message.online_shop')]);
+        } else {
+            $pageTitle = __('message.pending_list_form_title', ['form' => __('message.online_shop')]);
         }
 
-        $reset_file_button = '<a href="' . route('users.index') . '" class=" mr-1 mt-0 btn btn-sm btn-info text-dark mt-3 pt-2 pb-2"><i class="ri-repeat-line" style="font-size:12px"></i> ' . __('message.reset_filter') . '</a>';
-        $button = $auth_user->can('users-add') ? '<a href="' . route('users.create') . '" class="float-right btn btn-sm btn-primary"><i class="fa fa-plus-circle"></i> ' . __('message.add_form_title', ['form' => __('message.online_shop')]) . '</a>' : '';
-        $multi_checkbox_delete = $auth_user->can('users-delete') ? '<button id="deleteSelectedBtn" checked-title = "users-checked" class="float-left btn btn-sm ">' . __('message.delete_selected') . '</button>' : '';
-        $export = $auth_user->can('users-add') ? '<a href="'.route('user.excel').'" class="float-right btn btn-sm btn-success loadRemoteModel mr-2"><i class="fa fa-download"></i> '. __('message.export').'</a>' : '';
-        return $dataTable->render('global.user-filter', compact('assets', 'pageTitle', 'button', 'auth_user', 'multi_checkbox_delete','params','reset_file_button','selectedCityId','cities','selectedCountryId','country','export'));
+        $reset_file_button = '<a href="' . route('users.index', ['status' => $approvalTab]) . '" class="btn btn-sm btn-outline-primary"><i class="ri-repeat-line"></i> ' . __('message.reset_filter') . '</a>';
+        $button = $auth_user->can('users-add') ? '<a href="' . route('users.create') . '" class="btn btn-sm btn-primary pds-os-list-add"><i class="fa fa-plus"></i> ' . __('message.add_form_title', ['form' => __('message.online_shop')]) . '</a>' : '';
+        $multi_checkbox_delete = $auth_user->can('users-delete') ? '<button id="deleteSelectedBtn" checked-title = "users-checked" class="btn btn-sm btn-outline-danger">' . __('message.delete_selected') . '</button>' : '';
+        $export = $auth_user->can('users-add') ? '<a href="'.route('user.excel').'" class="btn btn-sm btn-outline-success loadRemoteModel"><i class="fa fa-download"></i> '. __('message.export').'</a>' : '';
+        return $dataTable->render('global.user-filter', compact('assets', 'pageTitle', 'button', 'auth_user', 'multi_checkbox_delete','params','reset_file_button','selectedCityId','cities','selectedCountryId','country','export', 'approvalTab', 'approvalCounts'));
     }
     public function referenceindex(ReferenceDataTable $dataTable)
     {
@@ -190,6 +201,7 @@ class ClientController extends Controller
             'country_id' => $city->country_id,
             'user_type' => 'client',
             'status' => 1,
+            'approval_status' => User::APPROVAL_APPROVED,
             'created_by_admin' => 1,
             'is_temp_password' => 1,
             'email_verified_at' => now(),
@@ -282,6 +294,13 @@ class ClientController extends Controller
         $payload['is_temp_password'] = $request->is_temp_password ?? 1;
         $payload['is_vip'] = 0;
 
+        $approvalStatus = $request->input('approval_status', User::APPROVAL_APPROVED);
+        if (! in_array($approvalStatus, User::approvalStatuses(), true)) {
+            $approvalStatus = User::APPROVAL_APPROVED;
+        }
+        $payload['approval_status'] = $approvalStatus;
+        $payload['status'] = $approvalStatus === User::APPROVAL_APPROVED ? 1 : 0;
+
         if ($is_email_verification == 0) {
             $payload['email_verified_at'] = now();
         }
@@ -314,7 +333,7 @@ class ClientController extends Controller
             return redirect()->back()->withErrors($message);
         }
         $user = User::where('id', $id)->first();
-        $pageTitle = __('message.view_form_title', ['form' => __('message.online_shop')]);
+        $pageTitle = $user->name ?: __('message.online_shop');
         $data = User::findOrFail($id);
         $profileImage = getSingleMedia($data, 'profile_image');
         $type = request('type') ?? 'detail';
@@ -424,6 +443,12 @@ class ClientController extends Controller
         $payload['address'] = buildUserAddressFromProfile($osProfile);
         $payload['os_profile'] = $osProfile;
 
+        if ($request->filled('approval_status') && in_array($request->approval_status, User::approvalStatuses(), true)) {
+            $user->applyApprovalStatus($request->approval_status);
+            $payload['approval_status'] = $user->approval_status;
+            $payload['status'] = $user->status;
+        }
+
         if ($request->filled('password')) {
             $payload['password'] = bcrypt($request->password);
             $payload['is_temp_password'] = 0;
@@ -442,6 +467,41 @@ class ClientController extends Controller
             return json_message_response($message);
         }
         return redirect()->route('users.index')->withSuccess($message);
+    }
+
+    public function updateApprovalStatus(Request $request, $id)
+    {
+        if (! auth()->user()->can('users-edit')) {
+            return response()->json([
+                'status' => false,
+                'message' => __('message.demo_permission_denied'),
+            ], 403);
+        }
+
+        $request->validate([
+            'approval_status' => 'required|in:pending,approved,rejected',
+        ]);
+
+        $user = User::where('id', $id)->where('user_type', 'client')->first();
+        if (! $user) {
+            return response()->json([
+                'status' => false,
+                'message' => __('message.not_found_entry', ['name' => __('message.online_shop')]),
+            ], 404);
+        }
+
+        $user->applyApprovalStatus($request->approval_status);
+        $user->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => __('message.approved_reject_form', [
+                'form' => __('message.online_shop'),
+                'status' => __('message.'.$user->approval_status),
+            ]),
+            'approval_status' => $user->approval_status,
+            'label' => __('message.'.$user->approval_status),
+        ]);
     }
 
     /**
@@ -567,15 +627,18 @@ class ClientController extends Controller
         $request['username'] = $request->username ?? stristr($request->email, "@", true) . rand(100, 1000);
         $request['display_name'] = $request['name'];
         $request['user_type'] = 'client';
+        $request['approval_status'] = User::APPROVAL_PENDING;
+        $request['status'] = 0;
+        $request['created_by_admin'] = 0;
 
         $result = User::create($request->all());
         $result->assignRole($request->user_type);
-        $message = __('message.save_form', ['form' => __('message.online_shop')]);
+        $message = __('message.os_signup_pending_approval');
         if ($request->is('api/*')) {
             return json_message_response($message);
         }
         $notification = array(
-            'message' => 'Successfully Register',
+            'message' => $message,
             'alert-type' => 'success'
         );
 

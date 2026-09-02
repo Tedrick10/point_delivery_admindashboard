@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\SuperAdmin;
 
 use App\Http\Controllers\Controller;
+use App\Models\HrStaff;
+use App\Services\HrPayrollService;
+use App\Services\RiderRemitService;
 use App\Services\SuperAdminDashboardService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -31,6 +34,32 @@ class ScreenController extends Controller
         $period = $dashboard->periodFromRequest($request);
         $ctx = $dashboard->screenContext($screen, $period);
 
+        $lateFineDefaults = null;
+        $lateFineStaff = collect();
+        $riderSalaryStaff = collect();
+        if ($screen === 'late-fine') {
+            $payroll = app(HrPayrollService::class);
+            $lateFineDefaults = [
+                'fine_per_minute' => $payroll->defaultFinePerMinute(),
+                'absent_day_rate' => $payroll->defaultAbsentDayRate(),
+            ];
+            $lateFineStaff = HrStaff::query()
+                ->active()
+                ->orderBy('staff_group')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'name', 'staff_group', 'allowance_minutes', 'sort_order']);
+        } elseif ($screen === 'rider-salary') {
+            $payroll = app(HrPayrollService::class);
+            $payroll->syncStaffFromAccounts();
+            $riderSalaryStaff = HrStaff::query()
+                ->active()
+                ->where('staff_group', 'rider')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'name', 'staff_group', 'way_rate', 'sort_order']);
+        }
+
         return view('super-admin.screens.show', [
             'screenKey' => $screen,
             'screen' => $screens[$screen],
@@ -38,6 +67,12 @@ class ScreenController extends Controller
             'branchRows' => $ctx['branchRows'],
             'monthLabel' => $ctx['monthLabel'],
             'saPeriod' => $period,
+            'defaultFuel' => $screen === 'rider-remit'
+                ? app(RiderRemitService::class)->defaultFuelAmount()
+                : null,
+            'lateFineDefaults' => $lateFineDefaults,
+            'lateFineStaff' => $lateFineStaff,
+            'riderSalaryStaff' => $riderSalaryStaff,
         ]);
     }
 }

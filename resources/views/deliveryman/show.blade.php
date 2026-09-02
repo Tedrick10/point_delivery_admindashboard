@@ -36,9 +36,6 @@
                             <li class="nav-item">
                                 <a href="{{ route('deliveryman-view.show', [ 'id' => $data->id, 'type' => 'vehicle_information']) }}" class="nav-link {{ $type == 'vehicle_information' ? 'active': '' }}"> {{ __('message.vehicle_information') }} </a>
                             </li>
-                            <li class="nav-item">
-                                <a href="{{ route('deliveryman-view.show', [ 'id' => $data->id, 'type' => 'rating']) }}" class="nav-link {{ $type == 'rating' ? 'active': '' }}"> {{ __('message.rating') }} </a>
-                            </li>
                         </ul>
                         <div class="tab-content">
                             <div class="row">
@@ -49,23 +46,6 @@
                                                 <div class="profile-card rounded">
                                                     <img class="rounded-circle avatar-100 d-block mx-auto image-fluid mb-3 profile_image_preview" src="{{ getSingleMedia($data,'profile_image', null) }}" alt="profile-pic">
                                                     <h3 class="font-600 text-white text-center mb-0">{{ optional($data)->name }}</h3>
-                                                    <p class="text-white text-center mb-5">
-                                                        @php
-                                                            $status = 'warning';
-                                                            $status_name = 'inactive';
-                                                            switch ($data->status) {
-                                                                case 0:
-                                                                    $status = 'warning';
-                                                                    $status_name = __('message.inactive');
-                                                                    break;
-                                                                case 1:
-                                                                    $status = 'success';
-                                                                    $status_name = __('message.active');
-                                                                    break;
-                                                            }
-                                                        @endphp
-                                                        <span class="text-capitalize badge bg-{{$status}}">{{$status_name}}</span>
-                                                    </p>
                                                 </div>
                                                 <div class="pro-content rounded">
                                                     <div class="d-flex align-items-center mb-3">
@@ -85,12 +65,6 @@
                                                             <i class="fas fa-map"></i>
                                                         </div>
                                                         <p class="mb-0">{{ auth()->user()->hasRole('admin') ? optional($data->city)->name : maskSensitiveInfo('city',optional($data->city)->name) }}</p> , <p class="mb-0">{{ auth()->user()->hasRole('admin') ? optional($data->country)->name : maskSensitiveInfo('country',optional($data->country)->name) }}</p>
-                                                    </div>
-                                                    <div class="d-flex align-items-center mb-3">
-                                                        <div class="p-icon mr-3">
-                                                            <i class="fa fa-code-branch"></i>
-                                                        </div>
-                                                        <p class="mb-0">{{ __('message.app_version') . ' : ' . (auth()->user()->hasRole('admin') ? ($data->app_version ? : '0') : '0')}}</p>
                                                     </div>
                                                     <div class="d-flex align-items-center mb-3">
                                                         <div class="p-icon mr-3">

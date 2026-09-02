@@ -8,6 +8,7 @@ use App\Models\EmployeeType;
 use App\Http\Requests\UserRequest;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class SubAdminController extends Controller
 {
@@ -44,7 +45,7 @@ class SubAdminController extends Controller
             'role' => $roleFilter,
         ]));
         $button = $auth_user->can('subadmin-add') ? '<a href="' . $createRoute . '" class="float-right btn btn-sm btn-primary"><i class="fa fa-plus-circle"></i> ' . __('message.add_form_title', ['form' => __('message.sub_admin')]) . '</a>' : '';
-        return $dataTable->render('global.datatable', compact('assets', 'pageTitle', 'button', 'auth_user','multi_checkbox_delete', 'employeeType', 'roleFilter'));
+        return $dataTable->render('subadmin.index', compact('assets', 'pageTitle', 'button', 'auth_user','multi_checkbox_delete', 'employeeType', 'roleFilter'));
     }
 
     /**
@@ -150,32 +151,49 @@ class SubAdminController extends Controller
             $message = __('message.demo_permission_denied');
             return redirect()->back()->withErrors($message);
         }
-        $user = User::find($id);
+        $user = User::whereNotIn('user_type', ['admin', 'client', 'delivery_man'])->find($id);
 
-        $user->removeRole($user->user_type);
         $message = __('message.not_found_entry', ['name' => __('message.sub_admin')]);
-        if($user == null) {
-            return response()->json(['status' => false, 'message' => $message ]);
+        if ($user == null) {
+            return response()->json(['status' => false, 'message' => $message]);
         }
 
-        $user->fill($request->all())->update();
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'user_type' => 'required|string|max:100',
+            'contact_number' => 'nullable|string|max:30',
+            'password' => 'nullable|string|min:6',
+            'profile_image' => 'nullable|image',
+        ]);
 
-        if (isset($request->profile_image) && $request->profile_image != null) {
+        $user->removeRole($user->user_type);
+
+        $payload = [
+            'name' => $data['name'],
+            'user_type' => $data['user_type'],
+            'contact_number' => $data['contact_number'] ?? $user->contact_number,
+        ];
+
+        if (! empty($data['password'])) {
+            $payload['password'] = bcrypt($data['password']);
+            $payload['is_temp_password'] = 0;
+        }
+
+        $user->fill($payload)->update();
+
+        if ($request->hasFile('profile_image')) {
             $user->clearMediaCollection('profile_image');
             $user->addMediaFromRequest('profile_image')->toMediaCollection('profile_image');
         }
 
-        $user->assignRole($request['user_type']);
+        $user->assignRole($data['user_type']);
 
-        $message = __('message.update_form',[ 'form' => __('message.sub_admin') ]);
+        $message = __('message.update_form', ['form' => __('message.sub_admin')]);
 
         if ($request->is('api/*')) {
             return json_message_response($message);
         }
 
-        if(auth()->check()){
-           return redirect()->route('sub-admin.index')->withSuccess($message);
-        }
         return redirect()->route('sub-admin.index')->withSuccess($message);
     }
 
@@ -242,5 +260,57 @@ class SubAdminController extends Controller
         }
 
         return redirect()->route('sub-admin.index')->withSuccess($message);
+    }
+
+    /**
+     * Employee List On/Off (rest day). Off auto-returns On at 12:01 AM next day.
+     * Each Off day increments Office Salary နားရက် by 1.
+     */
+    public function updateWorkStatus(Request $request, $id)
+    {
+        if (! auth()->user()->can('subadmin-edit') && ! auth()->user()->can('users-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        if (env('APP_DEMO')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $request->validate([
+            'work_on' => 'required|boolean',
+        ]);
+
+        $employee = User::query()
+            ->whereNotIn('user_type', ['admin', 'client', 'delivery_man', 'super_admin'])
+            ->whereNull('deleted_at')
+            ->findOrFail($id);
+
+        $workOn = $request->boolean('work_on');
+        $today = now('Asia/Yangon')->toDateString();
+        $alreadyOffToday = ! $workOn
+            && Schema::hasColumn('users', 'rider_work_off_date')
+            && $employee->rider_work_off_date
+            && $employee->rider_work_off_date->toDateString() === $today
+            && ! (bool) ($employee->rider_work_on ?? true);
+
+        $employee->rider_work_on = $workOn;
+        if (Schema::hasColumn('users', 'rider_work_off_date')) {
+            $employee->rider_work_off_date = $workOn ? null : $today;
+        }
+        $employee->save();
+
+        $restDays = null;
+        if (! $workOn && ! $alreadyOffToday) {
+            $restDays = app(\App\Services\HrPayrollService::class)->incrementRestDayForUser($employee);
+        }
+
+        return response()->json([
+            'message' => __('message.employee_work_status_updated'),
+            'work_on' => (bool) $employee->isRiderWorkOn(),
+            'label' => $employee->isRiderWorkOn()
+                ? __('message.rider_work_on')
+                : __('message.rider_work_off'),
+            'rest_days' => $restDays,
+        ]);
     }
 }

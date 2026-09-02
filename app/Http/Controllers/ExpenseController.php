@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\ExpenseCard;
 use App\Models\ExpenseItem;
 use App\Models\ExpenseSummary;
-use App\Models\RiderRemit;
 use App\Services\ExpenseRiderFuelSyncService;
 use App\Services\ExpenseSummaryService;
 use Carbon\Carbon;
@@ -151,19 +150,19 @@ class ExpenseController extends Controller
         }
 
         try {
-            $day = Carbon::parse((string) $request->get('date', now('Asia/Yangon')->toDateString()))
+            $expenseDay = Carbon::parse((string) $request->get('date', now('Asia/Yangon')->toDateString()))
                 ->toDateString();
         } catch (\Throwable $e) {
-            $day = now('Asia/Yangon')->toDateString();
+            $expenseDay = now('Asia/Yangon')->toDateString();
         }
 
-        $total = round((float) RiderRemit::query()
-            ->whereDate('remit_date', $day)
-            ->sum('fuel_amount'), 2);
+        $fuelSync = app(ExpenseRiderFuelSyncService::class);
+        $total = $fuelSync->fuelTotalForExpenseDay($expenseDay);
 
         return response()->json([
-            'date' => $day,
-            'subject' => app(ExpenseRiderFuelSyncService::class)->subject(),
+            'date' => $expenseDay,
+            'remit_date' => $fuelSync->remitDateForExpenseDay($expenseDay),
+            'subject' => $fuelSync->subject(),
             'amount' => $total,
         ]);
     }
@@ -193,7 +192,7 @@ class ExpenseController extends Controller
                 ]);
 
                 $this->syncItems($card, $data['items']);
-                app(ExpenseRiderFuelSyncService::class)->syncDate($data['expense_date'], auth()->id());
+                app(ExpenseRiderFuelSyncService::class)->syncExpenseDate($data['expense_date'], auth()->id());
                 $card->recalculateTotal();
 
                 return $card->fresh('items');
@@ -216,6 +215,9 @@ class ExpenseController extends Controller
 
         $data = $this->validatedPayload($request);
         $card = ExpenseCard::query()->findOrFail($id);
+        if ($card->isGenerated()) {
+            return response()->json(['message' => __('message.expense_summary_card_locked')], 422);
+        }
 
         try {
             $card = DB::transaction(function () use ($card, $data) {
@@ -235,7 +237,7 @@ class ExpenseController extends Controller
                 // Manual rows from form; Rider ဆီဖိုး is re-synced from remits below.
                 ExpenseItem::query()->where('expense_card_id', $card->id)->delete();
                 $this->syncItems($card, $data['items']);
-                app(ExpenseRiderFuelSyncService::class)->syncDate($data['expense_date'], auth()->id());
+                app(ExpenseRiderFuelSyncService::class)->syncExpenseDate($data['expense_date'], auth()->id());
                 $card->recalculateTotal();
 
                 return $card->fresh('items');
@@ -257,8 +259,11 @@ class ExpenseController extends Controller
         }
 
         $card = ExpenseCard::query()->findOrFail($id);
+        if ($card->isGenerated()) {
+            return response()->json(['message' => __('message.expense_summary_card_locked')], 422);
+        }
+
         DB::transaction(function () use ($card) {
-            ExpenseSummary::query()->where('expense_card_id', $card->id)->delete();
             $card->delete();
         });
 
@@ -274,6 +279,14 @@ class ExpenseController extends Controller
         }
 
         $card = ExpenseCard::query()->with('items')->findOrFail($id);
+
+        // Generate only from the next Yangon calendar day (e.g. 2nd's card → from 3rd).
+        $expenseDay = $card->expense_date?->copy()->timezone('Asia/Yangon')->toDateString();
+        $today = now('Asia/Yangon')->toDateString();
+        if (! $expenseDay || $today <= $expenseDay) {
+            return response()->json(['message' => __('message.expense_summary_generate_next_day')], 422);
+        }
+
         $summary = $summaryService->generateFromCard($card, auth()->id());
 
         return response()->json([
@@ -320,7 +333,9 @@ class ExpenseController extends Controller
             if ($uploaded instanceof UploadedFile) {
                 $image = $this->storeItemImage($uploaded);
             } elseif ($image === '' || $image === ExpenseItem::DEMO_IMAGE) {
-                $image = null;
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    "items.$index.image" => [__('message.expenses_image_required')],
+                ]);
             }
 
             $items[] = [

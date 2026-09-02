@@ -15,12 +15,12 @@
             ['name' => 'Yangon', 'name_mm' => 'ရန်ကုန်', 'nrc_state' => 'Yangon'],
         ];
     }
-    $defaultFromBranchName = config('dispatch_item_cities.default_from_branch', 'MDY');
+    $defaultFromBranchName = config('dispatch_item_cities.default_from_branch', 'MDY To MDY');
     $defaultToBranchName = config('dispatch_item_cities.default_to_branch', $defaultFromBranchName);
-    $mdyBranch = $branchCities->firstWhere('name', $defaultFromBranchName);
-    $defaultToBranch = $branchCities->firstWhere('name', $defaultToBranchName) ?? $mdyBranch;
-    $defaultBranchId = $mdyBranch->id ?? null;
-    $defaultToBranchId = $defaultToBranch->id ?? $defaultBranchId;
+    $defaultBranchId = resolveDefaultDispatchBranchId($defaultFromBranchName);
+    $defaultToBranchId = resolveDefaultDispatchBranchId($defaultToBranchName) ?: $defaultBranchId;
+    $mdyBranch = $defaultBranchId ? $branchCities->firstWhere('id', $defaultBranchId) : null;
+    $defaultToBranch = $defaultToBranchId ? $branchCities->firstWhere('id', $defaultToBranchId) : $mdyBranch;
     $defaultDeliveryCity = config('dispatch_item_cities.default_delivery_city', 'Mandalay');
     $defaultTownship = config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်');
     $receivedDate = old('received_date', $isEdit && $item->received_date

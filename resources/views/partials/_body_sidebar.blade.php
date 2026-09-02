@@ -297,6 +297,68 @@
                 ->prepend('<i class="fa fa-user-tie"></i>')
                 ->link->attr(['class' => '']);
 
+            // My Salary — visible to office accounts (own salary)
+            $menu
+                ->add('<span>' . __('message.hr_my_salary_title') . '</span>', [
+                    'route' => 'hr.my-salary.index',
+                ])
+                ->prepend('<i class="fas fa-wallet"></i>')
+                ->link->attr(['class' => '']);
+
+            // HR / Payroll (admin)
+            $menu
+                ->add('<span>' . __('message.hr_payroll') . '</span>', ['class' => ''])
+                ->prepend('<i class="fas fa-users-cog"></i>')
+                ->nickname('hrpayroll')
+                ->data('permission', 'hr-payroll-list')
+                ->link->attr(['class' => ''])
+                ->href('#hrpayroll');
+
+            $menu->hrpayroll
+                ->add('<span>' . __('message.hr_late_fine_title') . '</span>', [
+                    'class' => 'sidebar-layout',
+                    'route' => 'hr.late-fine.index',
+                ])
+                ->data('permission', 'hr-payroll-list')
+                ->prepend('<i class="fas fa-user-clock"></i>')
+                ->link->attr(['class' => '']);
+
+            $menu->hrpayroll
+                ->add('<span>' . __('message.hr_office_salary_title') . '</span>', [
+                    'class' => 'sidebar-layout',
+                    'route' => 'hr.office-salary.index',
+                ])
+                ->data('permission', 'hr-payroll-list')
+                ->prepend('<i class="fas fa-wallet"></i>')
+                ->link->attr(['class' => '']);
+
+            $menu->hrpayroll
+                ->add('<span>' . __('message.hr_rider_salary_title') . '</span>', [
+                    'class' => 'sidebar-layout',
+                    'route' => 'hr.rider-salary.index',
+                ])
+                ->data('permission', 'hr-payroll-list')
+                ->prepend('<i class="fas fa-motorcycle"></i>')
+                ->link->attr(['class' => '']);
+
+            // Account Creation
+            $menu
+                ->add('<span>' . __('message.account_creation') . '</span>', [
+                    'route' => 'sub-admin.index',
+                ])
+                ->data('permission', 'subadmin-list')
+                ->prepend('<i class="fas fa-user-plus"></i>')
+                ->link->attr(['class' => '']);
+
+            // Roles & Permission (combined)
+            $menu
+                ->add('<span>' . __('message.roles_and_permission') . '</span>', [
+                    'route' => 'permission.index',
+                ])
+                ->data('permission', 'permission-list')
+                ->prepend('<i class="fas fa-user-shield"></i>')
+                ->link->attr(['class' => '']);
+
             // Terms & Privacy
             $menu
                 ->add('<span>' . __('message.terms_condition') . '</span>', [

@@ -19,6 +19,8 @@ class RiderRemit extends Model
         'fee_amount',
         'denominations',
         'kpay_amount',
+        'is_off',
+        'submitted_at',
         'updated_by',
     ];
 
@@ -34,6 +36,8 @@ class RiderRemit extends Model
             'fee_amount' => 'double',
             'denominations' => 'array',
             'kpay_amount' => 'double',
+            'is_off' => 'boolean',
+            'submitted_at' => 'datetime',
             'updated_by' => 'integer',
         ];
     }
@@ -79,5 +83,10 @@ class RiderRemit extends Model
     public function isBalanced(): bool
     {
         return abs($this->combined() - $this->remaining()) < 0.51;
+    }
+
+    public function isRemitOff(): bool
+    {
+        return (bool) $this->is_off && $this->submitted_at === null;
     }
 }

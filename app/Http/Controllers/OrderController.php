@@ -144,6 +144,53 @@ class OrderController extends Controller
         ]);
     }
 
+    public function dispatchItemsDeliAudit($id, DispatchOrderAuditService $audit)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $order = Order::findOrFail($id);
+        $entries = $audit->deliAmountTimelineForOrder($order);
+
+        return response()->json([
+            'order_id' => (int) $order->id,
+            'entries' => $entries->values(),
+        ]);
+    }
+
+    public function dispatchDeliAudit(Request $request, DispatchOrderAuditService $audit)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $yangonToday = now('Asia/Yangon')->format('d-m-Y');
+        $fromRaw = trim((string) $request->get('from_date', $yangonToday));
+        $toRaw = trim((string) $request->get('to_date', $fromRaw !== '' ? $fromRaw : $yangonToday));
+        if ($fromRaw === '') {
+            $fromRaw = $yangonToday;
+        }
+        if ($toRaw === '') {
+            $toRaw = $fromRaw;
+        }
+
+        $fromDay = $this->parseDispatchDateInput($fromRaw)->toDateString();
+        $toDay = $this->parseDispatchDateInput($toRaw)->toDateString();
+        if ($toDay < $fromDay) {
+            $toDay = $fromDay;
+            $toRaw = $fromRaw;
+        }
+
+        $entries = $audit->deliAmountTimelineForRange($fromDay, $toDay);
+
+        return response()->json([
+            'from_date' => $fromRaw,
+            'to_date' => $toRaw,
+            'entries' => $entries->values(),
+        ]);
+    }
+
     public function orderprintindex(OrderPrintDataTable $dataTable)
     {
         $pageTitle = __('message.list_form_title', ['form' => __('message.print_order')]);
@@ -228,12 +275,19 @@ class OrderController extends Controller
             'address' => $request->os_address,
         ];
 
+        // Delivery/customer details are filled per item — never copy OS pickup into delivery.
+        $deliveryPoint = [
+            'name' => '',
+            'contact_number' => '',
+            'address' => '',
+        ];
+
         // Admin New Order → Text Order so it appears in the User App "စာဖြင့်" list
         // and the OS account can continue filling parcel item details.
         $data = [
             'client_id' => $request->client_id,
             'pickup_point' => $pickupPoint,
-            'delivery_point' => $pickupPoint,
+            'delivery_point' => $deliveryPoint,
             'is_text_order' => 1,
             'is_photo_order' => 0,
             'is_shop_order' => 0,
@@ -431,6 +485,10 @@ class OrderController extends Controller
 
         if (!$rider) {
             return response()->json(['message' => __('message.not_found_entry', ['name' => __('message.delivery_man')])], 422);
+        }
+
+        if (! $rider->isRiderWorkOn()) {
+            return response()->json(['message' => __('message.rider_work_off_assign_blocked')], 422);
         }
 
         $pickupService = app(\App\Services\PickupParcelDispatchService::class);
@@ -637,6 +695,10 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.not_found_entry', ['name' => __('message.delivery_man')])], 422);
         }
 
+        if (! $rider->isRiderWorkOn()) {
+            return response()->json(['message' => __('message.rider_work_off_assign_blocked')], 422);
+        }
+
         $updated = DispatchOrderItem::query()
             ->whereIn('id', $request->item_ids)
             ->where('status', 'assigned')
@@ -772,6 +834,10 @@ class OrderController extends Controller
     /**
      * Admin Rider List — per-rider Assigned / On Way / Delivered / Pending item counts.
      */
+    /**
+     * Admin Rider List — status counts per rider for a day (default: Yangon today).
+     * From–To can widen the window; empty request dates fall back to today.
+     */
     public function dispatchRiderList(Request $request)
     {
         if (! auth()->user()->can('order-list')) {
@@ -781,20 +847,29 @@ class OrderController extends Controller
         }
 
         $statuses = ['courier_assigned', 'courier_departed', 'pending', 'completed'];
-        $yangonToday = Carbon::now('Asia/Yangon')->format('d-m-Y');
+        $yangonToday = now('Asia/Yangon')->format('d-m-Y');
         $fromDateRaw = trim((string) $request->get('from_date', $yangonToday));
-        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw));
+        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw !== '' ? $fromDateRaw : $yangonToday));
+        if ($fromDateRaw === '') {
+            $fromDateRaw = $yangonToday;
+        }
+        if ($toDateRaw === '') {
+            $toDateRaw = $fromDateRaw;
+        }
+        $riderFilter = trim((string) $request->get('rider_id', 'all'));
+        if ($riderFilter === '') {
+            $riderFilter = 'all';
+        }
+
         $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
         $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
         if ($toDay < $fromDay) {
             $toDay = $fromDay;
             $toDateRaw = $fromDateRaw;
         }
+        $hasDateFilter = true;
 
-        $riderFilter = trim((string) $request->get('rider_id', 'all'));
-        $statusFilter = trim((string) $request->get('status', 'active'));
-
-        $countRows = DispatchOrderItem::query()
+        $countQuery = DispatchOrderItem::query()
             ->selectRaw("
                 delivery_man_id,
                 SUM(CASE WHEN status = 'courier_assigned' THEN 1 ELSE 0 END) as courier_assigned,
@@ -808,24 +883,10 @@ class OrderController extends Controller
             ->whereNotNull('delivery_man_id')
             ->whereIn('status', $statuses)
             ->where(function ($dateQuery) use ($fromDay, $toDay) {
-                $dateQuery->whereBetween('received_date', [$fromDay, $toDay])
-                    ->orWhere(function ($fallback) use ($fromDay, $toDay) {
-                        $fallback->whereNull('received_date')
-                            ->where(function ($assigned) use ($fromDay, $toDay) {
-                                $assigned->where(function ($q) use ($fromDay, $toDay) {
-                                    $q->whereNotNull('assigned_at')
-                                        ->whereDate('assigned_at', '>=', $fromDay)
-                                        ->whereDate('assigned_at', '<=', $toDay);
-                                })->orWhere(function ($q) use ($fromDay, $toDay) {
-                                    $q->whereNull('assigned_at')
-                                        ->whereDate('created_at', '>=', $fromDay)
-                                        ->whereDate('created_at', '<=', $toDay);
-                                });
-                            });
-                    });
-            })
-            ->groupBy('delivery_man_id')
-            ->get();
+                $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
+            });
+
+        $countRows = $countQuery->groupBy('delivery_man_id')->get();
 
         $countsByRider = [];
         foreach ($countRows as $row) {
@@ -843,16 +904,13 @@ class OrderController extends Controller
 
         $riderQuery = User::query()
             ->where('user_type', 'delivery_man')
+            ->where('status', 1)
             ->whereIn('id', array_keys($countsByRider) ?: [0])
             ->withAvg('rating as average_rating', 'rating')
             ->withCount('rating as ratings_count')
             ->orderBy('name');
 
-        if ($statusFilter === 'active') {
-            $riderQuery->where('status', 1);
-        }
-
-        if ($riderFilter !== '' && $riderFilter !== 'all' && is_numeric($riderFilter)) {
+        if ($riderFilter !== 'all' && is_numeric($riderFilter)) {
             $riderQuery->where('id', (int) $riderFilter);
         }
 
@@ -874,14 +932,11 @@ class OrderController extends Controller
                 'id' => $rider->id,
                 'name' => $rider->name,
                 'phone' => $rider->riderAssignedPhone() ?: '-',
-                'status' => (int) $rider->status,
                 'counts' => $counts,
                 'average_rating' => $avg,
                 'ratings_count' => $ratingCount,
             ];
-        })->sortByDesc(function ($rider) {
-            return ((float) $rider->average_rating * 1000) + (int) $rider->ratings_count;
-        })->values();
+        })->sortBy('name')->values();
 
         $riderOptions = User::query()
             ->where('user_type', 'delivery_man')
@@ -903,9 +958,9 @@ class OrderController extends Controller
             'filterFromDate',
             'filterToDate',
             'riderFilter',
-            'statusFilter',
             'fromDay',
             'toDay',
+            'hasDateFilter',
             'riderOfMonthUrl'
         ));
     }
@@ -953,15 +1008,22 @@ class OrderController extends Controller
                 ->withErrors(__('message.not_found_entry', ['name' => __('message.delivery_man')]));
         }
 
-        $yangonToday = Carbon::now('Asia/Yangon')->format('d-m-Y');
+        $yangonToday = now('Asia/Yangon')->format('d-m-Y');
         $fromDateRaw = trim((string) $request->get('from_date', $yangonToday));
-        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw));
+        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw !== '' ? $fromDateRaw : $yangonToday));
+        if ($fromDateRaw === '') {
+            $fromDateRaw = $yangonToday;
+        }
+        if ($toDateRaw === '') {
+            $toDateRaw = $fromDateRaw;
+        }
         $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
         $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
         if ($toDay < $fromDay) {
             $toDay = $fromDay;
             $toDateRaw = $fromDateRaw;
         }
+        $hasDateFilter = true;
 
         $search = trim((string) $request->get('search', ''));
 
@@ -969,24 +1031,10 @@ class OrderController extends Controller
             ->where('delivery_man_id', $rider->id)
             ->where('status', $queryStatus)
             ->with(['order.client', 'fromBranch', 'toBranch', 'deliveryMan', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia'])
+            ->orderByDesc('id')
             ->where(function ($dateQuery) use ($fromDay, $toDay) {
-                $dateQuery->whereBetween('received_date', [$fromDay, $toDay])
-                    ->orWhere(function ($fallback) use ($fromDay, $toDay) {
-                        $fallback->whereNull('received_date')
-                            ->where(function ($assigned) use ($fromDay, $toDay) {
-                                $assigned->where(function ($q) use ($fromDay, $toDay) {
-                                    $q->whereNotNull('assigned_at')
-                                        ->whereDate('assigned_at', '>=', $fromDay)
-                                        ->whereDate('assigned_at', '<=', $toDay);
-                                })->orWhere(function ($q) use ($fromDay, $toDay) {
-                                    $q->whereNull('assigned_at')
-                                        ->whereDate('created_at', '>=', $fromDay)
-                                        ->whereDate('created_at', '<=', $toDay);
-                                });
-                            });
-                    });
-            })
-            ->orderByDesc('id');
+                $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
+            });
 
         if ($status === 'delivered') {
             $itemsQuery->whereNull('admin_completed_at');
@@ -1219,6 +1267,9 @@ class OrderController extends Controller
                 $fill['delivery_locked'] = true;
                 $fill['delivered_type'] = $deliveredType;
                 $fill['delivered_photo_id'] = $deliveredPhotoId;
+                $fill['rider_remit_at'] = null;
+                $fill['delivered_at'] = now();
+                $fill['rider_remit_date'] = resolveRiderRemitDate((int) ($item->delivery_man_id ?? 0));
                 if ($deliveredType === 'gate' && $gateAmount !== null) {
                     $fill['gate_amount'] = $gateAmount;
                 }
@@ -1433,16 +1484,7 @@ class OrderController extends Controller
             return $buildOsRow($osId, $receiveItems);
         })->filter()->sortBy(static fn ($row) => mb_strtolower($row->name), SORT_NATURAL)->values();
 
-        // Demo rows when a tab has no real unfinished settlements (UI preview).
-        if ($payToOsRows->isEmpty()) {
-            $payToOsRows = $this->demoOsSettlementRows('pay');
-        }
-        if ($receiveFromOsRows->isEmpty()) {
-            $receiveFromOsRows = $this->demoOsSettlementRows('receive');
-        }
         $rows = $payToOsRows->concat($receiveFromOsRows)->values();
-        $usingOsSettlementDemo = $payToOsRows->contains(fn ($r) => ! empty($r->is_demo))
-            || $receiveFromOsRows->contains(fn ($r) => ! empty($r->is_demo));
 
         $osOptions = User::query()
             ->where('user_type', 'client')
@@ -1468,112 +1510,8 @@ class OrderController extends Controller
             'fromDay',
             'toDay',
             'osFilter',
-            'slipCompany',
-            'usingOsSettlementDemo'
+            'slipCompany'
         ));
-    }
-
-    /**
-     * Sample OS settlement rows for empty pay / receive tabs.
-     *
-     * @return \Illuminate\Support\Collection<int, object>
-     */
-    protected function demoOsSettlementRows(string $section)
-    {
-        $proofUrl = asset('images/demo/os-settlement-proof.svg');
-
-        if ($section === 'receive') {
-            return collect([
-                (object) [
-                    'id' => -9101,
-                    'name' => 'Demo OS · Mingalar Market (MDY)',
-                    'phone' => '09-700-111-001',
-                    'amount' => 185000,
-                    'kpay_name' => '',
-                    'kpay_no' => '',
-                    'kpay_slip_url' => $proofUrl,
-                    'has_kpay_slip' => true,
-                    'item_count' => 8,
-                    'is_finished' => false,
-                    'batch_id' => null,
-                    'is_demo' => true,
-                ],
-                (object) [
-                    'id' => -9102,
-                    'name' => 'Demo OS · Golden Gate Shop',
-                    'phone' => '09-700-111-002',
-                    'amount' => 94500,
-                    'kpay_name' => '',
-                    'kpay_no' => '',
-                    'kpay_slip_url' => null,
-                    'has_kpay_slip' => false,
-                    'item_count' => 4,
-                    'is_finished' => false,
-                    'batch_id' => null,
-                    'is_demo' => true,
-                ],
-                (object) [
-                    'id' => -9103,
-                    'name' => 'Demo OS · City Mart Express',
-                    'phone' => '09-700-111-003',
-                    'amount' => 262000,
-                    'kpay_name' => '',
-                    'kpay_no' => '',
-                    'kpay_slip_url' => $proofUrl,
-                    'has_kpay_slip' => true,
-                    'item_count' => 12,
-                    'is_finished' => false,
-                    'batch_id' => null,
-                    'is_demo' => true,
-                ],
-            ]);
-        }
-
-        // pay → amount negative (admin pays OS)
-        return collect([
-            (object) [
-                'id' => -9001,
-                'name' => 'Demo OS · Zin Min Oo (Yangon)',
-                'phone' => '09-250-100-111',
-                'amount' => -125000,
-                'kpay_name' => 'Zin Min Oo',
-                'kpay_no' => '09-250-100-111',
-                'kpay_slip_url' => $proofUrl,
-                'has_kpay_slip' => true,
-                'item_count' => 6,
-                'is_finished' => false,
-                'batch_id' => null,
-                'is_demo' => true,
-            ],
-            (object) [
-                'id' => -9002,
-                'name' => 'Demo OS · Aye Chan Store',
-                'phone' => '09-450-200-222',
-                'amount' => -78500,
-                'kpay_name' => 'Aye Chan',
-                'kpay_no' => '09-450-200-222',
-                'kpay_slip_url' => null,
-                'has_kpay_slip' => false,
-                'item_count' => 3,
-                'is_finished' => false,
-                'batch_id' => null,
-                'is_demo' => true,
-            ],
-            (object) [
-                'id' => -9003,
-                'name' => 'Demo OS · Shwe Pyi Fashion',
-                'phone' => '09-780-300-333',
-                'amount' => -210000,
-                'kpay_name' => 'Shwe Pyi',
-                'kpay_no' => '09-780-300-333',
-                'kpay_slip_url' => $proofUrl,
-                'has_kpay_slip' => true,
-                'item_count' => 9,
-                'is_finished' => false,
-                'batch_id' => null,
-                'is_demo' => true,
-            ],
-        ]);
     }
 
     public function dispatchOsSettlementSlipPreview(Request $request, $osId)
@@ -1583,7 +1521,7 @@ class OrderController extends Controller
         }
 
         if ((int) $osId <= 0) {
-            return response()->json(['message' => __('message.os_settlement_demo_action_blocked')], 422);
+            return response()->json(['message' => __('message.something_went_wrong')], 422);
         }
 
         $yangonToday = Carbon::now('Asia/Yangon')->format('d-m-Y');
@@ -1663,7 +1601,7 @@ class OrderController extends Controller
         }
 
         if ((int) $osId <= 0) {
-            return response()->json(['message' => __('message.os_settlement_demo_action_blocked')], 422);
+            return response()->json(['message' => __('message.something_went_wrong')], 422);
         }
 
         $request->validate([
@@ -1697,7 +1635,7 @@ class OrderController extends Controller
         }
 
         if ((int) $osId <= 0) {
-            return response()->json(['message' => __('message.os_settlement_demo_action_blocked')], 422);
+            return response()->json(['message' => __('message.something_went_wrong')], 422);
         }
 
         $request->validate([
@@ -2846,11 +2784,75 @@ class OrderController extends Controller
         }
     }
 
+    /**
+     * Rider List date filter (From–To inclusive) — day-by-day window.
+     *
+     * Delivered / Completed / Finished: dated activity in range.
+     * Assigned / On Way / Pending: also include still-open items that started
+     * on or before toDay (so On Way keeps showing on later days until delivered).
+     */
+    private function applyRiderListDateFilter($dateQuery, string $fromDay, string $toDay): void
+    {
+        $dateQuery->whereBetween('received_date', [$fromDay, $toDay])
+            ->orWhere(function ($assigned) use ($fromDay, $toDay) {
+                $assigned->whereNotNull('assigned_at')
+                    ->whereDate('assigned_at', '>=', $fromDay)
+                    ->whereDate('assigned_at', '<=', $toDay);
+            })
+            ->orWhere(function ($onWay) use ($fromDay, $toDay) {
+                $onWay->where('status', 'courier_departed')
+                    ->whereDate('updated_at', '>=', $fromDay)
+                    ->whereDate('updated_at', '<=', $toDay);
+            })
+            ->orWhere(function ($delivered) use ($fromDay, $toDay) {
+                $delivered->where('status', 'completed')
+                    ->where(function ($when) use ($fromDay, $toDay) {
+                        $when->where(function ($d) use ($fromDay, $toDay) {
+                            $d->whereNotNull('delivered_at')
+                                ->whereDate('delivered_at', '>=', $fromDay)
+                                ->whereDate('delivered_at', '<=', $toDay);
+                        })->orWhere(function ($r) use ($fromDay, $toDay) {
+                            $r->whereNotNull('rider_remit_date')
+                                ->whereDate('rider_remit_date', '>=', $fromDay)
+                                ->whereDate('rider_remit_date', '<=', $toDay);
+                        })->orWhere(function ($c) use ($fromDay, $toDay) {
+                            $c->whereNotNull('admin_completed_at')
+                                ->whereDate('admin_completed_at', '>=', $fromDay)
+                                ->whereDate('admin_completed_at', '<=', $toDay);
+                        });
+                    });
+            })
+            ->orWhere(function ($fallback) use ($fromDay, $toDay) {
+                $fallback->whereNull('received_date')
+                    ->whereNull('assigned_at')
+                    ->whereDate('created_at', '>=', $fromDay)
+                    ->whereDate('created_at', '<=', $toDay);
+            })
+            // Still-open Assigned / On Way / Pending carried into later day views.
+            ->orWhere(function ($open) use ($toDay) {
+                $open->whereIn('status', ['courier_assigned', 'courier_departed', 'pending'])
+                    ->where(function ($started) use ($toDay) {
+                        $started->where(function ($a) use ($toDay) {
+                            $a->whereNotNull('assigned_at')
+                                ->whereDate('assigned_at', '<=', $toDay);
+                        })->orWhere(function ($r) use ($toDay) {
+                            $r->whereNotNull('received_date')
+                                ->whereDate('received_date', '<=', $toDay);
+                        })->orWhere(function ($c) use ($toDay) {
+                            $c->whereNull('assigned_at')
+                                ->whereNull('received_date')
+                                ->whereDate('created_at', '<=', $toDay);
+                        });
+                    });
+            });
+    }
+
     private function getDispatchPickupRiders()
     {
         return User::select('id', 'name')
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->availableForAssign()
             ->orderBy('name')
             ->get();
     }
@@ -3947,6 +3949,7 @@ class OrderController extends Controller
         $deliveryMenQuery = User::where('city_id', $order->city_id)
             ->where('status', 1)
             ->where('user_type', 'delivery_man')
+            ->availableForAssign()
             ->where(function ($query) {
                 $query->whereNotNull('email_verified_at')
                     ->whereNotNull('otp_verify_at')

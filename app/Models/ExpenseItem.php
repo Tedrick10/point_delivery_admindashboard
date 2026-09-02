@@ -22,18 +22,23 @@ class ExpenseItem extends Model
 
     public function hasImage(): bool
     {
-        $path = trim((string) ($this->image ?? ''));
+        return $this->imagePath() !== '';
+    }
+
+    public function hasUploadedImage(): bool
+    {
+        $path = $this->imagePath();
 
         return $path !== '' && $path !== self::DEMO_IMAGE;
     }
 
     public function imageUrl(): ?string
     {
-        if (! $this->hasImage()) {
+        $path = $this->imagePath();
+        // Never fall back to the demo receipt — users must upload a real image.
+        if ($path === '' || $path === self::DEMO_IMAGE) {
             return null;
         }
-
-        $path = trim((string) $this->image);
 
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
             return $path;
@@ -44,6 +49,11 @@ class ExpenseItem extends Model
         }
 
         return asset('storage/'.$path);
+    }
+
+    private function imagePath(): string
+    {
+        return trim((string) ($this->image ?? ''));
     }
 
     protected $casts = [

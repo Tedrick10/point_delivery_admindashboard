@@ -103,28 +103,50 @@
                         <p>{{ __('message.no_record_found') }}</p>
                     </div>
                 @else
-                    <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-daily-check-shell">
+                    <div class="pds-frozen-table pds-daily-check-shell" id="dailyCheckFrozen">
+                        @php
+                            $dcCols = [
+                                ['w' => '56', 'class' => '', 'label' => __('message.no')],
+                                ['w' => '130', 'class' => '', 'label' => __('message.received_date')],
+                                ['w' => '220', 'class' => '', 'label' => __('message.name')],
+                                ['w' => '160', 'class' => '', 'label' => __('message.invoice_number')],
+                                ['w' => '110', 'class' => '', 'label' => __('message.item_count')],
+                                ['w' => '120', 'class' => 'text-right', 'label' => __('message.advance_paid')],
+                                ['w' => '110', 'class' => 'text-right', 'label' => __('message.amount')],
+                                ['w' => '170', 'class' => 'text-right', 'label' => __('message.os_to_pay')],
+                                ['w' => '120', 'class' => 'text-right', 'label' => __('message.deli_amount')],
+                                ['w' => '90', 'class' => 'text-right', 'label' => __('message.gate')],
+                                ['w' => '90', 'class' => '', 'label' => __('message.user')],
+                                ['w' => '170', 'class' => '', 'label' => __('message.date')],
+                                ['w' => '130', 'class' => '', 'label' => __('message.remitted_date')],
+                            ];
+                            if ($mode !== 'all') {
+                                $dcCols[] = ['w' => '200', 'class' => '', 'label' => __('message.action')];
+                            }
+                        @endphp
+                        <div class="pds-frozen-table__head">
+                            <table class="table pds-rider-list-table pds-daily-check-table">
+                                <colgroup>
+                                    @foreach($dcCols as $col)
+                                        <col style="width: {{ $col['w'] }}px">
+                                    @endforeach
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        @foreach($dcCols as $col)
+                                            <th class="{{ $col['class'] }}">{{ $col['label'] }}</th>
+                                        @endforeach
+                                    </tr>
+                                </thead>
+                            </table>
+                        </div>
+                        <div class="pds-frozen-table__body">
                         <table class="table pds-rider-list-table pds-daily-check-table" id="dailyCheckTable">
-                            <thead>
-                                <tr>
-                                    <th>{{ __('message.no') }}</th>
-                                    <th>{{ __('message.received_date') }}</th>
-                                    <th>{{ __('message.name') }}</th>
-                                    <th>{{ __('message.invoice_number') }}</th>
-                                    <th>{{ __('message.item_count') }}</th>
-                                    <th class="text-right">{{ __('message.advance_paid') }}</th>
-                                    <th class="text-right">{{ __('message.amount') }}</th>
-                                    <th class="text-right">{{ __('message.os_to_pay') }}</th>
-                                    <th class="text-right">{{ __('message.deli_amount') }}</th>
-                                    <th class="text-right">{{ __('message.gate') }}</th>
-                                    <th>{{ __('message.user') }}</th>
-                                    <th>{{ __('message.date') }}</th>
-                                    <th>{{ __('message.remitted_date') }}</th>
-                                    @if($mode !== 'all')
-                                        <th>{{ __('message.action') }}</th>
-                                    @endif
-                                </tr>
-                            </thead>
+                            <colgroup>
+                                @foreach($dcCols as $col)
+                                    <col style="width: {{ $col['w'] }}px">
+                                @endforeach
+                            </colgroup>
                             <tbody>
                                 @foreach($rows as $index => $row)
                                     <tr data-invoice-id="{{ $row->id }}" data-party-type="{{ $row->party_type }}">
@@ -221,6 +243,7 @@
                                 </tr>
                             </tfoot>
                         </table>
+                        </div>
                     </div>
                 @endif
             </div>
@@ -312,6 +335,17 @@
             var $ = window.jQuery;
             if (window.__pdsDailyCheckBound) return;
             window.__pdsDailyCheckBound = true;
+
+            (function bindFrozenDailyCheckHeader() {
+                var root = document.getElementById('dailyCheckFrozen');
+                if (!root) return;
+                var headWrap = root.querySelector('.pds-frozen-table__head');
+                var bodyWrap = root.querySelector('.pds-frozen-table__body');
+                if (!headWrap || !bodyWrap) return;
+                bodyWrap.addEventListener('scroll', function () {
+                    headWrap.scrollLeft = bodyWrap.scrollLeft;
+                });
+            })();
 
             var remitDateUrl = null;
             var remitPhotoUrl = null;

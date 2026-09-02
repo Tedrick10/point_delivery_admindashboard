@@ -1,8 +1,8 @@
 <?php
 
 return [
-    'default_from_branch' => 'MDY',
-    'default_to_branch' => 'MDY',
+    'default_from_branch' => 'MDY To MDY',
+    'default_to_branch' => 'MDY To MDY',
     'default_delivery_city' => 'Mandalay',
     'default_township' => 'ချမ်းမြသာစည်',
     'cities' => [

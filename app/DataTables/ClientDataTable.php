@@ -23,8 +23,8 @@ class ClientDataTable extends DataTable
             ->editColumn('checkbox', function ($row) {
                 return '<input type="checkbox" class=" select-table-row-checked-values" id="datatable-row-' . $row->id . '" name="datatable_ids[]" value="' . $row->id . '" onclick="dataTableRowCheck(' . $row->id . ')">';
             })
-            ->editColumn('status', function ($data) {
-                $action_type = 'status';
+            ->editColumn('approval_status', function ($data) {
+                $action_type = 'approval_status';
                 $deleted_at = null;
                 return view('users.action', compact('data', 'action_type', 'deleted_at'))->render();
             })
@@ -36,9 +36,6 @@ class ClientDataTable extends DataTable
             })
             ->editColumn('contact_number', function($query) {
                 return auth()->user()->hasRole('admin') ? maskSensitiveInfo('contact_number', $query->contact_number) : maskSensitiveInfo('contact_number', $query->contact_number);
-            })
-            ->addColumn('rating',function($query){
-                return count($query->rating) > 0 ? (float) number_format(max($query->rating->avg('rating'),0), 2) : 0;
             })
             ->order(function ($query) {
                 if (request()->has('order')) {
@@ -62,8 +59,22 @@ class ClientDataTable extends DataTable
                 return optional($query->country)->name ?? '-';
             })
             ->addColumn('name', function ($row) {
+                $img = getSingleMedia($row, 'profile_image');
+                $fallback = asset('images/user/1.jpg');
+                $name = e($row->name);
+                $url = route('users.show', $row->id);
+                $phone = e(maskSensitiveInfo('contact_number', $row->contact_number) ?: '-');
 
-                return $row->user_type === 'client' ? '<a href="' . route('users.show', $row->id) . '" class="link-success">' . $row->name . '</a>' : '-' ;
+                return '<div class="pds-table-user">'
+                    . '<img src="' . e($img ?: $fallback) . '" alt="" class="pds-table-user__avatar">'
+                    . '<div class="pds-table-user__meta">'
+                    . '<a href="' . $url . '" class="pds-table-user__name">' . $name . '</a>'
+                    . '<span class="pds-table-user__sub">' . $phone . '</span>'
+                    . '</div>'
+                    . '</div>';
+            })
+            ->filterColumn('name', function ($query, $keyword) {
+                $query->where('name', 'like', "%{$keyword}%");
             })
             ->editColumn('otp_verify_at', function ($data) {
                 if ($data->otp_verify_at !== null) {
@@ -75,10 +86,6 @@ class ClientDataTable extends DataTable
                     return view('users.action', compact('data', 'action_type', 'deleted_at'))->render();
                 }
             })
-           ->editColumn('app_version',function($row){
-                return $row->app_version ?? '-';
-            })
-
             ->addColumn('action', function ($row) {
                 $id = $row->id;
                 $action_type = 'action';
@@ -117,7 +124,7 @@ class ClientDataTable extends DataTable
                     return view('users.action', compact('data', 'action_type', 'deleted_at'))->render();
                 }
             })
-            ->rawColumns(['checkbox', 'action', 'status','name','otp_verify_at','is_autoverified_mobile','is_autoverified_email']);
+            ->rawColumns(['checkbox', 'action', 'approval_status','name','otp_verify_at','is_autoverified_mobile','is_autoverified_email']);
     }
 
     /**
@@ -134,26 +141,19 @@ class ClientDataTable extends DataTable
         $lastActive = request()->input('last_actived_at');
         $status = request('status');
         switch ($status) {
-            case '':
-                break;
-
             case 'active':
-                $model = $model->where('status', 1)->whereNull('deleted_at')
-                        ->whereNotNull('email_verified_at')
-                        ->whereNotNull('otp_verify_at');
+            case 'approved':
+                $model = $model->where('approval_status', User::APPROVAL_APPROVED);
                 break;
             case 'inactive':
-                $model = $model->where('status', 0);
+            case 'rejected':
+                $model = $model->where('approval_status', User::APPROVAL_REJECTED);
                 break;
-                case 'pending':
-                    $model = $model->where('status', 1)->where(function ($query) {
-                        $query->where('is_autoverified_email', 0)
-                            ->whereNull('email_verified_at')
-                            ->orWhere('is_autoverified_mobile', 0)
-                            ->whereNull('otp_verify_at');
-                    });
-                    break;
+            case 'pending':
+                $model = $model->where('approval_status', User::APPROVAL_PENDING);
+                break;
             default:
+                $model = $model->where('approval_status', User::APPROVAL_PENDING);
                 break;
         }
 
@@ -186,7 +186,6 @@ class ClientDataTable extends DataTable
      */
     protected function getColumns()
     {
-        $status = request('status');
         $columns = [
             Column::make('checkbox')
                 ->searchable(false)
@@ -198,45 +197,32 @@ class ClientDataTable extends DataTable
                 ->title(__('message.srno'))
                 ->addClass('text-capitalize')
                 ->orderable(false),
-            ['data' => 'name', 'name' => 'name', 'title' => __('message.name'),  'class' => 'text-capitalize'],
+            ['data' => 'name', 'name' => 'name', 'title' => __('message.name'),  'class' => 'text-capitalize', 'orderable' => false],
             ['data' => 'city_id', 'name' => 'city_id', 'title' => __('message.city')],
             ['data' => 'country_id', 'name' => 'country_id', 'title' => __('message.country')],
-            ['data' => 'contact_number', 'name' => 'contact_number', 'title' => __('message.contact_number')],
             ['data' => 'created_at', 'name' => 'created_at', 'title' => __('message.created_at')],
-            ['data' => 'last_actived_at', 'name' => 'last_actived_at', 'title' => __('message.last_actived_at')],
-            ['data' => 'rating', 'name' => 'rating', 'title' => __('message.rating')],
-            ['data' => 'app_version', 'name' => 'app_version', 'title' => __('message.app_version')],
-
+            ['data' => 'last_actived_at', 'name' => 'last_actived_at', 'title' => __('message.last_active')],
+            Column::make('approval_status', 'approval_status')
+                ->title(__('message.status'))
+                ->visible(true)
+                ->orderable(false),
+            Column::computed('action')
+                ->exportable(false)
+                ->printable(false)
+                ->title(__('message.action'))
+                ->width(100)
+                ->addClass('text-center hide-search'),
         ];
-        if ($status === 'active' || $status === 'inactive') {
-            $columns[] = Column::make('status', 'status')
-                ->title(__('message.status'))
-                ->visible(true)
-                ->orderable(false);
-        } elseif ($status === 'pending') {
-            $columns[] = Column::make('is_autoverified_email', 'is_autoverified_email')
-                ->title(__('message.email') . ' ' . __('message.is_verify'))
-                ->visible(true)
-                ->orderable(false);
-
-            $columns[] = Column::make('is_autoverified_mobile', 'is_autoverified_mobile')
-                ->title(__('message.mobile') . ' ' . __('message.is_verify'))
-                ->visible(true)
-                ->orderable(false);
-        } else {
-            $columns[] = Column::make('status', 'status')
-                ->title(__('message.status'))
-                ->visible(true)
-                ->orderable(false);
-        }
-
-        $columns[] = Column::computed('action')
-            ->exportable(false)
-            ->printable(false)
-            ->title(__('message.action'))
-            ->width(60)
-            ->addClass('text-center hide-search');
 
         return $columns;
+    }
+
+    public function getBuilderParameters(): array
+    {
+        $params = parent::getBuilderParameters();
+        $params['scrollX'] = false;
+        $params['autoWidth'] = false;
+
+        return $params;
     }
 }

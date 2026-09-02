@@ -26,6 +26,7 @@ class DispatchOrderAuditService
     public const TYPE_PRE_PICKUP_MOVED = 'dispatch_audit_pre_pickup_moved';
     public const TYPE_MOVED_TO_ASSIGN_100 = 'dispatch_audit_moved_to_assign_100';
     public const TYPE_DELIVERY_ITEM_STATUS = 'dispatch_audit_delivery_item_status';
+    public const TYPE_DELI_AMOUNT = 'dispatch_audit_deli_amount';
 
     public function record(Order $order, string $type, string $message, array $data = []): OrderHistory
     {
@@ -105,6 +106,8 @@ class DispatchOrderAuditService
             'action' => $actionLabel,
             'actor_role' => 'admin',
         ]);
+
+        $this->maybeLogDeliAmountChange($order, $item, $before, $after, $admin, 'admin');
     }
 
     public function logRiderItemInfo(
@@ -140,6 +143,8 @@ class DispatchOrderAuditService
             'action' => $actionLabel,
             'actor_role' => 'rider',
         ]);
+
+        $this->maybeLogDeliAmountChange($order, $item, $before, $after, $rider, 'rider');
     }
 
     public function logPickupCompleted(Order $order, ?User $rider = null): void
@@ -456,6 +461,285 @@ class DispatchOrderAuditService
             'action' => $actionLabel,
             'actor_role' => 'os',
         ]);
+
+        $this->maybeLogDeliAmountChange($order, $item, $before, $after, $client, 'os');
+    }
+
+    /**
+     * Dedicated DeliAmount audit entry (also shown in Order List DeliAmount Audit Log).
+     */
+    public function maybeLogDeliAmountChange(
+        Order $order,
+        DispatchOrderItem $item,
+        ?array $before,
+        ?array $after,
+        ?User $actor = null,
+        string $actorRole = 'admin'
+    ): void {
+        if (! is_array($before) || ! is_array($after)) {
+            return;
+        }
+
+        $from = round((float) ($before['deli_amount'] ?? 0), 2);
+        $to = round((float) ($after['deli_amount'] ?? 0), 2);
+        if (abs($from - $to) < 0.001) {
+            return;
+        }
+
+        $actor = $actor ?: auth()->user();
+        $actorName = $actor?->name ?: match ($actorRole) {
+            'rider' => $this->t('dispatch_audit_account_rider'),
+            'os', 'client' => $this->t('dispatch_audit_account_os'),
+            default => $this->t('dispatch_audit_account_admin'),
+        };
+        $itemLabel = $item->code ?: ('#'.$item->id);
+        $fromLabel = $this->formatMoney($from);
+        $toLabel = $this->formatMoney($to);
+        $sizeWeight = (int) ($after['weight'] ?? $item->weight ?? 0);
+        $sizeLabel = $this->friendlySizeLabel($sizeWeight);
+        $actionParts = [
+            __('message.order').' #'.$order->id,
+            $this->t('dispatch_audit_field_item').' — '.$itemLabel,
+        ];
+        if ($sizeLabel !== '—') {
+            $actionParts[] = $this->t('dispatch_audit_field_size').' — '.$sizeLabel;
+        }
+        $actionParts[] = $this->t('dispatch_audit_field_deli_amount').' — '.$fromLabel.' → '.$toLabel;
+
+        $this->record($order, self::TYPE_DELI_AMOUNT, $this->t('dispatch_audit_deli_amount_changed', [
+            'actor' => $actorName,
+            'order' => $order->id,
+            'item' => $itemLabel,
+            'from' => $fromLabel,
+            'to' => $toLabel,
+        ]), [
+            'actor_role' => $actorRole,
+            'admin_id' => $actorRole === 'admin' ? $actor?->id : null,
+            'admin_name' => $actorRole === 'admin' ? $actorName : null,
+            'rider_id' => $actorRole === 'rider' ? $actor?->id : null,
+            'rider_name' => $actorRole === 'rider' ? $actorName : null,
+            'client_id' => in_array($actorRole, ['os', 'client'], true) ? ($actor?->id ?: $order->client_id) : null,
+            'client_name' => in_array($actorRole, ['os', 'client'], true) ? $actorName : null,
+            'item_id' => $item->id,
+            'item_code' => $item->code,
+            'field' => 'deli_amount',
+            'old_value' => $from,
+            'new_value' => $to,
+            'from' => $fromLabel,
+            'to' => $toLabel,
+            'weight' => $sizeWeight,
+            'size' => $sizeLabel !== '—' ? $sizeLabel : null,
+            'action' => implode(' · ', $actionParts),
+            'action_parts' => $actionParts,
+            'before' => [
+                'deli_amount' => $from,
+                'weight' => (int) ($before['weight'] ?? 0),
+            ],
+            'after' => [
+                'deli_amount' => $to,
+                'weight' => $sizeWeight,
+            ],
+        ]);
+    }
+
+    /**
+     * DeliAmount-only timeline for one order (dedicated Audit Log modal).
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function deliAmountTimelineForOrder(Order $order): Collection
+    {
+        $order->loadMissing(['orderHistoryasc', 'client', 'delivery_man', 'dispatchItems']);
+
+        $entries = collect();
+
+        foreach ($order->orderHistoryasc as $history) {
+            $type = (string) ($history->history_type ?? '');
+            $data = is_array($history->history_data) ? $history->history_data : [];
+            $at = $history->datetime ?? $history->created_at;
+
+            if ($type === self::TYPE_DELI_AMOUNT) {
+                $presented = $this->presentHistory($history, $order);
+                if ($presented) {
+                    $entries->push($presented);
+                }
+                continue;
+            }
+
+            // Legacy: item-info rows that changed DeliAmount before dedicated type existed.
+            if (! in_array($type, [
+                self::TYPE_ADMIN_ITEM_INFO,
+                self::TYPE_RIDER_ITEM_INFO,
+                self::TYPE_OS_ITEM_INFO,
+            ], true)) {
+                continue;
+            }
+
+            $legacy = $this->legacyDeliAmountEntry($order, $data, $at);
+            if ($legacy) {
+                $entries->push($legacy);
+            }
+        }
+
+        return $entries
+            ->sortBy('sort_at')
+            ->values()
+            ->map(function (array $e) {
+                unset($e['sort_at']);
+
+                return $e;
+            });
+    }
+
+    /**
+     * DeliAmount audit rows for Order List date range (Yangon calendar days).
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function deliAmountTimelineForRange(string $fromDay, string $toDay): Collection
+    {
+        $tz = 'Asia/Yangon';
+        $fromDay = Carbon::parse($fromDay, $tz)->toDateString();
+        $toDay = Carbon::parse($toDay, $tz)->toDateString();
+        if ($toDay < $fromDay) {
+            $toDay = $fromDay;
+        }
+
+        $histories = OrderHistory::query()
+            ->with(['order:id'])
+            ->whereIn('history_type', [
+                self::TYPE_DELI_AMOUNT,
+                self::TYPE_ADMIN_ITEM_INFO,
+                self::TYPE_RIDER_ITEM_INFO,
+                self::TYPE_OS_ITEM_INFO,
+            ])
+            ->where(function ($q) use ($fromDay, $toDay) {
+                $q->where(function ($d) use ($fromDay, $toDay) {
+                    $d->whereNotNull('datetime')
+                        ->whereDate('datetime', '>=', $fromDay)
+                        ->whereDate('datetime', '<=', $toDay);
+                })->orWhere(function ($c) use ($fromDay, $toDay) {
+                    $c->whereNull('datetime')
+                        ->whereDate('created_at', '>=', $fromDay)
+                        ->whereDate('created_at', '<=', $toDay);
+                });
+            })
+            ->orderByDesc('datetime')
+            ->orderByDesc('id')
+            ->limit(500)
+            ->get();
+
+        $entries = collect();
+        foreach ($histories as $history) {
+            $order = $history->order;
+            if (! $order) {
+                $order = Order::query()->find((int) $history->order_id);
+            }
+            if (! $order) {
+                continue;
+            }
+
+            $type = (string) ($history->history_type ?? '');
+            $data = is_array($history->history_data) ? $history->history_data : [];
+            $at = $history->datetime ?? $history->created_at;
+
+            if ($type === self::TYPE_DELI_AMOUNT) {
+                $presented = $this->presentHistory($history, $order);
+                if ($presented) {
+                    $presented['order_id'] = (int) $order->id;
+                    $presented['sort_at'] = Carbon::parse($at)->timestamp;
+                    $entries->push($presented);
+                }
+                continue;
+            }
+
+            $legacy = $this->legacyDeliAmountEntry($order, $data, $at);
+            if ($legacy) {
+                $entries->push($legacy);
+            }
+        }
+
+        return $entries
+            ->sortByDesc('sort_at')
+            ->values()
+            ->map(function (array $e) {
+                unset($e['sort_at']);
+
+                return $e;
+            });
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|null
+     */
+    protected function legacyDeliAmountEntry(Order $order, array $data, $at): ?array
+    {
+        $before = is_array($data['before'] ?? null) ? $data['before'] : null;
+        $after = is_array($data['after'] ?? null) ? $data['after'] : null;
+        if (! is_array($before) || ! is_array($after)) {
+            return null;
+        }
+        $from = round((float) ($before['deli_amount'] ?? 0), 2);
+        $to = round((float) ($after['deli_amount'] ?? 0), 2);
+        if (abs($from - $to) < 0.001) {
+            return null;
+        }
+
+        $fromLabel = $this->formatMoney($from);
+        $toLabel = $this->formatMoney($to);
+        $itemCode = (string) ($data['item_code'] ?? ('#'.($data['item_id'] ?? '-')));
+        $actorName = $this->resolveName(
+            $data['admin_name'] ?? null,
+            $data['rider_name'] ?? null,
+            $data['client_name'] ?? null,
+            $data['actor_name'] ?? null,
+            '-'
+        );
+        $sizeWeight = (int) ($after['weight'] ?? $data['weight'] ?? 0);
+        if ($sizeWeight <= 0) {
+            $itemId = (int) ($data['item_id'] ?? 0);
+            if ($itemId > 0) {
+                $order->loadMissing('dispatchItems');
+                $liveItem = $order->dispatchItems->firstWhere('id', $itemId);
+                $sizeWeight = (int) ($liveItem->weight ?? 0);
+            }
+        }
+        $sizeLabel = $this->friendlySizeLabel($sizeWeight);
+        $msg = $this->t('dispatch_audit_deli_amount_changed', [
+            'actor' => $actorName,
+            'order' => $order->id,
+            'item' => $itemCode,
+            'from' => $fromLabel,
+            'to' => $toLabel,
+        ]);
+
+        $actionParts = [
+            __('message.order').' #'.$order->id,
+            $this->t('dispatch_audit_field_item').' — '.$itemCode,
+        ];
+        if ($sizeLabel !== '—') {
+            $actionParts[] = $this->t('dispatch_audit_field_size').' — '.$sizeLabel;
+        }
+        $actionParts[] = $this->t('dispatch_audit_field_deli_amount').' — '.$fromLabel.' → '.$toLabel;
+
+        return [
+            'type' => self::TYPE_DELI_AMOUNT,
+            'title' => $this->t('dispatch_audit_title_deli_amount'),
+            'message' => $msg,
+            'summary' => $msg,
+            'time' => $this->formatTime($at),
+            'icon' => 'fa-solid fa-coins',
+            'tone' => 'edit',
+            'order_id' => (int) $order->id,
+            'action' => implode(' · ', $actionParts),
+            'action_parts' => $actionParts,
+            'reason' => null,
+            'changes' => [],
+            'items' => [],
+            'photos' => [],
+            'sort_at' => Carbon::parse($at)->timestamp,
+        ];
     }
 
     public function logPhotoUploaded(Order $order, DispatchOrderItem $item, ?User $rider = null): void
@@ -892,6 +1176,53 @@ class DispatchOrderAuditService
                 $action = $actionParts !== [] ? implode(' · ', $actionParts) : null;
             }
             // No before snapshot = cannot prove a change; leave empty (entry is filtered out).
+        } elseif ($type === self::TYPE_DELI_AMOUNT) {
+            $code = (string) ($data['item_code'] ?? ('#'.($data['item_id'] ?? '-')));
+            $from = (string) ($data['from'] ?? $this->formatMoney((float) ($data['old_value'] ?? 0)));
+            $to = (string) ($data['to'] ?? $this->formatMoney((float) ($data['new_value'] ?? 0)));
+            $sizeLabel = trim((string) ($data['size'] ?? ''));
+            if ($sizeLabel === '' || $sizeLabel === '—') {
+                $sizeWeight = (int) ($data['weight'] ?? (is_array($data['after'] ?? null) ? ($data['after']['weight'] ?? 0) : 0));
+                if ($sizeWeight <= 0) {
+                    $snap = $this->resolveItemSnapshotFromData($order, $data);
+                    $sizeWeight = (int) ($snap['weight'] ?? 0);
+                }
+                $sizeLabel = $this->friendlySizeLabel($sizeWeight);
+            }
+
+            if (! empty($data['action_parts']) && is_array($data['action_parts'])) {
+                $actionParts = array_values(array_filter(array_map('strval', $data['action_parts'])));
+            } else {
+                $actionParts = [
+                    __('message.order').' #'.$order->id,
+                    $this->t('dispatch_audit_field_item').' — '.$code,
+                ];
+                if ($sizeLabel !== '' && $sizeLabel !== '—') {
+                    $actionParts[] = $this->t('dispatch_audit_field_size').' — '.$sizeLabel;
+                }
+                $actionParts[] = $this->t('dispatch_audit_field_deli_amount').' — '.$from.' → '.$to;
+            }
+
+            // Ensure Size chip exists for older logs.
+            $hasSizePart = collect($actionParts)->contains(
+                fn ($p) => str_contains((string) $p, $this->t('dispatch_audit_field_size'))
+                    || str_contains((string) $p, 'Size')
+                    || str_contains((string) $p, 'အရွယ်အစား')
+            );
+            if (! $hasSizePart && $sizeLabel !== '' && $sizeLabel !== '—') {
+                $insertAt = 2;
+                if (count($actionParts) < 2) {
+                    $insertAt = count($actionParts);
+                }
+                array_splice(
+                    $actionParts,
+                    $insertAt,
+                    0,
+                    [$this->t('dispatch_audit_field_size').' — '.$sizeLabel]
+                );
+            }
+
+            $action = implode(' · ', $actionParts);
         } elseif ($type === self::TYPE_PHOTO_UPLOADED) {
             $code = (string) ($data['item_code'] ?? ('#'.($data['item_id'] ?? '-')));
             $actionParts = [$this->t('dispatch_audit_field_item').' — '.$code];
@@ -1223,6 +1554,21 @@ class DispatchOrderAuditService
                 'client' => $clientName,
                 'order' => $order->id,
                 'item' => $data['item_code'] ?? ('#'.($data['item_id'] ?? '-')),
+            ]),
+            self::TYPE_DELI_AMOUNT => $this->t('dispatch_audit_deli_amount_changed', [
+                'actor' => $this->resolveName(
+                    $data['admin_name'] ?? null,
+                    $data['rider_name'] ?? null,
+                    $data['client_name'] ?? null,
+                    $data['actor_name'] ?? null,
+                    $adminName,
+                    $riderName,
+                    $clientName
+                ),
+                'order' => $order->id,
+                'item' => $data['item_code'] ?? ('#'.($data['item_id'] ?? '-')),
+                'from' => $data['from'] ?? $this->formatMoney((float) ($data['old_value'] ?? 0)),
+                'to' => $data['to'] ?? $this->formatMoney((float) ($data['new_value'] ?? 0)),
             ]),
             self::TYPE_PHOTO_UPLOADED => $this->t('dispatch_audit_photo_uploaded', [
                 'rider' => $riderName,
@@ -1947,6 +2293,7 @@ class DispatchOrderAuditService
             self::TYPE_ITEM_CREATED => $this->t('dispatch_audit_title_item_created'),
             self::TYPE_ITEM_DELETED => $this->t('dispatch_audit_title_item_deleted'),
             self::TYPE_OS_ITEM_INFO => $this->t('dispatch_audit_title_os_item_info'),
+            self::TYPE_DELI_AMOUNT => $this->t('dispatch_audit_title_deli_amount'),
             self::TYPE_PHOTO_UPLOADED => $this->t('dispatch_audit_title_photo_uploaded'),
             self::TYPE_PRE_PICKUP_MOVED => $this->t('dispatch_audit_title_pre_pickup_moved'),
             self::TYPE_MOVED_TO_ASSIGN_100 => $this->t('dispatch_audit_title_moved_to_assign_100'),
@@ -1966,6 +2313,7 @@ class DispatchOrderAuditService
             self::TYPE_ORDER_CREATED, 'create', 'draft' => 'fa-solid fa-file-pen',
             self::TYPE_PICKUP_RIDER_ASSIGNED, 'courier_assigned' => 'fa-solid fa-user-check',
             self::TYPE_ADMIN_ITEM_INFO, self::TYPE_OS_ITEM_INFO => 'fa-solid fa-pen-to-square',
+            self::TYPE_DELI_AMOUNT => 'fa-solid fa-coins',
             self::TYPE_RIDER_ITEM_INFO => 'fa-solid fa-motorcycle',
             self::TYPE_PICKUP_COMPLETED, 'courier_picked_up' => 'fa-solid fa-box-open',
             self::TYPE_DELIVERY_RIDER_ASSIGNED => 'fa-solid fa-truck',
@@ -1990,7 +2338,7 @@ class DispatchOrderAuditService
         return match ($type) {
             self::TYPE_ORDER_CREATED, 'create', 'draft' => 'info',
             self::TYPE_PICKUP_RIDER_ASSIGNED, 'courier_assigned', self::TYPE_DELIVERY_RIDER_ASSIGNED => 'assign',
-            self::TYPE_ADMIN_ITEM_INFO, self::TYPE_RIDER_ITEM_INFO, self::TYPE_OS_ITEM_INFO, self::TYPE_ITEM_CREATED => 'edit',
+            self::TYPE_ADMIN_ITEM_INFO, self::TYPE_RIDER_ITEM_INFO, self::TYPE_OS_ITEM_INFO, self::TYPE_ITEM_CREATED, self::TYPE_DELI_AMOUNT => 'edit',
             self::TYPE_PICKUP_COMPLETED, 'courier_picked_up', 'completed', self::TYPE_PHOTO_UPLOADED => 'success',
             self::TYPE_DELIVERY_ITEM_STATUS, 'courier_departed', 'pending' => 'info',
             self::TYPE_RESTORED, self::TYPE_PRE_PICKUP_MOVED, self::TYPE_MOVED_TO_ASSIGN_100 => 'restore',

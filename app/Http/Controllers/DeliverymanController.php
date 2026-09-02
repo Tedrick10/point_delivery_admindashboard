@@ -132,7 +132,7 @@ class DeliverymanController extends Controller
 
     public function reviews($id)
     {
-        if (! auth()->user()->can('deliveryman-list')) {
+        if (! auth()->user()->can('deliveryman-list') && ! auth()->user()->can('order-list')) {
             return response()->json(['message' => __('message.demo_permission_denied')], 403);
         }
 
@@ -229,6 +229,11 @@ class DeliverymanController extends Controller
 
         if ($is_document_verification == 0) {
             $request['document_verified_at'] = now();
+        }
+
+        $forcedBranchId = forcedBranchId(auth()->user());
+        if ($forcedBranchId && ! $request->filled('branch_id')) {
+            $request->merge(['branch_id' => $forcedBranchId]);
         }
 
         $result = User::create($request->all());
@@ -426,6 +431,49 @@ class DeliverymanController extends Controller
             'message' => __('message.update_form', ['form' => __('message.contact_number')]),
             'contact_number' => $deliveryman->contact_number,
             'display' => maskSensitiveInfo('contact_number', $deliveryman->contact_number),
+        ]);
+    }
+
+    public function updateWorkStatus(Request $request, int $id)
+    {
+        if (! auth()->user()->can('deliveryman-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        if (env('APP_DEMO')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $request->validate([
+            'work_on' => 'required|boolean',
+        ]);
+
+        $deliveryman = User::query()
+            ->where('user_type', 'delivery_man')
+            ->whereNull('deleted_at')
+            ->findOrFail($id);
+
+        $forcedBranchId = forcedBranchId(auth()->user());
+        if ($forcedBranchId) {
+            $branchId = (int) ($deliveryman->branch_id ?? 0);
+            if ($branchId > 0 && $branchId !== $forcedBranchId) {
+                return response()->json(['message' => __('message.demo_permission_denied')], 403);
+            }
+        }
+
+        $workOn = $request->boolean('work_on');
+        $deliveryman->rider_work_on = $workOn;
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'rider_work_off_date')) {
+            $deliveryman->rider_work_off_date = $workOn ? null : now('Asia/Yangon')->toDateString();
+        }
+        $deliveryman->save();
+
+        return response()->json([
+            'message' => __('message.rider_work_status_updated'),
+            'work_on' => (bool) $deliveryman->rider_work_on,
+            'label' => $deliveryman->rider_work_on
+                ? __('message.rider_work_on')
+                : __('message.rider_work_off'),
         ]);
     }
 

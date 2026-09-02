@@ -21,4 +21,8 @@ class OrderHistory extends Model
         'order_id' => 'integer',
     ];
 
+    public function order()
+    {
+        return $this->belongsTo(Order::class, 'order_id', 'id');
+    }
 }

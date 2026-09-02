@@ -22,11 +22,19 @@ class OsSettlementService
     ) {}
 
     /**
-     * Completed items for settlement within a date range.
+     * Unfinished Completed items for ငွေရှင်းတမ်း within a date range.
+     * Delivered-only (no admin_completed_at) never appears — Completed first.
+     * List day D = Completed during Yangon calendar day D+1 (same lag as Daily Check).
+     * Strict From–To only — unfinished rows do NOT carry into later days.
      * Pass null for $osId to include all Online Shops.
      */
     public function completedItemsQuery(?int $osId, string $fromDay, string $toDay)
     {
+        $fromDay = Carbon::parse($fromDay)->toDateString();
+        $toDay = Carbon::parse($toDay)->toDateString();
+        $boundsStart = dailyCheckListDayBounds($fromDay)['start'];
+        $boundsEnd = dailyCheckListDayBounds($toDay)['end'];
+
         return DispatchOrderItem::query()
             ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch'])
             ->when($osId !== null, function ($query) use ($osId) {
@@ -43,24 +51,42 @@ class OsSettlementService
             ->where('status', 'completed')
             ->whereNotNull('admin_completed_at')
             ->whereNull('admin_finished_at')
-            ->where(function ($dateQuery) use ($fromDay, $toDay) {
-                $dateQuery->whereBetween('received_date', [$fromDay, $toDay])
-                    ->orWhere(function ($fallback) use ($fromDay, $toDay) {
-                        $fallback->whereNull('received_date')
-                            ->where(function ($assigned) use ($fromDay, $toDay) {
-                                $assigned->where(function ($q) use ($fromDay, $toDay) {
-                                    $q->whereNotNull('assigned_at')
-                                        ->whereDate('assigned_at', '>=', $fromDay)
-                                        ->whereDate('assigned_at', '<=', $toDay);
-                                })->orWhere(function ($q) use ($fromDay, $toDay) {
-                                    $q->whereNull('assigned_at')
-                                        ->whereDate('created_at', '>=', $fromDay)
-                                        ->whereDate('created_at', '<=', $toDay);
-                                });
-                            });
-                    });
-            })
+            // Only the list-day window (Completed on D+1 → shows on D). No carry-forward.
+            ->where('admin_completed_at', '>=', $boundsStart)
+            ->where('admin_completed_at', '<', $boundsEnd)
             ->orderByDesc('id');
+    }
+
+    /**
+     * Settlement / Money Transfer period from each item's list day
+     * (Completed Yangon calendar day − 1), matching ငွေရှင်းတမ်း / Daily Check.
+     *
+     * @param  \Illuminate\Support\Collection<int, DispatchOrderItem>  $items
+     * @return array{0: string, 1: string}
+     */
+    protected function listDayRangeFromItems($items, string $fallbackFrom, string $fallbackTo): array
+    {
+        $days = $items
+            ->map(function ($item) {
+                if (empty($item->admin_completed_at)) {
+                    return null;
+                }
+
+                return dailyCheckListDate(Carbon::parse($item->admin_completed_at))->toDateString();
+            })
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
+        if ($days->isEmpty()) {
+            return [
+                Carbon::parse($fallbackFrom)->toDateString(),
+                Carbon::parse($fallbackTo)->toDateString(),
+            ];
+        }
+
+        return [$days->first(), $days->last()];
     }
 
     public function buildSlipRows($items, string $invoiceDate): array
@@ -239,12 +265,16 @@ class OsSettlementService
         $amount = (float) $slipData['totals']['os_to_pay'];
         $itemIds = $items->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
 
+        // Money Transfer / batch period = items' list day (Completed → yesterday),
+        // not the filter day when unfinished rows were carried into "today".
+        [$batchFromDay, $batchToDay] = $this->listDayRangeFromItems($items, $fromDay, $toDay);
+
         @set_time_limit(120);
 
         $batch = OsSettlementBatch::create([
             'os_user_id' => $osId,
-            'from_date' => $fromDay,
-            'to_date' => $toDay,
+            'from_date' => $batchFromDay,
+            'to_date' => $batchToDay,
             'amount' => $amount,
             'payment_method' => $paymentMethod,
             'settlement_side' => in_array($settlementSide, ['pay', 'receive'], true) ? $settlementSide : null,

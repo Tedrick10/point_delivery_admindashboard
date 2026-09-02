@@ -34,10 +34,11 @@ class User extends Authenticatable implements HasMedia
         'password',
         'username', 'user_type', 'country_id', 'city_id', 'branch_id', 'address', 'contact_number',
         'daily_contact_number', 'daily_contact_date', 'email_verified_at',
-        'player_id', 'latitude', 'longitude', 'status', 'last_notification_seen' , 'login_type', 'uid', 'fcm_token', 'otp_verify_at'
+        'player_id', 'latitude', 'longitude', 'status', 'rider_work_on', 'rider_work_off_date', 'last_notification_seen' , 'login_type', 'uid', 'fcm_token', 'otp_verify_at'
         ,'app_version', 'last_location_update_at', 'app_source','last_actived_at','document_verified_at' ,'is_autoverified_document',
         'is_autoverified_email','is_autoverified_mobile','vehicle_id','referral_code','partner_referral_code','flag','apple_user_identifier',
-        'is_vip', 'welcome_orders_used', 'is_temp_password', 'created_by_admin', 'os_profile'
+        'is_vip', 'welcome_orders_used', 'is_temp_password', 'created_by_admin', 'os_profile',
+        'approval_status',
     ];
 
     /**
@@ -61,6 +62,8 @@ class User extends Authenticatable implements HasMedia
         'city_id' => 'integer',
         'branch_id' => 'integer',
         'status' => 'integer',
+        'rider_work_on' => 'boolean',
+        'rider_work_off_date' => 'date',
         'otp_verify_at' => 'datetime',
         'document_verified_at' => 'datetime',
         'last_location_update_at'   => 'datetime',
@@ -78,6 +81,42 @@ class User extends Authenticatable implements HasMedia
     //     'profile_photo_url',
     // ];
 
+
+    public const APPROVAL_PENDING = 'pending';
+    public const APPROVAL_APPROVED = 'approved';
+    public const APPROVAL_REJECTED = 'rejected';
+
+    public static function approvalStatuses(): array
+    {
+        return [
+            self::APPROVAL_PENDING,
+            self::APPROVAL_APPROVED,
+            self::APPROVAL_REJECTED,
+        ];
+    }
+
+    public function isClientApprovalApproved(): bool
+    {
+        if ($this->user_type !== 'client') {
+            return true;
+        }
+
+        return ($this->approval_status ?? self::APPROVAL_APPROVED) === self::APPROVAL_APPROVED
+            && (int) $this->status === 1;
+    }
+
+    /**
+     * Sync approval_status with login-active status for OS clients.
+     */
+    public function applyApprovalStatus(string $approvalStatus): void
+    {
+        $approvalStatus = in_array($approvalStatus, self::approvalStatuses(), true)
+            ? $approvalStatus
+            : self::APPROVAL_PENDING;
+
+        $this->approval_status = $approvalStatus;
+        $this->status = $approvalStatus === self::APPROVAL_APPROVED ? 1 : 0;
+    }
 
     public function routeNotificationForOneSignal()
     {
@@ -115,6 +154,11 @@ class User extends Authenticatable implements HasMedia
         return $this->belongsTo(Branch::class, 'branch_id', 'id');
     }
 
+    public function hrStaff()
+    {
+        return $this->hasOne(HrStaff::class, 'user_id', 'id');
+    }
+
     public function order(){
         return $this->hasMany(Order::class,'client_id','id')->withTrashed();
     }
@@ -143,6 +187,45 @@ class User extends Authenticatable implements HasMedia
         $phone = trim((string) ($this->contact_number ?? ''));
 
         return $phone !== '' ? $phone : null;
+    }
+
+    public function isRiderWorkOn(): bool
+    {
+        $today = now('Asia/Yangon')->toDateString();
+        if (! ($this->rider_work_on ?? true)) {
+            $offDate = $this->rider_work_off_date
+                ? $this->rider_work_off_date->toDateString()
+                : null;
+            if ($offDate === null || $offDate < $today) {
+                return true;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Toggle display: Off for today (work_on false with today's off date).
+     */
+    public function displaysWorkOff(): bool
+    {
+        return ! $this->isRiderWorkOn();
+    }
+
+    /**
+     * Riders available for Pick Up / Delivery assign today (On only).
+     */
+    public function scopeAvailableForAssign($query)
+    {
+        try {
+            app(\App\Services\RiderWorkStatusService::class)->resetExpiredOffRiders();
+        } catch (\Throwable $e) {
+            // Keep assign list usable even if reset fails.
+        }
+
+        return $query->where('rider_work_on', true);
     }
 
     public function deliveryManDocument(){

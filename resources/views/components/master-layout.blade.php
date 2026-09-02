@@ -10,7 +10,7 @@
         @include('partials._head')
 
     </head>
-    <body class="pds-admin{{ (Auth::check() && !in_array(Auth::user()->user_type, ['client', 'delivery_man'], true)) ? ' pds-header-nav' : '' }}" id="app">
+    <body class="pds-admin" id="app">
         <script>
             try {
                 if (localStorage.getItem('dark') === 'true') {

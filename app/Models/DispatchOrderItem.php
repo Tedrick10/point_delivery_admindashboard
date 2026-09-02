@@ -18,6 +18,7 @@ class DispatchOrderItem extends Model
         'pending_photo_id',
         'delivered_photo_id',
         'delivered_type',
+        'delivered_at',
         'cust_photo_id',
         'cust_sign_id',
         'received_date',
@@ -29,6 +30,8 @@ class DispatchOrderItem extends Model
         'admin_updated_at',
         'admin_completed_at',
         'admin_finished_at',
+        'rider_remit_at',
+        'rider_remit_date',
         'from_branch_id',
         'to_branch_id',
         'city_id',
@@ -65,6 +68,9 @@ class DispatchOrderItem extends Model
         'admin_updated_at' => 'datetime',
         'admin_completed_at' => 'datetime',
         'admin_finished_at' => 'datetime',
+        'delivered_at' => 'datetime',
+        'rider_remit_at' => 'datetime',
+        'rider_remit_date' => 'date',
         'from_branch_id' => 'integer',
         'to_branch_id' => 'integer',
         'city_id' => 'integer',
@@ -79,6 +85,31 @@ class DispatchOrderItem extends Model
         'gate_amount' => 'double',
         'gate_os_paid' => 'double',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $item) {
+            if ($item->status !== 'completed') {
+                return;
+            }
+
+            $becameDelivered = ! $item->exists
+                || ($item->isDirty('status') && $item->getOriginal('status') !== 'completed');
+
+            if ($becameDelivered) {
+                $item->rider_remit_at = null;
+                if (empty($item->delivered_at)) {
+                    $item->delivered_at = now();
+                }
+                $item->rider_remit_date = resolveRiderRemitDate(
+                    (int) ($item->delivery_man_id ?? 0),
+                    $item->delivered_at instanceof \Carbon\Carbon
+                        ? $item->delivered_at
+                        : null
+                );
+            }
+        });
+    }
 
     public function order()
     {

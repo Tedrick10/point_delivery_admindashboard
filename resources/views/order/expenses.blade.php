@@ -62,14 +62,19 @@
                         $cardItemsJson = $card->items->map(fn ($i) => [
                             'subject' => $i->subject,
                             'amount' => (float) $i->amount,
-                            'image' => $i->hasImage() ? $i->image : null,
+                            'image' => $i->hasUploadedImage() ? $i->image : null,
                             'image_url' => $i->imageUrl(),
                             'locked' => $i->source === \App\Models\ExpenseItem::SOURCE_RIDER_FUEL,
                         ])->values();
+                        $isGenerated = in_array((int) $card->id, $generatedCardIds ?? [], true);
+                        $canGenerate = ! $isGenerated
+                            && $card->expense_date
+                            && $today > $card->expense_date->format('Y-m-d');
                     @endphp
-                    <article class="pds-expense-card" data-id="{{ $card->id }}"
+                    <article class="pds-expense-card{{ $isGenerated ? ' is-generated' : '' }}" data-id="{{ $card->id }}"
                              data-date="{{ $card->expense_date->format('Y-m-d') }}"
-                             data-generated="{{ in_array((int) $card->id, $generatedCardIds ?? [], true) ? '1' : '0' }}"
+                             data-generated="{{ $isGenerated ? '1' : '0' }}"
+                             data-can-generate="{{ $canGenerate ? '1' : '0' }}"
                              data-items='@json($cardItemsJson)'>
                         <header class="pds-expense-card__header">
                             <strong>{{ $card->expense_date->format('d/m/y') }}</strong>
@@ -95,6 +100,16 @@
                                     <li>
                                         <span>{{ $item->subject }}</span>
                                         <em>{{ number_format($item->amount) }}</em>
+                                        @php $thumb = $item->imageUrl(); @endphp
+                                        @if($thumb)
+                                            <button type="button" class="pds-expense-card__thumb js-card-image" data-image="{{ $thumb }}" data-subject="{{ $item->subject }}" title="{{ __('message.expenses_image_view') }}">
+                                                <img src="{{ $thumb }}" alt="">
+                                            </button>
+                                        @else
+                                            <span class="pds-expense-card__thumb is-empty" title="{{ __('message.expenses_image_upload') }}">
+                                                <i class="fas fa-camera" aria-hidden="true"></i>
+                                            </span>
+                                        @endif
                                     </li>
                                 @empty
                                     @if($riderFuelItems->isEmpty())
@@ -103,24 +118,36 @@
                                 @endforelse
                             </ul>
                         </div>
-                        @if($canEdit)
-                            <div class="pds-expense-card__actions">
+                        <div class="pds-expense-card__actions">
+                            @if($canEdit && ! $isGenerated)
                                 <button type="button" class="pds-expense-card__btn is-edit" data-action="edit" title="{{ __('message.edit') }}">
                                     <i class="fas fa-pen"></i>
                                     <span>{{ __('message.edit') }}</span>
                                 </button>
-                                <button type="button" class="pds-expense-card__btn is-generate {{ in_array((int) $card->id, $generatedCardIds ?? [], true) ? 'is-done' : '' }}"
-                                        data-action="generate"
-                                        title="{{ __('message.expense_summary_generate') }}">
-                                    <i class="fas fa-file-export"></i>
-                                    <span>{{ in_array((int) $card->id, $generatedCardIds ?? [], true) ? __('message.expense_summary_generated_btn') : __('message.expense_summary_generate') }}</span>
+                            @else
+                                <button type="button" class="pds-expense-card__btn is-view" data-action="view" title="{{ __('message.expenses_view_card') }}">
+                                    <i class="fas fa-eye"></i>
+                                    <span>{{ __('message.expenses_view_btn') }}</span>
                                 </button>
-                                <button type="button" class="pds-expense-card__btn is-del" data-action="delete" title="{{ __('message.delete') }}">
+                            @endif
+                            @if($canEdit)
+                                <button type="button" class="pds-expense-card__btn is-generate {{ $isGenerated ? 'is-done' : '' }}{{ ! $isGenerated && ! $canGenerate ? ' is-wait' : '' }}"
+                                        data-action="generate"
+                                        title="{{ $isGenerated
+                                            ? __('message.expense_summary_generated_btn')
+                                            : ($canGenerate ? __('message.expense_summary_generate') : __('message.expense_summary_generate_next_day')) }}"
+                                        @if($isGenerated || ! $canGenerate) disabled @endif>
+                                    <i class="fas fa-file-export"></i>
+                                    <span>{{ $isGenerated ? __('message.expense_summary_generated_btn') : __('message.expense_summary_generate') }}</span>
+                                </button>
+                                <button type="button" class="pds-expense-card__btn is-del" data-action="delete"
+                                        title="{{ $isGenerated ? __('message.expense_summary_card_locked') : __('message.delete') }}"
+                                        @if($isGenerated) disabled @endif>
                                     <i class="fas fa-trash"></i>
                                     <span>{{ __('message.delete') }}</span>
                                 </button>
-                            </div>
-                        @endif
+                            @endif
+                        </div>
                         <footer class="pds-expense-card__total">
                             <span>{{ __('message.total') }}</span>
                             <strong>{{ number_format($card->display_total ?? $card->total_amount) }}</strong>
@@ -143,35 +170,55 @@
         </div>
     </div>
 
-    {{-- Create / Edit modal --}}
+    {{-- Create / Edit / View modal --}}
     <div class="pds-expense-modal" id="expense-form-modal" hidden>
         <div class="pds-expense-modal__backdrop" data-close="form"></div>
-        <div class="pds-expense-modal__dialog" role="dialog" aria-modal="true">
-            <header class="pds-expense-modal__header">
-                <h5 id="expense-form-title">{{ __('message.expenses_add_card') }}</h5>
-                <div class="pds-expense-modal__date">
-                    <label for="expense-date-input">{{ __('message.date') }}</label>
-                    <input type="date" id="expense-date-input" class="form-control" value="{{ $today }}">
+        <div class="pds-expense-modal__stage">
+            <div class="pds-expense-modal__dialog" role="dialog" aria-modal="true">
+                <header class="pds-expense-modal__header">
+                    <h5 id="expense-form-title">{{ __('message.expenses_add_card') }}</h5>
+                    <div class="pds-expense-modal__date">
+                        <label for="expense-date-input">{{ __('message.date') }}</label>
+                        <input type="date" id="expense-date-input" class="form-control" value="{{ $today }}">
+                    </div>
+                </header>
+                <div class="pds-expense-modal__cols">
+                    <span>{{ __('message.expenses_subject') }}</span>
+                    <span>{{ __('message.amount') }}</span>
+                    <span>{{ __('message.image') }}</span>
+                    <span></span>
                 </div>
-            </header>
-            <div class="pds-expense-modal__cols">
-                <span>{{ __('message.expenses_subject') }}</span>
-                <span>{{ __('message.amount') }}</span>
-                <span>{{ __('message.image') }}</span>
-                <span></span>
+                <div class="pds-expense-modal__rows" id="expense-item-rows"></div>
+                <div class="pds-expense-modal__add-row">
+                    <button type="button" class="pds-expense-modal__plus" id="expense-add-row" title="Add row">+</button>
+                </div>
+                <div class="pds-expense-modal__total">
+                    <span>{{ __('message.total_amount') }}</span>
+                    <strong id="expense-form-total">0</strong>
+                </div>
+                <footer class="pds-expense-modal__footer">
+                    <button type="button" class="pds-expense-modal__cancel" id="expense-form-cancel" title="{{ __('message.cancel') }}">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <button type="button" class="pds-expense-modal__save" id="expense-form-save" title="{{ __('message.save') }}">
+                        <i class="fas fa-check"></i>
+                    </button>
+                </footer>
             </div>
-            <div class="pds-expense-modal__rows" id="expense-item-rows"></div>
-            <div class="pds-expense-modal__add-row">
-                <button type="button" class="pds-expense-modal__plus" id="expense-add-row" title="Add row">+</button>
-            </div>
-            <footer class="pds-expense-modal__footer">
-                <button type="button" class="pds-expense-modal__cancel" id="expense-form-cancel" title="{{ __('message.cancel') }}">
-                    <i class="fas fa-times"></i>
-                </button>
-                <button type="button" class="pds-expense-modal__save" id="expense-form-save" title="{{ __('message.save') }}">
-                    <i class="fas fa-check"></i>
-                </button>
-            </footer>
+            <aside class="pds-expense-modal__preview" id="expense-image-view-modal" hidden>
+                <header class="pds-expense-modal__header">
+                    <h5 id="expense-image-view-title">{{ __('message.expenses_image_view') }}</h5>
+                    <button type="button" class="pds-expense-modal__preview-close" id="expense-image-view-close" title="{{ __('message.close') }}" data-close="image-view">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </header>
+                <div class="pds-expense-image-view">
+                    <img id="expense-image-view-img" src="" alt="">
+                </div>
+                <footer class="pds-expense-modal__footer">
+                    <button type="button" class="pds-expense-modal__cancel" id="expense-image-view-change">{{ __('message.expenses_image_change') }}</button>
+                </footer>
+            </aside>
         </div>
     </div>
 
@@ -186,23 +233,6 @@
             <footer class="pds-expense-modal__footer">
                 <button type="button" class="pds-expense-modal__cancel" id="expense-delete-no">{{ __('message.no') }}</button>
                 <button type="button" class="pds-expense-modal__save is-danger" id="expense-delete-yes">{{ __('message.yes') }}</button>
-            </footer>
-        </div>
-    </div>
-
-    {{-- Image preview --}}
-    <div class="pds-expense-modal pds-expense-modal--image-view" id="expense-image-view-modal" hidden>
-        <div class="pds-expense-modal__backdrop" data-close="image-view"></div>
-        <div class="pds-expense-modal__dialog pds-expense-modal__dialog--image" role="dialog" aria-modal="true">
-            <header class="pds-expense-modal__header">
-                <h5 id="expense-image-view-title">{{ __('message.expenses_image_view') }}</h5>
-            </header>
-            <div class="pds-expense-image-view">
-                <img id="expense-image-view-img" src="" alt="">
-            </div>
-            <footer class="pds-expense-modal__footer">
-                <button type="button" class="pds-expense-modal__cancel" id="expense-image-view-change">{{ __('message.expenses_image_change') }}</button>
-                <button type="button" class="pds-expense-modal__save" id="expense-image-view-close">{{ __('message.close') }}</button>
             </footer>
         </div>
     </div>
@@ -232,8 +262,7 @@
     </script>
     <script>
         (function () {
-            if (!@json($canEdit)) return;
-
+            const canEdit = @json((bool) $canEdit);
             const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
             const routes = {
                 store: @json(route('order.expenses.store')),
@@ -246,6 +275,8 @@
             const i18n = {
                 addTitle: @json(__('message.expenses_add_card')),
                 editTitle: @json(__('message.expenses_edit_card')),
+                viewTitle: @json(__('message.expenses_view_card')),
+                viewLabel: @json(__('message.expenses_view_btn')),
                 subjectRequired: @json(__('message.expenses_items_required')),
                 saveOk: @json(__('message.expenses_saved')),
                 deleteOk: @json(__('message.expenses_deleted')),
@@ -253,10 +284,13 @@
                 generateLabel: @json(__('message.expense_summary_generate')),
                 generatedLabel: @json(__('message.expense_summary_generated_btn')),
                 generateOk: @json(__('message.expense_summary_generated')),
+                generateNextDay: @json(__('message.expense_summary_generate_next_day')),
+                lockedHint: @json(__('message.expense_summary_card_locked')),
                 noticeError: @json(__('message.error')),
                 imageUpload: @json(__('message.expenses_image_upload')),
                 imageView: @json(__('message.expenses_image_view')),
                 imageChange: @json(__('message.expenses_image_change')),
+                imageRequired: @json(__('message.expenses_image_required')),
                 close: @json(__('message.close')),
             };
 
@@ -274,6 +308,7 @@
             let editingId = null;
             let deletingId = null;
             let imageViewRow = null;
+            let viewingOnly = false;
 
             function showNotice(message, title) {
                 if (noticeTitle) noticeTitle.textContent = title || i18n.generateLabel;
@@ -299,19 +334,26 @@
 
             function openImageView(url, row) {
                 if (!url || !imageViewModal || !imageViewImg) return;
+                rowsEl?.querySelectorAll('.pds-expense-modal__row.is-previewing').forEach((el) => {
+                    el.classList.remove('is-previewing');
+                });
                 imageViewRow = row || null;
+                imageViewRow?.classList.add('is-previewing');
                 imageViewImg.src = url;
                 const subject = row?.querySelector('.js-subject')?.value?.trim() || '';
                 if (imageViewTitle) {
                     imageViewTitle.textContent = subject || i18n.imageView;
                 }
                 imageViewModal.hidden = false;
+                formModal?.classList.add('has-preview');
             }
 
             function closeImageView() {
+                imageViewRow?.classList.remove('is-previewing');
                 if (imageViewModal) imageViewModal.hidden = true;
                 if (imageViewImg) imageViewImg.removeAttribute('src');
                 imageViewRow = null;
+                formModal?.classList.remove('has-preview');
             }
 
             function fmt(n) {
@@ -344,11 +386,32 @@
                 const lockedAmount = rowsEl.querySelector('.pds-expense-modal__row.is-locked .js-amount');
                 if (!lockedAmount) return;
                 lockedAmount.value = await fetchRiderFuelAmount(dateInput.value);
+                refreshFormTotal();
+            }
+
+            function setFormViewMode(on) {
+                viewingOnly = !!on;
+                formModal?.classList.toggle('is-view', viewingOnly);
+                if (dateInput) {
+                    dateInput.readOnly = viewingOnly;
+                    dateInput.disabled = viewingOnly;
+                }
+                const addRowBtn = document.getElementById('expense-add-row');
+                const saveBtn = document.getElementById('expense-form-save');
+                const changeBtn = document.getElementById('expense-image-view-change');
+                if (addRowBtn) addRowBtn.hidden = viewingOnly;
+                if (saveBtn) saveBtn.hidden = viewingOnly;
+                if (changeBtn) changeBtn.hidden = viewingOnly;
             }
 
             async function openForm(mode, card) {
-                editingId = mode === 'edit' && card ? Number(card.dataset.id) : null;
-                titleEl.textContent = editingId ? i18n.editTitle : i18n.addTitle;
+                if (mode === 'create' && !canEdit) return;
+                if (mode === 'edit' && (!canEdit || isCardGenerated(card))) {
+                    mode = 'view';
+                }
+                setFormViewMode(mode === 'view');
+                editingId = (mode === 'edit' || mode === 'view') && card ? Number(card.dataset.id) : null;
+                titleEl.textContent = viewingOnly ? i18n.viewTitle : (editingId ? i18n.editTitle : i18n.addTitle);
                 dateInput.value = card?.dataset.date || @json($today);
                 rowsEl.innerHTML = '';
                 let items = [];
@@ -367,6 +430,7 @@
                     items = [riderFuelRow(fuelAmt), ...items];
                 }
                 items.forEach(addRow);
+                closeImageView();
                 formModal.hidden = false;
             }
 
@@ -374,6 +438,7 @@
                 closeImageView();
                 formModal.hidden = true;
                 editingId = null;
+                setFormViewMode(false);
             }
 
             function isRealImage(item) {
@@ -399,19 +464,31 @@
                 syncImageButtonMeta(btn);
             }
 
+            function refreshFormTotal() {
+                const totalEl = document.getElementById('expense-form-total');
+                if (!totalEl || !rowsEl) return;
+                let total = 0;
+                rowsEl.querySelectorAll('.js-amount').forEach((input) => {
+                    const n = parseFloat(input.value || '0');
+                    if (!isNaN(n)) total += n;
+                });
+                totalEl.textContent = Math.round(total).toLocaleString();
+            }
+
             function addRow(item) {
-                const locked = !!item?.locked;
+                const isRiderFuel = !!item?.locked;
+                const locked = isRiderFuel || viewingOnly;
                 const row = document.createElement('div');
                 row.className = 'pds-expense-modal__row' + (locked ? ' is-locked' : '');
                 const amountVal = item?.amount === '' || item?.amount == null ? (locked ? '0' : '') : item.amount;
                 const existingImage = isRealImage(item) ? (item?.image || '') : '';
                 const imageUrl = isRealImage(item) ? (item?.image_url || '') : '';
+                const showImage = !isRiderFuel;
                 row.innerHTML = `
                     <input type="text" class="form-control js-subject" placeholder="${@json(__('message.expenses_subject'))}" value="${escapeAttr(item?.subject || '')}" ${locked ? 'readonly' : ''}>
                     <input type="number" min="0" step="1" class="form-control js-amount" placeholder="0" value="${amountVal}" ${locked ? 'readonly' : ''}>
-                    ${locked
-                        ? `<span class="pds-expense-modal__image-spacer"></span>`
-                        : `<div class="pds-expense-modal__image-wrap">
+                    ${showImage
+                        ? `<div class="pds-expense-modal__image-wrap">
                             <input type="file" class="js-image-input" accept="image/*" hidden>
                             <input type="hidden" class="js-existing-image" value="${escapeAttr(existingImage)}">
                             <button type="button" class="pds-expense-modal__image-btn${imageUrl ? ' has-image' : ' is-empty'}" title="${escapeAttr(imageUrl ? i18n.imageView : i18n.imageUpload)}">
@@ -419,12 +496,13 @@
                                     ? `<span class="pds-expense-modal__image-thumb"><img src="${escapeAttr(imageUrl)}" alt="" class="js-image-preview"></span>`
                                     : '<i class="fas fa-camera" aria-hidden="true"></i>'}
                             </button>
-                        </div>`}
+                        </div>`
+                        : `<span class="pds-expense-modal__image-spacer"></span>`}
                     ${locked
-                        ? `<span class="pds-expense-modal__row-lock" title="${@json(__('message.expenses_rider_fuel_hint'))}">🔒</span>`
+                        ? `<span class="pds-expense-modal__row-lock" title="${viewingOnly ? escapeAttr(i18n.lockedHint) : @json(__('message.expenses_rider_fuel_hint'))}">🔒</span>`
                         : `<button type="button" class="pds-expense-modal__row-del" title="Remove">&times;</button>`}
                 `;
-                if (!locked) {
+                if (showImage) {
                     const fileInput = row.querySelector('.js-image-input');
                     const imageBtn = row.querySelector('.pds-expense-modal__image-btn');
                     const existingInput = row.querySelector('.js-existing-image');
@@ -434,9 +512,11 @@
                             openImageView(previewUrl, row);
                             return;
                         }
+                        if (viewingOnly) return;
                         fileInput?.click();
                     });
                     fileInput?.addEventListener('change', () => {
+                        if (viewingOnly) return;
                         const file = fileInput.files?.[0];
                         if (!file) return;
                         setImagePreview(imageBtn, null, URL.createObjectURL(file));
@@ -444,6 +524,7 @@
                     });
                 }
                 const delBtn = row.querySelector('.pds-expense-modal__row-del');
+                row.querySelector('.js-amount')?.addEventListener('input', refreshFormTotal);
                 if (delBtn) {
                     delBtn.addEventListener('click', () => {
                         if (rowsEl.querySelectorAll('.pds-expense-modal__row:not(.is-locked)').length <= 1) {
@@ -455,16 +536,19 @@
                             setImagePreview(imageBtn, null, '');
                             if (existingInput) existingInput.value = '';
                             if (fileInput) fileInput.value = '';
+                            refreshFormTotal();
                             return;
                         }
                         row.remove();
+                        refreshFormTotal();
                     });
                 }
                 rowsEl.appendChild(row);
+                refreshFormTotal();
             }
 
             dateInput.addEventListener('change', function () {
-                if (!formModal.hidden) {
+                if (!formModal.hidden && !viewingOnly) {
                     refreshLockedRiderFuelAmount();
                 }
             });
@@ -489,9 +573,29 @@
             }
 
             async function saveForm() {
+                if (!canEdit || viewingOnly) return;
+                if (editingId) {
+                    const card = document.querySelector(`.pds-expense-card[data-id="${editingId}"]`);
+                    if (isCardGenerated(card)) {
+                        showNotice(i18n.lockedHint, i18n.generatedLabel);
+                        return;
+                    }
+                }
                 const items = collectItems();
                 if (!items.length) {
                     showNotice(i18n.subjectRequired, i18n.editTitle);
+                    return;
+                }
+                const missingImage = items.find((item) => {
+                    const fileInput = item.row.querySelector('.js-image-input');
+                    // Locked rows (Rider ဆီဖိုး) have no image input.
+                    if (!fileInput) return false;
+                    const existingImage = (item.row.querySelector('.js-existing-image')?.value || '').trim();
+                    const file = fileInput.files?.[0];
+                    return !file && (!existingImage || existingImage === demoImagePath);
+                });
+                if (missingImage) {
+                    showNotice(i18n.imageRequired, i18n.editTitle);
                     return;
                 }
                 const fd = new FormData();
@@ -500,7 +604,7 @@
                     fd.append(`items[${index}][subject]`, item.subject);
                     fd.append(`items[${index}][amount]`, String(item.amount));
                     const existingImage = item.row.querySelector('.js-existing-image')?.value || '';
-                    if (existingImage) {
+                    if (existingImage && existingImage !== demoImagePath) {
                         fd.append(`items[${index}][existing_image]`, existingImage);
                     }
                     const file = item.row.querySelector('.js-image-input')?.files?.[0];
@@ -538,6 +642,42 @@
                 }
             }
 
+            function isCardGenerated(card) {
+                return card?.dataset?.generated === '1';
+            }
+
+            function applyViewButton(btn) {
+                if (!btn) return;
+                btn.disabled = false;
+                btn.classList.remove('is-edit');
+                btn.classList.add('is-view');
+                btn.dataset.action = 'view';
+                btn.title = i18n.viewTitle;
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = 'fas fa-eye';
+                const label = btn.querySelector('span');
+                if (label) label.textContent = i18n.viewLabel;
+            }
+
+            function lockGeneratedCard(card) {
+                if (!card) return;
+                card.dataset.generated = '1';
+                card.classList.add('is-generated');
+                applyViewButton(card.querySelector('[data-action="edit"], [data-action="view"]'));
+                const del = card.querySelector('[data-action="delete"]');
+                if (del) {
+                    del.disabled = true;
+                    del.title = i18n.lockedHint;
+                }
+                const gen = card.querySelector('[data-action="generate"]');
+                if (gen) {
+                    gen.disabled = true;
+                    gen.classList.add('is-done');
+                    const label = gen.querySelector('span');
+                    if (label) label.textContent = i18n.generatedLabel;
+                }
+            }
+
             async function confirmDelete() {
                 if (!deletingId) return;
                 const btn = document.getElementById('expense-delete-yes');
@@ -564,6 +704,10 @@
             async function generateSummary(card) {
                 const id = Number(card?.dataset?.id);
                 if (!id) return;
+                if (card?.dataset?.canGenerate !== '1') {
+                    showNotice(i18n.generateNextDay, i18n.generateLabel);
+                    return;
+                }
                 const btn = card.querySelector('[data-action="generate"]');
                 if (btn) btn.disabled = true;
                 try {
@@ -577,22 +721,19 @@
                     });
                     const json = await res.json().catch(() => ({}));
                     if (!res.ok) throw new Error(json.message || 'Generate failed');
-                    card.dataset.generated = '1';
-                    if (btn) {
-                        btn.classList.add('is-done');
-                        const label = btn.querySelector('span');
-                        if (label) label.textContent = i18n.generatedLabel;
-                    }
+                    lockGeneratedCard(card);
                     showNotice(json.message || i18n.generateOk, i18n.generateLabel);
                 } catch (err) {
                     showNotice(err.message || 'Generate failed', i18n.noticeError);
-                } finally {
-                    if (btn) btn.disabled = false;
+                    if (btn && !isCardGenerated(card)) btn.disabled = false;
                 }
             }
 
             document.getElementById('expenses-add-card')?.addEventListener('click', () => openForm('create'));
-            document.getElementById('expense-add-row')?.addEventListener('click', () => addRow({ subject: '', amount: '' }));
+            document.getElementById('expense-add-row')?.addEventListener('click', () => {
+                if (viewingOnly) return;
+                addRow({ subject: '', amount: '' });
+            });
             document.getElementById('expense-form-cancel')?.addEventListener('click', closeForm);
             document.getElementById('expense-form-save')?.addEventListener('click', saveForm);
             formModal.querySelector('[data-close="form"]')?.addEventListener('click', closeForm);
@@ -613,21 +754,51 @@
             document.getElementById('expense-image-view-close')?.addEventListener('click', closeImageView);
             imageViewModal?.querySelector('[data-close="image-view"]')?.addEventListener('click', closeImageView);
             document.getElementById('expense-image-view-change')?.addEventListener('click', () => {
+                if (viewingOnly) return;
                 const row = imageViewRow;
                 closeImageView();
                 row?.querySelector('.js-image-input')?.click();
             });
 
             document.getElementById('expenses-board')?.addEventListener('click', (e) => {
-                const btn = e.target.closest('[data-action]');
-                if (!btn) return;
-                const card = btn.closest('.pds-expense-card');
+                const card = e.target.closest('.pds-expense-card');
                 if (!card || card.classList.contains('pds-expense-card--add')) return;
-                if (btn.dataset.action === 'edit') {
+                const thumb = e.target.closest('.js-card-image');
+                if (thumb) {
+                    const imageUrl = thumb.dataset.image || '';
+                    const subject = (thumb.dataset.subject || '').trim();
+                    openForm(isCardGenerated(card) || !canEdit ? 'view' : 'edit', card).then(() => {
+                        if (!imageUrl) return;
+                        const row = Array.from(rowsEl.querySelectorAll('.pds-expense-modal__row')).find((el) => {
+                            return (el.querySelector('.js-subject')?.value || '').trim() === subject;
+                        });
+                        openImageView(imageUrl, row || null);
+                    });
+                    return;
+                }
+                const btn = e.target.closest('[data-action]');
+                if (!btn) {
+                    if (e.target.closest('.pds-expense-card__header, .pds-expense-card__body')) {
+                        openForm(isCardGenerated(card) || !canEdit ? 'view' : 'edit', card);
+                    }
+                    return;
+                }
+                if (btn.dataset.action === 'view') {
+                    openForm('view', card);
+                } else if (btn.dataset.action === 'edit') {
                     openForm('edit', card);
                 } else if (btn.dataset.action === 'generate') {
+                    if (!canEdit || isCardGenerated(card)) return;
+                    if (card?.dataset?.canGenerate !== '1') {
+                        showNotice(i18n.generateNextDay, i18n.generateLabel);
+                        return;
+                    }
                     generateSummary(card);
                 } else if (btn.dataset.action === 'delete') {
+                    if (!canEdit || isCardGenerated(card)) {
+                        showNotice(i18n.lockedHint, i18n.generatedLabel);
+                        return;
+                    }
                     deletingId = Number(card.dataset.id);
                     deleteModal.hidden = false;
                 }

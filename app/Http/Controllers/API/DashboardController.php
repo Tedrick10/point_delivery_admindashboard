@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use App\Models\Setting;
 use App\Models\FrontendData;
 use App\Models\AppSetting;
+use App\Models\Branch;
 use App\Http\Resources\FrontendDataResource;
 use App\Http\Resources\OrderResource;
 use App\Http\Resources\SettingResource;
@@ -25,6 +26,7 @@ use App\Models\UserAddress;
 use App\Models\Vehicle;
 use App\Models\Wallet;
 use App\Models\WithdrawRequest;
+use App\Services\HrPayrollService;
 
 class DashboardController extends Controller
 {
@@ -45,6 +47,17 @@ class DashboardController extends Controller
             'position' => SettingData('CURRENCY', 'CURRENCY_POSITION') ?? 'left',
         ];
         $data['api_base_url'] = $this->resolvedApiBaseUrl();
+        $data['branches'] = Branch::query()
+            ->where('status', 1)
+            ->orderBy('name')
+            ->get(['id', 'name', 'status'])
+            ->map(fn (Branch $branch) => [
+                'id' => $branch->id,
+                'name' => $branch->name,
+                'status' => (int) $branch->status,
+            ])
+            ->values()
+            ->all();
 
         return json_custom_response($data);
     }
@@ -325,6 +338,16 @@ class DashboardController extends Controller
 
             $emergencyCount = Emergency::where('delivery_man_id', $auth_user->id)->where('status', 0)->count();
             $data['is_emergency'] = $emergencyCount > 0 ? true : false;
+
+            // Auto payroll salary for Rider App (current month)
+            try {
+                $data['payroll_salary'] = app(HrPayrollService::class)->salaryForUser(
+                    $auth_user,
+                    $request->get('month')
+                );
+            } catch (\Throwable $e) {
+                $data['payroll_salary'] = null;
+            }
         }
         return json_custom_response($data);
     }

@@ -396,10 +396,9 @@ class DispatchOrderItemController extends Controller
             $creditTo
         );
 
-        $branchId = \App\Models\Branch::query()
-            ->where('status', 1)
-            ->where('name', config('dispatch_item_cities.default_from_branch', 'MDY'))
-            ->value('id');
+        $branchId = resolveDefaultDispatchBranchId(
+            config('dispatch_item_cities.default_from_branch', 'MDY To MDY')
+        );
 
         $existingCount = DispatchOrderItem::query()
             ->where('order_id', $order->id)
@@ -1092,6 +1091,9 @@ class DispatchOrderItemController extends Controller
         // Any transition to Delivered is final — lock so status cannot change again.
         if ($toStatus === 'completed') {
             $fill['delivery_locked'] = true;
+            $fill['rider_remit_at'] = null;
+            $fill['delivered_at'] = now();
+            $fill['rider_remit_date'] = resolveRiderRemitDate((int) ($item->delivery_man_id ?? 0));
             $deliveredType = (string) $request->input('delivered_type');
             $fill['delivered_type'] = $deliveredType;
             if (! $request->hasFile('delivered_photo')) {
@@ -1272,6 +1274,13 @@ class DispatchOrderItemController extends Controller
                 'status' => false,
                 'message' => __('message.demo_permission_denied'),
             ], 403);
+        }
+
+        if (! $user->isRiderWorkOn()) {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.rider_work_off_assign_blocked'),
+            ], 422);
         }
 
         app(DispatchOrderWorkflowService::class)->reclaimPrematureAssign100Items();

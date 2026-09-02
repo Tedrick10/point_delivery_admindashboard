@@ -25,6 +25,16 @@ class ExpenseCard extends Model
         return $this->hasMany(ExpenseItem::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function summaries(): HasMany
+    {
+        return $this->hasMany(ExpenseSummary::class);
+    }
+
+    public function isGenerated(): bool
+    {
+        return $this->summaries()->exists();
+    }
+
     public function createdByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

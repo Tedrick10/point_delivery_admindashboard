@@ -41,6 +41,7 @@ Route::post('confirm-register-phone-firebase', [API\UserController::class, 'conf
 Route::get('appsetting', [API\DashboardController::class, 'appsetting']);
 Route::get('server-config', [API\DashboardController::class, 'serverConfig']);
 Route::get('language-table-list', [API\LanguageTableController::class, 'getList']);
+Route::get('branch-list', [API\BranchController::class, 'getList']);
 
 Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function () {
     Route::get('dashboard-detail', [API\UserController::class, 'dashboard']);
@@ -177,6 +178,7 @@ Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function ()
     Route::post('frontenddata-delete/{id}', [Controllers\FrontendDataController::class, 'destroy']);
     Route::get('frontend-website-data', [API\DashboardController::class, 'websiteData']);
     Route::get('deliveryman-dashboard-data', [API\DashboardController::class, 'deliverymandashboard']);
+    Route::get('my-payroll-salary', [API\HrSalaryController::class, 'mySalary']);
 
     Route::post('verify-otp-for-email', [API\UserController::class, 'verifyOTPForEmail']);
     Route::post('resend-otp-for-email', [API\UserController::class, 'resendOTPForEmail']);

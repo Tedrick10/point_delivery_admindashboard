@@ -189,6 +189,15 @@ class SuperAdminDashboardService
                 ['label' => __('message.sa_akos_given'), 'value' => $s['summary_ako_month'], 'money' => true],
                 ['label' => __('message.sa_days_generated'), 'value' => $s['summary_days'], 'money' => false],
             ],
+            'late-fine' => [
+                ['label' => __('message.hr_allowance_minutes'), 'value' => __('message.sa_late_fine_metric_per_staff'), 'money' => false, 'raw' => true],
+                ['label' => __('message.hr_fine_per_minute'), 'value' => app(\App\Services\HrPayrollService::class)->defaultFinePerMinute(), 'money' => true],
+                ['label' => __('message.hr_absent_day_rate'), 'value' => app(\App\Services\HrPayrollService::class)->defaultAbsentDayRate(), 'money' => true],
+            ],
+            'rider-salary' => [
+                ['label' => __('message.hr_way_rate'), 'value' => __('message.sa_late_fine_metric_per_staff'), 'money' => false, 'raw' => true],
+                ['label' => __('message.hr_group_rider'), 'value' => \App\Models\HrStaff::query()->active()->where('staff_group', 'rider')->count(), 'money' => false],
+            ],
             default => [],
         };
 

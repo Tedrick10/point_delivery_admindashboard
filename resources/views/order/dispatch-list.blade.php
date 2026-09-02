@@ -8,6 +8,14 @@
                             <h4 class="card-title mb-0 pds-page-title">{{ $pageTitle ?? '' }}</h4>
                         </div>
                         <div class="card-header-toolbar pds-page-actions">
+                            <button type="button"
+                                    class="pds-dispatch-items-audit-btn"
+                                    id="deliAuditBtn"
+                                    data-url="{{ route('order.dispatch.deli-audit') }}"
+                                    title="{{ __('message.dispatch_audit_deli_amount_log') }}">
+                                <i class="fas fa-clipboard-list" aria-hidden="true"></i>
+                                <span>{{ __('message.dispatch_audit_deli_amount_log') }}</span>
+                            </button>
                             @if(isset($button))
                                 {!! $button !!}
                             @endif
@@ -150,7 +158,7 @@
                             <div class="mb-3">{!! $multi_checkbox_delete !!}</div>
                         @endif
 
-                        <div class="pds-table-shell pds-dispatch-table-shell">
+                        <div class="pds-table-shell pds-dispatch-table-shell pds-no-freeze">
                             {{ $dataTable->table(['class' => 'table w-100 pds-datatable pds-dispatch-datatable'], false) }}
                         </div>
                     </div>
@@ -159,10 +167,106 @@
         </div>
     </div>
 
+    <div class="pds-rider-remit-audit pds-deli-audit" id="deliAuditModal" hidden>
+        <div class="pds-rider-remit-audit__backdrop" data-deli-audit-close></div>
+        <div class="pds-rider-remit-audit__panel" role="dialog" aria-modal="true" aria-labelledby="deliAuditTitle">
+            <div class="pds-rider-remit-audit__head">
+                <div>
+                    <h5 id="deliAuditTitle">{{ __('message.dispatch_audit_deli_amount_log') }}</h5>
+                    <p id="deliAuditRangeLabel">{{ $filterFromDate }} — {{ $filterToDate }}</p>
+                </div>
+                <button type="button" class="pds-rider-remit-audit__close" data-deli-audit-close aria-label="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="pds-rider-remit-audit__body" id="deliAuditBody">
+                <p class="pds-rider-remit-audit__empty">{{ __('message.dispatch_audit_deli_amount_empty') }}</p>
+            </div>
+        </div>
+    </div>
+
     @section('bottom_script')
         {{ $dataTable->scripts() }}
         <script src="{{ asset('js/dispatch-pickup-rider-list.js') }}?v=9"></script>
         <script src="{{ asset('js/admin-order-list-live.js') }}?v=3"></script>
+        <script>
+            (function bindDeliAuditLog() {
+                if (!window.jQuery) {
+                    return setTimeout(bindDeliAuditLog, 40);
+                }
+                var $ = window.jQuery;
+                var $btn = $('#deliAuditBtn');
+                var $modal = $('#deliAuditModal');
+                var $body = $('#deliAuditBody');
+                var $range = $('#deliAuditRangeLabel');
+                if (!$btn.length || !$modal.length) return;
+
+                var emptyText = @json(__('message.dispatch_audit_deli_amount_empty'));
+
+                function closeAudit() {
+                    $modal.attr('hidden', true);
+                }
+
+                function openAudit() {
+                    var fromDate = $('#from_date').val() || @json($filterFromDate);
+                    var toDate = $('#to_date').val() || @json($filterToDate);
+                    $range.text(fromDate + ' — ' + toDate);
+                    $modal.removeAttr('hidden');
+                    $body.html('<p class="pds-rider-remit-audit__loading"><i class="fas fa-spinner fa-spin"></i></p>');
+                    $.ajax({
+                        url: $btn.data('url'),
+                        type: 'GET',
+                        data: { from_date: fromDate, to_date: toDate },
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                        success: function (res) {
+                            var entries = (res && res.entries) ? res.entries : [];
+                            if (!entries.length) {
+                                $body.html('<p class="pds-rider-remit-audit__empty">' + emptyText + '</p>');
+                                return;
+                            }
+                            var html = '<ol class="pds-rider-remit-audit__list">';
+                            entries.forEach(function (e, index) {
+                                var parts = Array.isArray(e.action_parts) ? e.action_parts : [];
+                                var chips = parts.map(function (p) {
+                                    return '<span class="pds-rider-remit-audit__chip">' + $('<div>').text(p).html() + '</span>';
+                                }).join('');
+                                html += '<li class="pds-rider-remit-audit__item">';
+                                html += '<span class="pds-rider-remit-audit__index">' + (index + 1) + '</span>';
+                                html += '<div class="pds-rider-remit-audit__card">';
+                                html += '<div class="pds-rider-remit-audit__meta">';
+                                html += '<strong>' + $('<div>').text(e.title || 'DeliAmount').html() + '</strong>';
+                                html += '<time>' + $('<div>').text(e.time || '').html() + '</time>';
+                                html += '</div>';
+                                html += '<p>' + $('<div>').text(e.summary || e.message || '').html() + '</p>';
+                                if (chips) {
+                                    html += '<div class="pds-rider-remit-audit__chips">' + chips + '</div>';
+                                }
+                                html += '</div></li>';
+                            });
+                            html += '</ol>';
+                            $body.html(html);
+                        },
+                        error: function (xhr) {
+                            var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                                ? xhr.responseJSON.message
+                                : @json(__('message.something_went_wrong'));
+                            $body.html('<p class="pds-rider-remit-audit__empty">' + $('<div>').text(msg).html() + '</p>');
+                        }
+                    });
+                }
+
+                $btn.on('click', function (e) {
+                    e.preventDefault();
+                    openAudit();
+                });
+                $modal.on('click', '[data-deli-audit-close]', closeAudit);
+                $(document).on('keydown.deliAuditList', function (e) {
+                    if (e.key === 'Escape' && !$modal.is('[hidden]')) {
+                        closeAudit();
+                    }
+                });
+            })();
+        </script>
         <script>
             $(document).ready(function () {
                 if (typeof flatpickr !== 'undefined') {

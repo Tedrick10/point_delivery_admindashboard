@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Branch;
 use App\Models\DispatchOrderItem;
 use App\Models\Order;
 use Carbon\Carbon;
@@ -507,17 +506,23 @@ class TextOrderDispatchService
         $delivery = is_array($order->delivery_point) ? $order->delivery_point : [];
         $branchId = $this->defaultBranchId();
 
-        $customerName = trim((string) ($delivery['name'] ?? ''));
-        $customerPhone = normalizeContactNumber(trim((string) ($delivery['contact_number'] ?? '')));
-        $customerAddress = trim((string) ($delivery['address'] ?? ''));
-        if ($customerName === '') {
-            $customerName = trim((string) ($pickup['name'] ?? ''));
-        }
-        if ($customerPhone === '') {
-            $customerPhone = normalizeContactNumber(trim((string) ($pickup['contact_number'] ?? '')));
-        }
-        if ($customerAddress === '') {
-            $customerAddress = trim((string) ($pickup['address'] ?? ''));
+        // Text orders: customer is entered per item — never seed from OS pickup
+        // (admin create used to copy pickup → delivery, which polluted Customer fields).
+        if ($this->isTextOrder($order)) {
+            $customerName = '';
+            $customerPhone = '';
+            $customerAddress = '';
+        } else {
+            $customerName = trim((string) ($delivery['name'] ?? ''));
+            $customerPhone = normalizeContactNumber(trim((string) ($delivery['contact_number'] ?? '')));
+            $customerAddress = trim((string) ($delivery['address'] ?? ''));
+
+            // If delivery was incorrectly mirrored from OS pickup, treat as empty.
+            if ($this->deliveryLooksLikePickupOs($pickup, $delivery)) {
+                $customerName = '';
+                $customerPhone = '';
+                $customerAddress = '';
+            }
         }
 
         // Instruction only — never auto tip / order.description pollution.
@@ -538,6 +543,29 @@ class TextOrderDispatchService
             'customer_address' => $customerAddress,
             'weight' => 0,
         ], $this->paymentFieldsFromSource(is_array($delivery['payment'] ?? null) ? $delivery['payment'] : []));
+    }
+
+    /**
+     * True when delivery name/phone/address match pickup (OS) — not a real customer.
+     */
+    private function deliveryLooksLikePickupOs(array $pickup, array $delivery): bool
+    {
+        $pName = trim((string) ($pickup['name'] ?? ''));
+        $pPhone = normalizeContactNumber(trim((string) ($pickup['contact_number'] ?? '')));
+        $pAddr = trim((string) ($pickup['address'] ?? ''));
+        $dName = trim((string) ($delivery['name'] ?? ''));
+        $dPhone = normalizeContactNumber(trim((string) ($delivery['contact_number'] ?? '')));
+        $dAddr = trim((string) ($delivery['address'] ?? ''));
+
+        if ($dName === '' && $dPhone === '' && $dAddr === '') {
+            return false;
+        }
+
+        $nameSame = $pName !== '' && $dName !== '' && mb_strtolower($pName) === mb_strtolower($dName);
+        $phoneSame = $pPhone !== '' && $dPhone !== '' && $pPhone === $dPhone;
+        $addrSame = $pAddr !== '' && $dAddr !== '' && mb_strtolower($pAddr) === mb_strtolower($dAddr);
+
+        return ($nameSame && $addrSame) || ($nameSame && $phoneSame) || ($addrSame && $phoneSame);
     }
 
     /**
@@ -716,12 +744,9 @@ class TextOrderDispatchService
 
     private function defaultBranchId(): ?int
     {
-        $name = config('dispatch_item_cities.default_from_branch', 'MDY');
-
-        return Branch::query()
-            ->where('status', 1)
-            ->where('name', $name)
-            ->value('id');
+        return resolveDefaultDispatchBranchId(
+            config('dispatch_item_cities.default_from_branch', 'MDY To MDY')
+        );
     }
 
     private function resolveTargetCount(Order $order, ?int $itemCount = null): int

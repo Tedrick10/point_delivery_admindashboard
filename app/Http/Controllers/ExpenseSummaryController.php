@@ -45,10 +45,24 @@ class ExpenseSummaryController extends Controller
         }
 
         $rows = ExpenseSummary::query()
+            ->with(['expenseCard.items'])
             ->whereBetween('summary_date', [$from, $to])
             ->orderBy('summary_date')
             ->orderBy('id')
             ->get();
+
+        $summaryService = app(\App\Services\ExpenseSummaryService::class);
+        $authUser = auth()->user();
+        $rows = $summaryService->syncIncomeOnRows($rows, $authUser);
+
+        $incomeItemsByDate = [];
+        foreach ($rows as $row) {
+            $day = $row->summary_date?->toDateString();
+            if (! $day || isset($incomeItemsByDate[$day])) {
+                continue;
+            }
+            $incomeItemsByDate[$day] = $summaryService->incomeCardItemsForDate($day, $authUser);
+        }
 
         $pageTitle = __('message.expense_summary_title');
         $assets = [];
@@ -66,6 +80,7 @@ class ExpenseSummaryController extends Controller
             'pageTitle',
             'assets',
             'rows',
+            'incomeItemsByDate',
             'prevMonth',
             'nextMonth',
             'monthLabel',

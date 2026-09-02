@@ -9,6 +9,8 @@
         'os-receive' => 'fa-hand-holding-usd',
         'expenses' => 'fa-receipt',
         'expense-summary' => 'fa-file-invoice-dollar',
+        'late-fine' => 'fa-user-clock',
+        'rider-salary' => 'fa-coins',
     ];
 @endphp
 <a href="{{ route('super-admin.dashboard') }}" class="{{ request()->routeIs('super-admin.dashboard') ? 'active' : '' }}">

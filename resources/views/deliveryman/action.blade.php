@@ -57,22 +57,26 @@
         </div>
     @endif
     @if($action_type == 'action')
-        <div class="d-flex justify-content-end align-items-center">
+        <div class="pds-deliveryman-row-actions">
             @if($auth_user->can('deliveryman-edit'))
-                <a class="mr-2" href="{{ route('deliveryman.edit', $id) }}" title="{{ __('message.update_form_title',['form' => __('message.deliveryman') ]) }}"><i class="fas fa-edit text-primary"></i></a>
+                <a class="pds-deliveryman-row-action is-edit" href="{{ route('deliveryman.edit', $id) }}" title="{{ __('message.update_form_title',['form' => __('message.deliveryman') ]) }}">
+                    <i class="fas fa-pen" aria-hidden="true"></i>
+                </a>
             @endif
 
             @if($auth_user->can('deliveryman-show'))
-            <a class="mr-2" href="{{ route('deliveryman.show',$id) }}"><i class="fas fa-eye text-secondary"></i></a>
+                <a class="pds-deliveryman-row-action is-view" href="{{ route('deliveryman.show',$id) }}" title="{{ __('message.view') }}">
+                    <i class="fas fa-eye" aria-hidden="true"></i>
+                </a>
             @endif
 
             @if($auth_user->can('deliveryman-delete'))
                 {{ html()->form('DELETE', route('deliveryman.destroy', $id))->attribute('data--submit', 'deliveryman'.$id)->open() }}
-                    <a class="mr-2 text-danger" href="javascript:void(0)" data--submit="deliveryman{{$id}}"
+                    <a class="pds-deliveryman-row-action is-delete" href="javascript:void(0)" data--submit="deliveryman{{$id}}"
                         data--confirmation='true' data-title="{{ __('message.delete_form_title',['form'=> __('message.delivery_man') ]) }}"
                         title="{{ __('message.delete_form_title',['form'=>  __('message.delivery_man') ]) }}"
                         data-message='{{ __("message.delete_msg") }}'>
-                        <i class="fas fa-trash-alt"></i>
+                        <i class="fas fa-trash" aria-hidden="true"></i>
                     </a>
                 {{ html()->form()->close() }}
             @endif

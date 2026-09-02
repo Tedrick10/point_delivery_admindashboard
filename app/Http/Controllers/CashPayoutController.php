@@ -74,6 +74,10 @@ class CashPayoutController extends Controller
 
         $rider = User::query()->where('user_type', 'delivery_man')->findOrFail((int) $data['delivery_man_id']);
 
+        if (! $rider->isRiderWorkOn()) {
+            return response()->json(['message' => __('message.rider_work_off_assign_blocked')], 422);
+        }
+
         $payout->update([
             'delivery_man_id' => $rider->id,
             'status' => OsCashPayout::STATUS_ASSIGNED,

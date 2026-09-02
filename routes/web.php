@@ -31,6 +31,9 @@ use App\Http\Controllers\Frontendwebsite\FronthomeController;
 use App\Http\Controllers\SuperAdmin\AuthController as SuperAdminAuthController;
 use App\Http\Controllers\SuperAdmin\BranchAdminController as SuperAdminBranchAdminController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
+use App\Http\Controllers\SuperAdmin\LateFineSettingsController as SuperAdminLateFineSettingsController;
+use App\Http\Controllers\SuperAdmin\RiderRemitSettingsController as SuperAdminRiderRemitSettingsController;
+use App\Http\Controllers\SuperAdmin\RiderSalarySettingsController as SuperAdminRiderSalarySettingsController;
 use App\Http\Controllers\SuperAdmin\ScreenController as SuperAdminScreenController;
 use App\Http\Controllers\WalkThroughController;
 use App\Http\Controllers\PushNotificationController;
@@ -41,6 +44,11 @@ use App\Http\Controllers\CashPayoutController;
 use App\Http\Controllers\OsReceiveSettlementController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\ExpenseSummaryController;
+use App\Http\Controllers\HrLateFineController;
+use App\Http\Controllers\HrMySalaryController;
+use App\Http\Controllers\HrOfficeSalaryController;
+use App\Http\Controllers\HrRiderSalaryController;
+use App\Http\Controllers\HrStaffController;
 use App\Http\Controllers\RiderRemitController;
 use App\Http\Controllers\WhyDeliveryController;
 use App\Http\Controllers\WithdrawRequestController;
@@ -218,6 +226,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
 
     Route::get('users/os-account/create', [ClientController::class, 'createOsAccount'])->name('users.os-account.create');
     Route::post('users/os-account/store', [ClientController::class, 'storeOsAccount'])->name('users.os-account.store');
+    Route::post('users/{id}/approval-status', [ClientController::class, 'updateApprovalStatus'])->name('users.approval-status');
     Route::resource('users', ClientController::class);
     Route::get('users-view/{id?}', [ClientController::class, 'show'])->name('users-view.show');
     Route::get('users-edit/{id?}', [ClientController::class, 'edit'])->name('users-edit.edit');
@@ -227,6 +236,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
 
     // sub admin
     Route::resource('sub-admin', SubAdminController::class);
+    Route::post('sub-admin/{id}/work-status', [SubAdminController::class, 'updateWorkStatus'])->name('sub-admin.work-status');
     Route::get('sub-admin-restore/{id?}', [SubAdminController::class, 'action'])->name('sub-admin.restore');
     Route::delete('sub-admin-force-delete/{id?}', [SubAdminController::class, 'action'])->name('sub-admin.force.delete');
 
@@ -234,6 +244,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('deliveryman-rider-of-month', [DeliverymanController::class, 'riderOfTheMonth'])->name('deliveryman.rider-of-month');
     Route::get('deliveryman/{id}/reviews', [DeliverymanController::class, 'reviews'])->name('deliveryman.reviews');
     Route::post('deliveryman/{id}/contact-number', [DeliverymanController::class, 'updateContactNumber'])->name('deliveryman.contact-number');
+    Route::post('deliveryman/{id}/work-status', [DeliverymanController::class, 'updateWorkStatus'])->name('deliveryman.work-status');
     Route::get('deliveryman-view/{id?}', [DeliverymanController::class, 'show'])->name('deliveryman-view.show');
     Route::get('deliverymean-restore/{id?}', [DeliverymanController::class, 'action'])->name('deliveryman.restore');
     Route::delete('deliveryman-force-delete/{id?}', [DeliverymanController::class, 'action'])->name('deliveryman.force.delete');
@@ -283,15 +294,37 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('expenses/{id}/generate', [ExpenseController::class, 'generate'])->name('order.expenses.generate');
     Route::delete('expenses/{id}', [ExpenseController::class, 'destroy'])->name('order.expenses.destroy');
     Route::get('expense-summary', [ExpenseSummaryController::class, 'index'])->name('order.expense-summary');
+
+    Route::get('hr/my-salary', [HrMySalaryController::class, 'index'])->name('hr.my-salary.index');
+    Route::get('hr/staff', [HrStaffController::class, 'index'])->name('hr.staff.index');
+    Route::post('hr/staff', [HrStaffController::class, 'store'])->name('hr.staff.store');
+    Route::put('hr/staff/{id}', [HrStaffController::class, 'update'])->name('hr.staff.update');
+    Route::delete('hr/staff/{id}', [HrStaffController::class, 'destroy'])->name('hr.staff.destroy');
+    Route::get('hr/late-fine', [HrLateFineController::class, 'index'])->name('hr.late-fine.index');
+    Route::put('hr/late-fine/row/{id}', [HrLateFineController::class, 'updateRow'])->name('hr.late-fine.row.update');
+    Route::post('hr/late-fine/item', [HrLateFineController::class, 'storeItem'])->name('hr.late-fine.item.store');
+    Route::delete('hr/late-fine/item/{id}', [HrLateFineController::class, 'destroyItem'])->name('hr.late-fine.item.destroy');
+    Route::get('hr/office-salary', [HrOfficeSalaryController::class, 'index'])->name('hr.office-salary.index');
+    Route::put('hr/office-salary/row/{id}', [HrOfficeSalaryController::class, 'updateRow'])->name('hr.office-salary.row.update');
+    Route::post('hr/office-salary/sync', [HrOfficeSalaryController::class, 'syncFromLateFine'])->name('hr.office-salary.sync');
+    Route::get('hr/rider-salary', [HrRiderSalaryController::class, 'index'])->name('hr.rider-salary.index');
+    Route::put('hr/rider-salary/row/{id}', [HrRiderSalaryController::class, 'updateRow'])->name('hr.rider-salary.row.update');
+    Route::post('hr/rider-salary/sync', [HrRiderSalaryController::class, 'syncFromLateFine'])->name('hr.rider-salary.sync');
+
     Route::get('rider-remit', [RiderRemitController::class, 'index'])->name('order.rider-remit');
     Route::post('rider-remit/save', [RiderRemitController::class, 'save'])->name('order.rider-remit.save');
+    Route::post('rider-remit/default-fuel', [RiderRemitController::class, 'saveDefaultFuel'])->name('order.rider-remit.default-fuel');
+    Route::post('rider-remit/submit', [RiderRemitController::class, 'submit'])->name('order.rider-remit.submit');
+    Route::get('rider-remit/logs', [RiderRemitController::class, 'logs'])->name('order.rider-remit.logs');
     Route::get('dispatch-os-list/{osId}/slip-preview', [OrderController::class, 'dispatchOsSettlementSlipPreview'])->name('order.dispatch.os-slip-preview');
     Route::post('dispatch-os-list/{osId}/upload-kpay-slip', [OrderController::class, 'dispatchOsSettlementUploadKpay'])->name('order.dispatch.os-upload-kpay');
     Route::post('dispatch-os-list/{osId}/finish', [OrderController::class, 'dispatchOsSettlementFinish'])->name('order.dispatch.os-finish');
     Route::post('dispatch-os-list/finish-all', [OrderController::class, 'dispatchOsSettlementFinishAll'])->name('order.dispatch.os-finish-all');
     Route::get('dispatch-os-list/{osId}/items', [OrderController::class, 'dispatchOsItems'])->name('order.dispatch.os-items');
     Route::post('dispatch-os-list/{osId}/items/bulk-update', [OrderController::class, 'dispatchOsItemsBulkUpdate'])->name('order.dispatch.os-items.bulk-update');
+    Route::get('dispatch-order/deli-audit', [OrderController::class, 'dispatchDeliAudit'])->name('order.dispatch.deli-audit');
     Route::get('dispatch-order/{id}/items/live-version', [OrderController::class, 'liveItemsVersion'])->name('order.dispatch.items.live-version');
+    Route::get('dispatch-order/{id}/items/deli-audit', [OrderController::class, 'dispatchItemsDeliAudit'])->name('order.dispatch.items.deli-audit');
     Route::get('dispatch-order/{id}/items', [OrderController::class, 'dispatchItems'])->name('order.dispatch.items');
     Route::get('dispatch-order/{id}/item/create', [OrderController::class, 'dispatchItemCreate'])->name('order.dispatch.item.create');
     Route::post('dispatch-order/{id}/item', [OrderController::class, 'dispatchItemStore'])->name('order.dispatch.item.store');
@@ -570,6 +603,14 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
         Route::get('dashboard', [SuperAdminDashboardController::class, 'index']);
         Route::get('screens', [SuperAdminScreenController::class, 'hub'])->name('screens.hub');
         Route::get('screens/{screen}', [SuperAdminScreenController::class, 'show'])->name('screens.show');
+        Route::post('rider-remit/default-fuel', [SuperAdminRiderRemitSettingsController::class, 'saveDefaultFuel'])
+            ->name('rider-remit.default-fuel');
+        Route::post('late-fine/defaults', [SuperAdminLateFineSettingsController::class, 'saveDefaults'])
+            ->name('late-fine.defaults');
+        Route::put('late-fine/staff/{id}/allowance', [SuperAdminLateFineSettingsController::class, 'updateAllowance'])
+            ->name('late-fine.staff.allowance');
+        Route::put('rider-salary/staff/{id}/way-rate', [SuperAdminRiderSalarySettingsController::class, 'updateWayRate'])
+            ->name('rider-salary.staff.way-rate');
         Route::resource('branch-admins', SuperAdminBranchAdminController::class)->except(['show']);
     });
 });

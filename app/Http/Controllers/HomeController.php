@@ -572,6 +572,11 @@ class HomeController extends Controller
                 $user = User::find($request->id);
                 if ($request->status != null) {
                     $user->status = $request->status;
+                    if (($user->user_type ?? '') === 'client') {
+                        $user->approval_status = ((int) $request->status === 1)
+                            ? User::APPROVAL_APPROVED
+                            : User::APPROVAL_REJECTED;
+                    }
                 }
 
                 if ($request->has('is_autoverified_email')) {
@@ -835,6 +840,7 @@ class HomeController extends Controller
                     ->with('city:id,name')
                     ->where('user_type', 'delivery_man')
                     ->where('status', 1)
+                    ->availableForAssign()
                     ->where(function ($query) {
                         $query->whereNotNull('email_verified_at')
                             ->whereNotNull('otp_verify_at')
