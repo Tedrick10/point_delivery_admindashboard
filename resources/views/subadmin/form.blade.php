@@ -16,6 +16,16 @@
                     </div>
 
                     <div class="card-body pds-page-body">
+                        @if ($errors->any())
+                            <div class="alert alert-danger">
+                                <ul class="mb-0 pl-3">
+                                    @foreach ($errors->all() as $error)
+                                        <li>{{ $error }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+
                         <div class="row">
                             <div class="col-md-3 col-lg-2 mb-4 mb-md-0">
                                 @include('partials._profile_upload', ['profileImage' => $profileImage ?? null])
@@ -32,10 +42,13 @@
                                 <div class="row">
                                     <div class="form-group col-md-6">
                                         {{ html()->label(__('message.role') . ' <span class="text-danger">*</span>', 'user_type')->class('form-control-label') }}
-                                        {{ html()->select('user_type', $roles, old('user_type', optional($data ?? null)->user_type ?? ($selectedRole ?? null)))
+                                        {{ html()->select('user_type', ['' => __('message.select_name', ['select' => __('message.role')])] + $roles->toArray(), old('user_type', optional($data ?? null)->user_type ?? ($selectedRole ?? null)))
                                             ->class('select2js role')
                                             ->attribute('data-placeholder', __('message.select_name', ['select' => __('message.role')]))
                                             ->attribute('required', true) }}
+                                        @error('user_type')
+                                            <span class="help-block error text-danger">{{ $message }}</span>
+                                        @enderror
                                     </div>
 
                                     <div class="form-group col-md-6">
@@ -44,6 +57,9 @@
                                             ->placeholder(__('message.name'))
                                             ->class('form-control')
                                             ->attribute('required', true) }}
+                                        @error('name')
+                                            <span class="help-block error text-danger">{{ $message }}</span>
+                                        @enderror
                                     </div>
 
                                     @php $readonly = isset($id) ? 'readonly' : ''; @endphp
@@ -55,6 +71,9 @@
                                             ->class('form-control')
                                             ->attribute('required', true)
                                             ->attribute($readonly, '') }}
+                                        @error('email')
+                                            <span class="help-block error text-danger">{{ $message }}</span>
+                                        @enderror
                                     </div>
 
                                     <div class="form-group col-md-6">
@@ -64,6 +83,9 @@
                                             ->class('form-control')
                                             ->attribute('required', true)
                                             ->attribute($readonly, '') }}
+                                        @error('username')
+                                            <span class="help-block error text-danger">{{ $message }}</span>
+                                        @enderror
                                     </div>
 
                                     <div class="form-group col-md-6">
@@ -74,6 +96,11 @@
                                             ->attribute('id', 'phone')
                                             ->attribute('required', true)
                                             ->attribute($readonly, '') }}
+                                        <span id="valid-msg" class="text-success d-none">✓</span>
+                                        <span id="error-msg" class="text-danger d-none"></span>
+                                        @error('contact_number')
+                                            <span class="help-block error text-danger">{{ $message }}</span>
+                                        @enderror
                                     </div>
 
                                     <div class="form-group col-md-6">
@@ -107,6 +134,9 @@
                                                     </span>
                                                 </div>
                                             </div>
+                                            @error('password')
+                                                <span class="help-block error text-danger">{{ $message }}</span>
+                                            @enderror
                                         @endif
                                     </div>
                                 </div>
@@ -114,7 +144,7 @@
                         </div>
 
                         <hr class="mt-2">
-                        {{ html()->submit(isset($id) ? __('message.update') : __('message.save'))->class('btn btn-md btn-primary float-right') }}
+                        {{ html()->submit(isset($id) ? __('message.update') : __('message.save'))->class('btn btn-md btn-primary float-right')->attribute('id', 'subadmin_submit') }}
                     </div>
                 </div>
             </div>
@@ -127,6 +157,35 @@
         <script>
             $(document).ready(function() {
                 $('.select2js').select2({ width: '100%' });
+
+                // Always allow Save; phone script may have disabled it earlier.
+                $('#subadmin_form [type="submit"]').prop('disabled', false).removeClass('disabled');
+
+                var phoneInput = document.querySelector('#subadmin_form #phone');
+                if (phoneInput && !phoneInput.readOnly) {
+                    ['input', 'keyup', 'blur', 'countrychange', 'change'].forEach(function (eventName) {
+                        phoneInput.addEventListener(eventName, function () {
+                            $('#subadmin_form [type="submit"]').prop('disabled', false).removeClass('disabled');
+                        });
+                    });
+                }
+
+                $('#subadmin_form').on('submit', function () {
+                    if (phoneInput && window.intlTelInputGlobals) {
+                        var iti = window.intlTelInputGlobals.getInstance(phoneInput);
+                        if (iti) {
+                            var full = iti.getNumber();
+                            if (full) {
+                                phoneInput.value = full;
+                                var hidden = document.querySelector('#subadmin_form input[type="hidden"][name="contact_number"]');
+                                if (hidden) {
+                                    hidden.value = full;
+                                }
+                            }
+                        }
+                    }
+                    $('#subadmin_form [type="submit"]').prop('disabled', false).removeClass('disabled');
+                });
 
                 $('.hide-show-password').on('click', function() {
                     var passwordInput = $('#password');

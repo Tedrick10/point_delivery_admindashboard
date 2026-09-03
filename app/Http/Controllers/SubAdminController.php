@@ -67,11 +67,7 @@ class SubAdminController extends Controller
             $employeeType = EmployeeType::with('activeRoles')->find(request('employee_type'));
         }
 
-        $rolesQuery = Role::where('status', 1)->whereNotIn('name', ['admin','client','delivery_man']);
-        if ($employeeType) {
-            $rolesQuery->where('employee_type_id', $employeeType->id);
-        }
-        $roles = $rolesQuery->get()->pluck('name', 'name');
+        $roles = $this->employeeRoleOptions($employeeType);
 
         $assets = ['phone'];
         return view('subadmin.form', compact('pageTitle','roles','assets','employeeType','selectedRole'));
@@ -85,12 +81,54 @@ class SubAdminController extends Controller
      */
     public function store(UserRequest $request)
     {
-        $request['password'] = bcrypt($request->password);
-        $request['username'] = $request->username ?? stristr($request->email, "@", true) . rand(100,1000);
+        if (! auth()->user()->can('subadmin-add')) {
+            return redirect()->back()->withInput()->withErrors(__('message.demo_permission_denied'));
+        }
 
-        $result = User::create($request->all());
-        uploadMediaFile($result,$request->profile_image, 'profile_image');
-        $result->assignRole($request->user_type);
+        $allowedRoles = $this->employeeRoleOptions()->keys()->all();
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'username' => 'required|string|max:100|unique:users,username',
+            'contact_number' => 'required|string|max:30|unique:users,contact_number',
+            'password' => 'required|string|min:6',
+            'user_type' => 'required|string|in:'.implode(',', $allowedRoles),
+            'profile_image' => 'nullable|image|mimes:jpg,jpeg,png,gif',
+        ]);
+
+        $contactNumber = $this->normalizeContactNumber($data['contact_number'] ?? null);
+        if ($contactNumber === null) {
+            return redirect()->back()->withInput()->withErrors([
+                'contact_number' => __('message.contact_number').' is required.',
+            ]);
+        }
+
+        if (User::withTrashed()->where('contact_number', $contactNumber)->exists()) {
+            return redirect()->back()->withInput()->withErrors([
+                'contact_number' => __('message.contact_number_already_taken'),
+            ]);
+        }
+
+        try {
+            $result = User::create([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'username' => $data['username'],
+                'password' => bcrypt($data['password']),
+                'user_type' => $data['user_type'],
+                'contact_number' => $contactNumber,
+                'status' => 1,
+                'email_verified_at' => now(),
+                'otp_verify_at' => now(),
+            ]);
+
+            uploadMediaFile($result, $request->file('profile_image'), 'profile_image');
+            $result->assignRole($data['user_type']);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()->back()->withInput()->withErrors($e->getMessage());
+        }
 
         $message = __('message.save_form', ['form' => __('message.sub_admin')]);
         if ($request->is('api/*')) {
@@ -127,13 +165,13 @@ class SubAdminController extends Controller
         $data = User::whereNotIn('user_type',['admin','client','delivery_man'])->findOrFail($id);
         $profileImage = getSingleMedia($data, 'profile_image');
         $assets = ['phone'];
-        $roles = Role::where('status', 1)->whereNotIn('name', ['admin','client','delivery_man'])->get()->pluck('name', 'name');
         $employeeType = null;
         $selectedRole = $data->user_type;
         if ($data->user_type) {
             $role = Role::where('name', $data->user_type)->first();
             $employeeType = $role?->employeeType;
         }
+        $roles = $this->employeeRoleOptions($employeeType, $selectedRole);
 
         return view('subadmin.form', compact('data', 'pageTitle', 'id', 'assets','roles','profileImage','employeeType','selectedRole'));
     }
@@ -329,5 +367,55 @@ class SubAdminController extends Controller
             'rest_locked' => (bool) ($restResult['locked'] ?? false),
             'off_date' => $workOn ? null : $today,
         ]);
+    }
+
+    /**
+     * Roles assignable on Account Creation / Employee form.
+     * System app roles (client, delivery man, super admin) stay out of this list.
+     * Admin + custom employee roles (staff, manager, …) are shown.
+     *
+     * @return \Illuminate\Support\Collection<string, string>
+     */
+    protected function employeeRoleOptions(?EmployeeType $employeeType = null, ?string $includeRole = null)
+    {
+        $excluded = ['client', 'delivery_man', 'super_admin', 'demo_admin'];
+
+        $rolesQuery = Role::query()
+            ->where('status', 1)
+            ->whereNotIn('name', $excluded)
+            ->orderBy('name');
+
+        if ($employeeType) {
+            $rolesQuery->where(function ($query) use ($employeeType, $includeRole) {
+                $query->where('employee_type_id', $employeeType->id);
+                if ($includeRole) {
+                    $query->orWhere('name', $includeRole);
+                }
+            });
+        }
+
+        return $rolesQuery->get()->mapWithKeys(function (Role $role) {
+            $label = ucwords(str_replace('_', ' ', $role->name));
+
+            return [$role->name => $label];
+        });
+    }
+
+    /**
+     * Normalize intl-tel / dial-code quirks (e.g. +95+9598… → +9598…).
+     */
+    protected function normalizeContactNumber(?string $value): ?string
+    {
+        $number = preg_replace('/\s+/', '', (string) $value);
+        if ($number === '' || preg_match('/^\+\d{1,4}$/', $number)) {
+            return null;
+        }
+
+        // Collapse duplicated country dial prefixes: +95+9598… → +9598…
+        if (preg_match('/^\+(\d{1,4})\+(\d+)$/', $number, $matches)) {
+            $number = '+'.$matches[2];
+        }
+
+        return $number;
     }
 }

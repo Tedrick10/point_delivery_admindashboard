@@ -1246,21 +1246,29 @@
                         input.addEventListener('keyup', reset);
 
                         function validate(input) {
+                            var $form = $(input).closest('form');
+                            var $submit = $form.length ? $form.find('[type="submit"]') : $();
                             if (input.value.trim()) {
                                 if (iti.isValidNumber()) {
                                     succ.removeClass('d-none');
                                     err.html('');
                                     err.addClass('d-none');
                                     $(input).closest('.form-group').removeClass('has-danger');
-                                    $('[type="submit"]').removeClass('disabled').prop('disabled', false);
+                                    $submit.removeClass('disabled').prop('disabled', false);
                                 } else {
                                     var errorCode = iti.getValidationError();
                                     err.html(errorMap[errorCode] || "Invalid number");
                                     err.removeClass('d-none');
                                     succ.addClass('d-none');
                                     $(input).closest('.form-group').addClass('has-danger');
-                                    $('[type="submit"]').addClass('disabled').prop('disabled', true);
+                                    // Do not disable Save — show the error and let the user correct it.
+                                    $submit.removeClass('disabled').prop('disabled', false);
                                 }
+                            } else {
+                                err.addClass('d-none');
+                                succ.addClass('d-none');
+                                $(input).closest('.form-group').removeClass('has-danger');
+                                $submit.removeClass('disabled').prop('disabled', false);
                             }
                         }   
                     }

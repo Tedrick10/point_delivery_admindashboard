@@ -36,7 +36,7 @@ class UserRequest extends FormRequest
             'name' => 'required|string|max:255',
             'username'  => 'sometimes|required|unique:users,username,'.$user_id,
             'email'     => 'sometimes|nullable|email|unique:users,email,'.$user_id,
-            'contact_number' => 'required|max:20|unique:users,contact_number,'.$user_id,
+            'contact_number' => 'required|max:30|unique:users,contact_number,'.$user_id,
             'profile_image' => 'nullable|image|mimes:jpg,jpeg,png,gif',
         ];
 
@@ -44,8 +44,15 @@ class UserRequest extends FormRequest
             $rules['username'] = 'required|unique:users,username,'.$user_id;
             $rules['email'] = 'required|email|unique:users,email,'.$user_id;
             // Admin sets rider phone (required). No midnight re-entry in Rider App.
-            $rules['contact_number'] = 'required|max:20|unique:users,contact_number,'.$user_id;
+            $rules['contact_number'] = 'required|max:30|unique:users,contact_number,'.$user_id;
             $rules['branch_id'] = 'required|exists:branches,id';
+        }
+
+        if ($this->routeIs('sub-admin.*', 'sub-admin.store')) {
+            $rules['username'] = 'required|unique:users,username,'.$user_id;
+            $rules['email'] = 'required|email|unique:users,email,'.$user_id;
+            $rules['contact_number'] = 'required|max:30|unique:users,contact_number,'.$user_id;
+            $rules['user_type'] = 'required|string|max:100';
         }
 
         if ($this->requiresOsProfile()) {
@@ -96,10 +103,18 @@ class UserRequest extends FormRequest
     protected function prepareForValidation()
     {
         if ($this->has('contact_number')) {
-            $contactNumber = preg_replace('/\s+/', '', (string) $this->contact_number);
+            $raw = $this->input('contact_number');
+            // intlTelInput can submit duplicate fields as an array.
+            if (is_array($raw)) {
+                $raw = collect($raw)->filter()->last();
+            }
+            $contactNumber = preg_replace('/\s+/', '', (string) $raw);
             // Dial-code-only leftovers from intlTelInput when the field is left empty.
             if ($contactNumber === '' || preg_match('/^\+\d{1,4}$/', $contactNumber)) {
                 $contactNumber = null;
+            } elseif (preg_match('/^\+(\d{1,4})\+(\d+)$/', $contactNumber, $matches)) {
+                // Fix +95+9598… → +9598…
+                $contactNumber = '+'.$matches[2];
             }
             $this->merge(['contact_number' => $contactNumber]);
         }

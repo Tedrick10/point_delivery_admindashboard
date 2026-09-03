@@ -21,7 +21,7 @@ class EmployeeType extends Model
     {
         return $this->roles()
             ->where('status', 1)
-            ->whereNotIn('name', ['admin', 'client', 'delivery_man', 'demo_admin'])
+            ->whereNotIn('name', ['admin', 'client', 'delivery_man', 'demo_admin', 'super_admin'])
             ->orderBy('name');
     }
 
