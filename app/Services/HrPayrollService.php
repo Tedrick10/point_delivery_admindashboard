@@ -541,9 +541,104 @@ class HrPayrollService
     }
 
     /**
-     * Employee List Off → +1 နားရက် on the current month salary sheet (once per Off day).
+     * Employee List Off → +1 နားရက် (once per calendar day, Asia/Yangon).
+     *
+     * @return array{rest_days: int, rest_off_dates: array<int, string>, applied: bool}
+     */
+    public function applyRestDayOffForUser(User $user): array
+    {
+        $row = $this->salaryRowForUserCurrentMonth($user);
+        if (! $row) {
+            return ['rest_days' => 0, 'rest_off_dates' => [], 'applied' => false];
+        }
+
+        $today = now('Asia/Yangon')->toDateString();
+        $dates = array_values(array_filter(array_map('strval', (array) ($row->rest_off_dates ?? []))));
+        if (in_array($today, $dates, true)) {
+            return [
+                'rest_days' => (int) $row->rest_days,
+                'rest_off_dates' => $dates,
+                'applied' => false,
+            ];
+        }
+
+        $dates[] = $today;
+        sort($dates);
+        $row->rest_off_dates = $dates;
+        $row->rest_days = min(31, (int) $row->rest_days + 1);
+        $row->save();
+
+        return [
+            'rest_days' => (int) $row->rest_days,
+            'rest_off_dates' => $dates,
+            'applied' => true,
+        ];
+    }
+
+    /**
+     * Employee List On → −1 နားရက် only before 17:00 Asia/Yangon on the same Off day.
+     * After 17:00 the rest day stays locked.
+     *
+     * @return array{rest_days: int, rest_off_dates: array<int, string>, reverted: bool, locked: bool}
+     */
+    public function revertRestDayOffForUser(User $user): array
+    {
+        $row = $this->salaryRowForUserCurrentMonth($user);
+        if (! $row) {
+            return ['rest_days' => 0, 'rest_off_dates' => [], 'reverted' => false, 'locked' => false];
+        }
+
+        $today = now('Asia/Yangon')->toDateString();
+        $dates = array_values(array_filter(array_map('strval', (array) ($row->rest_off_dates ?? []))));
+        $hasToday = in_array($today, $dates, true);
+
+        if (! $hasToday) {
+            return [
+                'rest_days' => (int) $row->rest_days,
+                'rest_off_dates' => $dates,
+                'reverted' => false,
+                'locked' => false,
+            ];
+        }
+
+        if (! $this->canRevertRestDayOffToday()) {
+            return [
+                'rest_days' => (int) $row->rest_days,
+                'rest_off_dates' => $dates,
+                'reverted' => false,
+                'locked' => true,
+            ];
+        }
+
+        $dates = array_values(array_filter($dates, fn ($d) => $d !== $today));
+        $row->rest_off_dates = $dates;
+        $row->rest_days = max(0, (int) $row->rest_days - 1);
+        $row->save();
+
+        return [
+            'rest_days' => (int) $row->rest_days,
+            'rest_off_dates' => $dates,
+            'reverted' => true,
+            'locked' => false,
+        ];
+    }
+
+    public function canRevertRestDayOffToday(): bool
+    {
+        $now = now('Asia/Yangon');
+
+        return $now->lt($now->copy()->startOfDay()->setTime(17, 0, 0));
+    }
+
+    /**
+     * @deprecated Use applyRestDayOffForUser()
      */
     public function incrementRestDayForUser(User $user): int
+    {
+        return (int) ($this->applyRestDayOffForUser($user)['rest_days'] ?? 0);
+    }
+
+    protected function salaryRowForUserCurrentMonth(User $user): ?HrOfficeSalaryRow
     {
         $this->syncStaffFromAccounts();
 
@@ -553,26 +648,17 @@ class HrPayrollService
             ->first();
 
         if (! $staff) {
-            return 0;
+            return null;
         }
 
         $month = $this->parseMonth(null);
         $group = $staff->staff_group === 'rider' ? 'rider' : 'office';
         $this->ensureSalaryRows($month, $group);
 
-        $row = HrOfficeSalaryRow::query()
+        return HrOfficeSalaryRow::query()
             ->whereDate('period_month', $month->toDateString())
             ->where('staff_id', $staff->id)
             ->first();
-
-        if (! $row) {
-            return 0;
-        }
-
-        $row->rest_days = min(31, (int) $row->rest_days + 1);
-        $row->save();
-
-        return (int) $row->rest_days;
     }
 
     /**

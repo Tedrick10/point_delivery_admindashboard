@@ -86,10 +86,10 @@
                             </td>
                             <td><span class="js-total-salary pds-hr-cell pds-hr-cell--strong">{{ number_format($row->total_salary) }}</span></td>
                             <td>
-                                <input type="number" class="pds-hr-input sal-input" data-field="late_minute_amount" value="{{ (int) $row->late_minute_amount }}" @disabled(! $canEdit)>
+                                <span class="js-late-minute-amount pds-hr-cell" title="{{ __('message.hr_late_minute_readonly_hint') }}">{{ number_format($row->late_minute_amount) }}</span>
                             </td>
                             <td>
-                                <input type="number" min="0" class="pds-hr-input sal-input" data-field="fine_amount" value="{{ (int) $row->fine_amount }}" @disabled(! $canEdit)>
+                                <span class="js-fine-amount pds-hr-cell" title="{{ __('message.hr_fine_amount_readonly_hint') }}">{{ number_format($row->fine_amount) }}</span>
                             </td>
                             <td>
                                 <span class="js-bag-deduction pds-hr-cell" title="{{ __('message.hr_bag_readonly_hint') }}">{{ number_format($row->bag_deduction) }}</span>
@@ -159,8 +159,8 @@
                         var $tr = $(this);
                         totals.way_count += parseNum($tr.find('.js-way-count').text());
                         totals.total_salary += parseNum($tr.find('.js-total-salary').text());
-                        totals.late_minute_amount += parseNum($tr.find('[data-field="late_minute_amount"]').val());
-                        totals.fine_amount += parseNum($tr.find('[data-field="fine_amount"]').val());
+                        totals.late_minute_amount += parseNum($tr.find('.js-late-minute-amount').text());
+                        totals.fine_amount += parseNum($tr.find('.js-fine-amount').text());
                         totals.bag_deduction += parseNum($tr.find('.js-bag-deduction').text());
                         totals.deposit += parseNum($tr.find('[data-field="deposit"]').val());
                         totals.total_deduction += parseNum($tr.find('.js-total-deduction').text());

@@ -264,7 +264,7 @@ class SubAdminController extends Controller
 
     /**
      * Employee List On/Off (rest day). Off auto-returns On at 12:01 AM next day.
-     * Each Off day increments Office Salary နားရက် by 1.
+     * Off → နားရက် +1. On before 17:00 → နားရက် −1. After 17:00 On keeps နားရက် locked.
      */
     public function updateWorkStatus(Request $request, $id)
     {
@@ -287,11 +287,6 @@ class SubAdminController extends Controller
 
         $workOn = $request->boolean('work_on');
         $today = now('Asia/Yangon')->toDateString();
-        $alreadyOffToday = ! $workOn
-            && Schema::hasColumn('users', 'rider_work_off_date')
-            && $employee->rider_work_off_date
-            && $employee->rider_work_off_date->toDateString() === $today
-            && ! (bool) ($employee->rider_work_on ?? true);
 
         $employee->rider_work_on = $workOn;
         if (Schema::hasColumn('users', 'rider_work_off_date')) {
@@ -299,18 +294,40 @@ class SubAdminController extends Controller
         }
         $employee->save();
 
-        $restDays = null;
-        if (! $workOn && ! $alreadyOffToday) {
-            $restDays = app(\App\Services\HrPayrollService::class)->incrementRestDayForUser($employee);
+        $payroll = app(\App\Services\HrPayrollService::class);
+        $restResult = [
+            'rest_days' => null,
+            'rest_off_dates' => [],
+            'applied' => false,
+            'reverted' => false,
+            'locked' => false,
+        ];
+
+        if (! $workOn) {
+            $restResult = array_merge($restResult, $payroll->applyRestDayOffForUser($employee));
+        } else {
+            $restResult = array_merge($restResult, $payroll->revertRestDayOffForUser($employee));
+        }
+
+        $message = __('message.employee_work_status_updated');
+        if ($workOn && ! empty($restResult['locked'])) {
+            $message = __('message.employee_work_on_rest_locked');
+        } elseif (! $workOn && ! empty($restResult['applied'])) {
+            $message = __('message.employee_work_off_rest_added');
+        } elseif ($workOn && ! empty($restResult['reverted'])) {
+            $message = __('message.employee_work_on_rest_reverted');
         }
 
         return response()->json([
-            'message' => __('message.employee_work_status_updated'),
+            'message' => $message,
             'work_on' => (bool) $employee->isRiderWorkOn(),
             'label' => $employee->isRiderWorkOn()
                 ? __('message.rider_work_on')
                 : __('message.rider_work_off'),
-            'rest_days' => $restDays,
+            'rest_days' => $restResult['rest_days'],
+            'rest_off_dates' => $restResult['rest_off_dates'] ?? [],
+            'rest_locked' => (bool) ($restResult['locked'] ?? false),
+            'off_date' => $workOn ? null : $today,
         ]);
     }
 }

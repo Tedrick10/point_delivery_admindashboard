@@ -75,9 +75,6 @@ class HrOfficeSalaryController extends Controller
         }
 
         $data = $request->validate([
-            'rest_days' => 'nullable|integer|min:0|max:31',
-            'late_minute_amount' => 'nullable|numeric',
-            'fine_amount' => 'nullable|numeric|min:0',
             'deposit' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string|max:1000',
         ]);
@@ -87,7 +84,8 @@ class HrOfficeSalaryController extends Controller
                 $row->{$key} = $value;
             }
         }
-        // monthly_salary / day rate → Super Admin; bag_deduction → Late Fine; no way pay / ကြိုသုံး
+        // monthly_salary / day rate → Super Admin
+        // rest_days → Employee List Off/On; late_minute / fine / bag → Late Fine sync
         $row->way_count = 0;
         $row->way_rate = 0;
         $row->personal_expense = 0;

@@ -54,7 +54,7 @@
                         <th>{{ __('message.hr_monthly_salary') }}</th>
                         <th>{{ __('message.hr_day_rate') }}</th>
                         <th>{{ __('message.hr_days_in_month') }}</th>
-                        <th>{{ __('message.hr_rest_days') }}</th>
+                        <th class="pds-hr-col-rest">{{ __('message.hr_rest_days') }}</th>
                         <th>{{ __('message.hr_worked_days') }}</th>
                         <th>{{ __('message.hr_total_salary') }}</th>
                         <th>{{ __('message.hr_late_minute_amount') }}</th>
@@ -91,16 +91,38 @@
                                 <span class="js-day-rate pds-hr-cell pds-hr-cell--muted" title="{{ __('message.hr_day_rate_auto_hint') }}">{{ number_format(round($row->day_rate)) }}</span>
                             </td>
                             <td><span class="pds-hr-cell pds-hr-cell--muted">{{ $daysInMonth }}</span></td>
-                            <td>
-                                <input type="number" min="0" max="31" class="pds-hr-input sal-input" data-field="rest_days" value="{{ $row->rest_days }}" @disabled(! $canEdit)>
+                            <td class="pds-hr-col-rest">
+                                @php
+                                    $offDates = array_values(array_filter(array_map('strval', (array) ($row->rest_off_dates ?? []))));
+                                    $offDateItems = collect($offDates)->map(function ($offDate) {
+                                        $c = \Carbon\Carbon::parse($offDate, 'Asia/Yangon');
+
+                                        return [
+                                            'iso' => $c->toDateString(),
+                                            'label' => $c->format('d/m/Y'),
+                                            'short' => $c->format('j/n'),
+                                        ];
+                                    })->values()->all();
+                                @endphp
+                                <div class="pds-hr-rest-cell">
+                                    <span class="js-rest-days pds-hr-rest-cell__count" title="{{ __('message.hr_rest_days_readonly_hint') }}">{{ (int) $row->rest_days }}</span>
+                                    <button type="button"
+                                            class="pds-hr-rest-btn"
+                                            data-name="{{ $row->staff?->name }}"
+                                            data-dates='@json($offDateItems)'
+                                            title="{{ __('message.hr_rest_dates_btn_hint') }}"
+                                            aria-label="{{ __('message.hr_rest_dates_btn_hint') }}">
+                                        <i class="fas fa-calendar-day" aria-hidden="true"></i>
+                                    </button>
+                                </div>
                             </td>
                             <td><span class="js-worked-days pds-hr-cell">{{ $row->worked_days }}</span></td>
                             <td><span class="js-total-salary pds-hr-cell pds-hr-cell--strong">{{ number_format($row->total_salary) }}</span></td>
                             <td>
-                                <input type="number" class="pds-hr-input sal-input" data-field="late_minute_amount" value="{{ (int) $row->late_minute_amount }}" @disabled(! $canEdit)>
+                                <span class="js-late-minute-amount pds-hr-cell" title="{{ __('message.hr_late_minute_readonly_hint') }}">{{ number_format($row->late_minute_amount) }}</span>
                             </td>
                             <td>
-                                <input type="number" min="0" class="pds-hr-input sal-input" data-field="fine_amount" value="{{ (int) $row->fine_amount }}" @disabled(! $canEdit)>
+                                <span class="js-fine-amount pds-hr-cell" title="{{ __('message.hr_fine_amount_readonly_hint') }}">{{ number_format($row->fine_amount) }}</span>
                             </td>
                             <td>
                                 <span class="js-bag-deduction pds-hr-cell" title="{{ __('message.hr_bag_readonly_hint') }}">{{ number_format($row->bag_deduction) }}</span>
@@ -140,6 +162,16 @@
                 </table>
             </div>
         </div>
+
+        <div id="pds-hr-rest-popover" class="pds-hr-rest-popover" hidden>
+            <div class="pds-hr-rest-popover__head">
+                <strong class="js-rest-pop-name"></strong>
+                <button type="button" class="pds-hr-rest-popover__close" aria-label="Close">&times;</button>
+            </div>
+            <p class="pds-hr-rest-popover__sub">{{ __('message.hr_rest_dates_popup_title') }}</p>
+            <ul class="pds-hr-rest-popover__list js-rest-pop-list"></ul>
+            <p class="pds-hr-rest-popover__empty js-rest-pop-empty">{{ __('message.hr_rest_dates_empty') }}</p>
+        </div>
     </div>
 
     @include('hr.partials.styles')
@@ -176,11 +208,11 @@
                         var $tr = $(this);
                         totals.monthly_salary += parseNum($tr.find('.js-monthly-salary').text());
                         totals.day_rate += parseNum($tr.find('.js-day-rate').text());
-                        totals.rest_days += parseNum($tr.find('[data-field="rest_days"]').val());
+                        totals.rest_days += parseNum($tr.find('.js-rest-days').text());
                         totals.worked_days += parseNum($tr.find('.js-worked-days').text());
                         totals.total_salary += parseNum($tr.find('.js-total-salary').text());
-                        totals.late_minute_amount += parseNum($tr.find('[data-field="late_minute_amount"]').val());
-                        totals.fine_amount += parseNum($tr.find('[data-field="fine_amount"]').val());
+                        totals.late_minute_amount += parseNum($tr.find('.js-late-minute-amount').text());
+                        totals.fine_amount += parseNum($tr.find('.js-fine-amount').text());
                         totals.bag_deduction += parseNum($tr.find('.js-bag-deduction').text());
                         totals.deposit += parseNum($tr.find('[data-field="deposit"]').val());
                         totals.total_deduction += parseNum($tr.find('.js-total-deduction').text());
@@ -256,6 +288,89 @@
                         saveRow($(this).closest('tr'), true);
                     });
                 }
+
+                (function bindRestDatePopover() {
+                    var $pop = $('#pds-hr-rest-popover');
+                    var $list = $pop.find('.js-rest-pop-list');
+                    var $empty = $pop.find('.js-rest-pop-empty');
+                    var $name = $pop.find('.js-rest-pop-name');
+                    var $activeBtn = null;
+
+                    function closePop() {
+                        $pop.attr('hidden', true);
+                        if ($activeBtn) {
+                            $activeBtn.removeClass('is-open');
+                            $activeBtn = null;
+                        }
+                    }
+
+                    function openPop($btn) {
+                        var dates = [];
+                        try {
+                            dates = JSON.parse($btn.attr('data-dates') || '[]') || [];
+                        } catch (e) {
+                            dates = [];
+                        }
+                        $name.text($btn.attr('data-name') || '');
+                        $list.empty();
+                        if (!dates.length) {
+                            $list.attr('hidden', true);
+                            $empty.removeAttr('hidden');
+                        } else {
+                            $empty.attr('hidden', true);
+                            $list.removeAttr('hidden');
+                            dates.forEach(function (item, idx) {
+                                $list.append(
+                                    $('<li/>')
+                                        .append($('<strong/>').text(item.label || item.short || item.iso || ''))
+                                        .append($('<span/>').text('#' + (idx + 1)))
+                                );
+                            });
+                        }
+
+                        $('.pds-hr-rest-btn').removeClass('is-open');
+                        $btn.addClass('is-open');
+                        $activeBtn = $btn;
+                        $pop.removeAttr('hidden');
+
+                        var rect = $btn[0].getBoundingClientRect();
+                        var popW = $pop.outerWidth() || 240;
+                        var popH = $pop.outerHeight() || 160;
+                        var left = Math.min(window.innerWidth - popW - 12, Math.max(12, rect.left + rect.width / 2 - popW / 2));
+                        var top = rect.bottom + 8;
+                        if (top + popH > window.innerHeight - 12) {
+                            top = Math.max(12, rect.top - popH - 8);
+                        }
+                        $pop.css({ left: left + 'px', top: top + 'px' });
+                    }
+
+                    $('#office-salary-table').on('click', '.pds-hr-rest-btn', function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var $btn = $(this);
+                        if ($activeBtn && $activeBtn[0] === $btn[0] && !$pop.is('[hidden]')) {
+                            closePop();
+                            return;
+                        }
+                        openPop($btn);
+                    });
+
+                    $pop.on('click', '.pds-hr-rest-popover__close', function (e) {
+                        e.preventDefault();
+                        closePop();
+                    });
+
+                    $(document).on('click.pdsRestPop', function (e) {
+                        if ($(e.target).closest('#pds-hr-rest-popover, .pds-hr-rest-btn').length) {
+                            return;
+                        }
+                        closePop();
+                    });
+
+                    $(window).on('scroll.pdsRestPop resize.pdsRestPop', function () {
+                        closePop();
+                    });
+                })();
             })();
         </script>
     @endpush

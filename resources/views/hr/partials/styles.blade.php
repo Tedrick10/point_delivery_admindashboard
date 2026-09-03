@@ -425,6 +425,133 @@
     .pds-hr-empty { text-align: center !important; color: var(--hr-muted); padding: 36px 16px !important; white-space: normal !important; }
     .pds-hr-icon-btn { color: #dc2626; padding: 4px 6px; }
     .pds-hr-icon-btn:hover { color: #b91c1c; }
+    .pds-hr-table--salary thead th.pds-hr-col-rest,
+    .pds-hr-table--salary tbody td.pds-hr-col-rest,
+    .pds-hr-table--salary tfoot td.pds-hr-col-rest {
+        min-width: 108px;
+        width: 108px;
+        overflow: visible;
+    }
+    .pds-hr-rest-cell {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    .pds-hr-rest-cell__count {
+        font-size: 15px;
+        font-weight: 800;
+        color: #0f172a;
+        font-variant-numeric: tabular-nums;
+        min-width: 1.2em;
+        text-align: center;
+    }
+    .pds-hr-rest-btn {
+        width: 32px;
+        height: 32px;
+        border: 1px solid #fdba74;
+        border-radius: 10px;
+        background: linear-gradient(180deg, #fff7ed, #ffedd5);
+        color: #c2410c;
+        display: inline-grid;
+        place-items: center;
+        cursor: pointer;
+        transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+        box-shadow: 0 2px 6px rgba(194, 65, 12, .08);
+    }
+    .pds-hr-rest-btn:hover,
+    .pds-hr-rest-btn.is-open {
+        background: linear-gradient(180deg, #ffedd5, #fed7aa);
+        box-shadow: 0 6px 14px rgba(194, 65, 12, .16);
+        transform: translateY(-1px);
+        color: #9a3412;
+    }
+    .pds-hr-rest-btn i { font-size: 13px; }
+    .pds-hr-rest-popover {
+        position: fixed;
+        z-index: 1080;
+        width: 240px;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, .16);
+        padding: 12px 14px 14px;
+    }
+    .pds-hr-rest-popover[hidden] { display: none !important; }
+    .pds-hr-rest-popover__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 2px;
+    }
+    .pds-hr-rest-popover__head strong {
+        font-size: 14px;
+        font-weight: 800;
+        color: #0f172a;
+    }
+    .pds-hr-rest-popover__close {
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 8px;
+        background: #f1f5f9;
+        color: #64748b;
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .pds-hr-rest-popover__close:hover { background: #e2e8f0; color: #0f172a; }
+    .pds-hr-rest-popover__sub {
+        margin: 0 0 10px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: #94a3b8;
+    }
+    .pds-hr-rest-popover__list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 6px;
+        max-height: 220px;
+        overflow: auto;
+    }
+    .pds-hr-rest-popover__list li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: #fff7ed;
+        border: 1px solid #ffedd5;
+        color: #9a3412;
+        font-weight: 700;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+    }
+    .pds-hr-rest-popover__list li span {
+        font-size: 11px;
+        font-weight: 800;
+        color: #c2410c;
+        background: #fff;
+        border-radius: 999px;
+        padding: 2px 8px;
+        border: 1px solid #fed7aa;
+    }
+    .pds-hr-rest-popover__empty {
+        margin: 0;
+        padding: 16px 8px;
+        text-align: center;
+        color: #94a3b8;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .pds-hr-rest-popover__empty[hidden],
+    .pds-hr-rest-popover__list[hidden] { display: none !important; }
     .pds-hr-formula-note {
         background: #fff7ed; border: 1px solid #ffd8b0; color: #9a3412;
         border-radius: 14px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; font-weight: 600;

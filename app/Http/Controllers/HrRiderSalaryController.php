@@ -68,14 +68,12 @@ class HrRiderSalaryController extends Controller
         }
 
         $data = $request->validate([
-            'late_minute_amount' => 'nullable|numeric',
-            'fine_amount' => 'nullable|numeric|min:0',
             'deposit' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string|max:1000',
         ]);
 
         // way_count → auto from Delivered items; 1 way စာ → Super Admin only
-        // bag_deduction → synced from Late Fine bag section
+        // late_minute / fine / bag_deduction → Late Fine sync
         foreach ($data as $key => $value) {
             if ($value !== null) {
                 $row->{$key} = $value;
