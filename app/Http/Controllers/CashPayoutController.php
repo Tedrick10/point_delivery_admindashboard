@@ -20,8 +20,20 @@ class CashPayoutController extends Controller
             $status = 'unassigned';
         }
 
-        $items = OsCashPayout::query()
-            ->with(['osUser.city', 'deliveryMan', 'settlementBatch'])
+        [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request);
+        $branchTabs = $branches;
+        $selectedBranchId = $branchId;
+
+        $baseQuery = OsCashPayout::query()
+            ->with(['osUser.city', 'deliveryMan', 'settlementBatch', 'moneyTransfer'])
+            ->when($branchId, function ($q) use ($branchId) {
+                $q->where(function ($inner) use ($branchId) {
+                    $inner->whereHas('moneyTransfer', fn ($mt) => $mt->where('branch_id', $branchId))
+                        ->orWhereHas('deliveryMan', fn ($dm) => $dm->where('branch_id', $branchId));
+                });
+            });
+
+        $items = (clone $baseQuery)
             ->when($status === 'unassigned', fn ($q) => $q->where('status', OsCashPayout::STATUS_UNASSIGNED))
             ->when($status === 'assigned', fn ($q) => $q->where('status', OsCashPayout::STATUS_ASSIGNED))
             ->when($status === 'pending', fn ($q) => $q->where('status', OsCashPayout::STATUS_PENDING))
@@ -32,15 +44,24 @@ class CashPayoutController extends Controller
         $riders = User::query()
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('name')
             ->get(['id', 'name', 'contact_number']);
 
         $counts = [
-            'unassigned' => OsCashPayout::query()->where('status', OsCashPayout::STATUS_UNASSIGNED)->count(),
-            'assigned' => OsCashPayout::query()->where('status', OsCashPayout::STATUS_ASSIGNED)->count(),
-            'pending' => OsCashPayout::query()->where('status', OsCashPayout::STATUS_PENDING)->count(),
-            'done' => OsCashPayout::query()->where('status', OsCashPayout::STATUS_DONE)->count(),
+            'unassigned' => (clone $baseQuery)->where('status', OsCashPayout::STATUS_UNASSIGNED)->count(),
+            'assigned' => (clone $baseQuery)->where('status', OsCashPayout::STATUS_ASSIGNED)->count(),
+            'pending' => (clone $baseQuery)->where('status', OsCashPayout::STATUS_PENDING)->count(),
+            'done' => (clone $baseQuery)->where('status', OsCashPayout::STATUS_DONE)->count(),
         ];
+
+        $branchTabCounts = OsCashPayout::query()
+            ->leftJoin('os_money_transfers', 'os_cash_payouts.money_transfer_id', '=', 'os_money_transfers.id')
+            ->leftJoin('users as payout_riders', 'os_cash_payouts.delivery_man_id', '=', 'payout_riders.id')
+            ->selectRaw('COALESCE(NULLIF(os_money_transfers.branch_id, 0), NULLIF(payout_riders.branch_id, 0)) as branch_key, COUNT(os_cash_payouts.id) as total')
+            ->groupBy('branch_key')
+            ->pluck('total', 'branch_key');
+        $allBranchCount = OsCashPayout::query()->count();
 
         $pageTitle = __('message.cash_payout_title');
         $assets = [];
@@ -53,7 +74,13 @@ class CashPayoutController extends Controller
             'riders',
             'status',
             'counts',
-            'canEdit'
+            'canEdit',
+            'branchFilter',
+            'branches',
+            'branchTabs',
+            'branchTabCounts',
+            'allBranchCount',
+            'selectedBranchId'
         ));
     }
 

@@ -16,7 +16,22 @@
                 </div>
             </div>
 
+            @include('partials._branch-tabs', [
+                'branchTabs' => $branchTabs ?? collect(),
+                'selectedBranchId' => $selectedBranchId ?? null,
+                'branchTabCounts' => $branchTabCounts ?? [],
+                'allCount' => $allBranchCount ?? null,
+                'includeAll' => false,
+                'routeName' => 'order.dispatch.os-list',
+                'routeQuery' => [
+                    'from_date' => $filterFromDate,
+                    'to_date' => $filterToDate,
+                    'os_id' => $osFilter,
+                ],
+            ])
+
             <form method="GET" action="{{ route('order.dispatch.os-list') }}" class="pds-rider-toolbar" id="osListFilterForm">
+                <input type="hidden" name="branch_id" value="{{ $branchFilter ?? 'all' }}">
                 <div class="pds-rider-toolbar__fields">
                     <div class="pds-dispatch-field pds-dispatch-field-sm pds-rider-toolbar__grow">
                         <label for="os_list_os">{{ __('message.online_shopping') }}</label>

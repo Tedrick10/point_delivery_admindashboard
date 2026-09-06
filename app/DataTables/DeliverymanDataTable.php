@@ -246,6 +246,12 @@ class DeliverymanDataTable extends DataTable
                     ->orWhereNull('branch_id');
             });
         }
+
+        $tabBranchId = (int) ($this->branch_id ?? request('branch_id', 0));
+        if ($tabBranchId > 0) {
+            $model->where('branch_id', $tabBranchId);
+        }
+
         return $model->whereNull('deleted_at');
     }
 

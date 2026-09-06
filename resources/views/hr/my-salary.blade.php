@@ -10,7 +10,7 @@
                 <p class="pds-hr-hero__subtitle">{{ __('message.hr_my_salary_hint') }}</p>
             </div>
             <div class="pds-hr-hero__stats">
-                <div class="pds-hr-stat">
+                <div class="pds-hr-stat{{ ((float) ($salary['net_pay'] ?? 0)) < 0 ? ' pds-hr-stat--danger' : '' }}">
                     <span class="pds-hr-stat__value">{{ number_format((float) ($salary['net_pay'] ?? 0)) }}</span>
                     <span class="pds-hr-stat__label">{{ __('message.hr_net_pay') }}</span>
                 </div>
@@ -43,7 +43,7 @@
                     <span class="pds-hr-summary__label">{{ __('message.hr_total_deduction') }}</span>
                     <span class="pds-hr-summary__value">{{ number_format($salary['total_deduction']) }}</span>
                 </div>
-                <div class="pds-hr-summary__card pds-hr-summary__card--success">
+                <div class="pds-hr-summary__card {{ ((float) $salary['net_pay']) < 0 ? 'pds-hr-summary__card--danger' : 'pds-hr-summary__card--success' }}">
                     <span class="pds-hr-summary__label">{{ __('message.hr_net_pay') }}</span>
                     <span class="pds-hr-summary__value">{{ number_format($salary['net_pay']) }}</span>
                 </div>

@@ -16,6 +16,16 @@
                 </div>
             </div>
 
+            @include('partials._branch-tabs', [
+                'branchTabs' => $branchTabs ?? collect(),
+                'selectedBranchId' => $selectedBranchId ?? null,
+                'branchTabCounts' => $branchTabCounts ?? [],
+                'allCount' => $allBranchCount ?? null,
+                'includeAll' => false,
+                'routeName' => 'order.cash-payout',
+                'routeQuery' => ['status' => $status],
+            ])
+
             <div class="pds-cash-payout-tabs" role="tablist">
                 @foreach([
                     'unassigned' => __('message.cash_payout_assign'),
@@ -23,7 +33,7 @@
                     'pending' => __('message.pending'),
                     'done' => __('message.done'),
                 ] as $key => $label)
-                    <a href="{{ route('order.cash-payout', ['status' => $key]) }}"
+                    <a href="{{ route('order.cash-payout', array_filter(['status' => $key, 'branch_id' => $selectedBranchId ?? null])) }}"
                        class="pds-cash-payout-tab {{ $status === $key ? 'is-active' : '' }}">
                         <span>{{ $label }}</span>
                         <em>{{ $counts[$key] ?? 0 }}</em>

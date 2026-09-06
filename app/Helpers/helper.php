@@ -352,29 +352,76 @@ function riderRemitBusinessDayBounds(string $dayYmd): array
 /**
  * Daily Check List invoice day (Asia/Yangon).
  *
- * Completed on calendar day C always maps to C − 1 (no 9AM cutoff).
- * Example: Completed on 28th → Daily Check date 27th.
+ * Same lag as Rider ငွေအပ်: first admin Completed on Yangon day C → C − 1.
+ * After that rider already has a Completed on day C, later items → C.
  */
-function dailyCheckListDate(?Carbon $at = null): Carbon
+function dailyCheckListDate(?Carbon $at = null, ?int $riderId = null, ?int $excludeItemId = null): Carbon
 {
     $tz = 'Asia/Yangon';
     $at = ($at ?? Carbon::now($tz))->copy()->timezone($tz);
+
+    if ($riderId && $riderId > 0 && riderHadAdminCompletedBefore($riderId, $at, $excludeItemId)) {
+        return $at->copy()->startOfDay();
+    }
 
     return $at->copy()->subDay()->startOfDay();
 }
 
 /**
+ * Invoice day for a completed dispatch item (Rider + OS Daily Check / ငွေရှင်းတမ်း).
+ */
+function dailyCheckListDateForItem($item, ?Carbon $at = null): Carbon
+{
+    $stamp = $at
+        ?? (! empty($item?->admin_completed_at) ? Carbon::parse($item->admin_completed_at) : null);
+
+    return dailyCheckListDate(
+        $stamp,
+        (int) ($item?->delivery_man_id ?? 0) ?: null,
+        (int) ($item?->id ?? 0) ?: null
+    );
+}
+
+function dailyCheckListItemInPeriod($item, string $fromDay, string $toDay): bool
+{
+    $day = dailyCheckListDateForItem($item)->toDateString();
+
+    return $day >= $fromDay && $day <= $toDay;
+}
+
+/**
+ * True when this rider already has another admin Completed earlier on the same Yangon day.
+ */
+function riderHadAdminCompletedBefore(int $riderId, Carbon $at, ?int $excludeItemId = null): bool
+{
+    $tz = 'Asia/Yangon';
+    $at = $at->copy()->timezone($tz);
+    $dayStart = $at->copy()->startOfDay()->utc();
+    $before = $at->copy()->utc();
+
+    return \App\Models\DispatchOrderItem::query()
+        ->where('delivery_man_id', $riderId)
+        ->whereNotNull('admin_completed_at')
+        ->where('admin_completed_at', '>=', $dayStart)
+        ->where('admin_completed_at', '<', $before)
+        ->when($excludeItemId, fn ($q) => $q->where('id', '!=', $excludeItemId))
+        ->exists();
+}
+
+/**
  * UTC bounds for Daily Check List day D on admin_completed_at.
  *
- * Day D sheet = Completed anytime during Yangon calendar day D+1.
+ * Sheet D includes:
+ * - first Completed on Yangon day D+1 (maps to D)
+ * - later Completed on Yangon day D after that rider already Completed once on D
  *
  * @return array{start: Carbon, end: Carbon}
  */
 function dailyCheckListDayBounds(string $dayYmd): array
 {
     $tz = 'Asia/Yangon';
-    $start = Carbon::parse($dayYmd, $tz)->addDay()->startOfDay();
-    $end = $start->copy()->addDay();
+    $start = Carbon::parse($dayYmd, $tz)->startOfDay();
+    $end = $start->copy()->addDays(2);
 
     return [
         'start' => $start->copy()->utc(),
@@ -402,6 +449,17 @@ function yangonTodayOrderReceivedDatetime(?Carbon $now = null): string
     $now = ($now ?? Carbon::now($tz))->copy()->timezone($tz);
 
     return $now->copy()->startOfDay()->format('Y-m-d H:i:s');
+}
+
+/**
+ * Yangon calendar day as d-m-Y (admin received-date defaults).
+ */
+function yangonTodayDate(?Carbon $now = null): string
+{
+    $tz = 'Asia/Yangon';
+    $now = ($now ?? Carbon::now($tz))->copy()->timezone($tz);
+
+    return $now->format('d-m-Y');
 }
 
 /**
@@ -816,11 +874,21 @@ function getSettingFirstData($type = null, $key = null)
 
 function mediaPublicUrl($media, string $conversionName = ''): ?string
 {
-    if (! $media || ! getFileExistsCheck($media)) {
+    if (! $media) {
         return null;
     }
 
-    return '/storage/' . ltrim($media->getPathRelativeToRoot($conversionName), '/');
+    try {
+        $relative = ltrim((string) $media->getPathRelativeToRoot($conversionName), '/');
+    } catch (\Throwable $e) {
+        $relative = '';
+    }
+
+    if ($relative === '') {
+        return null;
+    }
+
+    return '/storage/' . $relative;
 }
 
 function mediaAbsoluteUrl($media, string $conversionName = ''): ?string
@@ -1552,6 +1620,102 @@ function forcedBranchId(?User $user = null): ?int
     $branchId = (int) ($user->branch_id ?? 0);
 
     return $branchId > 0 ? $branchId : null;
+}
+
+/**
+ * Canonical destination / settlement branch tab order (Burmese labels).
+ * Food(မန္တလေး) is last.
+ */
+function destinationBranchOrderSql(): string
+{
+    return "FIELD(name, 'မန္တလေး', 'ရန်ကုန်', 'လားရှိုး', 'တောင်ကြီး', 'ပြင်ဦးလွင်', 'Food(မန္တလေး)')";
+}
+
+/**
+ * Destination branch on an item: To, or From when To is empty.
+ */
+function destinationBranchColumnSql(string $table = ''): string
+{
+    $prefix = $table !== '' ? $table.'.' : '';
+
+    return 'COALESCE(NULLIF('.$prefix.'to_branch_id, 0), '.$prefix.'from_branch_id)';
+}
+
+function applyDestinationBranchFilter($query, ?int $branchId, string $table = '')
+{
+    if (! $branchId || $branchId <= 0) {
+        return $query;
+    }
+
+    return $query->whereRaw(destinationBranchColumnSql($table).' = ?', [$branchId]);
+}
+
+/**
+ * Preferred default tab when no branch_id is provided (မန္တလေး).
+ */
+function defaultDestinationBranchId($branches = null): ?int
+{
+    $branches = $branches ?? destinationBranchTabs();
+    if ($branches->isEmpty()) {
+        return null;
+    }
+
+    $preferred = $branches->firstWhere('name', 'မန္တလေး')
+        ?: $branches->first(fn ($b) => (string) $b->name !== 'Food(မန္တလေး)')
+        ?: $branches->first();
+
+    return $preferred ? (int) $preferred->id : null;
+}
+
+/**
+ * Active branches for settlement / list tabs (respects forced branch users).
+ *
+ * @return \Illuminate\Support\Collection<int, \App\Models\Branch>
+ */
+function destinationBranchTabs(?User $user = null)
+{
+    $query = \App\Models\Branch::query()
+        ->where('status', 1)
+        ->orderByRaw(destinationBranchOrderSql())
+        ->orderBy('name');
+
+    $forced = forcedBranchId($user);
+    if ($forced) {
+        $query->where('id', $forced);
+    }
+
+    return $query->get(['id', 'name']);
+}
+
+/**
+ * Resolve branch_id query for settlement screens.
+ * No "All" tab — defaults to မန္တလေး when branch_id is missing.
+ *
+ * @return array{0: ?int, 1: string, 2: \Illuminate\Support\Collection<int, \App\Models\Branch>}
+ */
+function resolveDestinationBranchFilter($request = null, ?User $user = null): array
+{
+    $request = $request ?? request();
+    $user = $user ?? auth()->user();
+    $branches = destinationBranchTabs($user);
+    $forced = forcedBranchId($user);
+
+    if ($forced) {
+        return [$forced, (string) $forced, $branches];
+    }
+
+    $raw = $request->get('branch_id');
+    $id = is_numeric($raw) ? (int) $raw : 0;
+    if ($id > 0 && $branches->contains(fn ($b) => (int) $b->id === $id)) {
+        return [$id, (string) $id, $branches];
+    }
+
+    $defaultId = defaultDestinationBranchId($branches);
+    if ($defaultId) {
+        return [$defaultId, (string) $defaultId, $branches];
+    }
+
+    return [null, 'all', $branches];
 }
 
 function isAdminPanelUser(?User $user): bool
@@ -4685,6 +4849,20 @@ function normalizeMyanmarLocalDigits(string $local): string
     return $number;
 }
 
+function stripRepeatedMyanmarCountryCode(string $digits): string
+{
+    while (str_starts_with($digits, '95') && strlen($digits) >= 12) {
+        $rest = substr($digits, 2);
+        if (preg_match('/^9\d{7,9}$/', $rest) || (str_starts_with($rest, '95') && strlen($rest) >= 10)) {
+            $digits = $rest;
+            continue;
+        }
+        break;
+    }
+
+    return $digits;
+}
+
 function normalizeContactNumber(?string $phone): string
 {
     $phone = trim((string) $phone);
@@ -4702,38 +4880,24 @@ function normalizeContactNumber(?string $phone): string
         $phone = '+' . $matches[1];
     }
 
-    if (preg_match('/^\+95/', $phone)) {
-        $local = normalizeMyanmarLocalDigits(substr($phone, 3));
-        $phone = $local !== '' ? '+95' . $local : $phone;
-    } elseif (preg_match('/^\+(\d+)$/', $phone, $matches)) {
-        $digits = $matches[1];
-        if (preg_match('/^95(9\d{7,9})$/', $digits, $myanmarMatch)) {
-            $phone = '+95' . normalizeMyanmarLocalDigits($myanmarMatch[1]);
-        } elseif (preg_match('/^9\d{7,9}$/', $digits)) {
-            $phone = '+95' . normalizeMyanmarLocalDigits($digits);
-        }
-    } elseif (preg_match('/^9\d{7,9}$/', $phone)) {
-        $phone = '+95' . normalizeMyanmarLocalDigits($phone);
-    } elseif (preg_match('/^95(\d+)$/', $phone, $matches) && strlen($phone) >= 11) {
-        $local = normalizeMyanmarLocalDigits($matches[1]);
-        $phone = $local !== '' ? '+95' . $local : '+' . $phone;
-    } elseif (preg_match('/^\d{6,10}$/', $phone)) {
-        $local = normalizeMyanmarLocalDigits($phone);
-        $phone = $local !== '' ? '+95' . $local : $phone;
+    $phone = preg_replace('/\s+/', '', $phone);
+    while (preg_match('/^\+95\+/', $phone)) {
+        $phone = '+' . ltrim(substr($phone, 3), '+');
     }
 
-    if (preg_match('/^\+950/', $phone)) {
-        $phone = '+95' . substr($phone, 4);
+    $digits = preg_replace('/\D+/', '', $phone);
+    if ($digits === '') {
+        return '';
     }
 
-    if (preg_match('/^\+9595(\d+)$/', $phone, $matches)) {
-        $local = normalizeMyanmarLocalDigits('9' . $matches[1]);
-        if ($local !== '') {
-            $phone = '+95' . $local;
-        }
+    $digits = stripRepeatedMyanmarCountryCode($digits);
+    $local = normalizeMyanmarLocalDigits($digits);
+
+    if ($local === '') {
+        return '+'.$digits;
     }
 
-    return $phone;
+    return '+95'.$local;
 }
 
 function normalizeOrderContactNumbers(array $data): array
@@ -5267,17 +5431,18 @@ function formatDispatchItemSize($value): string
 }
 
 /**
- * Resolve default From/To branch id (MDY To MDY).
+ * Resolve default From/To branch id (မန္တလေး).
  */
 function resolveDefaultDispatchBranchId(?string $preferredName = null): ?int
 {
     $preferredName = trim((string) ($preferredName
-        ?? config('dispatch_item_cities.default_from_branch', 'MDY To MDY')));
+        ?? config('dispatch_item_cities.default_from_branch', 'မန္တလေး')));
 
     $candidates = array_values(array_unique(array_filter([
         $preferredName,
-        config('dispatch_item_cities.default_from_branch', 'MDY To MDY'),
-        config('dispatch_item_cities.default_to_branch', 'MDY To MDY'),
+        config('dispatch_item_cities.default_from_branch', 'မန္တလေး'),
+        config('dispatch_item_cities.default_to_branch', 'မန္တလေး'),
+        'မန္တလေး',
         'MDY To MDY',
         'MDY',
     ])));

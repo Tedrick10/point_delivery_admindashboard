@@ -9,6 +9,7 @@ class ExpenseSummary extends Model
 {
     protected $fillable = [
         'summary_date',
+        'branch_id',
         'expense_card_id',
         'income',
         'expense',
@@ -18,6 +19,7 @@ class ExpenseSummary extends Model
 
     protected $casts = [
         'summary_date' => 'date',
+        'branch_id' => 'integer',
         'income' => 'float',
         'expense' => 'float',
         'ako_given' => 'float',

@@ -108,13 +108,10 @@ class UserRequest extends FormRequest
             if (is_array($raw)) {
                 $raw = collect($raw)->filter()->last();
             }
-            $contactNumber = preg_replace('/\s+/', '', (string) $raw);
+            $contactNumber = normalizeContactNumber((string) $raw);
             // Dial-code-only leftovers from intlTelInput when the field is left empty.
             if ($contactNumber === '' || preg_match('/^\+\d{1,4}$/', $contactNumber)) {
                 $contactNumber = null;
-            } elseif (preg_match('/^\+(\d{1,4})\+(\d+)$/', $contactNumber, $matches)) {
-                // Fix +95+9598… → +9598…
-                $contactNumber = '+'.$matches[2];
             }
             $this->merge(['contact_number' => $contactNumber]);
         }

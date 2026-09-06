@@ -26,6 +26,7 @@ use App\Models\StaticData;
 use App\Models\User;
 use App\Models\City;
 use App\Models\Country;
+use App\Models\DeliveryCity;
 use App\Models\OrderHistory;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Traits\OrderTrait;
@@ -33,6 +34,7 @@ use App\Traits\PaymentTrait;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Picqer\Barcode\BarcodeGeneratorPNG;
@@ -301,9 +303,9 @@ class OrderController extends Controller
             'status' => 'courier_assigned',
             'country_id' => $client->country_id,
             'city_id' => $client->city_id,
-            'date' => $pickupDatetime,
-            'pickup_datetime' => $pickupDatetime,
-            'delivery_datetime' => $deliveryDatetime,
+            'date' => $this->yangonWallClock($pickupDatetime),
+            'pickup_datetime' => $this->yangonWallClock($pickupDatetime),
+            'delivery_datetime' => $this->yangonWallClock($deliveryDatetime),
             'total_amount' => 0,
             'fixed_charges' => 0,
             'weight_charge' => 0,
@@ -648,7 +650,7 @@ class OrderController extends Controller
         ]);
     }
 
-    public function dispatchAssign100()
+    public function dispatchAssign100(Request $request)
     {
         if (!auth()->user()->can('order-list')) {
             $message = __('message.demo_permission_denied');
@@ -658,17 +660,49 @@ class OrderController extends Controller
         app(DispatchOrderWorkflowService::class)->reclaimPrematureAssign100Items();
         app(DispatchOrderWorkflowService::class)->refreshAssign100PoolReceivedDates();
 
-        $items = DispatchOrderItem::query()
+        $destinationBranches = \App\Models\Branch::query()
+            ->where('status', 1)
+            ->orderByRaw(destinationBranchOrderSql())
+            ->orderBy('name')
+            ->get(['id', 'name', 'city_name']);
+
+        $tabCounts = DispatchOrderItem::query()
+            ->where('status', 'assigned')
+            ->selectRaw('to_branch_id, COUNT(*) as total')
+            ->groupBy('to_branch_id')
+            ->pluck('total', 'to_branch_id');
+
+        $activeToBranchId = (int) $request->input('to_branch_id', 0);
+        if ($activeToBranchId <= 0) {
+            $preferred = $destinationBranches->firstWhere('name', 'မန္တလေး')
+                ?: $destinationBranches->first(fn ($b) => (int) ($tabCounts[$b->id] ?? 0) > 0)
+                ?: $destinationBranches->first();
+            $activeToBranchId = (int) ($preferred?->id ?? 0);
+        }
+
+        $itemsQuery = DispatchOrderItem::query()
             ->where('status', 'assigned')
             ->with(['order.client', 'order.delivery_man', 'fromBranch', 'toBranch', 'deliveryMan'])
             ->orderByDesc('assigned_at')
-            ->orderByDesc('id')
-            ->get();
+            ->orderByDesc('id');
+
+        if ($activeToBranchId > 0) {
+            $itemsQuery->where('to_branch_id', $activeToBranchId);
+        }
+
+        $items = $itemsQuery->get();
 
         $pageTitle = __('message.assign_100');
         $assets = [];
 
-        return view('order.dispatch-assign-100', compact('pageTitle', 'assets', 'items'));
+        return view('order.dispatch-assign-100', compact(
+            'pageTitle',
+            'assets',
+            'items',
+            'destinationBranches',
+            'activeToBranchId',
+            'tabCounts'
+        ));
     }
 
     public function dispatchAssignRider(Request $request)
@@ -699,9 +733,30 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.rider_work_off_assign_blocked')], 422);
         }
 
+        $poolItems = DispatchOrderItem::query()
+            ->whereIn('id', $request->item_ids)
+            ->where('status', 'assigned')
+            ->get();
+
+        if ($poolItems->isEmpty()) {
+            return response()->json(['message' => __('message.no_record_found')], 422);
+        }
+
+        $toBranchIds = $poolItems->pluck('to_branch_id')->filter()->unique()->values();
+        if ($toBranchIds->count() !== 1) {
+            return response()->json(['message' => __('message.assign_100_same_to_branch_required')], 422);
+        }
+
+        $toBranchId = (int) $toBranchIds->first();
+        $riderBranchId = (int) ($rider->branch_id ?? 0);
+        if ($toBranchId > 0 && $riderBranchId > 0 && $riderBranchId !== $toBranchId) {
+            return response()->json(['message' => __('message.assign_100_rider_branch_mismatch')], 422);
+        }
+
         $updated = DispatchOrderItem::query()
             ->whereIn('id', $request->item_ids)
             ->where('status', 'assigned')
+            ->when($toBranchId > 0, fn ($q) => $q->where('to_branch_id', $toBranchId))
             ->update([
                 'status' => 'courier_assigned',
                 'delivery_man_id' => $rider->id,
@@ -861,6 +916,10 @@ class OrderController extends Controller
             $riderFilter = 'all';
         }
 
+        [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request, auth()->user());
+        $branchTabs = $branches;
+        $selectedBranchId = $branchId;
+
         $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
         $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
         if ($toDay < $fromDay) {
@@ -902,9 +961,22 @@ class OrderController extends Controller
             ];
         }
 
-        $riderQuery = User::query()
+        $branchRiderQuery = User::query()
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId));
+
+        $branchTabCounts = User::query()
+            ->where('user_type', 'delivery_man')
+            ->where('status', 1)
+            ->whereIn('id', array_keys($countsByRider) ?: [0])
+            ->whereNotNull('branch_id')
+            ->where('branch_id', '>', 0)
+            ->selectRaw('branch_id, COUNT(*) as total')
+            ->groupBy('branch_id')
+            ->pluck('total', 'branch_id');
+
+        $riderQuery = (clone $branchRiderQuery)
             ->whereIn('id', array_keys($countsByRider) ?: [0])
             ->withAvg('rating as average_rating', 'rating')
             ->withCount('rating as ratings_count')
@@ -938,9 +1010,7 @@ class OrderController extends Controller
             ];
         })->sortBy('name')->values();
 
-        $riderOptions = User::query()
-            ->where('user_type', 'delivery_man')
-            ->where('status', 1)
+        $riderOptions = (clone $branchRiderQuery)
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -961,7 +1031,11 @@ class OrderController extends Controller
             'fromDay',
             'toDay',
             'hasDateFilter',
-            'riderOfMonthUrl'
+            'riderOfMonthUrl',
+            'branchTabs',
+            'branchTabCounts',
+            'selectedBranchId',
+            'branchFilter'
         ));
     }
 
@@ -1084,6 +1158,7 @@ class OrderController extends Controller
         $statusLabel = $statusMap[$status];
         $filterFromDate = $fromDateRaw;
         $filterToDate = $toDateRaw;
+        [, $branchFilter] = resolveDestinationBranchFilter($request, auth()->user());
 
         return view('order.dispatch-rider-items', compact(
             'pageTitle',
@@ -1101,7 +1176,8 @@ class OrderController extends Controller
             'filterToDate',
             'fromDay',
             'toDay',
-            'search'
+            'search',
+            'branchFilter'
         ));
     }
 
@@ -1387,10 +1463,12 @@ class OrderController extends Controller
 
         $osFilter = trim((string) $request->get('os_id', 'all'));
         $settlementService = app(OsSettlementService::class);
+        [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request);
+        $branchTabs = $branches;
+        $selectedBranchId = $branchId;
 
         $unfinishedItems = $settlementService
-            ->completedItemsQuery(null, $fromDay, $toDay)
-            ->get()
+            ->completedItemsForPeriod(null, $fromDay, $toDay, $branchId)
             ->filter(function ($item) use ($osFilter) {
                 $osId = (int) ($item->order?->client_id ?? 0);
                 if ($osFilter === '' || $osFilter === 'all') {
@@ -1405,6 +1483,17 @@ class OrderController extends Controller
 
                 return true;
             });
+
+        $branchTabCounts = DispatchOrderItem::query()
+            ->where('status', 'completed')
+            ->whereNotNull('admin_completed_at')
+            ->whereNull('admin_finished_at')
+            ->where('admin_completed_at', '>=', dailyCheckListDayBounds($fromDay)['start'])
+            ->where('admin_completed_at', '<', dailyCheckListDayBounds($toDay)['end'])
+            ->selectRaw('COALESCE(NULLIF(to_branch_id, 0), from_branch_id) as branch_key, COUNT(*) as total')
+            ->groupBy('branch_key')
+            ->pluck('total', 'branch_key');
+        $allBranchCount = (int) $branchTabCounts->sum();
 
         // Only unfinished OS remain on ငွေရှင်းတမ်း; Finished rows move to Daily Check / Money Transfer.
         $grouped = $unfinishedItems->groupBy(static fn ($item) => (int) ($item->order?->client_id ?? 0));
@@ -1510,7 +1599,13 @@ class OrderController extends Controller
             'fromDay',
             'toDay',
             'osFilter',
-            'slipCompany'
+            'slipCompany',
+            'branchFilter',
+            'branches',
+            'branchTabs',
+            'branchTabCounts',
+            'allBranchCount',
+            'selectedBranchId'
         ));
     }
 
@@ -1534,7 +1629,7 @@ class OrderController extends Controller
         $settlementService = app(OsSettlementService::class);
         $settlementSide = $request->get('settlement_side');
         $items = $settlementService->filterItemsBySettlementSide(
-            $settlementService->completedItemsQuery($osId, $fromDay, $toDay)->get(),
+            $settlementService->completedItemsForPeriod($osId, $fromDay, $toDay),
             in_array($settlementSide, ['pay', 'receive'], true) ? $settlementSide : null
         );
 
@@ -2151,7 +2246,7 @@ class OrderController extends Controller
 
         $item = DispatchOrderItem::create(array_merge($data, $amounts, [
             'order_id' => $order->id,
-            'received_date' => $this->parseDispatchDateInput($data['received_date']),
+            'received_date' => $this->parseDispatchDateInput($data['received_date'])->timezone('Asia/Yangon')->toDateString(),
             'status' => 'collected',
             'code' => DispatchOrderItem::generateCode(),
         ]));
@@ -2206,7 +2301,7 @@ class OrderController extends Controller
         }
 
         $item->update(array_merge($data, $amounts, [
-            'received_date' => $this->parseDispatchDateInput($data['received_date']),
+            'received_date' => $this->parseDispatchDateInput($data['received_date'])->timezone('Asia/Yangon')->toDateString(),
             'pickup_pay_mode' => $pickupPayMode,
             'admin_updated_at' => now(),
         ]));
@@ -2455,6 +2550,24 @@ class OrderController extends Controller
 
     private function dispatchDeliveryCities(): array
     {
+        try {
+            if (Schema::hasTable('delivery_cities')) {
+                $rows = DeliveryCity::query()->active()->orderBy('sort_order')->orderBy('name')->get();
+                if ($rows->isNotEmpty()) {
+                    return $rows->map(static function (DeliveryCity $city) {
+                        return [
+                            'id' => $city->id,
+                            'name' => $city->name,
+                            'name_mm' => $city->displayName(),
+                            'nrc_state' => $city->name,
+                        ];
+                    })->all();
+                }
+            }
+        } catch (\Throwable $e) {
+            // Fall back to config when the managed city table is not ready.
+        }
+
         $cities = config('dispatch_item_cities.cities');
 
         if (is_array($cities) && !empty($cities)) {
@@ -2734,9 +2847,9 @@ class OrderController extends Controller
             'delivery_man_id' => (int) $request->delivery_man_id,
             'country_id' => $client->country_id,
             'city_id' => $client->city_id,
-            'date' => $pickupDatetime,
-            'pickup_datetime' => $pickupDatetime,
-            'delivery_datetime' => $deliveryDatetime,
+            'date' => $this->yangonWallClock($pickupDatetime),
+            'pickup_datetime' => $this->yangonWallClock($pickupDatetime),
+            'delivery_datetime' => $this->yangonWallClock($deliveryDatetime),
         ]);
 
         $order = app(\App\Services\PickupParcelDispatchService::class)
@@ -2778,10 +2891,15 @@ class OrderController extends Controller
     private function parseDispatchDateInput($value): Carbon
     {
         try {
-            return Carbon::createFromFormat('d-m-Y', $value)->startOfDay();
+            return Carbon::createFromFormat('d-m-Y', $value, 'Asia/Yangon')->startOfDay();
         } catch (\Exception $e) {
-            return Carbon::parse($value)->startOfDay();
+            return Carbon::parse($value, 'Asia/Yangon')->timezone('Asia/Yangon')->startOfDay();
         }
+    }
+
+    private function yangonWallClock($value): string
+    {
+        return Carbon::parse($value)->timezone('Asia/Yangon')->format('Y-m-d H:i:s');
     }
 
     /**
@@ -2849,9 +2967,12 @@ class OrderController extends Controller
 
     private function getDispatchPickupRiders()
     {
-        return User::select('id', 'name')
+        $branchId = defaultDestinationBranchId();
+
+        return User::select('id', 'name', 'contact_number')
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->availableForAssign()
             ->orderBy('name')
             ->get();
@@ -2983,6 +3104,18 @@ class OrderController extends Controller
             $data['weight_charge'] = 0;
             $data['distance_charge'] = 0;
             $data['vehicle_charge'] = $data['vehicle_charge'] ?? 0;
+
+            // Persist the local dispatch defaults for later client item creation.
+            $pickup = is_array($data['pickup_point'] ?? null) ? $data['pickup_point'] : [];
+            $fromBranchId = (int) $request->input('from_branch_id', $pickup['from_branch_id'] ?? 0);
+            $toBranchId = (int) $request->input('to_branch_id', $pickup['to_branch_id'] ?? 0);
+            if ($fromBranchId > 0 || $toBranchId > 0) {
+                $pickup['from_branch_id'] = $fromBranchId > 0 ? $fromBranchId : null;
+                $pickup['to_branch_id'] = $toBranchId > 0 ? $toBranchId : $pickup['from_branch_id'];
+                $pickup['delivery_city'] = $request->input('delivery_city', $pickup['delivery_city'] ?? null);
+                $pickup['township'] = $request->input('township', $pickup['township'] ?? null);
+                $data['pickup_point'] = $pickup;
+            }
 
             if (empty($request->id) && $request->is('api/*') && ($data['payment_type'] ?? '') !== 'online') {
                 $data['status'] = 'create';

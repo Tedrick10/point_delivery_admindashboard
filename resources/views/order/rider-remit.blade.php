@@ -18,22 +18,24 @@
 
             @include('order.partials._settlement-tabs', ['activeTab' => 'rider-remit'])
 
+            @include('partials._branch-tabs', [
+                'branchTabs' => $branchTabs ?? $branches,
+                'selectedBranchId' => $selectedBranchId ?? ($branchFilter === 'all' ? null : (int) $branchFilter),
+                'branchTabCounts' => $branchTabCounts ?? [],
+                'allCount' => $allBranchCount ?? null,
+                'includeAll' => false,
+                'routeName' => 'order.rider-remit',
+                'routeQuery' => [
+                    'date' => $filterDate,
+                ],
+            ])
+
             <form method="GET" action="{{ route('order.rider-remit') }}" class="pds-daily-check-toolbar" id="riderRemitFilterForm">
+                <input type="hidden" name="branch_id" id="rr_branch" value="{{ $branchFilter }}">
                 <div class="pds-daily-check-toolbar__grid pds-rider-remit-toolbar">
                     <div class="pds-daily-check-field pds-daily-check-field--date">
                         <label for="rr_date">{{ __('message.date') }}</label>
                         <input type="text" name="date" id="rr_date" class="pds-dispatch-input dispatch-datepicker" value="{{ $filterDate }}" autocomplete="off">
-                    </div>
-                    <div class="pds-daily-check-field pds-daily-check-field--branch">
-                        <label for="rr_branch">{{ __('message.branch') }}</label>
-                        <select name="branch_id" id="rr_branch" class="pds-dispatch-input pds-dispatch-select">
-                            @if($branches->count() !== 1)
-                                <option value="all" @selected($branchFilter === 'all')>{{ __('message.all') }}</option>
-                            @endif
-                            @foreach($branches as $branch)
-                                <option value="{{ $branch->id }}" @selected((string) $branchFilter === (string) $branch->id)>{{ $branch->name }}</option>
-                            @endforeach
-                        </select>
                     </div>
                     <div class="pds-daily-check-toolbar__actions">
                         <button type="button" class="pds-rider-remit-audit-btn" id="rrAuditBtn"

@@ -322,7 +322,7 @@ class DispatchOrderWorkflowService
 
     public function applyDispatchStatusFilter($query, ?string $status): void
     {
-        if (!$status) {
+        if (!$status || $status === 'all') {
             return;
         }
 
@@ -349,13 +349,7 @@ class DispatchOrderWorkflowService
                 }),
             'rider_pick_up_unassigned' => $query->whereNull('delivery_man_id'),
             'rider_pick_up_assigned' => $query->whereNotNull('delivery_man_id')
-                ->whereNotIn('status', ['courier_picked_up', 'courier_departed', 'completed', 'pickup_error', 'cancelled'])
-                ->where(function ($q) {
-                    // Still waiting for Admin Item Info (or items not created yet).
-                    $q->whereHas('dispatchItems', function ($item) {
-                        $item->where('status', 'collected')->whereNull('admin_updated_at');
-                    })->orWhereDoesntHave('dispatchItems');
-                }),
+                ->whereNotIn('status', ['courier_picked_up', 'courier_departed', 'completed', 'pickup_error', 'cancelled']),
             'rider_pick_up_error' => $query->where('status', 'pickup_error')
                 ->where(function ($q) {
                     $q->whereNull('pickup_error_choice')
@@ -457,7 +451,7 @@ class DispatchOrderWorkflowService
     }
 
     /**
-     * Day-by-day counts for Order List tabs (Pick Up / Pick Up Rider / Rider Done / Admin Done).
+     * Day-by-day counts for Order List tabs (All / Pick Up / Pick Up Rider / Rider Done / Admin Done).
      *
      * Date bounds must match DispatchOrderDataTable: pickup_datetime as Yangon wall clock,
      * created_at fallback as UTC (orders with null pickup_datetime).
@@ -467,6 +461,7 @@ class DispatchOrderWorkflowService
     public function orderListTabCounts(?string $fromDateRaw = null, ?string $toDateRaw = null, ?string $searchTerm = null): array
     {
         $tabs = [
+            'all',
             'rider_pick_up_unassigned',
             'rider_pick_up_assigned',
             'rider_pick_up_done',
@@ -475,6 +470,7 @@ class DispatchOrderWorkflowService
 
         // Keep counts in sync with the table (Admin Done may reclaim premature Assign 100 rows).
         $this->reclaimPrematureAssign100Items();
+        $this->healUtcRolloverReceivedDates();
 
         $yangonToday = Carbon::now('Asia/Yangon');
         $fromRaw = $fromDateRaw ?: $yangonToday->format('d-m-Y');
@@ -491,7 +487,9 @@ class DispatchOrderWorkflowService
         foreach ($tabs as $tab) {
             $query = Order::query()->whereNull('deleted_at');
             $this->applyOrderListQuery($query);
-            $this->applyDispatchStatusFilter($query, $tab);
+            if ($tab !== 'all') {
+                $this->applyDispatchStatusFilter($query, $tab);
+            }
 
             if ($dateBounds) {
                 $query->where(function ($dateQuery) use ($dateBounds) {
@@ -674,14 +672,20 @@ class DispatchOrderWorkflowService
             return;
         }
 
-        $moved = DispatchOrderItem::query()
+        $movedQuery = DispatchOrderItem::query()
             ->where('order_id', $order->id)
-            ->where('status', 'collected')
-            ->update([
-                'status' => 'assigned',
-                'assigned_at' => now(),
-                'received_date' => Carbon::now('Asia/Yangon')->toDateString(),
-            ]);
+            ->where('status', 'collected');
+
+        $items = (clone $movedQuery)->get();
+        $moved = 0;
+
+        foreach ($items as $item) {
+            $item->status = 'assigned';
+            $item->assigned_at = now();
+            $item->received_date = Carbon::now('Asia/Yangon')->toDateString();
+            $item->save();
+            $moved++;
+        }
 
         // Admin Done + Rider Pick Up Done → notify client once when items enter Assign 100.
         if ($moved > 0) {
@@ -746,6 +750,40 @@ class DispatchOrderWorkflowService
                 'status' => 'collected',
                 'assigned_at' => null,
             ]);
+    }
+
+    /**
+     * New Order used UTC "today" before Yangon midnight+6:30, so early-morning
+     * creates landed on yesterday. Move those same-day creates onto Yangon today.
+     */
+    public function healUtcRolloverReceivedDates(): int
+    {
+        $tz = 'Asia/Yangon';
+        $today = Carbon::now($tz)->toDateString();
+        $yesterday = Carbon::now($tz)->copy()->subDay()->toDateString();
+        $todayStartUtc = Carbon::now($tz)->copy()->startOfDay()->utc()->format('Y-m-d H:i:s');
+
+        $ids = Order::query()
+            ->where('created_at', '>=', $todayStartUtc)
+            ->whereDate('pickup_datetime', $yesterday)
+            ->whereTime('pickup_datetime', '00:00:00')
+            ->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+
+        Order::query()->whereIn('id', $ids)->update([
+            'pickup_datetime' => $today.' 00:00:00',
+            'date' => $today.' 00:00:00',
+        ]);
+
+        DispatchOrderItem::query()
+            ->whereIn('order_id', $ids)
+            ->whereDate('received_date', $yesterday)
+            ->update(['received_date' => $today]);
+
+        return $ids->count();
     }
 
     public function isAdminDone(Order $order): bool

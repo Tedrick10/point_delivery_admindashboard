@@ -13,7 +13,11 @@ class BranchController extends Controller
         $branches = Branch::query()->where('status', 1);
 
         $branches->when($request->filled('search'), function ($q) use ($request) {
-            return $q->where('name', 'LIKE', '%'.$request->search.'%');
+            return $q->where(function ($inner) use ($request) {
+                $inner->where('name', 'LIKE', '%'.$request->search.'%')
+                    ->orWhere('city_name', 'LIKE', '%'.$request->search.'%')
+                    ->orWhere('code', 'LIKE', '%'.$request->search.'%');
+            });
         });
 
         $perPage = config('constant.PER_PAGE_LIMIT');
@@ -26,11 +30,16 @@ class BranchController extends Controller
             }
         }
 
-        $paginated = $branches->orderBy('name')->paginate($perPage);
+        $paginated = $branches->orderBy('city_name')->orderBy('name')->paginate($perPage);
         $items = $paginated->getCollection()->map(function (Branch $branch) {
             return [
                 'id' => $branch->id,
                 'name' => $branch->name,
+                'code' => $branch->code,
+                'city_name' => $branch->city_name,
+                'label' => $branch->displayLabel(),
+                'address' => $branch->address,
+                'phone' => $branch->phone,
                 'status' => (int) $branch->status,
             ];
         })->values();

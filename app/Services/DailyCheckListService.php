@@ -82,6 +82,9 @@ class DailyCheckListService
                 /** @var Collection<int, DispatchOrderItem> $groupItems */
                 $first = $groupItems->first();
                 $day = $this->itemDay($first);
+                if ($day < $fromDay || $day > $toDay) {
+                    continue;
+                }
                 $partyId = $partyType === DailyCheckInvoice::PARTY_OS
                     ? (int) ($first->order?->client_id ?? 0)
                     : (int) ($first->delivery_man_id ?? 0);
@@ -140,7 +143,7 @@ class DailyCheckListService
 
         if ($items && $items->isNotEmpty()) {
             $invoice->item_ids = $items->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
-            if (! $invoice->branch_id && $branchId) {
+            if ($branchId && (int) $invoice->branch_id !== $branchId) {
                 $invoice->branch_id = $branchId;
             }
             if ($invoice->isDirty()) {
@@ -329,8 +332,8 @@ class DailyCheckListService
 
     protected function baseItemsQuery(string $fromDay, string $toDay, ?int $branchId)
     {
-        // Completed onwards. Invoice date = Completed calendar day − 1 (Yangon), no 9AM cutoff.
-        // Day D sheet = Completed during Yangon day D+1. From–To uses first start → last end.
+        // Completed onwards. Invoice day matches Rider ငွေအပ်:
+        // first Completed on C → C−1; later Completed that day → C.
         $boundsStart = dailyCheckListDayBounds($fromDay)['start'];
         $boundsEnd = dailyCheckListDayBounds($toDay)['end'];
 
@@ -340,10 +343,7 @@ class DailyCheckListService
             ->where('admin_completed_at', '>=', $boundsStart)
             ->where('admin_completed_at', '<', $boundsEnd)
             ->when($branchId && $branchId > 0, function ($q) use ($branchId) {
-                $q->where(function ($inner) use ($branchId) {
-                    $inner->where('from_branch_id', $branchId)
-                        ->orWhere('to_branch_id', $branchId);
-                });
+                applyDestinationBranchFilter($q, $branchId);
             });
     }
 
@@ -372,7 +372,9 @@ class DailyCheckListService
                 $q->where('delivery_man_id', (int) $invoice->party_user_id);
             })
             ->with(['order.client.city', 'toBranch', 'fromBranch', 'deliveryMan', 'photoMedia', 'custPhotoMedia', 'custSignMedia'])
-            ->get();
+            ->get()
+            ->filter(fn (DispatchOrderItem $item) => $this->itemDay($item) === $day)
+            ->values();
 
         $invoice->item_ids = $items->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
         $invoice->save();
@@ -457,6 +459,7 @@ class DailyCheckListService
             'remitted_date' => $invoice->remitted_date?->format('d-m-Y') ?? '',
             'remitted_photo_url' => $invoice->remittedPhotoUrl(),
             'has_remitted_photo' => (bool) $invoice->remitted_photo_path,
+            'branch_id' => (int) ($invoice->branch_id ?? 0),
             'branch_name' => $invoice->branch?->name ?? '-',
         ];
     }
@@ -700,10 +703,9 @@ class DailyCheckListService
 
     protected function itemDay(DispatchOrderItem $item): string
     {
-        // Invoice day = Yangon calendar day of Completed − 1 (no 9AM cutoff).
         $at = $item->admin_completed_at ?: $item->admin_finished_at ?: $item->updated_at;
 
-        return dailyCheckListDate($at ? Carbon::parse($at) : null)->toDateString();
+        return dailyCheckListDateForItem($item, $at ? Carbon::parse($at) : null)->toDateString();
     }
 
     protected function generateInvoiceNo(): string

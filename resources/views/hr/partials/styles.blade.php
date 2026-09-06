@@ -18,6 +18,10 @@
     .pds-hr-stat--soft {
         background: #fff; color: var(--hr-ink); border: 1px solid var(--hr-line); box-shadow: 0 8px 20px rgba(15, 23, 42, .04);
     }
+    .pds-hr-stat--danger {
+        background: linear-gradient(135deg, #dc2626, #ef4444);
+        box-shadow: 0 10px 24px rgba(220, 38, 38, .22);
+    }
     .pds-hr-stat__value { display: block; font-size: 24px; font-weight: 800; line-height: 1.1; }
     .pds-hr-stat__label { display: block; margin-top: 4px; font-size: 12px; opacity: .9; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
     .pds-hr-toolbar {
@@ -59,6 +63,15 @@
         background: #fff; border: 1px solid var(--hr-line); border-radius: 20px;
         box-shadow: 0 10px 30px rgba(15, 23, 42, .04); overflow: hidden;
     }
+    /* Sticky thead/tfoot need a scrollport without an overflow:hidden ancestor. */
+    .pds-hr-panel--salary,
+    .pds-hr-panel--late {
+        overflow: visible;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        border-radius: 0;
+    }
     .pds-hr-side { padding: 18px; }
     .pds-hr-side__head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
     .pds-hr-side__head h5 { margin: 0; font-weight: 700; color: var(--hr-ink); }
@@ -76,28 +89,70 @@
         font-weight: 700; border-top: 0; border-bottom: 1px solid var(--hr-line); white-space: nowrap; padding: 12px 10px; vertical-align: middle;
     }
 
-    /* —— Payroll salary sheets —— */
+    /* —— Payroll salary sheets (frozen header + TOTAL) —— */
     .pds-hr-panel--salary,
     .pds-hr-panel--late {
-        overflow: hidden;
+        overflow: visible;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        border-radius: 0;
     }
+    .pds-hr-freeze-shell,
     .pds-hr-panel--salary .table-responsive,
     .pds-hr-panel--late .table-responsive {
-        overflow: auto;
-        max-height: min(72vh, 860px);
+        overflow-x: auto;
+        overflow-y: hidden;
+        max-height: none;
+        position: relative;
+        border-radius: 20px;
+        border: 1px solid var(--hr-line);
+        background: #fff;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, .04);
         -webkit-overflow-scrolling: touch;
     }
     .pds-hr-table--salary,
     .pds-hr-table--late {
         min-width: 1100px;
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+        margin: 0;
+    }
+    /* Classic freeze: only tbody scrolls vertically */
+    .pds-hr-table--freeze {
+        min-width: 1100px;
+    }
+    .pds-hr-table--freeze > thead,
+    .pds-hr-table--freeze > tbody,
+    .pds-hr-table--freeze > tfoot {
+        display: block;
+        width: 100%;
+    }
+    .pds-hr-table--freeze > tbody {
+        max-height: min(58vh, 620px);
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    .pds-hr-table--freeze > thead,
+    .pds-hr-table--freeze > tfoot {
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+    .pds-hr-table--freeze > thead > tr,
+    .pds-hr-table--freeze > tbody > tr,
+    .pds-hr-table--freeze > tfoot > tr {
+        display: table;
+        width: 100%;
+        table-layout: fixed;
     }
     .pds-hr-table--salary thead th,
     .pds-hr-table--late thead th {
-        position: sticky;
-        top: 0;
-        z-index: 3;
-        background: #0f172a;
-        color: #f8fafc;
+        position: static;
+        top: auto;
+        z-index: auto;
+        background: #ffffff !important;
+        color: #0f172a !important;
         text-align: center;
         white-space: normal;
         line-height: 1.25;
@@ -106,25 +161,26 @@
         text-transform: none;
         font-weight: 700;
         padding: 14px 10px;
-        border-bottom: 0;
+        border-bottom: 1px solid #e2e8f0 !important;
         vertical-align: middle;
-        min-width: 88px;
-        box-shadow: 0 1px 0 rgba(15, 23, 42, .35);
+        min-width: 0;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, .06);
     }
     .pds-hr-table--salary thead th.pds-hr-col-no,
     .pds-hr-table--late thead th.pds-hr-col-no {
-        min-width: 48px;
         width: 48px;
-        left: 0;
-        z-index: 5;
+        left: auto;
+        z-index: auto;
+        background: #ffffff !important;
     }
     .pds-hr-table--salary thead th.pds-hr-col-name,
     .pds-hr-table--late thead th.pds-hr-col-name {
         text-align: left;
-        min-width: 180px;
-        left: 48px;
-        z-index: 5;
+        width: 200px;
+        left: auto;
+        z-index: auto;
         white-space: nowrap;
+        background: #ffffff !important;
     }
     .pds-hr-table--salary tbody td,
     .pds-hr-table--salary tfoot td,
@@ -150,25 +206,25 @@
     .pds-hr-table--salary tfoot td.pds-hr-col-no,
     .pds-hr-table--late tbody td.pds-hr-col-no,
     .pds-hr-table--late tfoot td.pds-hr-col-no {
-        position: sticky;
-        left: 0;
-        z-index: 2;
+        position: static;
+        left: auto;
+        z-index: auto;
         width: 48px;
         color: #94a3b8;
         font-weight: 700;
         background: inherit;
-        box-shadow: 1px 0 0 #eef2f7;
+        box-shadow: none;
     }
     .pds-hr-table--salary tbody td.pds-hr-col-name,
     .pds-hr-table--salary tfoot td.pds-hr-col-name,
     .pds-hr-table--late tbody td.pds-hr-col-name,
     .pds-hr-table--late tfoot td.pds-hr-col-name {
-        position: sticky;
-        left: 48px;
-        z-index: 2;
+        position: static;
+        left: auto;
+        z-index: auto;
         text-align: left;
         background: inherit;
-        box-shadow: 1px 0 0 #eef2f7;
+        box-shadow: none;
         white-space: nowrap;
     }
     .pds-hr-table--salary tbody tr:nth-child(even) td.pds-hr-col-no,
@@ -273,11 +329,17 @@
         font-size: 10px;
         padding: 1px 7px;
     }
+    .pds-hr-table--salary tfoot,
+    .pds-hr-table--late tfoot {
+        position: static;
+        bottom: auto;
+        z-index: auto;
+    }
     .pds-hr-table--salary tfoot tr.pds-hr-tfoot td,
     .pds-hr-table--late tfoot tr.pds-hr-tfoot td {
-        position: sticky;
-        bottom: 0;
-        z-index: 3;
+        position: static !important;
+        bottom: auto !important;
+        z-index: auto;
         background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
         border-top: 2px solid #fdba74;
         border-bottom: 0;
@@ -285,13 +347,13 @@
         font-weight: 800;
         padding-top: 14px;
         padding-bottom: 14px;
-        box-shadow: 0 -6px 16px rgba(154, 52, 18, .06);
+        box-shadow: 0 -4px 12px rgba(154, 52, 18, .08);
     }
     .pds-hr-table--salary tfoot tr.pds-hr-tfoot td.pds-hr-col-no,
     .pds-hr-table--salary tfoot tr.pds-hr-tfoot td.pds-hr-col-name,
     .pds-hr-table--late tfoot tr.pds-hr-tfoot td.pds-hr-col-no,
     .pds-hr-table--late tfoot tr.pds-hr-tfoot td.pds-hr-col-name {
-        z-index: 4;
+        z-index: auto;
         background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
     }
     .pds-hr-table--salary .pds-hr-tfoot__label,
@@ -703,6 +765,40 @@
     .pds-hr-extra--bag .pds-hr-extra__add-btn:hover {
         box-shadow: 0 12px 22px rgba(2, 132, 199, .28);
     }
+    .pds-hr-extra__toolbar {
+        display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
+        padding: 14px 22px 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+    }
+    .pds-hr-extra__filter-field {
+        display: flex; flex-direction: column; gap: 6px; min-width: 160px;
+    }
+    .pds-hr-extra__filter-field--search { flex: 1 1 220px; min-width: 200px; }
+    .pds-hr-extra__filter-field label {
+        margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+        text-transform: uppercase; color: #64748b;
+    }
+    .pds-hr-extra__filter-field label i { color: #94a3b8; margin-right: 4px; }
+    .pds-hr-extra__toolbar .pds-hr-extra__control {
+        height: 40px; border: 1px solid #dbe3ee; border-radius: 12px;
+        background: #fff; padding: 0 12px; font-weight: 600; color: #0f172a;
+    }
+    .pds-hr-extra__toolbar .pds-hr-extra__control:focus {
+        outline: none; border-color: #fb923c; box-shadow: 0 0 0 3px rgba(251, 146, 60, .18);
+    }
+    .pds-hr-extra--bag .pds-hr-extra__toolbar .pds-hr-extra__control:focus {
+        border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, .18);
+    }
+    .pds-hr-extra__filter-clear {
+        height: 40px; border: 1px solid #e2e8f0; border-radius: 12px;
+        background: #fff; color: #64748b; font-weight: 700; font-size: 13px;
+        padding: 0 14px; cursor: pointer; transition: .15s ease;
+    }
+    .pds-hr-extra__filter-clear:hover {
+        background: #fff7ed; border-color: #fdba74; color: #c2410c;
+    }
+    .pds-hr-extra--bag .pds-hr-extra__filter-clear:hover {
+        background: #f0f9ff; border-color: #7dd3fc; color: #0369a1;
+    }
     .pds-hr-extra__list {
         border: 0; border-radius: 0; overflow: hidden; margin-bottom: 0; background: #fff;
     }
@@ -811,6 +907,10 @@
         .pds-hr-summary { grid-template-columns: 1fr; }
         .pds-hr-hero__title { font-size: 22px; }
         .pds-hr-extra__form { grid-template-columns: 1fr; }
+        .pds-hr-extra__toolbar { padding: 12px 16px; }
+        .pds-hr-extra__filter-field,
+        .pds-hr-extra__filter-field--search,
+        .pds-hr-extra__filter-clear { width: 100%; min-width: 0; }
         .pds-hr-extra__add-btn { width: 100%; }
         .pds-hr-extra__list-head { display: none; }
         .pds-hr-extra__row,
@@ -829,3 +929,73 @@
         .pds-hr-my-salary__grid { grid-template-columns: 1fr 1fr; }
     }
 </style>
+<script>
+(function () {
+    function syncHrFreezeTable(table) {
+        if (!table || !table.classList.contains('pds-hr-table--freeze')) return;
+        var headRow = table.querySelector('thead tr');
+        var bodyRow = table.querySelector('tbody tr[data-row-id]') || table.querySelector('tbody tr');
+        var footRow = table.querySelector('tfoot tr');
+        if (!headRow || !bodyRow) return;
+
+        var headCells = headRow.children;
+        var bodyCells = bodyRow.children;
+        var count = Math.min(headCells.length, bodyCells.length);
+        if (count < 1) return;
+
+        // Reset widths so we can re-measure cleanly.
+        for (var i = 0; i < count; i++) {
+            headCells[i].style.width = '';
+            bodyCells[i].style.width = '';
+            if (footRow && footRow.children[i]) footRow.children[i].style.width = '';
+        }
+
+        var widths = [];
+        for (var j = 0; j < count; j++) {
+            widths.push(Math.ceil(Math.max(
+                headCells[j].getBoundingClientRect().width,
+                bodyCells[j].getBoundingClientRect().width
+            )));
+        }
+
+        var total = widths.reduce(function (sum, w) { return sum + w; }, 0);
+        table.style.width = total + 'px';
+        table.style.minWidth = total + 'px';
+
+        for (var k = 0; k < count; k++) {
+            var px = widths[k] + 'px';
+            headCells[k].style.width = px;
+            headCells[k].style.minWidth = px;
+            bodyCells[k].style.width = px;
+            bodyCells[k].style.minWidth = px;
+            if (footRow && footRow.children[k]) {
+                footRow.children[k].style.width = px;
+                footRow.children[k].style.minWidth = px;
+            }
+            // Apply same widths to every body row for consistency.
+            var rows = table.querySelectorAll('tbody tr');
+            for (var r = 0; r < rows.length; r++) {
+                if (rows[r].children[k]) {
+                    rows[r].children[k].style.width = px;
+                    rows[r].children[k].style.minWidth = px;
+                }
+            }
+        }
+    }
+
+    function syncAllHrFreezeTables() {
+        document.querySelectorAll('table.pds-hr-table--freeze').forEach(syncHrFreezeTable);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', syncAllHrFreezeTables);
+    } else {
+        syncAllHrFreezeTables();
+    }
+    window.addEventListener('resize', function () {
+        window.clearTimeout(window.__pdsHrFreezeTimer);
+        window.__pdsHrFreezeTimer = window.setTimeout(syncAllHrFreezeTables, 120);
+    });
+    window.pdsSyncHrFreezeTables = syncAllHrFreezeTables;
+})();
+</script>

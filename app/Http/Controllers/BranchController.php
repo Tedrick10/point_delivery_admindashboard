@@ -55,7 +55,7 @@ class BranchController extends Controller
             return redirect()->back()->withErrors($message);
         }
 
-        Branch::create($request->only(['name', 'status']));
+        Branch::create($request->only(['name', 'code', 'city_name', 'address', 'phone', 'status']));
         $message = __('message.save_form', ['form' => __('message.branch')]);
 
         return redirect()->route('branch.index')->withSuccess($message);
@@ -84,7 +84,7 @@ class BranchController extends Controller
         }
 
         $branch = Branch::findOrFail($id);
-        $branch->update($request->only(['name', 'status']));
+        $branch->update($request->only(['name', 'code', 'city_name', 'address', 'phone', 'status']));
         $message = __('message.update_form', ['form' => __('message.branch')]);
 
         return redirect()->route('branch.index')->withSuccess($message);

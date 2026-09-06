@@ -18,7 +18,7 @@
                             <tr>
                                 <th style="width:60px">{{ __('message.no') }}</th>
                                 <th>{{ __('message.delivery_man') }}</th>
-                                <th style="width:140px">{{ __('message.city_name') }}</th>
+                                <th style="width:140px">{{ __('message.branch') }}</th>
                                 <th style="width:140px">{{ __('message.phone') }}</th>
                             </tr>
                         </thead>

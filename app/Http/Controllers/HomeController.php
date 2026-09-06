@@ -831,13 +831,13 @@ class HomeController extends Controller
                         'id' => $user->id,
                         'text' => $user->text,
                         'name' => $user->text,
-                        'phone' => $user->contact_number,
+                        'phone' => normalizeContactNumber($user->contact_number),
                     ];
                 });
                 break;
             case 'dispatch_deliveryman_search':
-                $items = User::select('id', 'name as text', 'contact_number', 'city_id')
-                    ->with('city:id,name')
+                $items = User::select('id', 'name as text', 'contact_number', 'city_id', 'branch_id')
+                    ->with(['city:id,name', 'branch:id,name'])
                     ->where('user_type', 'delivery_man')
                     ->where('status', 1)
                     ->availableForAssign()
@@ -846,6 +846,10 @@ class HomeController extends Controller
                             ->whereNotNull('otp_verify_at')
                             ->whereNotNull('document_verified_at');
                     });
+                $branchId = (int) request('branch_id', 0);
+                if ($branchId > 0) {
+                    $items->where('branch_id', $branchId);
+                }
                 if ($value != '') {
                     $items->where('name', 'LIKE', '%' . $value . '%');
                 }
@@ -854,8 +858,10 @@ class HomeController extends Controller
                         'id' => $user->id,
                         'text' => $user->text,
                         'name' => $user->text,
-                        'phone' => $user->contact_number,
+                        'phone' => normalizeContactNumber($user->contact_number),
                         'city' => optional($user->city)->name,
+                        'branch' => optional($user->branch)->name,
+                        'branch_id' => $user->branch_id ? (int) $user->branch_id : null,
                     ];
                 });
                 break;
@@ -871,7 +877,7 @@ class HomeController extends Controller
                         'id' => $user->id,
                         'name' => $user->text,
                         'text' => $user->text,
-                        'phone' => $user->contact_number,
+                        'phone' => normalizeContactNumber($user->contact_number),
                         'address' => $user->address,
                     ];
                 });
@@ -902,7 +908,7 @@ class HomeController extends Controller
                         'id' => $user->id,
                         'name' => $user->text,
                         'text' => $displayName,
-                        'phone' => $user->contact_number,
+                        'phone' => normalizeContactNumber($user->contact_number),
                         'address' => $user->address,
                     ];
                 });

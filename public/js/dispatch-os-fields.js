@@ -16,15 +16,46 @@
 
         value = String(value).trim();
 
+        if (/^[A-Z]{2}\s+/i.test(value)) {
+            value = value.replace(/^[A-Z]{2}\s+/i, '').trim();
+        }
+
         if (/^[A-Z]{2}\+/i.test(value)) {
-            return '+' + value.replace(/^[A-Z]{2}\+/i, '').replace(/^\+/, '');
+            value = '+' + value.replace(/^[A-Z]{2}\+/i, '').replace(/^\+/, '');
+        } else if (/^[A-Z]{2}\d+$/i.test(value)) {
+            value = '+' + value.replace(/^[A-Z]{2}/i, '');
         }
 
-        if (/^[A-Z]{2}\d+$/i.test(value)) {
-            return '+' + value.replace(/^[A-Z]{2}/i, '');
+        value = value.replace(/\s+/g, '');
+        while (/^\+95\+/.test(value)) {
+            value = '+' + value.slice(3).replace(/^\+/, '');
         }
 
-        return value;
+        var digits = value.replace(/\D/g, '');
+        if (!digits) {
+            return '';
+        }
+
+        while (digits.indexOf('95') === 0 && digits.length >= 12) {
+            var rest = digits.slice(2);
+            if (/^9\d{7,9}$/.test(rest) || (rest.indexOf('95') === 0 && rest.length >= 10)) {
+                digits = rest;
+                continue;
+            }
+            break;
+        }
+
+        if (/^0\d+/.test(digits)) {
+            digits = digits.replace(/^0+/, '');
+        }
+        if (/^9\d{7,9}$/.test(digits)) {
+            return '+95' + digits;
+        }
+        if (digits.indexOf('95') === 0) {
+            return '+' + digits;
+        }
+
+        return '+95' + digits;
     }
 
     function normalizeOsPayload(item) {

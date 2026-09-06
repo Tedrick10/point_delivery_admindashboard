@@ -398,7 +398,7 @@ body.pds-frontend {
     box-shadow: 0 8px 20px color-mix(in srgb, var(--site-color) 30%, transparent);
 }
 
-/* Legal / CMS */
+/* Legal / CMS (generic CMS pages) */
 .privacy-policy,
 .terms-service,
 .pages {
@@ -412,6 +412,212 @@ body.pds-frontend {
 .terms-service p,
 .pages p {
     line-height: 1.75;
+}
+
+/* Legal routes: no site footer */
+.main-page--legal {
+    min-height: calc(100vh - 88px);
+    background: #f4f5f7;
+}
+
+.main-page--legal,
+.main-page--legal .reveal-on-scroll,
+.main-page--legal section,
+.main-page--legal .pds-legal {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+}
+
+/* ——— Clean Privacy / Terms document ——— */
+.pds-legal {
+    padding-bottom: 3.25rem;
+}
+
+.pds-legal__container {
+    max-width: 760px;
+    padding-top: 1.35rem;
+}
+
+.pds-legal__crumb {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0 1rem;
+    font-size: 0.86rem;
+    color: #98a0ab;
+}
+
+.pds-legal__crumb a {
+    color: #98a0ab;
+    text-decoration: none;
+}
+
+.pds-legal__crumb a:hover {
+    color: var(--site-color);
+}
+
+.pds-legal__sheet {
+    background: #fff;
+    border: 1px solid rgba(16, 24, 40, 0.06);
+    border-radius: 18px;
+    box-shadow: 0 14px 36px rgba(16, 24, 40, 0.05);
+    overflow: hidden;
+}
+
+.pds-legal__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.25rem;
+    padding: 1.4rem 1.5rem 1.15rem;
+}
+
+.pds-legal__titles h1 {
+    margin: 0 0 0.3rem;
+    font-size: clamp(1.45rem, 2.4vw, 1.75rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #15181e;
+    line-height: 1.25;
+}
+
+.pds-legal__titles p {
+    margin: 0;
+    max-width: 26rem;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    color: #6f7783;
+}
+
+.pds-legal__switch {
+    display: inline-flex;
+    flex-shrink: 0;
+    padding: 0.25rem;
+    gap: 0.15rem;
+    border-radius: 999px;
+    background: #eef0f3;
+}
+
+.pds-legal__switch a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 5.75rem;
+    padding: 0.5rem 0.95rem;
+    border-radius: 999px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #5c6570;
+    text-decoration: none !important;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pds-legal__switch a:hover {
+    color: #15181e;
+}
+
+.pds-legal__switch a.is-on {
+    background: var(--site-color);
+    color: #fff !important;
+    box-shadow: 0 5px 14px color-mix(in srgb, var(--site-color) 30%, transparent);
+}
+
+.pds-legal__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.7rem 1.5rem;
+    border-top: 1px solid rgba(16, 24, 40, 0.05);
+    border-bottom: 1px solid rgba(16, 24, 40, 0.05);
+    background: #fafbfc;
+    font-size: 0.8rem;
+    color: #8b93a0;
+}
+
+.pds-legal__bar strong {
+    color: var(--site-color);
+    font-weight: 650;
+}
+
+.pds-legal__body {
+    padding: 1.35rem 1.5rem 1.85rem;
+    color: #3d4450;
+    font-size: 0.96rem;
+    line-height: 1.75;
+}
+
+.pds-legal__body h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #15181e;
+    letter-spacing: -0.01em;
+}
+
+.pds-legal__body h3 {
+    margin: 1.35rem 0 0.4rem;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: #15181e;
+}
+
+.pds-legal__body p {
+    margin: 0 0 0.8rem;
+}
+
+.pds-legal__body ul {
+    margin: 0 0 0.95rem;
+    padding-left: 1.15rem;
+}
+
+.pds-legal__body li {
+    margin: 0 0 0.35rem;
+}
+
+.pds-legal__body em {
+    color: #6f7783;
+    font-style: normal;
+}
+
+.pds-legal__body a {
+    color: var(--site-color);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.pds-legal__body a:hover {
+    text-decoration: underline;
+}
+
+.pds-legal .privacy-policy,
+.pds-legal .terms-service {
+    margin-top: 0 !important;
+    max-width: none;
+    padding: 0;
+}
+
+@media (max-width: 767.98px) {
+    .pds-legal__top {
+        flex-direction: column;
+        padding: 1.2rem 1.1rem 1rem;
+    }
+
+    .pds-legal__switch {
+        width: 100%;
+    }
+
+    .pds-legal__switch a {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .pds-legal__bar,
+    .pds-legal__body {
+        padding-left: 1.1rem;
+        padding-right: 1.1rem;
+    }
 }
 
 /* Sign out */

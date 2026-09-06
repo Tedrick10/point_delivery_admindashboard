@@ -10,6 +10,7 @@ class ExpenseCard extends Model
 {
     protected $fillable = [
         'expense_date',
+        'branch_id',
         'total_amount',
         'created_by',
         'updated_by',
@@ -17,6 +18,7 @@ class ExpenseCard extends Model
 
     protected $casts = [
         'expense_date' => 'date',
+        'branch_id' => 'integer',
         'total_amount' => 'float',
     ];
 

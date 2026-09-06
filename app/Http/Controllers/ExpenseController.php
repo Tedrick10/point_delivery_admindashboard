@@ -49,9 +49,14 @@ class ExpenseController extends Controller
 
         app(ExpenseRiderFuelSyncService::class)->syncDateRange($from, $to, auth()->id());
 
+        [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request);
+        $branchTabs = $branches;
+        $selectedBranchId = $branchId;
+
         $cardsQuery = ExpenseCard::query()
             ->with('items')
             ->whereBetween('expense_date', [$from, $to])
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('expense_date')
             ->orderBy('id');
 
@@ -93,6 +98,16 @@ class ExpenseController extends Controller
             ->map(fn ($id) => (int) $id)
             ->all();
 
+        $branchTabCounts = ExpenseCard::query()
+            ->whereBetween('expense_date', [$from, $to])
+            ->whereNotNull('branch_id')
+            ->selectRaw('branch_id, COUNT(*) as total')
+            ->groupBy('branch_id')
+            ->pluck('total', 'branch_id');
+        $allBranchCount = ExpenseCard::query()
+            ->whereBetween('expense_date', [$from, $to])
+            ->count();
+
         $pageTitle = __('message.expenses_title');
         $assets = [];
         $canEdit = auth()->user()->can('order-edit');
@@ -119,7 +134,13 @@ class ExpenseController extends Controller
             'filterFrom',
             'filterTo',
             'filterSubject',
-            'generatedCardIds'
+            'generatedCardIds',
+            'branchFilter',
+            'branches',
+            'branchTabs',
+            'branchTabCounts',
+            'allBranchCount',
+            'selectedBranchId'
         ));
     }
 
@@ -157,13 +178,15 @@ class ExpenseController extends Controller
         }
 
         $fuelSync = app(ExpenseRiderFuelSyncService::class);
-        $total = $fuelSync->fuelTotalForExpenseDay($expenseDay);
+        [$branchId] = resolveDestinationBranchFilter($request);
+        $total = $fuelSync->fuelTotalForExpenseDay($expenseDay, $branchId);
 
         return response()->json([
             'date' => $expenseDay,
             'remit_date' => $fuelSync->remitDateForExpenseDay($expenseDay),
             'subject' => $fuelSync->subject(),
             'amount' => $total,
+            'branch_id' => $branchId,
         ]);
     }
 
@@ -177,22 +200,33 @@ class ExpenseController extends Controller
 
         try {
             $card = DB::transaction(function () use ($data) {
-                $existing = ExpenseCard::query()
-                    ->whereDate('expense_date', $data['expense_date'])
-                    ->first();
-                if ($existing) {
+                [$reqBranch] = resolveDestinationBranchFilter(request());
+                $cardBranchId = forcedBranchId(auth()->user()) ?: $reqBranch;
+
+                $existingQuery = ExpenseCard::query()->whereDate('expense_date', $data['expense_date']);
+                if ($cardBranchId) {
+                    $existingQuery->where('branch_id', $cardBranchId);
+                } else {
+                    $existingQuery->whereNull('branch_id');
+                }
+                if ($existingQuery->exists()) {
                     throw new \RuntimeException(__('message.expenses_date_exists'));
                 }
 
                 $card = ExpenseCard::query()->create([
                     'expense_date' => $data['expense_date'],
+                    'branch_id' => $cardBranchId,
                     'total_amount' => 0,
                     'created_by' => auth()->id(),
                     'updated_by' => auth()->id(),
                 ]);
 
                 $this->syncItems($card, $data['items']);
-                app(ExpenseRiderFuelSyncService::class)->syncExpenseDate($data['expense_date'], auth()->id());
+                app(ExpenseRiderFuelSyncService::class)->syncExpenseDate(
+                    $data['expense_date'],
+                    auth()->id(),
+                    $cardBranchId
+                );
                 $card->recalculateTotal();
 
                 return $card->fresh('items');
@@ -224,6 +258,11 @@ class ExpenseController extends Controller
                 $conflict = ExpenseCard::query()
                     ->whereDate('expense_date', $data['expense_date'])
                     ->where('id', '!=', $card->id)
+                    ->when(
+                        (int) ($card->branch_id ?? 0) > 0,
+                        fn ($q) => $q->where('branch_id', $card->branch_id),
+                        fn ($q) => $q->whereNull('branch_id')
+                    )
                     ->exists();
                 if ($conflict) {
                     throw new \RuntimeException(__('message.expenses_date_exists'));
@@ -237,7 +276,11 @@ class ExpenseController extends Controller
                 // Manual rows from form; Rider ဆီဖိုး is re-synced from remits below.
                 ExpenseItem::query()->where('expense_card_id', $card->id)->delete();
                 $this->syncItems($card, $data['items']);
-                app(ExpenseRiderFuelSyncService::class)->syncExpenseDate($data['expense_date'], auth()->id());
+                app(ExpenseRiderFuelSyncService::class)->syncExpenseDate(
+                    $data['expense_date'],
+                    auth()->id(),
+                    (int) ($card->branch_id ?? 0) ?: null
+                );
                 $card->recalculateTotal();
 
                 return $card->fresh('items');
@@ -298,9 +341,10 @@ class ExpenseController extends Controller
                 'expense' => (float) $summary->expense,
                 'ako_given' => (float) $summary->ako_given,
             ],
-            'summary_url' => route('order.expense-summary', [
+            'summary_url' => route('order.expense-summary', array_filter([
                 'month' => $summary->summary_date?->format('Y-m'),
-            ]),
+                'branch_id' => $card->branch_id,
+            ])),
         ]);
     }
 

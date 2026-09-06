@@ -24,11 +24,11 @@ class OsSettlementService
     /**
      * Unfinished Completed items for ငွေရှင်းတမ်း within a date range.
      * Delivered-only (no admin_completed_at) never appears — Completed first.
-     * List day D = Completed during Yangon calendar day D+1 (same lag as Daily Check).
-     * Strict From–To only — unfinished rows do NOT carry into later days.
+     * List day uses the same rule as Daily Check / Rider ငွေအပ်:
+     * first Completed on day C → C−1; later Completed that day → C.
      * Pass null for $osId to include all Online Shops.
      */
-    public function completedItemsQuery(?int $osId, string $fromDay, string $toDay)
+    public function completedItemsQuery(?int $osId, string $fromDay, string $toDay, ?int $branchId = null)
     {
         $fromDay = Carbon::parse($fromDay)->toDateString();
         $toDay = Carbon::parse($toDay)->toDateString();
@@ -48,13 +48,27 @@ class OsSettlementService
                     }
                 });
             })
+            ->when($branchId !== null && $branchId > 0, function ($query) use ($branchId) {
+                applyDestinationBranchFilter($query, $branchId);
+            })
             ->where('status', 'completed')
             ->whereNotNull('admin_completed_at')
             ->whereNull('admin_finished_at')
-            // Only the list-day window (Completed on D+1 → shows on D). No carry-forward.
+            // Candidate window: Completed on D or D+1 (itemDay then maps to the sheet).
             ->where('admin_completed_at', '>=', $boundsStart)
             ->where('admin_completed_at', '<', $boundsEnd)
             ->orderByDesc('id');
+    }
+
+    /**
+     * Unfinished Completed items whose Daily Check list day falls in [from, to].
+     */
+    public function completedItemsForPeriod(?int $osId, string $fromDay, string $toDay, ?int $branchId = null)
+    {
+        return $this->completedItemsQuery($osId, $fromDay, $toDay, $branchId)
+            ->get()
+            ->filter(fn ($item) => dailyCheckListItemInPeriod($item, $fromDay, $toDay))
+            ->values();
     }
 
     /**
@@ -72,7 +86,7 @@ class OsSettlementService
                     return null;
                 }
 
-                return dailyCheckListDate(Carbon::parse($item->admin_completed_at))->toDateString();
+                return dailyCheckListDateForItem($item)->toDateString();
             })
             ->filter()
             ->unique()
@@ -245,7 +259,7 @@ class OsSettlementService
         string $paymentMethod = 'kpay',
         ?string $settlementSide = null
     ): OsSettlementBatch {
-        $items = $this->completedItemsQuery($osId, $fromDay, $toDay)->get();
+        $items = $this->completedItemsForPeriod($osId, $fromDay, $toDay);
         $items = $this->filterItemsBySettlementSide($items, $settlementSide);
         if ($items->isEmpty()) {
             throw new \RuntimeException(__('message.os_settlement_no_completed_items'));
@@ -419,7 +433,7 @@ class OsSettlementService
      */
     public function hasUnfinishedCompletedItems(int $osId, string $fromDay, string $toDay): bool
     {
-        return $this->completedItemsQuery($osId, $fromDay, $toDay)->exists();
+        return $this->completedItemsForPeriod($osId, $fromDay, $toDay)->isNotEmpty();
     }
 
     public function generateSettlementFiles(
@@ -700,7 +714,7 @@ class OsSettlementService
 
         $invoiceDate = $batch->to_date
             ? Carbon::parse($batch->to_date)->format('d-m-Y')
-            : now()->format('d-m-Y');
+            : yangonTodayDate();
 
         return $this->buildSlipRows($items, $invoiceDate);
     }

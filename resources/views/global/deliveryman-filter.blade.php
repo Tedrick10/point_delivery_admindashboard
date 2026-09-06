@@ -1,5 +1,20 @@
 <x-master-layout :assets="$assets ?? []">
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-deliveryman-list-page">
+        <style>
+            .pds-dm-branch-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+            .pds-dm-branch-tab {
+                display: inline-flex; align-items: center; gap: 8px;
+                border: 1px solid #e2e8f0; background: #fff; color: #334155;
+                border-radius: 999px; padding: 8px 14px; font-weight: 700; text-decoration: none;
+            }
+            .pds-dm-branch-tab .badge { background: #f1f5f9; color: #64748b; }
+            .pds-dm-branch-tab:hover { border-color: #fdba74; color: #c2410c; text-decoration: none; }
+            .pds-dm-branch-tab.is-active {
+                background: linear-gradient(135deg, #FE6F07, #ff8f3d);
+                border-color: transparent; color: #fff;
+            }
+            .pds-dm-branch-tab.is-active .badge { background: rgba(255,255,255,.22); color: #fff; }
+        </style>
         <div class="row">
             <div class="col-lg-12">
                 <div class="card card-block card-stretch card-height pds-page-card">
@@ -23,6 +38,16 @@
                                 {!! $multi_checkbox_delete !!}
                             </div>
                         @endif
+
+                        @include('partials._branch-tabs', [
+                            'branchTabs' => $branchTabs ?? collect(),
+                            'selectedBranchId' => ($selectedBranchId ?? 0) > 0 ? $selectedBranchId : null,
+                            'branchTabCounts' => $branchTabCounts ?? [],
+                            'allCount' => $allRiderCount ?? null,
+                            'includeAll' => false,
+                            'routeName' => 'deliveryman.index',
+                            'routeQuery' => array_filter(['status' => request('status')]),
+                        ])
 
                         @include('global.deliveryman-datatable')
 

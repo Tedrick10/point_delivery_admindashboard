@@ -34,19 +34,21 @@ class MoneyTransferService
         ?int $osId = null,
         ?string $paymentMethod = null
     ): array {
+        $this->backfillTransferBranches();
+
         if ($paymentMethod === 'cash') {
-            return $this->listCashFinishRows($fromDay, $toDay, $osId);
+            return $this->listCashFinishRows($fromDay, $toDay, $osId, $branchId);
         }
 
         if ($paymentMethod === 'all') {
             $kpaySheet = $this->listSheet($fromDay, $toDay, $branchId, $osId, 'kpay');
-            $cashSheet = $this->listCashFinishRows($fromDay, $toDay, $osId);
+            $cashSheet = $this->listCashFinishRows($fromDay, $toDay, $osId, $branchId);
             $rows = $kpaySheet['rows']->concat($cashSheet['rows'])
                 ->sortBy(function ($row) {
                     return mb_strtolower((string) ($row->name ?? '')).'|'.((string) ($row->payment_method ?? 'kpay'));
                 })
                 ->values();
-            $totals = $this->finishTotals($fromDay, $toDay, $osId);
+            $totals = $this->finishTotals($fromDay, $toDay, $osId, $branchId);
 
             return [
                 'rows' => $rows,
@@ -61,17 +63,17 @@ class MoneyTransferService
         }
 
         $invoiceRows = $this->dailyCheck->listRows($fromDay, $toDay, 'os', $branchId, $osId, null);
+        if ($branchId && $branchId > 0) {
+            $invoiceRows = $invoiceRows->filter(fn ($row) => (int) ($row->branch_id ?? 0) === $branchId)->values();
+        }
         $grouped = $invoiceRows->groupBy(fn ($row) => (int) $row->party_user_id);
 
         $saved = OsMoneyTransfer::query()
-            ->with(['cashPayout.deliveryMan'])
-            ->whereDate('period_from', '<=', $toDay)
-            ->whereDate('period_to', '>=', $fromDay)
-            ->when($branchId !== null && $branchId > 0, function ($q) use ($branchId) {
-                $q->where(function ($inner) use ($branchId) {
-                    $inner->where('branch_id', $branchId)->orWhere('branch_id', 0);
-                });
+            ->with(['cashPayout.deliveryMan', 'settlementBatch'])
+            ->where(function ($q) use ($fromDay, $toDay) {
+                $this->applyTransferPeriod($q, $fromDay, $toDay);
             })
+            ->when($branchId !== null && $branchId > 0, fn ($q) => $q->where('branch_id', $branchId))
             ->when($osId !== null, fn ($q) => $q->where('os_user_id', $osId))
             ->when($paymentMethod !== null && $paymentMethod !== '', fn ($q) => $q->where('payment_method', $paymentMethod))
             ->orderByDesc('id')
@@ -83,11 +85,7 @@ class MoneyTransferService
         if ($paymentMethod === 'kpay' || $paymentMethod === 'cash') {
             $osIds = $saved->keys()->map(fn ($id) => (int) $id)->values();
 
-            $batchOs = OsSettlementBatch::query()
-                ->where('payment_method', $paymentMethod)
-                ->whereDate('from_date', '<=', $toDay)
-                ->whereDate('to_date', '>=', $fromDay)
-                ->when($osId !== null, fn ($q) => $q->where('os_user_id', $osId))
+            $batchOs = $this->batchesInRange($fromDay, $toDay, $osId, $paymentMethod, $branchId)
                 ->pluck('os_user_id')
                 ->map(fn ($id) => (int) $id)
                 ->all();
@@ -95,9 +93,13 @@ class MoneyTransferService
             $payoutOs = [];
             if ($paymentMethod === 'cash') {
                 $payoutOs = OsCashPayout::query()
-                    ->whereDate('period_from', '<=', $toDay)
-                    ->whereDate('period_to', '>=', $fromDay)
+                    ->with(['settlementBatch', 'moneyTransfer'])
+                    ->where(function ($q) use ($fromDay, $toDay) {
+                        $this->applyPayoutPeriod($q, $fromDay, $toDay);
+                    })
                     ->when($osId !== null, fn ($q) => $q->where('os_user_id', $osId))
+                    ->get()
+                    ->filter(fn (OsCashPayout $p) => $this->payoutMatchesBranch($p, $branchId))
                     ->pluck('os_user_id')
                     ->map(fn ($id) => (int) $id)
                     ->all();
@@ -150,14 +152,8 @@ class MoneyTransferService
         $methodBatchesByOs = collect();
         if (in_array($paymentMethod, ['kpay', 'cash', null, ''], true)) {
             $methodKey = in_array($paymentMethod, ['kpay', 'cash'], true) ? $paymentMethod : 'kpay';
-            $methodBatches = OsSettlementBatch::query()
-                ->where('payment_method', $methodKey)
-                ->whereDate('from_date', '<=', $toDay)
-                ->whereDate('to_date', '>=', $fromDay)
-                ->when($osId !== null, fn ($q) => $q->where('os_user_id', $osId))
-                ->when($osIds->isNotEmpty(), fn ($q) => $q->whereIn('os_user_id', $osIds->all()))
-                ->orderByDesc('id')
-                ->get();
+            $methodBatches = $this->batchesInRange($fromDay, $toDay, $osId, $methodKey, $branchId)
+                ->when($osIds->isNotEmpty(), fn (Collection $c) => $c->filter(fn ($b) => $osIds->contains((int) $b->os_user_id))->values());
             $methodBatchesById = $methodBatches->keyBy(fn (OsSettlementBatch $b) => (int) $b->id);
             $methodBatchesByOs = $methodBatches
                 ->groupBy(fn (OsSettlementBatch $b) => (int) $b->os_user_id)
@@ -177,13 +173,7 @@ class MoneyTransferService
             if ($paymentMethod && ! $entry) {
                 // Create synthetic row from settlement batch / cash payout if transfer row is missing.
                 $batch = $methodBatchesByOs->get($partyUserId)
-                    ?? OsSettlementBatch::query()
-                        ->where('os_user_id', $partyUserId)
-                        ->where('payment_method', $paymentMethod)
-                        ->whereDate('from_date', '<=', $toDay)
-                        ->whereDate('to_date', '>=', $fromDay)
-                        ->orderByDesc('id')
-                        ->first();
+                    ?? $this->batchesInRange($fromDay, $toDay, $partyUserId, $paymentMethod, $branchId)->first();
                 if (! $batch && $paymentMethod === 'cash') {
                     $orphanPayout = OsCashPayout::query()
                         ->with('deliveryMan')
@@ -199,7 +189,7 @@ class MoneyTransferService
                         $rows->push((object) array_merge([
                             'os_user_id' => $partyUserId,
                             'name' => $name,
-                            'os_phone' => $user?->contact_number ?? '',
+                            'os_phone' => normalizeContactNumber((string) ($user?->contact_number ?? '')),
                             'invoice_count' => 0,
                             'item_count' => 0,
                             'amount_due' => $amountDue,
@@ -239,7 +229,7 @@ class MoneyTransferService
                 $rows->push((object) array_merge([
                     'os_user_id' => $partyUserId,
                     'name' => $name,
-                    'os_phone' => $user?->contact_number ?? '',
+                    'os_phone' => normalizeContactNumber((string) ($user?->contact_number ?? '')),
                     'invoice_count' => 0,
                     'item_count' => is_array($batch->item_ids) ? count($batch->item_ids) : 0,
                     'amount_due' => $amountDue,
@@ -324,7 +314,7 @@ class MoneyTransferService
             $rows->push((object) array_merge([
                 'os_user_id' => $partyUserId,
                 'name' => $name,
-                'os_phone' => $user?->contact_number ?? '',
+                'os_phone' => normalizeContactNumber((string) ($user?->contact_number ?? '')),
                 'invoice_count' => $invoiceCount,
                 'item_count' => $itemCount,
                 'amount_due' => $amountDue,
@@ -353,7 +343,7 @@ class MoneyTransferService
             ->sortBy(fn ($row) => mb_strtolower((string) $row->name))
             ->values();
 
-        $totals = $this->finishTotals($fromDay, $toDay, $osId);
+        $totals = $this->finishTotals($fromDay, $toDay, $osId, $branchId);
         $summary = (object) [
             'os_count' => $rows->count(),
             'amount_due' => $totals['total'],
@@ -370,20 +360,9 @@ class MoneyTransferService
      *
      * @return array{kpay: float, cash: float, total: float}
      */
-    public function finishTotals(string $fromDay, string $toDay, ?int $osId = null): array
+    public function finishTotals(string $fromDay, string $toDay, ?int $osId = null, ?int $branchId = null): array
     {
-        $batches = OsSettlementBatch::query()
-            ->where(function ($q) use ($fromDay, $toDay) {
-                $q->where(function ($d) use ($fromDay, $toDay) {
-                    $d->whereDate('from_date', '<=', $toDay)
-                        ->whereDate('to_date', '>=', $fromDay);
-                })->orWhere(function ($d) use ($fromDay, $toDay) {
-                    $d->whereDate('finished_at', '>=', $fromDay)
-                        ->whereDate('finished_at', '<=', $toDay);
-                });
-            })
-            ->when($osId !== null, fn ($q) => $q->where('os_user_id', $osId))
-            ->get(['payment_method', 'amount']);
+        $batches = $this->batchesInRange($fromDay, $toDay, $osId, null, $branchId);
 
         $kpay = 0.0;
         $cash = 0.0;
@@ -408,22 +387,18 @@ class MoneyTransferService
      *
      * @return array{rows: Collection<int, object>, summary: object}
      */
-    protected function listCashFinishRows(string $fromDay, string $toDay, ?int $osId = null): array
+    protected function listCashFinishRows(string $fromDay, string $toDay, ?int $osId = null, ?int $branchId = null): array
     {
         $payouts = OsCashPayout::query()
             ->with(['osUser.city', 'deliveryMan', 'settlementBatch', 'moneyTransfer'])
             ->where(function ($q) use ($fromDay, $toDay) {
-                $q->where(function ($d) use ($fromDay, $toDay) {
-                    $d->whereDate('period_from', '<=', $toDay)
-                        ->whereDate('period_to', '>=', $fromDay);
-                })->orWhere(function ($d) use ($fromDay, $toDay) {
-                    $d->whereDate('created_at', '>=', $fromDay)
-                        ->whereDate('created_at', '<=', $toDay);
-                });
+                $this->applyPayoutPeriod($q, $fromDay, $toDay);
             })
             ->when($osId !== null, fn ($q) => $q->where('os_user_id', $osId))
             ->orderByDesc('id')
-            ->get();
+            ->get()
+            ->filter(fn (OsCashPayout $p) => $this->payoutMatchesBranch($p, $branchId))
+            ->values();
 
         $coveredBatchIds = $payouts
             ->pluck('settlement_batch_id')
@@ -433,22 +408,8 @@ class MoneyTransferService
             ->values()
             ->all();
 
-        $orphanBatches = OsSettlementBatch::query()
-            ->with('osUser')
-            ->where('payment_method', 'cash')
-            ->where(function ($q) use ($fromDay, $toDay) {
-                $q->where(function ($d) use ($fromDay, $toDay) {
-                    $d->whereDate('from_date', '<=', $toDay)
-                        ->whereDate('to_date', '>=', $fromDay);
-                })->orWhere(function ($d) use ($fromDay, $toDay) {
-                    $d->whereDate('finished_at', '>=', $fromDay)
-                        ->whereDate('finished_at', '<=', $toDay);
-                });
-            })
-            ->when($osId !== null, fn ($q) => $q->where('os_user_id', $osId))
-            ->when($coveredBatchIds !== [], fn ($q) => $q->whereNotIn('id', $coveredBatchIds))
-            ->orderByDesc('id')
-            ->get();
+        $orphanBatches = $this->batchesInRange($fromDay, $toDay, $osId, 'cash', $branchId)
+            ->when($coveredBatchIds !== [], fn (Collection $c) => $c->reject(fn ($b) => in_array((int) $b->id, $coveredBatchIds, true))->values());
 
         $rows = collect();
 
@@ -460,7 +421,7 @@ class MoneyTransferService
             $rows->push((object) array_merge([
                 'os_user_id' => (int) $payout->os_user_id,
                 'name' => $user?->name ?: ('OS #'.$payout->os_user_id),
-                'os_phone' => $user?->contact_number ?? '',
+                'os_phone' => normalizeContactNumber((string) ($user?->contact_number ?? '')),
                 'invoice_count' => 0,
                 'item_count' => is_array($batch?->item_ids) ? count($batch->item_ids) : 0,
                 'amount_due' => $amount,
@@ -492,7 +453,7 @@ class MoneyTransferService
             $rows->push((object) array_merge([
                 'os_user_id' => (int) $batch->os_user_id,
                 'name' => $user?->name ?: ('OS #'.$batch->os_user_id),
-                'os_phone' => $user?->contact_number ?? '',
+                'os_phone' => normalizeContactNumber((string) ($user?->contact_number ?? '')),
                 'invoice_count' => 0,
                 'item_count' => is_array($batch->item_ids) ? count($batch->item_ids) : 0,
                 'amount_due' => $amount,
@@ -521,7 +482,7 @@ class MoneyTransferService
             ->sortByDesc(fn ($row) => (int) ($row->cash_payout_id ?? $row->settlement_batch_id ?? 0))
             ->values();
 
-        $totals = $this->finishTotals($fromDay, $toDay, $osId);
+        $totals = $this->finishTotals($fromDay, $toDay, $osId, $branchId);
         $summary = (object) [
             'os_count' => $rows->count(),
             'amount_due' => $totals['total'],
@@ -571,7 +532,7 @@ class MoneyTransferService
             [
                 'period_from' => $fromDay,
                 'period_to' => $toDay,
-                'branch_id' => 0,
+                'branch_id' => $this->branchIdForBatch($batch) ?? 0,
                 'os_user_id' => (int) $batch->os_user_id,
                 'payment_method' => $method,
                 'cash_amount' => $method === 'cash' ? $due : 0,
@@ -866,6 +827,159 @@ class MoneyTransferService
         }
 
         return 'partial';
+    }
+
+    /**
+     * Finished OS counts per destination branch for the selected period.
+     *
+     * @return array<int, int>
+     */
+    public function branchFinishedCounts(string $fromDay, string $toDay): array
+    {
+        $this->backfillTransferBranches();
+        $counts = [];
+        foreach ($this->batchesInRange($fromDay, $toDay, null, null, null) as $batch) {
+            $branchId = $this->branchIdForBatch($batch);
+            if (! $branchId) {
+                continue;
+            }
+            $counts[$branchId] = ($counts[$branchId] ?? 0) + 1;
+        }
+
+        return $counts;
+    }
+
+    public function backfillTransferBranches(): void
+    {
+        $transfers = OsMoneyTransfer::query()
+            ->with('settlementBatch')
+            ->where(function ($q) {
+                $q->whereNull('branch_id')->orWhere('branch_id', 0);
+            })
+            ->whereNotNull('settlement_batch_id')
+            ->get();
+
+        foreach ($transfers as $transfer) {
+            $branchId = $transfer->settlementBatch
+                ? $this->branchIdForBatch($transfer->settlementBatch)
+                : null;
+            if ($branchId) {
+                $transfer->forceFill(['branch_id' => $branchId])->save();
+            }
+        }
+    }
+
+    /**
+     * @return Collection<int, OsSettlementBatch>
+     */
+    protected function batchesInRange(
+        string $fromDay,
+        string $toDay,
+        ?int $osId,
+        ?string $paymentMethod,
+        ?int $branchId
+    ): Collection {
+        $batches = OsSettlementBatch::query()
+            ->with('osUser')
+            ->where(function ($q) use ($fromDay, $toDay) {
+                $this->applyBatchPeriod($q, $fromDay, $toDay);
+            })
+            ->when($osId !== null, fn ($q) => $q->where('os_user_id', $osId))
+            ->when($paymentMethod, fn ($q) => $q->where('payment_method', $paymentMethod))
+            ->orderByDesc('id')
+            ->get();
+
+        if ($branchId && $branchId > 0) {
+            $batches = $batches
+                ->filter(fn (OsSettlementBatch $batch) => $this->branchIdForBatch($batch) === $branchId)
+                ->values();
+        }
+
+        return $batches;
+    }
+
+    protected function applyBatchPeriod($query, string $fromDay, string $toDay): void
+    {
+        $query->where(function ($q) use ($fromDay, $toDay) {
+            $q->where(function ($d) use ($fromDay, $toDay) {
+                $d->whereDate('from_date', '<=', $toDay)
+                    ->whereDate('to_date', '>=', $fromDay);
+            })->orWhere(function ($d) use ($fromDay, $toDay) {
+                $d->whereDate('finished_at', '>=', $fromDay)
+                    ->whereDate('finished_at', '<=', $toDay);
+            });
+        });
+    }
+
+    protected function applyTransferPeriod($query, string $fromDay, string $toDay): void
+    {
+        $query->where(function ($q) use ($fromDay, $toDay) {
+            $q->where(function ($d) use ($fromDay, $toDay) {
+                $d->whereDate('period_from', '<=', $toDay)
+                    ->whereDate('period_to', '>=', $fromDay);
+            })->orWhereHas('settlementBatch', function ($b) use ($fromDay, $toDay) {
+                $b->whereDate('finished_at', '>=', $fromDay)
+                    ->whereDate('finished_at', '<=', $toDay);
+            });
+        });
+    }
+
+    protected function applyPayoutPeriod($query, string $fromDay, string $toDay): void
+    {
+        $query->where(function ($q) use ($fromDay, $toDay) {
+            $q->where(function ($d) use ($fromDay, $toDay) {
+                $d->whereDate('period_from', '<=', $toDay)
+                    ->whereDate('period_to', '>=', $fromDay);
+            })->orWhere(function ($d) use ($fromDay, $toDay) {
+                $d->whereDate('created_at', '>=', $fromDay)
+                    ->whereDate('created_at', '<=', $toDay);
+            });
+        });
+    }
+
+    protected function branchIdForBatch(OsSettlementBatch $batch): ?int
+    {
+        return $this->branchIdForItemIds((array) ($batch->item_ids ?? []));
+    }
+
+    /**
+     * Destination branch for a settlement (to_branch, else from_branch).
+     *
+     * @param  list<int|string>  $itemIds
+     */
+    protected function branchIdForItemIds(array $itemIds): ?int
+    {
+        $ids = collect($itemIds)->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->unique()->values();
+        if ($ids->isEmpty()) {
+            return null;
+        }
+
+        $branch = DispatchOrderItem::query()
+            ->whereIn('id', $ids->all())
+            ->get(['to_branch_id', 'from_branch_id'])
+            ->map(fn (DispatchOrderItem $item) => (int) ($item->to_branch_id ?: $item->from_branch_id ?: 0))
+            ->filter()
+            ->countBy()
+            ->sortDesc()
+            ->keys()
+            ->first();
+
+        return $branch ? (int) $branch : null;
+    }
+
+    protected function payoutMatchesBranch(OsCashPayout $payout, ?int $branchId): bool
+    {
+        if (! $branchId || $branchId <= 0) {
+            return true;
+        }
+
+        if ($payout->settlementBatch) {
+            return $this->branchIdForBatch($payout->settlementBatch) === $branchId;
+        }
+
+        $transferBranch = (int) ($payout->moneyTransfer?->branch_id ?? 0);
+
+        return $transferBranch === $branchId;
     }
 
     /**

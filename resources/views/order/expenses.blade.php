@@ -16,20 +16,36 @@
                 </div>
             </div>
 
+            @include('partials._branch-tabs', [
+                'branchTabs' => $branchTabs ?? collect(),
+                'selectedBranchId' => $selectedBranchId ?? null,
+                'branchTabCounts' => $branchTabCounts ?? [],
+                'allCount' => $allBranchCount ?? null,
+                'includeAll' => false,
+                'routeName' => 'order.expenses',
+                'routeQuery' => [
+                    'month' => $monthValue,
+                    'from_date' => $filterFrom,
+                    'to_date' => $filterTo,
+                    'subject' => $filterSubject,
+                ],
+            ])
+
             <div class="pds-expenses-toolbar">
                 <div class="pds-expenses-toolbar__month">
                     <div class="pds-expenses-month-nav">
-                        <a href="{{ route('order.expenses', ['month' => $prevMonth]) }}" class="pds-expenses-month-nav__btn" title="Previous">
+                        <a href="{{ route('order.expenses', array_filter(['month' => $prevMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Previous">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                         <span class="pds-expenses-month-nav__label">{{ $monthLabel }}</span>
-                        <a href="{{ route('order.expenses', ['month' => $nextMonth]) }}" class="pds-expenses-month-nav__btn" title="Next">
+                        <a href="{{ route('order.expenses', array_filter(['month' => $nextMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Next">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </div>
                 </div>
                 <form method="GET" action="{{ route('order.expenses') }}" class="pds-expenses-filter" id="expensesFilterForm">
                     <input type="hidden" name="month" value="{{ $monthValue }}">
+                    <input type="hidden" name="branch_id" value="{{ $branchFilter ?? 'all' }}">
                     <div class="pds-expenses-filter__field">
                         <label for="expenses_from">{{ __('message.from_date') }}</label>
                         <input type="text" name="from_date" id="expenses_from" class="pds-dispatch-input dispatch-datepicker"
@@ -263,6 +279,7 @@
     <script>
         (function () {
             const canEdit = @json((bool) $canEdit);
+            const selectedBranchId = @json($selectedBranchId ?? null);
             const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
             const routes = {
                 store: @json(route('order.expenses.store')),
@@ -370,7 +387,9 @@
 
             async function fetchRiderFuelAmount(date) {
                 try {
-                    const url = routes.riderFuel + '?date=' + encodeURIComponent(date || '');
+                    const url = routes.riderFuel
+                        + '?date=' + encodeURIComponent(date || '')
+                        + (selectedBranchId ? '&branch_id=' + encodeURIComponent(selectedBranchId) : '');
                     const res = await fetch(url, {
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
                     });
@@ -600,6 +619,9 @@
                 }
                 const fd = new FormData();
                 fd.append('expense_date', dateInput.value);
+                if (selectedBranchId) {
+                    fd.append('branch_id', String(selectedBranchId));
+                }
                 items.forEach((item, index) => {
                     fd.append(`items[${index}][subject]`, item.subject);
                     fd.append(`items[${index}][amount]`, String(item.amount));

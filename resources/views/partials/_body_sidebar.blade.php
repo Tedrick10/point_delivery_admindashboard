@@ -297,6 +297,16 @@
                 ->prepend('<i class="fa fa-user-tie"></i>')
                 ->link->attr(['class' => '']);
 
+            // From / To / City / Township
+            $menu
+                ->add('<span>' . __('message.delivery_route_locations_title') . '</span>', [
+                    'class' => request()->is('delivery-route-locations*') ? 'active' : '',
+                    'route' => 'delivery-route-locations.index',
+                ])
+                ->data('permission', 'order-list')
+                ->prepend('<i class="fas fa-map-marker-alt"></i>')
+                ->link->attr(['class' => '']);
+
             // My Salary — visible to office accounts (own salary)
             $menu
                 ->add('<span>' . __('message.hr_my_salary_title') . '</span>', [

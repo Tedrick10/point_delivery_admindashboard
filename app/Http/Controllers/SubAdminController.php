@@ -406,14 +406,9 @@ class SubAdminController extends Controller
      */
     protected function normalizeContactNumber(?string $value): ?string
     {
-        $number = preg_replace('/\s+/', '', (string) $value);
+        $number = normalizeContactNumber((string) $value);
         if ($number === '' || preg_match('/^\+\d{1,4}$/', $number)) {
             return null;
-        }
-
-        // Collapse duplicated country dial prefixes: +95+9598… → +9598…
-        if (preg_match('/^\+(\d{1,4})\+(\d+)$/', $number, $matches)) {
-            $number = '+'.$matches[2];
         }
 
         return $number;

@@ -39,13 +39,8 @@ class DailyCheckListController extends Controller
             : (int) $branchFilter;
 
         $loginUser = auth()->user();
-        $branches = Branch::query()->where('status', 1)->orderBy('name')->get(['id', 'name']);
-        $forcedBranchId = forcedBranchId($loginUser);
-        if ($forcedBranchId) {
-            $branches = $branches->where('id', $forcedBranchId)->values();
-            $branchId = $forcedBranchId;
-            $branchFilter = (string) $branchId;
-        }
+        [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request, $loginUser);
+        $branchTabs = $branches;
 
         $osFilter = $request->get('os_id', 'all');
         $osId = null;
@@ -61,6 +56,20 @@ class DailyCheckListController extends Controller
 
         $rows = $service->listRows($fromDay, $toDay, $mode, $branchId, $osId, $riderId);
 
+        $branchTabCounts = DailyCheckInvoice::query()
+            ->whereBetween('received_date', [$fromDay, $toDay])
+            ->when($mode === 'os', fn ($q) => $q->where('party_type', DailyCheckInvoice::PARTY_OS))
+            ->when($mode === 'rider', fn ($q) => $q->where('party_type', DailyCheckInvoice::PARTY_RIDER))
+            ->whereNotNull('branch_id')
+            ->selectRaw('branch_id, COUNT(*) as total')
+            ->groupBy('branch_id')
+            ->pluck('total', 'branch_id');
+        $allBranchCount = DailyCheckInvoice::query()
+            ->whereBetween('received_date', [$fromDay, $toDay])
+            ->when($mode === 'os', fn ($q) => $q->where('party_type', DailyCheckInvoice::PARTY_OS))
+            ->when($mode === 'rider', fn ($q) => $q->where('party_type', DailyCheckInvoice::PARTY_RIDER))
+            ->count();
+
         $osOptions = User::query()
             ->where('user_type', 'client')
             ->where('status', 1)
@@ -70,6 +79,7 @@ class DailyCheckListController extends Controller
         $riderOptions = User::query()
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -77,6 +87,7 @@ class DailyCheckListController extends Controller
         $assets = [];
         $filterFromDate = $fromDateRaw;
         $filterToDate = $toDateRaw;
+        $selectedBranchId = $branchId;
 
         return view('order.daily-check-list', compact(
             'pageTitle',
@@ -87,6 +98,10 @@ class DailyCheckListController extends Controller
             'mode',
             'branchFilter',
             'branches',
+            'branchTabs',
+            'branchTabCounts',
+            'allBranchCount',
+            'selectedBranchId',
             'osFilter',
             'osOptions',
             'riderFilter',

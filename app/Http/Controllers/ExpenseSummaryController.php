@@ -44,16 +44,13 @@ class ExpenseSummaryController extends Controller
             $to = $from;
         }
 
-        $rows = ExpenseSummary::query()
-            ->with(['expenseCard.items'])
-            ->whereBetween('summary_date', [$from, $to])
-            ->orderBy('summary_date')
-            ->orderBy('id')
-            ->get();
+        [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request);
+        $branchTabs = $branches;
+        $selectedBranchId = $branchId;
 
         $summaryService = app(\App\Services\ExpenseSummaryService::class);
         $authUser = auth()->user();
-        $rows = $summaryService->syncIncomeOnRows($rows, $authUser);
+        $rows = $summaryService->rowsForPeriod($from, $to, $branchId, $authUser);
 
         $incomeItemsByDate = [];
         foreach ($rows as $row) {
@@ -61,8 +58,11 @@ class ExpenseSummaryController extends Controller
             if (! $day || isset($incomeItemsByDate[$day])) {
                 continue;
             }
-            $incomeItemsByDate[$day] = $summaryService->incomeCardItemsForDate($day, $authUser);
+            $incomeItemsByDate[$day] = $summaryService->incomeCardItemsForDate($day, $authUser, $branchId);
         }
+
+        $branchTabCounts = $summaryService->branchRowCounts($from, $to);
+        $allBranchCount = array_sum($branchTabCounts);
 
         $pageTitle = __('message.expense_summary_title');
         $assets = [];
@@ -89,7 +89,13 @@ class ExpenseSummaryController extends Controller
             'filterTo',
             'totalIncome',
             'totalExpense',
-            'totalAko'
+            'totalAko',
+            'branchFilter',
+            'branches',
+            'branchTabs',
+            'branchTabCounts',
+            'allBranchCount',
+            'selectedBranchId'
         ));
     }
 

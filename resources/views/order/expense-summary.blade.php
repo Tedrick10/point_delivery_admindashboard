@@ -16,20 +16,35 @@
                 </div>
             </div>
 
+            @include('partials._branch-tabs', [
+                'branchTabs' => $branchTabs ?? collect(),
+                'selectedBranchId' => $selectedBranchId ?? null,
+                'branchTabCounts' => $branchTabCounts ?? [],
+                'allCount' => $allBranchCount ?? null,
+                'includeAll' => false,
+                'routeName' => 'order.expense-summary',
+                'routeQuery' => [
+                    'month' => $monthValue,
+                    'from_date' => $filterFrom,
+                    'to_date' => $filterTo,
+                ],
+            ])
+
             <div class="pds-expenses-toolbar">
                 <div class="pds-expenses-toolbar__month">
                     <div class="pds-expenses-month-nav">
-                        <a href="{{ route('order.expense-summary', ['month' => $prevMonth]) }}" class="pds-expenses-month-nav__btn" title="Previous">
+                        <a href="{{ route('order.expense-summary', array_filter(['month' => $prevMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Previous">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                         <span class="pds-expenses-month-nav__label">{{ $monthLabel }}</span>
-                        <a href="{{ route('order.expense-summary', ['month' => $nextMonth]) }}" class="pds-expenses-month-nav__btn" title="Next">
+                        <a href="{{ route('order.expense-summary', array_filter(['month' => $nextMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Next">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </div>
                 </div>
                 <form method="GET" action="{{ route('order.expense-summary') }}" class="pds-expenses-filter" id="expenseSummaryFilterForm">
                     <input type="hidden" name="month" value="{{ $monthValue }}">
+                    <input type="hidden" name="branch_id" value="{{ $branchFilter ?? '' }}">
                     <div class="pds-expenses-filter__field">
                         <label for="summary_from">{{ __('message.from_date') }}</label>
                         <input type="text" name="from_date" id="summary_from" class="pds-dispatch-input dispatch-datepicker"

@@ -69,6 +69,8 @@ class BranchDataTable extends DataTable
                 ->width(60),
             ['data' => 'id', 'name' => 'id', 'title' => __('message.id')],
             ['data' => 'name', 'name' => 'name', 'title' => __('message.branch_name')],
+            ['data' => 'code', 'name' => 'code', 'title' => __('message.code')],
+            ['data' => 'city_name', 'name' => 'city_name', 'title' => __('message.city_name')],
             ['data' => 'created_at', 'name' => 'created_at', 'title' => __('message.created_at')],
             ['data' => 'status', 'name' => 'status', 'title' => __('message.status')],
             Column::computed('action')

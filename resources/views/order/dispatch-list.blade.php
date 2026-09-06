@@ -28,14 +28,15 @@
                             $isDedicatedPickupList = in_array($dedicatedStatus, ['rider_pick_up_error', 'rider_pick_up_cancelled', 'pre_order'], true);
                             $isPreOrderList = $dedicatedStatus === 'pre_order';
                             $pickupListTabs = [
+                                'all' => __('message.all'),
                                 'rider_pick_up_unassigned' => __('message.dispatch_tab_pick_up'),
                                 'rider_pick_up_assigned' => __('message.dispatch_tab_pick_up_rider'),
                                 'rider_pick_up_done' => __('message.dispatch_tab_rider_done'),
                                 'admin_completed' => __('message.dispatch_tab_admin_done'),
                             ];
-                            $activePickupTab = request('dispatch_status', 'rider_pick_up_unassigned');
+                            $activePickupTab = request('dispatch_status', 'all');
                             if (!$isDedicatedPickupList && !array_key_exists($activePickupTab, $pickupListTabs)) {
-                                $activePickupTab = 'rider_pick_up_unassigned';
+                                $activePickupTab = 'all';
                             }
                             $yangonToday = \Carbon\Carbon::now('Asia/Yangon');
                             if ($isPreOrderList) {
@@ -61,7 +62,7 @@
                             if ($isDedicatedPickupList) {
                                 $resetRouteParams['dispatch_status'] = $dedicatedStatus;
                             } else {
-                                $resetRouteParams['dispatch_status'] = 'rider_pick_up_unassigned';
+                                $resetRouteParams['dispatch_status'] = 'all';
                             }
                         @endphp
                         <form method="GET" action="{{ route('order.index') }}" id="dispatchFilterForm" class="pds-dispatch-filter-bar">
@@ -301,7 +302,7 @@
                     data.to_date = $('#to_date').val() || @json($defaultToDate);
                     data.dispatch_status = $('input[name="dispatch_status"]').val()
                         || $('#dispatch_status').val()
-                        || @json($isDedicatedPickupList ? ($dedicatedStatus ?? '') : 'rider_pick_up_unassigned');
+                        || @json($isDedicatedPickupList ? ($dedicatedStatus ?? '') : 'all');
                     data.search_term = $('input[name="search_term"]').val();
                     if (new URLSearchParams(window.location.search).get('orders_type')) {
                         data.orders_type = new URLSearchParams(window.location.search).get('orders_type');

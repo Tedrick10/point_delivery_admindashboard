@@ -1,4 +1,42 @@
 <x-master-layout :assets="$assets ?? []">
+    <style>
+        .pds-assign-100-tabs {
+            display: flex; flex-wrap: wrap; gap: 8px;
+            margin: 0 0 14px; padding: 0 2px;
+        }
+        .pds-assign-100-tab {
+            display: inline-flex; align-items: center; gap: 8px;
+            border: 1px solid #e2e8f0; background: #fff; color: #334155;
+            border-radius: 999px; padding: 8px 14px; font-weight: 700;
+            text-decoration: none; transition: .15s ease;
+        }
+        .pds-assign-100-tab em {
+            font-style: normal; min-width: 22px; height: 22px; padding: 0 6px;
+            border-radius: 999px; background: #f1f5f9; color: #64748b;
+            display: inline-grid; place-items: center; font-size: 12px;
+        }
+        .pds-assign-100-tab:hover { border-color: #fdba74; color: #c2410c; text-decoration: none; }
+        .pds-assign-100-tab.is-active {
+            background: linear-gradient(135deg, #FE6F07, #ff8f3d);
+            border-color: transparent; color: #fff;
+            box-shadow: 0 8px 18px rgba(254, 111, 7, .24);
+        }
+        .pds-assign-100-tab.is-active em { background: rgba(255,255,255,.22); color: #fff; }
+        .pds-dm-branch-tabs {
+            display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+        }
+        .pds-dm-branch-tab {
+            display: inline-flex; align-items: center; gap: 8px;
+            border: 1px solid #e2e8f0; background: #fff; color: #334155;
+            border-radius: 999px; padding: 8px 14px; font-weight: 700;
+            text-decoration: none;
+        }
+        .pds-dm-branch-tab:hover { border-color: #fdba74; color: #c2410c; text-decoration: none; }
+        .pds-dm-branch-tab.is-active {
+            background: linear-gradient(135deg, #FE6F07, #ff8f3d);
+            border-color: transparent; color: #fff;
+        }
+    </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-assign-100-page">
         <div class="pds-dispatch-to-assign-screen">
             <div class="pds-dispatch-to-assign-topbar">
@@ -20,6 +58,24 @@
                     </button>
                 </div>
             </div>
+
+            @php
+                $destinationBranches = $destinationBranches ?? collect();
+                $activeToBranchId = (int) ($activeToBranchId ?? 0);
+                $tabCounts = $tabCounts ?? collect();
+            @endphp
+            @if($destinationBranches->isNotEmpty())
+                <div class="pds-assign-100-tabs">
+                    @foreach($destinationBranches as $branchTab)
+                        @php $count = (int) ($tabCounts[$branchTab->id] ?? 0); @endphp
+                        <a href="{{ route('order.dispatch.assign-100', ['to_branch_id' => $branchTab->id]) }}"
+                           class="pds-assign-100-tab{{ $activeToBranchId === (int) $branchTab->id ? ' is-active' : '' }}">
+                            <span>{{ $branchTab->name }}</span>
+                            <em>{{ $count }}</em>
+                        </a>
+                    @endforeach
+                </div>
+            @endif
 
             <div class="pds-dispatch-to-assign-filter">
                 <div class="pds-dispatch-to-assign-filter-grid pds-dispatch-assign-100-filter-grid">
@@ -111,6 +167,7 @@
                                         data-customer-name="{{ $item->customer_name ?: '' }}"
                                         data-customer-phone="{{ $item->customer_phone ?: '' }}"
                                         data-item-id="{{ $item->id }}"
+                                        data-to-branch-id="{{ (int) ($item->to_branch_id ?? 0) }}"
                                     >
                                         <td class="assign-100-row-no">{{ $index + 1 }}</td>
                                         <td>
@@ -153,12 +210,13 @@
     @include('order.partials._dispatch-item-message-modal')
 
     @section('bottom_script')
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=3"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=5"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(document).ready(function () {
                 var osSearchRoute = "{{ route('ajax-list', ['type' => 'os_dispatch_search']) }}";
                 var riderRoute = "{{ route('ajax-list', ['type' => 'dispatch_deliveryman_search']) }}";
+                var activeToBranchId = {{ (int) ($activeToBranchId ?? 0) }};
                 var osInputSelector = '#assign_100_os_name';
                 var riderCache = [];
 
@@ -190,7 +248,7 @@
                         $('<tr class="pds-dispatch-table-row"></tr>')
                             .append('<td>' + (idx + 1) + '</td>')
                             .append('<td>' + (row.name || row.text || '') + '</td>')
-                            .append('<td>' + (row.city || '-') + '</td>')
+                            .append('<td>' + (row.branch || row.city || '-') + '</td>')
                             .append('<td>' + (row.phone || '-') + '</td>')
                             .data('rider', row)
                             .appendTo($body);
@@ -205,12 +263,17 @@
                     return riderCache.filter(function (row) {
                         return (row.name || row.text || '').toLowerCase().indexOf(query) !== -1
                             || String(row.phone || '').toLowerCase().indexOf(query) !== -1
-                            || String(row.city || '').toLowerCase().indexOf(query) !== -1;
+                            || String(row.city || '').toLowerCase().indexOf(query) !== -1
+                            || String(row.branch || '').toLowerCase().indexOf(query) !== -1;
                     });
                 }
 
                 function loadRiders(callback) {
-                    $.get(riderRoute, function (res) {
+                    var params = {};
+                    if (activeToBranchId > 0) {
+                        params.branch_id = activeToBranchId;
+                    }
+                    $.get(riderRoute, params, function (res) {
                         riderCache = res.results || [];
                         if (typeof callback === 'function') {
                             callback(riderCache);

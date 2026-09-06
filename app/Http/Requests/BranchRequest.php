@@ -19,6 +19,10 @@ class BranchRequest extends FormRequest
 
         return [
             'name' => 'required|string|max:255|unique:branches,name,'.($branchId ?? 'NULL').',id,deleted_at,NULL',
+            'code' => 'nullable|string|max:32',
+            'city_name' => 'nullable|string|max:100',
+            'address' => 'nullable|string|max:500',
+            'phone' => 'nullable|string|max:40',
             'status' => 'required|in:0,1',
         ];
     }

@@ -26,13 +26,8 @@ class RiderRemitController extends Controller
             : (int) $branchFilter;
 
         $loginUser = auth()->user();
-        $branches = Branch::query()->where('status', 1)->orderBy('name')->get(['id', 'name']);
-        $forcedBranchId = forcedBranchId($loginUser);
-        if ($forcedBranchId) {
-            $branches = $branches->where('id', $forcedBranchId)->values();
-            $branchId = $forcedBranchId;
-            $branchFilter = (string) $branchId;
-        }
+        [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request, $loginUser);
+        $branchTabs = $branches;
 
         $service->ensureOpenRemitDefaults($day, $branchId, (int) auth()->id());
         $sheet = $service->sheet($day, $branchId);
@@ -45,6 +40,19 @@ class RiderRemitController extends Controller
         $summary = $sheet['summary'];
         $storeBranchId = $branchId && $branchId > 0 ? $branchId : 0;
         $defaultFuel = $service->defaultFuelAmount();
+        $selectedBranchId = $branchId;
+
+        $branchTabCounts = RiderRemit::query()
+            ->whereDate('remit_date', $day)
+            ->whereNotNull('branch_id')
+            ->where('branch_id', '>', 0)
+            ->selectRaw('branch_id, COUNT(DISTINCT delivery_man_id) as total')
+            ->groupBy('branch_id')
+            ->pluck('total', 'branch_id');
+        $allBranchCount = (int) RiderRemit::query()
+            ->whereDate('remit_date', $day)
+            ->distinct()
+            ->count('delivery_man_id');
 
         return view('order.rider-remit', compact(
             'pageTitle',
@@ -54,6 +62,10 @@ class RiderRemitController extends Controller
             'filterDate',
             'branchFilter',
             'branches',
+            'branchTabs',
+            'branchTabCounts',
+            'allBranchCount',
+            'selectedBranchId',
             'canEdit',
             'denoms',
             'day',

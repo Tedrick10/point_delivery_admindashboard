@@ -16,6 +16,16 @@
                 </div>
             </div>
 
+            @include('partials._branch-tabs', [
+                'branchTabs' => $branchTabs ?? collect(),
+                'selectedBranchId' => $selectedBranchId ?? null,
+                'branchTabCounts' => $branchTabCounts ?? [],
+                'allCount' => $allBranchCount ?? null,
+                'includeAll' => false,
+                'routeName' => 'order.os-receive',
+                'routeQuery' => ['tab' => $tab ?? 'open'],
+            ])
+
             @php
                 $tab = $tab ?? 'open';
                 $openCount = $openCount ?? 0;
@@ -23,7 +33,7 @@
             @endphp
             <div class="pds-os-settlement-tabs pds-os-receive-tabs" role="tablist" aria-label="{{ __('message.os_receive_screen_title') }}">
                 <a
-                    href="{{ route('order.os-receive', ['tab' => 'open']) }}"
+                    href="{{ route('order.os-receive', array_filter(['tab' => 'open', 'branch_id' => $selectedBranchId ?? null])) }}"
                     class="pds-os-settlement-tab {{ $tab === 'open' ? 'is-active' : '' }}"
                     role="tab"
                     aria-selected="{{ $tab === 'open' ? 'true' : 'false' }}"
@@ -33,7 +43,7 @@
                     <em>{{ $openCount }}</em>
                 </a>
                 <a
-                    href="{{ route('order.os-receive', ['tab' => 'received']) }}"
+                    href="{{ route('order.os-receive', array_filter(['tab' => 'received', 'branch_id' => $selectedBranchId ?? null])) }}"
                     class="pds-os-settlement-tab {{ $tab === 'received' ? 'is-active' : '' }}"
                     data-tab="receive"
                     role="tab"

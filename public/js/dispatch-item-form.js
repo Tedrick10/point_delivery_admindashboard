@@ -189,7 +189,96 @@
         return selected === label || selected === town.name_en || selected === town.name_mm;
     }
 
-    function loadTownships(cityName, nrcState, selected, nrcDataUrl, preserveInvalidSelected) {
+    function csrfHeaders() {
+        return {
+            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') || '',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        };
+    }
+
+    function formDispatchOptions() {
+        return $('#dispatch_item_form').data('dispatch-item-options') || {};
+    }
+
+    function townshipMatchesManaged(town, selected) {
+        if (!selected) {
+            return false;
+        }
+        return selected === town.label
+            || selected === town.name
+            || selected === town.name_mm;
+    }
+
+    function finishTownshipSelect($township) {
+        if ($township.hasClass('select2-hidden-accessible')) {
+            $township.trigger('change.select2');
+        } else {
+            $township.trigger('change');
+        }
+    }
+
+    function renderManagedTownships($township, towns, selected, preserveInvalidSelected, cityName) {
+        var resolvedSelected = selected || '';
+        var selectedIsValid = !!(resolvedSelected && towns.some(function (town) {
+            return townshipMatchesManaged(town, resolvedSelected);
+        }));
+
+        if (!selectedIsValid) {
+            resolvedSelected = '';
+            var $form = $('#dispatch_item_form');
+            if ($form.data('apply-default-township')) {
+                var defaultCity = normalizeName($form.data('default-delivery-city') || 'Mandalay');
+                var defaultTownship = String($form.data('default-township') || '').trim();
+                if (defaultTownship && normalizeName(cityName) === defaultCity) {
+                    resolvedSelected = defaultTownship;
+                }
+            }
+        }
+
+        towns.forEach(function (town) {
+            var label = town.label || town.name_mm || town.name;
+            var value = town.name_mm || town.name || label;
+            appendTownshipOption($township, label, value, resolvedSelected ? townshipMatchesManaged(town, resolvedSelected) : false);
+        });
+
+        if (!$township.val()) {
+            var $firstRealOption = $township.find('option').filter(function () {
+                return String($(this).val() || '').trim() !== '';
+            }).first();
+            if ($firstRealOption.length) {
+                $township.val($firstRealOption.val());
+            }
+        }
+
+        if (preserveInvalidSelected && selected && !selectedIsValid) {
+            appendTownshipOption($township, selected, selected, true);
+        }
+
+        finishTownshipSelect($township);
+    }
+
+    function loadManagedTownships(cityName, cityId, selected, townshipsUrl, preserveInvalidSelected, fallback) {
+        var params = {};
+        if (cityId) {
+            params.city_id = cityId;
+        } else if (cityName) {
+            params.city = cityName;
+        }
+
+        $.getJSON(townshipsUrl, params).done(function (payload) {
+            if (!payload || !payload.city) {
+                fallback();
+                return;
+            }
+            renderManagedTownships($('#item_township'), payload.townships || [], selected, preserveInvalidSelected, cityName);
+        }).fail(function () {
+            fallback();
+        });
+    }
+
+    function loadTownships(cityName, nrcState, selected, nrcDataUrl, preserveInvalidSelected, extras) {
+        extras = extras || {};
         var $township = $('#item_township');
         var placeholder = $township.data('placeholder') || 'Select Township';
         $township.empty().append(new Option(placeholder, '', false, false));
@@ -199,6 +288,19 @@
             return;
         }
 
+        var townshipsUrl = extras.townshipsUrl || formDispatchOptions().townshipsUrl || '';
+        if (townshipsUrl) {
+            loadManagedTownships(cityName, extras.cityId, selected, townshipsUrl, preserveInvalidSelected, function () {
+                loadNrcTownships(cityName, nrcState, selected, nrcDataUrl, preserveInvalidSelected);
+            });
+            return;
+        }
+
+        loadNrcTownships(cityName, nrcState, selected, nrcDataUrl, preserveInvalidSelected);
+    }
+
+    function loadNrcTownships(cityName, nrcState, selected, nrcDataUrl, preserveInvalidSelected) {
+        var $township = $('#item_township');
         var normalizedCity = normalizeName(cityName);
         var normalizedState = normalizeName(nrcState);
         var resolvedSelected = selected || '';
@@ -305,6 +407,7 @@
         }
 
         return {
+            id: String($selected.attr('data-city-id') || '').trim(),
             name: String($selected.attr('data-name') || $selected.text() || '').trim(),
             nrcState: String($selected.attr('data-nrc-state') || '').trim()
         };
@@ -402,6 +505,28 @@
         }
     }
 
+    function persistManagedLocation(url, data, onSuccess, onFail) {
+        if (!url) {
+            onFail();
+            return;
+        }
+
+        $.ajax({
+            url: url,
+            method: 'POST',
+            headers: csrfHeaders(),
+            data: data
+        }).done(function (res) {
+            if (res && res.message) {
+                notifySuccess(res.message);
+            }
+            onSuccess(res || {});
+        }).fail(function (xhr) {
+            notifyError(extractErrorMessage(xhr));
+            onFail();
+        });
+    }
+
     function initDispatchFieldAddButtons($scope) {
         $scope = $scope && $scope.length ? $scope : $(document);
         $scope.off('click.dispatchItemAdd', '.pds-dispatch-field-add')
@@ -436,7 +561,16 @@
                         return;
                     }
 
-                    appendAndSelectOption($select, value, 'custom:' + value);
+                    persistManagedLocation(formDispatchOptions().branchesStoreUrl, { name: value }, function (res) {
+                        var branch = (res && res.branch) || {};
+                        var branchId = branch.id || ('custom:' + value);
+                        var branchName = branch.name || value;
+                        appendAndSelectOption($select, branchName, String(branchId), {
+                            'data-city-name': branch.city_name || branchName
+                        });
+                    }, function () {
+                        appendAndSelectOption($select, value, 'custom:' + value);
+                    });
                     return;
                 }
 
@@ -444,12 +578,25 @@
                     var $existingCity = findOptionByText($select, value);
                     if ($existingCity) {
                         $select.val($existingCity.val()).trigger('change.select2');
+                        $('#item_delivery_city').trigger('change.dispatchItemCity');
                         return;
                     }
 
-                    appendAndSelectOption($select, value, value, {
-                        'data-name': value,
-                        'data-nrc-state': ''
+                    persistManagedLocation(formDispatchOptions().citiesStoreUrl, { name: value, name_mm: value }, function (res) {
+                        var city = (res && res.city) || {};
+                        var cityName = city.name || value;
+                        appendAndSelectOption($select, city.label || cityName, cityName, {
+                            'data-name': cityName,
+                            'data-city-id': city.id || '',
+                            'data-nrc-state': cityName
+                        });
+                        $('#item_delivery_city').trigger('change.dispatchItemCity');
+                    }, function () {
+                        appendAndSelectOption($select, value, value, {
+                            'data-name': value,
+                            'data-city-id': '',
+                            'data-nrc-state': ''
+                        });
                     });
                     return;
                 }
@@ -461,7 +608,23 @@
                         return;
                     }
 
-                    appendAndSelectOption($select, value, value);
+                    var cityMeta = getSelectedCityMeta();
+                    var townshipPayload = { name: value, name_mm: value };
+                    if (cityMeta && cityMeta.id) {
+                        townshipPayload.delivery_city_id = cityMeta.id;
+                    }
+
+                    persistManagedLocation(
+                        (cityMeta && cityMeta.id) ? formDispatchOptions().townshipsStoreUrl : '',
+                        townshipPayload,
+                        function (res) {
+                            var township = (res && res.township) || {};
+                            appendAndSelectOption($select, township.label || value, township.name_mm || township.name || value);
+                        },
+                        function () {
+                            appendAndSelectOption($select, value, value);
+                        }
+                    );
                 }
             });
     }
@@ -644,13 +807,45 @@
             }
 
             var selected = resetTownship ? '' : $('#item_township').val();
-            loadTownships(cityMeta.name, cityMeta.nrcState, selected, options.nrcDataUrl, !resetTownship);
+            loadTownships(cityMeta.name, cityMeta.nrcState, selected, options.nrcDataUrl, !resetTownship, {
+                townshipsUrl: options.townshipsUrl,
+                cityId: cityMeta.id
+            });
         }
 
         $('#item_delivery_city').off('change.dispatchItemCity').on('change.dispatchItemCity', function () {
             refreshTownships(true);
         });
         refreshTownships(false);
+
+        function syncCityFromToBranch(resetTownship) {
+            var $opt = $('#to_branch_id option:selected');
+            var cityName = String($opt.data('city-name') || $opt.text() || '').trim();
+            if (!cityName) {
+                return;
+            }
+            var $city = $('#item_delivery_city');
+            var $matched = findOptionByText($city, cityName);
+            if ($matched) {
+                $city.val($matched.val());
+            } else {
+                appendAndSelectOption($city, cityName, cityName, {
+                    'data-name': cityName,
+                    'data-city-id': '',
+                    'data-nrc-state': cityName
+                });
+            }
+            if ($city.hasClass('select2-hidden-accessible')) {
+                $city.trigger('change.select2');
+            } else {
+                $city.trigger('change');
+            }
+            refreshTownships(!!resetTownship);
+        }
+
+        $('#to_branch_id').off('change.dispatchItemTo').on('change.dispatchItemTo', function () {
+            syncCityFromToBranch(true);
+        });
 
         $(document).off('input.dispatchItemAmount', '.pds-dispatch-item-amount')
             .on('input.dispatchItemAmount', '.pds-dispatch-item-amount', updateSummary);

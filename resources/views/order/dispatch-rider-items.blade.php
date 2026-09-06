@@ -21,7 +21,7 @@
                     </div>
                 </div>
                 <a
-                    href="{{ route('order.dispatch.rider-list', ['from_date' => $filterFromDate, 'to_date' => $filterToDate]) }}"
+                    href="{{ route('order.dispatch.rider-list', array_filter(['from_date' => $filterFromDate, 'to_date' => $filterToDate, 'branch_id' => $branchFilter ?? null])) }}"
                     class="pds-rider-close-btn"
                     title="{{ __('message.close') }}"
                 >
@@ -30,6 +30,7 @@
             </div>
 
             <form method="GET" action="{{ route('order.dispatch.rider-items', ['riderId' => $rider->id]) }}" class="pds-rider-toolbar" id="riderItemsFilterForm">
+                <input type="hidden" name="branch_id" value="{{ $branchFilter ?? '' }}">
                 <div class="pds-rider-toolbar__fields">
                     <div class="pds-dispatch-field pds-dispatch-field-sm">
                         <label for="rider_items_from_date">{{ __('message.from') }}</label>
@@ -214,7 +215,7 @@
                                             @endphp
                                             @if($pendingPhotoUrl)
                                                 <a href="{{ $pendingPhotoUrl }}" target="_blank" rel="noopener" class="d-inline-block mt-1">
-                                                    <img src="{{ $pendingPhotoUrl }}" alt="Pending" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb;">
+                                                    <img src="{{ $pendingPhotoUrl }}" alt="Pending" style="width: 88px; height: 88px; object-fit: cover; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff;">
                                                 </a>
                                             @endif
                                         </td>
@@ -268,6 +269,7 @@
                     <div class="form-group mb-0">
                         <label for="riderPendingPhotoInput">{{ __('message.image') ?? 'Image' }}</label>
                         <input type="file" id="riderPendingPhotoInput" class="form-control-file" accept="image/*">
+                        <img src="" alt="" class="pds-delivered-upload__preview is-pending" id="riderPendingUploadPreview" hidden>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -330,7 +332,8 @@
                     <div class="pds-delivered-modal__section-label">{{ __('message.delivered_photo') }}</div>
                     <label class="pds-delivered-upload" for="riderDeliveredPhotoInput" id="riderDeliveredUploadLabel">
                         <input type="file" id="riderDeliveredPhotoInput" accept="image/*" hidden>
-                        <span class="pds-delivered-upload__icon" aria-hidden="true"><i class="fas fa-cloud-upload-alt"></i></span>
+                        <span class="pds-delivered-upload__icon" id="riderDeliveredUploadIcon" aria-hidden="true"><i class="fas fa-cloud-upload-alt"></i></span>
+                        <img src="" alt="" class="pds-delivered-upload__preview" id="riderDeliveredUploadPreview" hidden>
                         <span class="pds-delivered-upload__title" id="riderDeliveredUploadTitle">{{ __('message.delivered_photo_pick') }}</span>
                         <span class="pds-delivered-upload__hint">{{ __('message.delivered_photo_hint') }}</span>
                     </label>
@@ -352,7 +355,7 @@
     @include('order.partials._dispatch-item-gate-modal')
 
     @section('bottom_script')
-        <script src="{{ asset('js/dispatch-item-form.js') }}?v=24"></script>
+        <script src="{{ asset('js/dispatch-item-form.js') }}?v=26"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(document).ready(function () {
@@ -553,9 +556,37 @@
                     $('.pds-delivered-choice[data-delivered-choice="' + type + '"]').addClass('is-active');
                 }
 
+                function setUploadPreview(imgId, iconId, file) {
+                    var img = document.getElementById(imgId);
+                    var icon = iconId ? document.getElementById(iconId) : null;
+                    if (!img) {
+                        return;
+                    }
+                    if (img.dataset.objectUrl) {
+                        URL.revokeObjectURL(img.dataset.objectUrl);
+                        delete img.dataset.objectUrl;
+                    }
+                    if (!file || !file.type || file.type.indexOf('image/') !== 0) {
+                        img.hidden = true;
+                        img.removeAttribute('src');
+                        if (icon) {
+                            icon.hidden = false;
+                        }
+                        return;
+                    }
+                    var url = URL.createObjectURL(file);
+                    img.dataset.objectUrl = url;
+                    img.src = url;
+                    img.hidden = false;
+                    if (icon) {
+                        icon.hidden = true;
+                    }
+                }
+
                 function resetDeliveredUploadLabel() {
                     $('#riderDeliveredUploadLabel').removeClass('has-file');
                     $('#riderDeliveredUploadTitle').text(@json(__('message.delivered_photo_pick')));
+                    setUploadPreview('riderDeliveredUploadPreview', 'riderDeliveredUploadIcon', null);
                 }
 
                 $(document).on('change', 'input[name="rider_delivered_type"]', syncDeliveredGateAmountVisibility);
@@ -568,6 +599,12 @@
                     }
                     $('#riderDeliveredUploadLabel').addClass('has-file');
                     $('#riderDeliveredUploadTitle').text(file.name);
+                    setUploadPreview('riderDeliveredUploadPreview', 'riderDeliveredUploadIcon', file);
+                });
+
+                $(document).on('change', '#riderPendingPhotoInput', function () {
+                    var file = this.files && this.files[0] ? this.files[0] : null;
+                    setUploadPreview('riderPendingUploadPreview', null, file);
                 });
 
                 $(document).on('click', '#riderItemsBulkUpdate', function (e) {
@@ -589,6 +626,7 @@
                     if (action === 'pending') {
                         $('#riderPendingRemarkInput').val('');
                         $('#riderPendingPhotoInput').val('');
+                        setUploadPreview('riderPendingUploadPreview', null, null);
                         $('#riderPendingRemarkModal').modal('show');
                         return;
                     }

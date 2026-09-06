@@ -60,7 +60,7 @@
 
     @section('bottom_script')
         {{ $dataTable->scripts() }}
-        <script src="{{ asset('js/dispatch-item-form.js') }}?v=24"></script>
+        <script src="{{ asset('js/dispatch-item-form.js') }}?v=26"></script>
         <script src="{{ asset('js/admin-order-list-live.js') }}?v=3"></script>
         <script>
             (function () {
@@ -96,6 +96,10 @@
                 if (typeof window.initDispatchItemForm === 'function') {
                     window.initDispatchItemForm({
                         nrcDataUrl: "{{ asset('data/myanmar-nrc.json') }}",
+                        townshipsUrl: "{{ route('delivery-route-locations.townships') }}",
+                        citiesStoreUrl: "{{ route('delivery-route-locations.cities.store') }}",
+                        townshipsStoreUrl: "{{ route('delivery-route-locations.townships.store') }}",
+                        branchesStoreUrl: "{{ route('delivery-route-locations.branches.store') }}",
                         modalParent: '#remoteModelData'
                     });
                 }

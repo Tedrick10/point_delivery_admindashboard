@@ -18,6 +18,10 @@ class OsSettlementSampleSeeder extends Seeder
     public function run(): void
     {
         $today = Carbon::now('Asia/Yangon')->toDateString();
+        // List day D shows items Completed on Yangon day D+1 (C−1 lag).
+        $listDay = $today;
+        $completedAt = Carbon::parse($listDay, 'Asia/Yangon')->addDay()->setTime(10, 30, 0);
+        $completedDay = $completedAt->toDateString();
 
         $src = DispatchOrderItem::query()
             ->with('order')
@@ -68,10 +72,10 @@ class OsSettlementSampleSeeder extends Seeder
                 ->whereHas('order', fn ($q) => $q->where('client_id', $clientId))
                 ->where('status', 'completed')
                 ->whereNull('admin_finished_at')
-                ->whereDate('received_date', $today)
                 ->where(function ($q) {
                     $q->where('item_name', 'like', 'Pay sample %')
-                        ->orWhere('item_name', 'like', 'Receive sample %');
+                        ->orWhere('item_name', 'like', 'Receive sample %')
+                        ->orWhere('item_name', 'like', 'Receive demo %');
                 })
                 ->delete();
 
@@ -94,10 +98,10 @@ class OsSettlementSampleSeeder extends Seeder
             $pay->gate_amount = 0;
             $pay->gate_os_paid = 0;
             $pay->status = 'completed';
-            $pay->admin_completed_at = now();
+            $pay->admin_completed_at = $completedAt->copy();
             $pay->admin_finished_at = null;
-            $pay->received_date = $today;
-            $pay->assigned_at = $today.' 10:00:00';
+            $pay->received_date = $completedDay;
+            $pay->assigned_at = $completedAt->copy()->subHours(2);
             $pay->customer_name = $name;
             $pay->save();
 
@@ -120,10 +124,10 @@ class OsSettlementSampleSeeder extends Seeder
             $recv->gate_amount = 0;
             $recv->gate_os_paid = 0;
             $recv->status = 'completed';
-            $recv->admin_completed_at = now();
+            $recv->admin_completed_at = $completedAt->copy()->addMinutes($i + 1);
             $recv->admin_finished_at = null;
-            $recv->received_date = $today;
-            $recv->assigned_at = $today.' 11:00:00';
+            $recv->received_date = $completedDay;
+            $recv->assigned_at = $completedAt->copy()->subHour();
             $recv->customer_name = $name;
             $recv->save();
 
@@ -136,7 +140,7 @@ class OsSettlementSampleSeeder extends Seeder
         }
 
         $svc = app(OsSettlementService::class);
-        $items = $svc->completedItemsQuery(null, $today, $today)->get();
+        $items = $svc->completedItemsQuery(null, $listDay, $listDay)->get();
         $payOs = $items->filter(static fn ($item) => (float) $item->displayOsToPay() < 0)
             ->groupBy(static fn ($item) => (int) ($item->order?->client_id ?? 0))
             ->count();
@@ -144,6 +148,6 @@ class OsSettlementSampleSeeder extends Seeder
             ->groupBy(static fn ($item) => (int) ($item->order?->client_id ?? 0))
             ->count();
 
-        $this->command?->info("Done for {$today}: Pay tab {$payOs} OS · Receive tab {$recvOs} OS");
+        $this->command?->info("Done for list day {$listDay} (Completed {$completedDay}): Pay tab {$payOs} OS · Receive tab {$recvOs} OS");
     }
 }

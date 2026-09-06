@@ -18,6 +18,21 @@
 
             @include('order.partials._settlement-tabs', ['activeTab' => 'money-transfer'])
 
+            @include('partials._branch-tabs', [
+                'branchTabs' => $branchTabs ?? $branches,
+                'selectedBranchId' => $selectedBranchId ?? ($branchFilter === 'all' ? null : (int) $branchFilter),
+                'branchTabCounts' => $branchTabCounts ?? [],
+                'allCount' => $allBranchCount ?? null,
+                'includeAll' => false,
+                'routeName' => 'order.money-transfer',
+                'routeQuery' => [
+                    'from_date' => $filterFromDate,
+                    'to_date' => $filterToDate,
+                    'os_id' => $osFilter,
+                    'method' => $paymentMethod ?? 'all',
+                ],
+            ])
+
             @php
                 $paymentMethod = $paymentMethod ?? 'all';
                 $showCashCols = in_array($paymentMethod, ['cash', 'all'], true);
@@ -46,6 +61,7 @@
 
             <form method="GET" action="{{ route('order.money-transfer') }}" class="pds-daily-check-toolbar" id="moneyTransferFilterForm">
                 <input type="hidden" name="method" value="{{ $paymentMethod }}">
+                <input type="hidden" name="branch_id" id="mt_branch" value="{{ $branchFilter }}">
                 <div class="pds-daily-check-toolbar__grid pds-money-transfer-toolbar__grid">
                     <div class="pds-daily-check-field pds-daily-check-field--date">
                         <label for="mt_from_date">{{ __('message.from') }}</label>
@@ -54,17 +70,6 @@
                     <div class="pds-daily-check-field pds-daily-check-field--date">
                         <label for="mt_to_date">{{ __('message.to') }}</label>
                         <input type="text" name="to_date" id="mt_to_date" class="pds-dispatch-input dispatch-datepicker" value="{{ $filterToDate }}" autocomplete="off">
-                    </div>
-                    <div class="pds-daily-check-field pds-daily-check-field--branch">
-                        <label for="mt_branch">{{ __('message.branch') }}</label>
-                        <select name="branch_id" id="mt_branch" class="pds-dispatch-input pds-dispatch-select">
-                            @if($branches->count() !== 1)
-                                <option value="all" @selected($branchFilter === 'all')>{{ __('message.all') }}</option>
-                            @endif
-                            @foreach($branches as $branch)
-                                <option value="{{ $branch->id }}" @selected((string) $branchFilter === (string) $branch->id)>{{ $branch->name }}</option>
-                            @endforeach
-                        </select>
                     </div>
                     <div class="pds-daily-check-field pds-daily-check-field--party">
                         <label for="mt_os">{{ __('message.online_shopping') }}</label>

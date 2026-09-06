@@ -389,12 +389,87 @@ class FronthomeController extends Controller
 
     public function privacypolicy()
     {
-        return view('frontend-website.privacy_policy');
+        $activeTab = request()->query('app', 'user') === 'rider' ? 'rider' : 'user';
+
+        return view('frontend-website.privacy_policy', [
+            'activeTab' => $activeTab,
+            'userHtml' => SettingData('privacy_policy', 'privacy_policy') ?? '',
+            'riderHtml' => SettingData('privacy_policy_rider', 'privacy_policy_rider') ?? '',
+        ]);
     }
 
     public function termofservice()
     {
-        return view('frontend-website.termofservice');
+        $activeTab = request()->query('app', 'user') === 'rider' ? 'rider' : 'user';
+
+        return view('frontend-website.termofservice', [
+            'activeTab' => $activeTab,
+            'userHtml' => SettingData('terms_condition', 'terms_condition') ?? '',
+            'riderHtml' => SettingData('terms_condition_rider', 'terms_condition_rider') ?? '',
+        ]);
+    }
+
+    public function deleteAccount()
+    {
+        $activeTab = request()->query('app', 'user') === 'rider' ? 'rider' : 'user';
+        $supportEmail = optional(\App\Models\AppSetting::query()->first())->support_email
+            ?: optional(\App\Models\AppSetting::query()->first())->site_email
+            ?: 'support@pointdelivery.worldwidemyanmar.com';
+
+        return view('frontend-website.delete_account', [
+            'activeTab' => $activeTab,
+            'userHtml' => $this->deleteAccountHtml('Point User', 'user', $supportEmail),
+            'riderHtml' => $this->deleteAccountHtml('Point Delivery Partner', 'rider', $supportEmail),
+        ]);
+    }
+
+    private function deleteAccountHtml(string $appName, string $appKey, string $supportEmail): string
+    {
+        $inAppPath = $appKey === 'rider'
+            ? 'Open Point Delivery Partner → Profile / Account → Delete Account'
+            : 'Open Point User → Account → Delete Account';
+
+        return <<<HTML
+<h2>Delete your {$appName} account</h2>
+<p>This page explains how to request deletion of your <strong>{$appName}</strong> account and associated personal data from Point Delivery Service.</p>
+
+<h3>How to delete your account in the app</h3>
+<ol>
+<li>{$inAppPath}</li>
+<li>Confirm the deletion request.</li>
+<li>Your account will be deleted and you will be signed out.</li>
+</ol>
+
+<h3>How to request deletion by email / support</h3>
+<ol>
+<li>Send an email to <a href="mailto:{$supportEmail}">{$supportEmail}</a>.</li>
+<li>Use the subject: <strong>Account deletion request – {$appName}</strong>.</li>
+<li>Include the phone number / email used to register your account.</li>
+<li>We will verify ownership and process the request.</li>
+</ol>
+
+<h3>What data is deleted</h3>
+<ul>
+<li>Account profile details (name, phone, email, login credentials)</li>
+<li>App profile photo and in-app chat/support attachments linked to your account (where stored)</li>
+<li>Device tokens used for push notifications</li>
+</ul>
+
+<h3>What data may be retained</h3>
+<ul>
+<li>Completed delivery / order records needed for legal, accounting, dispute, or fraud-prevention purposes</li>
+<li>Anonymized or aggregated analytics that no longer identify you</li>
+</ul>
+<p>Retained records are kept only as long as required by law or legitimate business needs, then deleted or anonymized.</p>
+
+<h3>အကောင့်ဖျက်ရန် (မြန်မာ)</h3>
+<ol>
+<li>အက်ပ်ထဲမှ: {$inAppPath}</li>
+<li>သို့မဟုတ် <a href="mailto:{$supportEmail}">{$supportEmail}</a> သို့ “Account deletion request – {$appName}” ခေါင်းစဉ်ဖြင့် အီးမေးလ်ပို့ပါ။</li>
+<li>မှတ်ပုံတင်ထားသော ဖုန်း/အီးမေးလ် ထည့်ပေးပါ။</li>
+</ol>
+<p>ကိုယ်ရေးအချက်အလက်များကို ဖျက်ပါမည်။ ဥပဒေ/ငွေစာရင်း/အငြင်းပွားမှုအတွက် လိုအပ်သော ပို့ဆောင်မှုမှတ်တမ်းများကို သတ်မှတ်ကာလအထိ ထိန်းသိမ်းနိုင်ပါသည်။</p>
+HTML;
     }
 
     public function page($slug)

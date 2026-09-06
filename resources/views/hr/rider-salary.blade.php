@@ -10,7 +10,7 @@
                 <p class="pds-hr-hero__subtitle">{{ __('message.hr_rider_sheet_hint') }}</p>
             </div>
             <div class="pds-hr-hero__stats">
-                <div class="pds-hr-stat">
+                <div class="pds-hr-stat{{ $sumNetPay < 0 ? ' pds-hr-stat--danger' : '' }}">
                     <span class="pds-hr-stat__value">{{ number_format($sumNetPay) }}</span>
                     <span class="pds-hr-stat__label">{{ __('message.hr_net_pay') }}</span>
                 </div>
@@ -38,15 +38,15 @@
                 <span class="pds-hr-summary__label">{{ __('message.hr_total_deduction') }}</span>
                 <span class="pds-hr-summary__value">{{ number_format($sumDeduction) }}</span>
             </div>
-            <div class="pds-hr-summary__card pds-hr-summary__card--success">
+            <div class="pds-hr-summary__card {{ $sumNetPay < 0 ? 'pds-hr-summary__card--danger' : 'pds-hr-summary__card--success' }}">
                 <span class="pds-hr-summary__label">{{ __('message.hr_net_pay') }}</span>
                 <span class="pds-hr-summary__value">{{ number_format($sumNetPay) }}</span>
             </div>
         </div>
 
         <div class="pds-hr-panel pds-hr-panel--salary">
-            <div class="table-responsive">
-                <table class="table pds-hr-table pds-hr-table--salary mb-0" id="rider-salary-table">
+            <div class="pds-hr-freeze-shell">
+                <table class="table pds-hr-table pds-hr-table--salary pds-hr-table--freeze mb-0" id="rider-salary-table">
                     <thead>
                     <tr>
                         <th class="pds-hr-col-no">#</th>
@@ -98,7 +98,7 @@
                                 <input type="number" min="0" class="pds-hr-input sal-input" data-field="deposit" value="{{ (int) $row->deposit }}" @disabled(! $canEdit)>
                             </td>
                             <td><span class="js-total-deduction pds-hr-cell pds-hr-cell--danger">{{ number_format($row->total_deduction) }}</span></td>
-                            <td><span class="js-net-pay pds-hr-cell pds-hr-cell--success">{{ number_format($row->net_pay) }}</span></td>
+                            <td><span class="js-net-pay pds-hr-cell {{ ((float) $row->net_pay) < 0 ? 'pds-hr-cell--danger' : 'pds-hr-cell--success' }}">{{ number_format($row->net_pay) }}</span></td>
                         </tr>
                     @empty
                         <tr>
@@ -119,7 +119,7 @@
                                 <td><span class="js-foot-bag_deduction pds-hr-cell">{{ number_format($colTotals['bag_deduction']) }}</span></td>
                                 <td><span class="js-foot-deposit pds-hr-cell">{{ number_format($colTotals['deposit']) }}</span></td>
                                 <td><span class="js-foot-total_deduction pds-hr-cell pds-hr-cell--danger">{{ number_format($colTotals['total_deduction']) }}</span></td>
-                                <td><span class="js-foot-net_pay pds-hr-cell pds-hr-cell--success">{{ number_format($colTotals['net_pay']) }}</span></td>
+                                <td><span class="js-foot-net_pay pds-hr-cell {{ ((float) $colTotals['net_pay']) < 0 ? 'pds-hr-cell--danger' : 'pds-hr-cell--success' }}">{{ number_format($colTotals['net_pay']) }}</span></td>
                             </tr>
                         </tfoot>
                     @endif
@@ -140,6 +140,13 @@
                 function money(n) { return new Intl.NumberFormat().format(Math.round(Number(n) || 0)); }
                 function parseNum(text) {
                     return parseFloat(String(text == null ? '' : text).replace(/,/g, '')) || 0;
+                }
+
+                function paintNetPay($el, value) {
+                    var n = Number(value) || 0;
+                    $el.text(money(n))
+                        .toggleClass('pds-hr-cell--danger', n < 0)
+                        .toggleClass('pds-hr-cell--success', n >= 0);
                 }
 
                 function refreshFooter() {
@@ -167,6 +174,10 @@
                         totals.net_pay += parseNum($tr.find('.js-net-pay').text());
                     });
                     Object.keys(totals).forEach(function (key) {
+                        if (key === 'net_pay') {
+                            paintNetPay($('#rider-salary-table .js-foot-net_pay'), totals.net_pay);
+                            return;
+                        }
                         $('#rider-salary-table .js-foot-' + key).text(money(totals[key]));
                     });
                 }
@@ -208,7 +219,7 @@
                                 var d = res.data;
                                 $tr.find('.js-total-salary').text(money(d.total_salary));
                                 $tr.find('.js-total-deduction').text(money(d.total_deduction));
-                                $tr.find('.js-net-pay').text(money(d.net_pay));
+                                paintNetPay($tr.find('.js-net-pay'), d.net_pay);
                                 refreshFooter();
                             },
                             error: function (xhr) {

@@ -143,6 +143,12 @@ class ClientController extends Controller
             return response()->json(['status' => false, 'message' => __('message.demo_permission_denied')], 403);
         }
 
+        if ($request->filled('contact_number')) {
+            $request->merge([
+                'contact_number' => normalizeContactNumber($request->contact_number),
+            ]);
+        }
+
         if ($request->boolean('from_dispatch')) {
             $existingUser = User::where('user_type', 'client')
                 ->where(function ($query) use ($request) {
@@ -257,7 +263,7 @@ class ClientController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'text' => $displayName,
-            'phone' => $user->contact_number,
+            'phone' => normalizeContactNumber($user->contact_number),
             'address' => $user->address,
         ];
     }

@@ -41,30 +41,35 @@ class ExpenseRiderFuelSyncService
         $this->syncRemitDate($remitDay, $userId);
     }
 
-    public function syncRemitDate(string $remitDay, ?int $userId = null): void
+    public function syncRemitDate(string $remitDay, ?int $userId = null, ?int $branchId = null): void
     {
-        $remitDay = Carbon::parse($remitDay)->toDateString();
-        $total = $this->fuelTotalForRemitDay($remitDay);
-        $this->upsertFuelOnExpenseDay($remitDay, $total, $userId);
+        $this->syncExpenseDate($remitDay, $userId, $branchId);
     }
 
-    public function syncExpenseDate(string $expenseDay, ?int $userId = null): void
+    public function syncExpenseDate(string $expenseDay, ?int $userId = null, ?int $branchId = null): void
     {
         $expenseDay = Carbon::parse($expenseDay)->toDateString();
-        $total = $this->fuelTotalForRemitDay($expenseDay);
-        $this->upsertFuelOnExpenseDay($expenseDay, $total, $userId);
+        foreach ($this->branchIdsForExpenseDay($expenseDay, $branchId) as $id) {
+            $this->upsertFuelOnExpenseDay(
+                $expenseDay,
+                $this->fuelTotalForRemitDay($expenseDay, $id),
+                $userId,
+                $id
+            );
+        }
     }
 
-    public function fuelTotalForRemitDay(string $remitDay): float
+    public function fuelTotalForRemitDay(string $remitDay, ?int $branchId = null): float
     {
         return round((float) RiderRemit::query()
             ->whereDate('remit_date', Carbon::parse($remitDay)->toDateString())
+            ->when($branchId && $branchId > 0, fn ($q) => $q->where('branch_id', $branchId))
             ->sum('fuel_amount'), 2);
     }
 
-    public function fuelTotalForExpenseDay(string $expenseDay): float
+    public function fuelTotalForExpenseDay(string $expenseDay, ?int $branchId = null): float
     {
-        return $this->fuelTotalForRemitDay($this->remitDateForExpenseDay($expenseDay));
+        return $this->fuelTotalForRemitDay($this->remitDateForExpenseDay($expenseDay), $branchId);
     }
 
     /**
@@ -117,18 +122,74 @@ class ExpenseRiderFuelSyncService
         }
     }
 
-    protected function upsertFuelOnExpenseDay(string $expenseDay, float $total, ?int $userId = null): void
+    /**
+     * @return list<int>
+     */
+    protected function branchIdsForExpenseDay(string $expenseDay, ?int $branchId = null): array
     {
+        if ($branchId && $branchId > 0) {
+            return [$branchId];
+        }
+
+        $tabIds = function_exists('destinationBranchTabs')
+            ? destinationBranchTabs()->pluck('id')->map(fn ($id) => (int) $id)->filter()->values()
+            : collect();
+
+        $fromRemits = RiderRemit::query()
+            ->whereDate('remit_date', $expenseDay)
+            ->where('branch_id', '>', 0)
+            ->pluck('branch_id')
+            ->map(fn ($id) => (int) $id);
+
+        $fromCards = ExpenseCard::query()
+            ->whereDate('expense_date', $expenseDay)
+            ->where('branch_id', '>', 0)
+            ->pluck('branch_id')
+            ->map(fn ($id) => (int) $id);
+
+        $ids = $fromRemits->merge($fromCards)->unique()->filter()->values();
+        if ($tabIds->isNotEmpty()) {
+            $ids = $ids->intersect($tabIds)->values();
+        }
+
+        if ($ids->isEmpty()) {
+            $default = function_exists('defaultDestinationBranchId') ? defaultDestinationBranchId() : null;
+            if ($default) {
+                return [(int) $default];
+            }
+        }
+
+        return $ids->all();
+    }
+
+    protected function upsertFuelOnExpenseDay(string $expenseDay, float $total, ?int $userId = null, ?int $branchId = null): void
+    {
+        $branchId = $branchId && $branchId > 0
+            ? $branchId
+            : (function_exists('defaultDestinationBranchId') ? defaultDestinationBranchId() : null);
+
         try {
-            DB::transaction(function () use ($expenseDay, $total, $userId) {
-                $card = ExpenseCard::query()->firstOrCreate(
-                    ['expense_date' => $expenseDay],
-                    [
+            DB::transaction(function () use ($expenseDay, $total, $userId, $branchId) {
+                $cardQuery = ExpenseCard::query()->whereDate('expense_date', $expenseDay);
+                if ($branchId) {
+                    $cardQuery->where('branch_id', $branchId);
+                } else {
+                    $cardQuery->whereNull('branch_id');
+                }
+
+                $card = $cardQuery->first();
+                if (! $card) {
+                    if ($total <= 0) {
+                        return;
+                    }
+                    $card = ExpenseCard::query()->create([
+                        'expense_date' => $expenseDay,
+                        'branch_id' => $branchId,
                         'total_amount' => 0,
                         'created_by' => $userId,
                         'updated_by' => $userId,
-                    ]
-                );
+                    ]);
+                }
 
                 if ($card->isGenerated()) {
                     return;

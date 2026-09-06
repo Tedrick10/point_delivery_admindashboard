@@ -373,6 +373,10 @@ class DispatchOrderItemController extends Controller
             'os_pay' => 'nullable|numeric|min:0',
             'customer_pay' => 'nullable|numeric|min:0',
             'remark' => 'nullable|string|max:2000',
+            'from_branch_id' => 'nullable|integer|exists:branches,id',
+            'to_branch_id' => 'nullable|integer|exists:branches,id',
+            'delivery_city' => 'nullable|string|max:100',
+            'township' => 'nullable|string|max:100',
         ]);
 
         $creditToRaw = $data['credit_to'] ?? 'customer';
@@ -396,9 +400,19 @@ class DispatchOrderItemController extends Controller
             $creditTo
         );
 
-        $branchId = resolveDefaultDispatchBranchId(
-            config('dispatch_item_cities.default_from_branch', 'MDY To MDY')
+        $defaultBranchId = resolveDefaultDispatchBranchId(
+            config('dispatch_item_cities.default_from_branch', 'မန္တလေး')
         );
+        $fromBranchId = (int) ($data['from_branch_id'] ?? $defaultBranchId);
+        $toBranchId = (int) ($data['to_branch_id'] ?? $fromBranchId);
+        $deliveryCity = trim((string) ($data['delivery_city'] ?? ''));
+        $township = trim((string) ($data['township'] ?? ''));
+        if ($deliveryCity === '') {
+            $deliveryCity = config('dispatch_item_cities.default_delivery_city', 'Mandalay');
+        }
+        if ($township === '') {
+            $township = config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်');
+        }
 
         $existingCount = DispatchOrderItem::query()
             ->where('order_id', $order->id)
@@ -408,7 +422,7 @@ class DispatchOrderItemController extends Controller
             })
             ->count();
 
-        $item = DispatchOrderItem::create([
+        $item = new DispatchOrderItem([
             'order_id' => $order->id,
             'photo_id' => 0,
             'received_date' => $order->pickup_datetime ?? $order->created_at ?? now(),
@@ -416,10 +430,10 @@ class DispatchOrderItemController extends Controller
             'code' => DispatchOrderItem::generateCode(),
             'item_name' => 'Parcel ' . ($existingCount + 1),
             'remark' => stripAutoOrderRemarkTip($data['remark'] ?? null),
-            'from_branch_id' => $branchId,
-            'to_branch_id' => $branchId,
-            'delivery_city' => config('dispatch_item_cities.default_delivery_city', 'Mandalay'),
-            'township' => config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်'),
+            'from_branch_id' => $fromBranchId,
+            'to_branch_id' => $toBranchId,
+            'delivery_city' => $deliveryCity,
+            'township' => $township,
             'customer_name' => trim($data['customer_name']),
             'customer_phone' => normalizeContactNumber(trim($data['customer_phone'])),
             'customer_address' => trim($data['customer_address']),
@@ -432,6 +446,7 @@ class DispatchOrderItemController extends Controller
             'cust_get' => $amounts['cust_get'],
             'os_to_pay' => $amounts['os_to_pay'],
         ]);
+        $item->save();
 
         try {
             app(DispatchOrderAuditService::class)->logItemCreated($order, $item, 'client');
@@ -689,8 +704,10 @@ class DispatchOrderItemController extends Controller
             $toDay = $fromDay;
         }
 
+        $riderScope = fn ($q) => $q->where('delivery_man_id', $user->id);
+
         $baseQuery = DispatchOrderItem::query()
-            ->where('delivery_man_id', $user->id)
+            ->where($riderScope)
             ->whereIn('status', $statuses);
         $this->applyDeliveryListDayFilter($baseQuery, $fromDay, $toDay);
 
@@ -703,7 +720,7 @@ class DispatchOrderItemController extends Controller
         ];
 
         $query = DispatchOrderItem::query()
-            ->where('delivery_man_id', $user->id)
+            ->where($riderScope)
             ->whereIn('status', $statuses)
             ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city'])
             ->orderByDesc('assigned_at')
@@ -711,13 +728,16 @@ class DispatchOrderItemController extends Controller
         $this->applyDeliveryListDayFilter($query, $fromDay, $toDay);
 
         if ($statusFilter !== '' && $statusFilter !== 'all') {
-            if (! in_array($statusFilter, $statuses, true)) {
+            if ($statusFilter === 'courier_assigned') {
+                $query->where('status', 'courier_assigned');
+            } elseif (! in_array($statusFilter, $statuses, true)) {
                 return json_custom_response([
                     'status' => false,
                     'message' => __('message.delivery_item_status_not_allowed'),
                 ], 422);
+            } else {
+                $query->where('status', $statusFilter);
             }
-            $query->where('status', $statusFilter);
         }
 
         $perPage = config('constant.PER_PAGE_LIMIT', 20);
@@ -953,10 +973,11 @@ class DispatchOrderItemController extends Controller
         }
 
         $workflow = app(DispatchOrderWorkflowService::class);
+        $statuses = $workflow->deliveryItemStatuses();
         $item = DispatchOrderItem::query()
             ->where('id', $itemId)
             ->where('delivery_man_id', $user->id)
-            ->whereIn('status', $workflow->deliveryItemStatuses())
+            ->whereIn('status', $statuses)
             ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city'])
             ->first();
 
@@ -1221,8 +1242,10 @@ class DispatchOrderItemController extends Controller
         app(DispatchOrderWorkflowService::class)->reclaimPrematureAssign100Items();
 
         $like = '%'.$q.'%';
+        $riderBranchId = (int) ($user->branch_id ?? 0);
         $query = DispatchOrderItem::query()
             ->where('status', 'assigned')
+            ->whereNull('delivery_man_id')
             ->where(function ($builder) use ($like, $q) {
                 $builder->where('customer_name', 'like', $like)
                     ->orWhere('customer_phone', 'like', $like)
@@ -1236,6 +1259,12 @@ class DispatchOrderItemController extends Controller
                         ['%'.$digits.'%']
                     );
                 }
+            })
+            ->when($riderBranchId > 0, function ($branchQ) use ($riderBranchId) {
+                $branchQ->where(function ($scope) use ($riderBranchId) {
+                    $scope->where('from_branch_id', $riderBranchId)
+                        ->orWhere('to_branch_id', $riderBranchId);
+                });
             })
             ->with(['fromBranch', 'toBranch', 'photoMedia', 'deliveryMan', 'order.city'])
             ->orderByDesc('assigned_at')
@@ -1288,6 +1317,7 @@ class DispatchOrderItemController extends Controller
         $item = DispatchOrderItem::query()
             ->where('id', $itemId)
             ->where('status', 'assigned')
+            ->whereNull('delivery_man_id')
             ->first();
 
         if (! $item) {
@@ -1297,9 +1327,23 @@ class DispatchOrderItemController extends Controller
             ], 404);
         }
 
+        $riderBranchId = (int) ($user->branch_id ?? 0);
+
+        // Local MDY Assign 100 → delivery rider (unchanged).
+        if ($riderBranchId > 0
+            && (int) ($item->from_branch_id ?? 0) > 0
+            && (int) $item->from_branch_id !== $riderBranchId
+            && (int) ($item->to_branch_id ?? 0) !== $riderBranchId) {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.access_denied'),
+            ], 422);
+        }
+
         $updated = DispatchOrderItem::query()
             ->where('id', $item->id)
             ->where('status', 'assigned')
+            ->whereNull('delivery_man_id')
             ->update([
                 'status' => 'courier_assigned',
                 'delivery_man_id' => $user->id,

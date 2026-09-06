@@ -181,7 +181,7 @@
     </div>
 
     @section('bottom_script')
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=3"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=5"></script>
         <script>
             (function () {
                 var osSearchRoute = "{{ route('ajax-list', ['type' => 'os_dispatch_search']) }}";

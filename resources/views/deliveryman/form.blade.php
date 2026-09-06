@@ -66,21 +66,58 @@
                                         @enderror
                                     </div>
 
-                                    @if(!isset($id))
                                     <div class="form-group col-md-6">
-                                        {{ html()->label(__('message.password').' <span class="text-danger">*</span>', 'password')->class('form-control-label') }}
+                                        @if(isset($id))
+                                            {{ html()->label(__('message.new_password'), 'password')->class('form-control-label') }}
+                                            <div class="input-group">
+                                                {{ html()->password('password')
+                                                    ->class('form-control')
+                                                    ->placeholder(__('message.new_password'))
+                                                    ->id('password')
+                                                    ->attribute('autocomplete', 'new-password') }}
+                                                <div class="input-group-append">
+                                                    <span class="input-group-text hide-show-password" data-target="#password" style="cursor: pointer;">
+                                                        <i class="fas fa-eye-slash"></i>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <small class="form-text text-muted">{{ __('message.leave_blank_to_keep_current_password') }}</small>
+                                        @else
+                                            {{ html()->label(__('message.password').' <span class="text-danger">*</span>', 'password')->class('form-control-label') }}
+                                            <div class="input-group">
+                                                {{ html()->password('password')
+                                                    ->class('form-control')
+                                                    ->placeholder(__('message.password'))
+                                                    ->id('password')
+                                                    ->attribute('autocomplete', 'new-password') }}
+                                                <div class="input-group-append">
+                                                    <span class="input-group-text hide-show-password" style="cursor: pointer;">
+                                                        <i class="fas fa-eye-slash"></i>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        @endif
+                                        @error('password')
+                                            <span class="help-block error">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+
+                                    @if(isset($id))
+                                    <div class="form-group col-md-6">
+                                        {{ html()->label(__('message.confirm_new_password'), 'password_confirmation')->class('form-control-label') }}
                                         <div class="input-group">
-                                            {{ html()->password('password')
+                                            {{ html()->password('password_confirmation')
                                                 ->class('form-control')
-                                                ->placeholder(__('message.password'))
-                                                ->id('password') }}
+                                                ->placeholder(__('message.confirm_new_password'))
+                                                ->id('password_confirmation')
+                                                ->attribute('autocomplete', 'new-password') }}
                                             <div class="input-group-append">
-                                                <span class="input-group-text hide-show-password" style="cursor: pointer;">
+                                                <span class="input-group-text hide-show-password" data-target="#password_confirmation" style="cursor: pointer;">
                                                     <i class="fas fa-eye-slash"></i>
                                                 </span>
                                             </div>
                                         </div>
-                                        @error('password')
+                                        @error('password_confirmation')
                                             <span class="help-block error">{{ $message }}</span>
                                         @enderror
                                     </div>
@@ -128,15 +165,16 @@
         <script>
             $(document).ready(function() {
                 $('.hide-show-password').on('click', function() {
-                    var passwordInput = $('#password');
-                    var eyeIcon = $('.hide-show-password i');
-                    var passwordFieldType = passwordInput.attr('type');
-                    if (passwordFieldType === 'password') {
-                        passwordInput.attr('type', 'text');
-                        eyeIcon.removeClass('fa-eye-slash').addClass('fa-eye');
+                    var $toggle = $(this);
+                    var target = $toggle.data('target') || '#password';
+                    var $passwordInput = $(target);
+                    var $eyeIcon = $toggle.find('i');
+                    if ($passwordInput.attr('type') === 'password') {
+                        $passwordInput.attr('type', 'text');
+                        $eyeIcon.removeClass('fa-eye-slash').addClass('fa-eye');
                     } else {
-                        passwordInput.attr('type', 'password');
-                        eyeIcon.removeClass('fa-eye').addClass('fa-eye-slash');
+                        $passwordInput.attr('type', 'password');
+                        $eyeIcon.removeClass('fa-eye').addClass('fa-eye-slash');
                     }
                 });
 
@@ -145,11 +183,13 @@
                     email: { required: true, email: true },
                     username: { required: true },
                     password: { required: {{ isset($id) ? 'false' : 'true' }}, minlength: 6 },
+                    password_confirmation: { equalTo: '#password' },
                 }, {
                     name: { required: "{{__('message.please_enter_name')}}"},
                     email: { required: "{{__('message.please_enter_email')}}" },
                     username: { required: "{{__('message.please_enter_username')}}" },
                     password: { required: "{{__('message.please_enter_password')}}", minlength: "{{__('message.please_enter_new_password')}}" },
+                    password_confirmation: { equalTo: "{{__('message.please_enter_confirm_password')}}" },
                 });
 
                 $('#deliveryman_form [type="submit"]').prop('disabled', false).removeClass('disabled');

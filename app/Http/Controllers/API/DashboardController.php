@@ -36,6 +36,8 @@ class DashboardController extends Controller
 
         $data['terms_condition'] = SettingData('terms_condition', 'terms_condition');
         $data['privacy_policy'] = SettingData('privacy_policy', 'privacy_policy');
+        $data['terms_condition_rider'] = SettingData('terms_condition_rider', 'terms_condition_rider');
+        $data['privacy_policy_rider'] = SettingData('privacy_policy_rider', 'privacy_policy_rider');
 
         $currency_code = SettingData('CURRENCY', 'CURRENCY_CODE') ?? 'USD';
         $currency = currencyArray($currency_code);
@@ -92,6 +94,8 @@ class DashboardController extends Controller
 
         $data['terms_condition'] = SettingData('terms_condition', 'terms_condition');
         $data['privacy_policy'] = SettingData('privacy_policy', 'privacy_policy');
+        $data['terms_condition_rider'] = SettingData('terms_condition_rider', 'terms_condition_rider');
+        $data['privacy_policy_rider'] = SettingData('privacy_policy_rider', 'privacy_policy_rider');
 
         $currency_code = SettingData('CURRENCY', 'CURRENCY_CODE') ?? 'USD';
         $currency = currencyArray($currency_code);
@@ -120,7 +124,9 @@ class DashboardController extends Controller
             'app_logo_image' => SettingData('app_content', 'app_logo_image') ?? null,
             'delivery_man_image' => SettingData('app_content', 'delivery_man_image') ?? null,
             'privacy_policy' => SettingData('privacy_policy', 'privacy_policy') ?? null,
+            'privacy_policy_rider' => SettingData('privacy_policy_rider', 'privacy_policy_rider') ?? null,
             'term_and_condition' => SettingData('terms_condition', 'terms_condition') ?? null,
+            'term_and_condition_rider' => SettingData('terms_condition_rider', 'terms_condition_rider') ?? null,
         ];
 
         $response['appsetting'] = $appsetting;

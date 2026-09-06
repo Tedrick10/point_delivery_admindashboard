@@ -505,6 +505,10 @@ class TextOrderDispatchService
         $pickup = is_array($order->pickup_point) ? $order->pickup_point : [];
         $delivery = is_array($order->delivery_point) ? $order->delivery_point : [];
         $branchId = $this->defaultBranchId();
+        $fromBranchId = (int) ($pickup['from_branch_id'] ?? 0) ?: $branchId;
+        $toBranchId = (int) ($pickup['to_branch_id'] ?? 0) ?: $fromBranchId;
+        $deliveryCity = trim((string) ($pickup['delivery_city'] ?? ''));
+        $township = trim((string) ($pickup['township'] ?? ''));
 
         // Text orders: customer is entered per item — never seed from OS pickup
         // (admin create used to copy pickup → delivery, which polluted Customer fields).
@@ -532,10 +536,14 @@ class TextOrderDispatchService
 
         return array_merge([
             'received_date' => formatDispatchYangonDate($order->pickup_datetime ?? $order->created_at ?? now()),
-            'from_branch_id' => $branchId,
-            'to_branch_id' => $branchId,
-            'delivery_city' => config('dispatch_item_cities.default_delivery_city', 'Mandalay'),
-            'township' => config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်'),
+            'from_branch_id' => $fromBranchId,
+            'to_branch_id' => $toBranchId,
+            'delivery_city' => $deliveryCity !== ''
+                ? $deliveryCity
+                : config('dispatch_item_cities.default_delivery_city', 'Mandalay'),
+            'township' => $township !== ''
+                ? $township
+                : config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်'),
             'item_name' => trim((string) ($pickup['description'] ?? '')),
             'remark' => $remark,
             'customer_name' => $customerName,

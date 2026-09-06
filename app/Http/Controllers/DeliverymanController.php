@@ -47,6 +47,7 @@ class DeliverymanController extends Controller
             'city_id' => request('city_id') ?? null,
             'country_id' => request('country_id') ?? null,
             'last_actived_at' => request('last_actived_at') ?? null,
+            'branch_id' => request('branch_id') ?? null,
         ];
         if (!is_array($params['city_id']) && !is_object($params['city_id'])) {
             $params['city_id'] = null;
@@ -58,6 +59,18 @@ class DeliverymanController extends Controller
         $cities = City::pluck('name', 'id')->prepend(__('message.select_name', ['select' => __('message.city')]), '')->toArray();
         $selectedCountryId = request('country_id');
         $country = Country::pluck('name', 'id')->prepend(__('message.select_name', ['select' => __('message.country')]), '')->toArray();
+        $branchTabs = destinationBranchTabs();
+        $selectedBranchId = (int) request('branch_id', 0);
+        if ($selectedBranchId <= 0) {
+            $selectedBranchId = (int) (defaultDestinationBranchId($branchTabs) ?? 0);
+        }
+        $branchTabCounts = User::query()
+            ->where('user_type', 'delivery_man')
+            ->whereNull('deleted_at')
+            ->selectRaw('branch_id, COUNT(*) as total')
+            ->groupBy('branch_id')
+            ->pluck('total', 'branch_id');
+        $allRiderCount = User::query()->where('user_type', 'delivery_man')->whereNull('deleted_at')->count();
 
         if(request('status') == 'active') {
             $pageTitle = __('message.active_list_form_title',['form' => __('message.delivery_man')] );
@@ -75,7 +88,27 @@ class DeliverymanController extends Controller
             ? '<a href="'.route('deliveryman.excel').'" class="btn btn-sm btn-success loadRemoteModel"><i class="fa fa-download"></i> '. __('message.export').'</a>'
             : '';
         $multi_checkbox_delete = $auth_user->can('deliveryman-delete') ? '<button id="deleteSelectedBtn" checked-title = "deliveryman-checked" class="float-left btn btn-sm ">' . __('message.delete_selected') . '</button>' : '';
-        return $dataTable->with('status', request('status'))->render('global.deliveryman-filter', compact('assets', 'pageTitle', 'button', 'auth_user', 'multi_checkbox_delete','params','reset_file_button','selectedCityId','cities','selectedCountryId','country','export'));
+        return $dataTable->with([
+            'status' => request('status'),
+            'branch_id' => $selectedBranchId,
+        ])->render('global.deliveryman-filter', compact(
+            'assets',
+            'pageTitle',
+            'button',
+            'auth_user',
+            'multi_checkbox_delete',
+            'params',
+            'reset_file_button',
+            'selectedCityId',
+            'cities',
+            'selectedCountryId',
+            'country',
+            'export',
+            'branchTabs',
+            'selectedBranchId',
+            'branchTabCounts',
+            'allRiderCount'
+        ));
     }
 
     public function riderOfTheMonth()
@@ -385,15 +418,24 @@ class DeliverymanController extends Controller
 
         $request->validate([
             'branch_id' => 'required|exists:branches,id',
+            'name' => 'required|string|max:255',
+            'contact_number' => 'nullable|string|max:30',
+            'password' => 'nullable|string|min:6|confirmed',
         ]);
 
-        $deliveryman->fill($request->all())->update();
+        $payload = $request->except(['password', 'password_confirmation', 'email', 'username', 'user_type']);
+        if ($request->filled('password')) {
+            $payload['password'] = bcrypt($request->password);
+            $payload['is_temp_password'] = 0;
+        }
+
+        $deliveryman->fill($payload)->update();
 
         if ($request->hasFile('profile_image')) {
             uploadMediaFile($deliveryman, $request->profile_image, 'profile_image');
         }
 
-        $deliveryman->assignRole($request['user_type']);
+        $deliveryman->assignRole($deliveryman->user_type ?: 'delivery_man');
 
         $message = __('message.update_form', ['form' => __('message.delivery_man')]);
         if ($request->is('api/*')) {

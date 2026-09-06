@@ -15,7 +15,7 @@
             ['name' => 'Yangon', 'name_mm' => 'ရန်ကုန်', 'nrc_state' => 'Yangon'],
         ];
     }
-    $defaultFromBranchName = config('dispatch_item_cities.default_from_branch', 'MDY To MDY');
+    $defaultFromBranchName = config('dispatch_item_cities.default_from_branch', 'မန္တလေး');
     $defaultToBranchName = config('dispatch_item_cities.default_to_branch', $defaultFromBranchName);
     $defaultBranchId = resolveDefaultDispatchBranchId($defaultFromBranchName);
     $defaultToBranchId = resolveDefaultDispatchBranchId($defaultToBranchName) ?: $defaultBranchId;
@@ -24,8 +24,8 @@
     $defaultDeliveryCity = config('dispatch_item_cities.default_delivery_city', 'Mandalay');
     $defaultTownship = config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်');
     $receivedDate = old('received_date', $isEdit && $item->received_date
-        ? $item->received_date->format('d-m-Y')
-        : optional($order->pickup_datetime)->format('d-m-Y') ?? now()->format('d-m-Y'));
+        ? formatDispatchYangonDate($item->received_date)
+        : formatDispatchYangonDate($order->pickup_datetime ?? $order->created_at ?? now('Asia/Yangon')));
     $fromBranchId = old('from_branch_id', $isEdit
         ? ($item->from_branch_id ?: $defaultBranchId)
         : $defaultBranchId);
@@ -35,8 +35,10 @@
     $deliveryCity = old('delivery_city', $isEdit
         ? ($item->delivery_city ?: $defaultDeliveryCity)
         : $defaultDeliveryCity);
-    $deliveryCityNames = collect($deliveryCities)->pluck('name')->all();
-    $hasCustomDeliveryCity = $deliveryCity && !in_array($deliveryCity, $deliveryCityNames, true);
+    $hasCustomDeliveryCity = $deliveryCity && !collect($deliveryCities)->contains(function ($city) use ($deliveryCity) {
+        return strcasecmp((string) ($city['name'] ?? ''), (string) $deliveryCity) === 0
+            || strcasecmp((string) ($city['name_mm'] ?? ''), (string) $deliveryCity) === 0;
+    });
     $township = old('township', $isEdit
         ? ($item->township ?: $defaultTownship)
         : $defaultTownship);
@@ -185,9 +187,13 @@
     (function () {
         var opts = {
             nrcDataUrl: "{{ asset('data/myanmar-nrc.json') }}",
+            townshipsUrl: "{{ route('delivery-route-locations.townships') }}",
+            citiesStoreUrl: "{{ route('delivery-route-locations.cities.store') }}",
+            townshipsStoreUrl: "{{ route('delivery-route-locations.townships.store') }}",
+            branchesStoreUrl: "{{ route('delivery-route-locations.branches.store') }}",
             modalParent: '#remoteModelData'
         };
-        var src = "{{ asset('js/dispatch-item-form.js') }}?v=25";
+        var src = "{{ asset('js/dispatch-item-form.js') }}?v=26";
 
         function bootForm() {
             if (typeof window.initDispatchItemForm === 'function') {

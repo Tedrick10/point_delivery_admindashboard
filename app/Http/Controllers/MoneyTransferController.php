@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Branch;
 use App\Models\User;
 use App\Services\MoneyTransferService;
 use Illuminate\Http\Request;
@@ -27,13 +26,8 @@ class MoneyTransferController extends Controller
             : (int) $branchFilter;
 
         $loginUser = auth()->user();
-        $branches = Branch::query()->where('status', 1)->orderBy('name')->get(['id', 'name']);
-        $forcedBranchId = forcedBranchId($loginUser);
-        if ($forcedBranchId) {
-            $branches = $branches->where('id', $forcedBranchId)->values();
-            $branchId = $forcedBranchId;
-            $branchFilter = (string) $branchId;
-        }
+        [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request, $loginUser);
+        $branchTabs = $branches;
 
         $osFilter = $request->get('os_id', 'all');
         $osId = null;
@@ -50,6 +44,9 @@ class MoneyTransferController extends Controller
         $rows = $sheet['rows'];
         $summary = $sheet['summary'];
 
+        $branchTabCounts = $service->branchFinishedCounts($fromDay, $toDay);
+        $allBranchCount = array_sum($branchTabCounts);
+
         $osOptions = User::query()
             ->where('user_type', 'client')
             ->where('status', 1)
@@ -62,6 +59,7 @@ class MoneyTransferController extends Controller
         $filterToDate = $toDateRaw;
         $canEdit = auth()->user()->can('order-edit');
         $paymentMethod = $method;
+        $selectedBranchId = $branchId;
 
         return view('order.money-transfer', compact(
             'pageTitle',
@@ -72,6 +70,10 @@ class MoneyTransferController extends Controller
             'filterToDate',
             'branchFilter',
             'branches',
+            'branchTabs',
+            'branchTabCounts',
+            'allBranchCount',
+            'selectedBranchId',
             'osFilter',
             'osOptions',
             'canEdit',

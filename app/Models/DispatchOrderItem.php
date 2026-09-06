@@ -109,6 +109,7 @@ class DispatchOrderItem extends Model
                 );
             }
         });
+
     }
 
     public function order()

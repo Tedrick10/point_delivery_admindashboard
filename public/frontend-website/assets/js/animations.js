@@ -112,6 +112,9 @@
         var elements = [];
         revealSelectors.forEach(function (selector) {
             document.querySelectorAll(selector).forEach(function (el) {
+                if (el.closest('.pds-legal, .main-page--legal')) {
+                    return;
+                }
                 if (elements.indexOf(el) === -1) {
                     elements.push(el);
                 }

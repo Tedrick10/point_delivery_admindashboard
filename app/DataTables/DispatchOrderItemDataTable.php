@@ -4,7 +4,6 @@ namespace App\DataTables;
 
 use App\Models\DispatchOrderItem;
 use App\Traits\DataTableTrait;
-use Carbon\Carbon;
 use Yajra\DataTables\Html\Column;
 use Yajra\DataTables\Services\DataTable;
 
@@ -36,10 +35,10 @@ class DispatchOrderItemDataTable extends DataTable
                 return '<input type="checkbox" class="pds-dispatch-item-check" value="' . $row->id . '">';
             })
             ->editColumn('received_date', function ($row) {
-                return $row->received_date ? Carbon::parse($row->received_date)->format('d-m-Y') : '-';
+                return formatDispatchYangonDate($row->received_date);
             })
             ->editColumn('updated_at', function ($row) {
-                return $row->updated_at ? Carbon::parse($row->updated_at)->format('d-m-Y') : '-';
+                return formatDispatchYangonDate($row->updated_at);
             })
             ->editColumn('status', function ($row) {
                 $label = strtoupper($row->status ?? 'collected');

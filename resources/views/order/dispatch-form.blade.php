@@ -10,8 +10,8 @@
             $isGateOrder = ($orderType['key'] ?? '') === 'gate';
             $gatePassImages = $gatePassImages ?? [];
             $receivedDate = $hasActiveOrder
-                ? \Carbon\Carbon::parse($data->pickup_datetime ?? $data->date ?? $data->created_at)->format('d-m-Y')
-                : now()->format('d-m-Y');
+                ? formatDispatchYangonDate($data->pickup_datetime ?? $data->date ?? $data->created_at)
+                : yangonTodayDate();
             $receivedDate = old('received_date', $receivedDate);
             $osName = old('os_name', $hasActiveOrder ? resolveDispatchOsName($data) : ($pickup['name'] ?? ''));
             $osPhone = old('os_phone', $hasActiveOrder ? resolveDispatchOsPhone($data) : normalizeContactNumber($pickup['contact_number'] ?? ''));
@@ -223,7 +223,7 @@
         @include('order.partials._os_search_modal')
 
         @section('bottom_script')
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=4"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=5"></script>
         <script>
             $(document).ready(function () {
                 if ($.fn.magnificPopup && $('.pds-gate-pass-showcase').length) {
@@ -697,7 +697,7 @@
                     $('#client_id').empty().val(null).trigger('change');
                     $('#delivery_man_id').val(null).trigger('change');
                     $('#os_name, #os_phone, #os_address, #remark').val('');
-                    $('#received_date').val("{{ now()->format('d-m-Y') }}");
+                    $('#received_date').val(@json(yangonTodayDate()));
                     $('#order_count').val(1);
                     $('#order_mode').val('now');
                 }

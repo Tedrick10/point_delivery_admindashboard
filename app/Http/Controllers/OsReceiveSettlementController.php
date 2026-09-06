@@ -20,18 +20,15 @@ class OsReceiveSettlementController extends Controller
             $tab = 'open';
         }
 
+        [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request);
+        $branchTabs = $branches;
+        $selectedBranchId = $branchId;
+
         $openStatuses = [
             OsReceiveSettlement::STATUS_PENDING,
             OsReceiveSettlement::STATUS_WAITING,
             OsReceiveSettlement::STATUS_REJECTED,
         ];
-
-        $openCount = OsReceiveSettlement::query()
-            ->whereIn('status', $openStatuses)
-            ->count();
-        $receivedCount = OsReceiveSettlement::query()
-            ->where('status', OsReceiveSettlement::STATUS_RECEIVED)
-            ->count();
 
         $query = OsReceiveSettlement::query()
             ->with(['osUser.city', 'settlementBatch', 'finishedByUser', 'reviewedByUser']);
@@ -46,6 +43,49 @@ class OsReceiveSettlementController extends Controller
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
+
+        $itemBranchMap = \App\Models\DispatchOrderItem::query()
+            ->select('id', 'from_branch_id', 'to_branch_id')
+            ->get()
+            ->mapWithKeys(function ($row) {
+                $branch = (int) ($row->to_branch_id ?: $row->from_branch_id);
+
+                return [(int) $row->id => $branch];
+            });
+
+        $settlementBranchId = function (OsReceiveSettlement $row) use ($itemBranchMap) {
+            foreach (collect($row->settlementBatch?->item_ids ?? []) as $itemId) {
+                $bid = (int) ($itemBranchMap[(int) $itemId] ?? 0);
+                if ($bid > 0) {
+                    return $bid;
+                }
+            }
+
+            return 0;
+        };
+
+        if ($branchId) {
+            $items = $items->filter(fn (OsReceiveSettlement $row) => $settlementBranchId($row) === (int) $branchId)->values();
+        }
+
+        $allSettlements = OsReceiveSettlement::query()->with('settlementBatch')->get();
+        $openCount = $allSettlements
+            ->filter(fn (OsReceiveSettlement $row) => in_array($row->status, $openStatuses, true))
+            ->when($branchId, fn ($c) => $c->filter(fn (OsReceiveSettlement $row) => $settlementBranchId($row) === (int) $branchId))
+            ->count();
+        $receivedCount = $allSettlements
+            ->filter(fn (OsReceiveSettlement $row) => $row->status === OsReceiveSettlement::STATUS_RECEIVED)
+            ->when($branchId, fn ($c) => $c->filter(fn (OsReceiveSettlement $row) => $settlementBranchId($row) === (int) $branchId))
+            ->count();
+
+        $branchTabCounts = $branches->mapWithKeys(function ($branch) use ($allSettlements, $settlementBranchId) {
+            return [
+                $branch->id => $allSettlements
+                    ->filter(fn (OsReceiveSettlement $row) => $settlementBranchId($row) === (int) $branch->id)
+                    ->count(),
+            ];
+        });
+        $allBranchCount = $allSettlements->count();
 
         $groupedItems = $items
             ->groupBy(function (OsReceiveSettlement $item) {
@@ -97,7 +137,13 @@ class OsReceiveSettlementController extends Controller
             'statCount',
             'tab',
             'openCount',
-            'receivedCount'
+            'receivedCount',
+            'branchFilter',
+            'branches',
+            'branchTabs',
+            'branchTabCounts',
+            'allBranchCount',
+            'selectedBranchId'
         ));
     }
 

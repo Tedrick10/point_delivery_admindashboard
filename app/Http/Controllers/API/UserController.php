@@ -776,7 +776,9 @@ class UserController extends Controller
         $claim_duration = Setting::where('type', 'claim_duration')->where('key', 'claim_duration')->first();
         $data['claim_duration'] = $claim_duration ? $claim_duration->value : null;
         $data['privacy_policy'] = SettingData('privacy_policy', 'privacy_policy');
+        $data['privacy_policy_rider'] = SettingData('privacy_policy_rider', 'privacy_policy_rider');
         $data['terms_condition'] = SettingData('terms_condition', 'terms_condition');
+        $data['terms_condition_rider'] = SettingData('terms_condition_rider', 'terms_condition_rider');
 
         return json_custom_response($data);
     }

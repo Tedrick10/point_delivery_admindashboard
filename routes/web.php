@@ -45,6 +45,7 @@ use App\Http\Controllers\CashPayoutController;
 use App\Http\Controllers\OsReceiveSettlementController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\ExpenseSummaryController;
+use App\Http\Controllers\DeliveryRouteLocationController;
 use App\Http\Controllers\HrLateFineController;
 use App\Http\Controllers\HrMySalaryController;
 use App\Http\Controllers\HrOfficeSalaryController;
@@ -295,6 +296,17 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('expenses/{id}/generate', [ExpenseController::class, 'generate'])->name('order.expenses.generate');
     Route::delete('expenses/{id}', [ExpenseController::class, 'destroy'])->name('order.expenses.destroy');
     Route::get('expense-summary', [ExpenseSummaryController::class, 'index'])->name('order.expense-summary');
+    Route::get('delivery-route-locations', [DeliveryRouteLocationController::class, 'index'])->name('delivery-route-locations.index');
+    Route::get('delivery-route-locations/townships', [DeliveryRouteLocationController::class, 'townships'])->name('delivery-route-locations.townships');
+    Route::post('delivery-route-locations/branches', [DeliveryRouteLocationController::class, 'storeBranch'])->name('delivery-route-locations.branches.store');
+    Route::put('delivery-route-locations/branches/{id}', [DeliveryRouteLocationController::class, 'updateBranch'])->name('delivery-route-locations.branches.update');
+    Route::delete('delivery-route-locations/branches/{id}', [DeliveryRouteLocationController::class, 'destroyBranch'])->name('delivery-route-locations.branches.destroy');
+    Route::post('delivery-route-locations/cities', [DeliveryRouteLocationController::class, 'storeCity'])->name('delivery-route-locations.cities.store');
+    Route::put('delivery-route-locations/cities/{id}', [DeliveryRouteLocationController::class, 'updateCity'])->name('delivery-route-locations.cities.update');
+    Route::delete('delivery-route-locations/cities/{id}', [DeliveryRouteLocationController::class, 'destroyCity'])->name('delivery-route-locations.cities.destroy');
+    Route::post('delivery-route-locations/townships', [DeliveryRouteLocationController::class, 'storeTownship'])->name('delivery-route-locations.townships.store');
+    Route::put('delivery-route-locations/townships/{id}', [DeliveryRouteLocationController::class, 'updateTownship'])->name('delivery-route-locations.townships.update');
+    Route::delete('delivery-route-locations/townships/{id}', [DeliveryRouteLocationController::class, 'destroyTownship'])->name('delivery-route-locations.townships.destroy');
 
     Route::get('hr/my-salary', [HrMySalaryController::class, 'index'])->name('hr.my-salary.index');
     Route::get('hr/staff', [HrStaffController::class, 'index'])->name('hr.staff.index');
@@ -636,6 +648,7 @@ Route::get('contactus', [FronthomeController::class, 'contactus'])->name('contac
 Route::get('privacypolicy', [FronthomeController::class, 'privacypolicy'])->name('privacypolicy');
 Route::get('delivery-partner', [FronthomeController::class, 'deliverypartner'])->name('deliverypartner');
 Route::get('termofservice', [FronthomeController::class, 'termofservice'])->name('termofservice');
+Route::get('delete-account', [FronthomeController::class, 'deleteAccount'])->name('delete-account');
 Route::post('client-store', [ClientController::class, 'frontendclientstore'])->name('client.store');
 Route::get('page/{slug}', [FronthomeController::class, 'page'])->name('pages');
 

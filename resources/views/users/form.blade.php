@@ -145,10 +145,32 @@
 
                 window.userRegPhoneIti = iti;
 
+                function toE164Mm(value) {
+                    var digits = String(value || '').replace(/\D/g, '');
+                    while (digits.indexOf('95') === 0 && digits.length >= 12) {
+                        var rest = digits.slice(2);
+                        if (/^9\d{7,9}$/.test(rest) || (rest.indexOf('95') === 0 && rest.length >= 10)) {
+                            digits = rest;
+                            continue;
+                        }
+                        break;
+                    }
+                    if (/^0\d+/.test(digits)) {
+                        digits = digits.replace(/^0+/, '');
+                    }
+                    if (/^9\d{7,9}$/.test(digits)) {
+                        return '+95' + digits;
+                    }
+                    if (!digits) {
+                        return '';
+                    }
+                    return digits.indexOf('95') === 0 ? '+' + digits : '+95' + digits;
+                }
+
                 function applyStoredNumber() {
                     if (!isReadonly) {
                         if (input.value) {
-                            iti.setNumber('+95' + String(input.value).replace(/\D/g, ''));
+                            iti.setNumber(toE164Mm(input.value));
                         }
                         return;
                     }
@@ -156,11 +178,7 @@
                     if (!stored) {
                         return;
                     }
-                    var normalized = String(stored).trim();
-                    if (normalized.indexOf('+') !== 0) {
-                        normalized = '+95' + normalized.replace(/\D/g, '');
-                    }
-                    iti.setNumber(normalized);
+                    iti.setNumber(toE164Mm(stored));
                 }
 
                 window.setTimeout(applyStoredNumber, 0);

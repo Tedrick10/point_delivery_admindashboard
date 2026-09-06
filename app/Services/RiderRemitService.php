@@ -297,6 +297,7 @@ class RiderRemitService
         $active = User::query()
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->when($branchId && $branchId > 0, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('name')
             ->get(['id', 'name', 'username', 'contact_number'])
             ->filter(fn (User $user) => $this->isDisplayableRider($user))
@@ -306,7 +307,7 @@ class RiderRemitService
             ->merge($dues->keys()->filter(fn ($id) => (float) ($dues->get($id)?->due ?? 0) > 0))
             ->merge($saved->keys())
             ->map(fn ($id) => (int) $id)
-            ->filter(fn ($id) => $id > 0)
+            ->filter(fn ($id) => $id > 0 && (! $branchId || $active->has($id)))
             ->unique()
             ->values();
 

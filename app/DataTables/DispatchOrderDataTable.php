@@ -18,9 +18,11 @@ class DispatchOrderDataTable extends OrderDataTable
     protected function pickupRiders(): Collection
     {
         if ($this->pickupRiders === null) {
-            $this->pickupRiders = User::select('id', 'name')
+            $branchId = defaultDestinationBranchId();
+            $this->pickupRiders = User::select('id', 'name', 'contact_number')
                 ->where('user_type', 'delivery_man')
                 ->where('status', 1)
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
                 ->availableForAssign()
                 ->orderBy('name')
                 ->get();
@@ -241,8 +243,7 @@ class DispatchOrderDataTable extends OrderDataTable
 
         $dispatchStatus = request('dispatch_status');
         $isDedicated = in_array($dispatchStatus, ['rider_pick_up_error', 'rider_pick_up_cancelled', 'pre_order'], true);
-        $isPickUpTab = ! $isDedicated
-            && ($dispatchStatus === null || $dispatchStatus === '' || $dispatchStatus === 'rider_pick_up_unassigned');
+        $isPickUpTab = ! $isDedicated && $dispatchStatus === 'rider_pick_up_unassigned';
 
         $tail = [
             ['data' => 'os_name', 'name' => 'os_name', 'title' => __('message.os_name'), 'orderable' => false],
@@ -342,6 +343,7 @@ class DispatchOrderDataTable extends OrderDataTable
         } else {
             // Pull back Admin-Done-only items that landed in Assign 100 too early.
             $workflow->reclaimPrematureAssign100Items();
+            $workflow->healUtcRolloverReceivedDates();
             $workflow->applyOrderListQuery($query);
         }
 
@@ -409,7 +411,7 @@ class DispatchOrderDataTable extends OrderDataTable
     }
 
     /**
-     * Main Order List tabs: default to Pick Up (unassigned). Dedicated lists keep their status.
+     * Main Order List tabs: default to All so Admin Done (awaiting rider) stays visible.
      */
     private function resolveOrderListDispatchStatus(?string $status): ?string
     {
@@ -429,6 +431,7 @@ class DispatchOrderDataTable extends OrderDataTable
             return $status;
         }
 
-        return 'rider_pick_up_unassigned';
+        // Default / All: keep Admin Done (awaiting rider) visible on Order List.
+        return null;
     }
 }

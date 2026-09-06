@@ -13,7 +13,7 @@
         @endif
         @if($deliveredPhotoUrl)
             <a href="{{ $deliveredPhotoUrl }}" target="_blank" rel="noopener" class="d-inline-block mt-1">
-                <img src="{{ $deliveredPhotoUrl }}" alt="{{ __('message.delivered_image') }}" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <img src="{{ $deliveredPhotoUrl }}" alt="{{ __('message.delivered_image') }}" style="width: 88px; height: 88px; object-fit: cover; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff;">
             </a>
         @endif
     </div>

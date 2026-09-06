@@ -30,8 +30,8 @@
         </div>
 
         <div class="pds-hr-panel pds-hr-panel--late mb-3">
-            <div class="table-responsive">
-                <table class="table pds-hr-table pds-hr-table--late mb-0" id="late-fine-table">
+            <div class="pds-hr-freeze-shell">
+                <table class="table pds-hr-table pds-hr-table--late pds-hr-table--freeze mb-0" id="late-fine-table">
                     <thead>
                     <tr>
                         <th class="pds-hr-col-no">#</th>
@@ -106,7 +106,14 @@
                         <tr class="pds-hr-tfoot">
                             <td class="pds-hr-col-no"></td>
                             <td class="pds-hr-col-name pds-hr-tfoot__label">{{ __('message.total') }}</td>
-                            <td colspan="8"></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
                             <td><span class="pds-hr-cell pds-hr-cell--strong">{{ number_format($sum_total_fine) }}</span></td>
                             <td><span class="pds-hr-cell pds-hr-cell--strong" style="color:var(--hr-orange)">{{ number_format($sum_grand) }}</span></td>
                         </tr>
@@ -127,7 +134,7 @@
                 </div>
                 <div class="pds-hr-extra__total-pill">
                     <span class="pds-hr-extra__total-pill-label">{{ __('message.total') }}</span>
-                    <span class="pds-hr-extra__total-pill-value">{{ number_format($sum_incidents) }}</span>
+                    <span class="pds-hr-extra__total-pill-value js-extra-list-pill-total" data-list="extra-fine">{{ number_format($sum_incidents) }}</span>
                 </div>
             </div>
 
@@ -174,7 +181,38 @@
                 </form>
             @endif
 
-            <div class="pds-hr-extra__list{{ $canEdit ? '' : ' is-readonly' }}">
+            <div class="pds-hr-extra__toolbar">
+                <div class="pds-hr-extra__filter-field pds-hr-extra__filter-field--search">
+                    <label><i class="fas fa-search"></i> {{ __('message.search') }}</label>
+                    <input type="search"
+                           class="pds-hr-extra__control js-extra-list-search"
+                           data-list="extra-fine"
+                           placeholder="{{ __('message.hr_extra_list_search_placeholder') }}"
+                           autocomplete="off">
+                </div>
+                <div class="pds-hr-extra__filter-field">
+                    <label><i class="fas fa-filter"></i> {{ __('message.name') }}</label>
+                    <select class="pds-hr-extra__control js-extra-list-name-filter" data-list="extra-fine">
+                        <option value="">{{ __('message.hr_extra_list_filter_all_names') }}</option>
+                        @foreach($items->map(fn ($item) => $item->staff?->name ?? ($item->staff_code ?: null))->filter()->unique()->sort()->values() as $filterName)
+                            <option value="{{ mb_strtolower($filterName) }}">{{ $filterName }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="pds-hr-extra__filter-field">
+                    <label><i class="fas fa-users"></i> {{ __('message.filter') }}</label>
+                    <select class="pds-hr-extra__control js-extra-list-group-filter" data-list="extra-fine">
+                        <option value="">{{ __('message.hr_extra_list_filter_all_groups') }}</option>
+                        <option value="office">{{ __('message.hr_group_office') }}</option>
+                        <option value="rider">{{ __('message.hr_group_rider') }}</option>
+                    </select>
+                </div>
+                <button type="button" class="pds-hr-extra__filter-clear js-extra-list-clear" data-list="extra-fine">
+                    <i class="fas fa-times"></i> {{ __('message.reset_filter') }}
+                </button>
+            </div>
+
+            <div class="pds-hr-extra__list{{ $canEdit ? '' : ' is-readonly' }}" data-extra-list="extra-fine">
                 <div class="pds-hr-extra__list-head">
                     <span class="pds-hr-extra__col-no">#</span>
                     <span class="pds-hr-extra__col-name">{{ __('message.name') }}</span>
@@ -193,9 +231,13 @@
                         $itemDate = $item->fine_date
                             ? $item->fine_date->timezone('Asia/Yangon')->format('d-m-Y')
                             : '—';
+                        $itemGroup = ($item->staff?->staff_group ?? '') === 'rider' ? 'rider' : 'office';
                     @endphp
-                    <div class="pds-hr-extra__row">
-                        <span class="pds-hr-extra__col-no">{{ $i + 1 }}</span>
+                    <div class="pds-hr-extra__row"
+                         data-name="{{ mb_strtolower($itemName) }}"
+                         data-group="{{ $itemGroup }}"
+                         data-amount="{{ (float) $item->amount }}">
+                        <span class="pds-hr-extra__col-no js-extra-row-no">{{ $i + 1 }}</span>
                         <span class="pds-hr-extra__col-name">
                             <span class="pds-hr-extra__avatar">{{ $itemInitial }}</span>
                             <span class="pds-hr-extra__name">{{ $itemName }}</span>
@@ -229,10 +271,16 @@
                     </div>
                 @endforelse
 
+                <div class="pds-hr-extra__empty pds-hr-extra__empty--filter" hidden>
+                    <span class="pds-hr-extra__empty-icon"><i class="fas fa-search"></i></span>
+                    <strong>{{ __('message.hr_extra_list_no_match') }}</strong>
+                    <p>{{ __('message.hr_extra_list_no_match_hint') }}</p>
+                </div>
+
                 @if($items->isNotEmpty())
                     <div class="pds-hr-extra__footer">
                         <span>{{ __('message.hr_extra_fine_total') }}</span>
-                        <strong>{{ number_format($sum_incidents) }}</strong>
+                        <strong class="js-extra-list-total" data-list="extra-fine">{{ number_format($sum_incidents) }}</strong>
                     </div>
                 @endif
             </div>
@@ -249,7 +297,7 @@
                 </div>
                 <div class="pds-hr-extra__total-pill">
                     <span class="pds-hr-extra__total-pill-label">{{ __('message.total') }}</span>
-                    <span class="pds-hr-extra__total-pill-value">{{ number_format($sum_bag_deductions) }}</span>
+                    <span class="pds-hr-extra__total-pill-value js-extra-list-pill-total" data-list="bag">{{ number_format($sum_bag_deductions) }}</span>
                 </div>
             </div>
 
@@ -296,7 +344,38 @@
                 </form>
             @endif
 
-            <div class="pds-hr-extra__list{{ $canEdit ? '' : ' is-readonly' }}">
+            <div class="pds-hr-extra__toolbar">
+                <div class="pds-hr-extra__filter-field pds-hr-extra__filter-field--search">
+                    <label><i class="fas fa-search"></i> {{ __('message.search') }}</label>
+                    <input type="search"
+                           class="pds-hr-extra__control js-extra-list-search"
+                           data-list="bag"
+                           placeholder="{{ __('message.hr_extra_list_search_placeholder') }}"
+                           autocomplete="off">
+                </div>
+                <div class="pds-hr-extra__filter-field">
+                    <label><i class="fas fa-filter"></i> {{ __('message.name') }}</label>
+                    <select class="pds-hr-extra__control js-extra-list-name-filter" data-list="bag">
+                        <option value="">{{ __('message.hr_extra_list_filter_all_names') }}</option>
+                        @foreach($bagItems->map(fn ($bag) => $bag->staff?->name ?? ($bag->staff_code ?: null))->filter()->unique()->sort()->values() as $filterName)
+                            <option value="{{ mb_strtolower($filterName) }}">{{ $filterName }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="pds-hr-extra__filter-field">
+                    <label><i class="fas fa-users"></i> {{ __('message.filter') }}</label>
+                    <select class="pds-hr-extra__control js-extra-list-group-filter" data-list="bag">
+                        <option value="">{{ __('message.hr_extra_list_filter_all_groups') }}</option>
+                        <option value="office">{{ __('message.hr_group_office') }}</option>
+                        <option value="rider">{{ __('message.hr_group_rider') }}</option>
+                    </select>
+                </div>
+                <button type="button" class="pds-hr-extra__filter-clear js-extra-list-clear" data-list="bag">
+                    <i class="fas fa-times"></i> {{ __('message.reset_filter') }}
+                </button>
+            </div>
+
+            <div class="pds-hr-extra__list{{ $canEdit ? '' : ' is-readonly' }}" data-extra-list="bag">
                 <div class="pds-hr-extra__list-head">
                     <span class="pds-hr-extra__col-no">#</span>
                     <span class="pds-hr-extra__col-name">{{ __('message.name') }}</span>
@@ -315,9 +394,13 @@
                         $bagDate = $bag->item_date
                             ? $bag->item_date->timezone('Asia/Yangon')->format('d-m-Y')
                             : '—';
+                        $bagGroup = ($bag->staff?->staff_group ?? '') === 'rider' ? 'rider' : 'office';
                     @endphp
-                    <div class="pds-hr-extra__row">
-                        <span class="pds-hr-extra__col-no">{{ $i + 1 }}</span>
+                    <div class="pds-hr-extra__row"
+                         data-name="{{ mb_strtolower($bagName) }}"
+                         data-group="{{ $bagGroup }}"
+                         data-amount="{{ (float) $bag->amount }}">
+                        <span class="pds-hr-extra__col-no js-extra-row-no">{{ $i + 1 }}</span>
                         <span class="pds-hr-extra__col-name">
                             <span class="pds-hr-extra__avatar">{{ $bagInitial }}</span>
                             <span class="pds-hr-extra__name">{{ $bagName }}</span>
@@ -351,10 +434,16 @@
                     </div>
                 @endforelse
 
+                <div class="pds-hr-extra__empty pds-hr-extra__empty--filter" hidden>
+                    <span class="pds-hr-extra__empty-icon"><i class="fas fa-search"></i></span>
+                    <strong>{{ __('message.hr_extra_list_no_match') }}</strong>
+                    <p>{{ __('message.hr_extra_list_no_match_hint') }}</p>
+                </div>
+
                 @if($bagItems->isNotEmpty())
                     <div class="pds-hr-extra__footer">
                         <span>{{ __('message.hr_bag_deduction_total') }}</span>
-                        <strong>{{ number_format($sum_bag_deductions) }}</strong>
+                        <strong class="js-extra-list-total" data-list="bag">{{ number_format($sum_bag_deductions) }}</strong>
                     </div>
                 @endif
             </div>
@@ -477,5 +566,75 @@
                 })();
             </script>
         @endif
+        <script>
+            (function ($) {
+                function money(n) {
+                    return new Intl.NumberFormat().format(Math.round(Number(n) || 0));
+                }
+
+                function applyExtraListFilter(listKey) {
+                    var $list = $('[data-extra-list="' + listKey + '"]');
+                    if (!$list.length) return;
+
+                    var search = String($('.js-extra-list-search[data-list="' + listKey + '"]').val() || '')
+                        .trim()
+                        .toLowerCase();
+                    var nameFilter = String($('.js-extra-list-name-filter[data-list="' + listKey + '"]').val() || '')
+                        .trim()
+                        .toLowerCase();
+                    var groupFilter = String($('.js-extra-list-group-filter[data-list="' + listKey + '"]').val() || '')
+                        .trim()
+                        .toLowerCase();
+
+                    var visible = 0;
+                    var total = 0;
+                    $list.find('.pds-hr-extra__row').each(function () {
+                        var $row = $(this);
+                        var name = String($row.attr('data-name') || '').toLowerCase();
+                        var group = String($row.attr('data-group') || '').toLowerCase();
+                        var amount = Number($row.attr('data-amount') || 0);
+                        var match = true;
+
+                        if (search && name.indexOf(search) === -1) {
+                            match = false;
+                        }
+                        if (match && nameFilter && name !== nameFilter) {
+                            match = false;
+                        }
+                        if (match && groupFilter && group !== groupFilter) {
+                            match = false;
+                        }
+
+                        $row.prop('hidden', !match);
+                        if (match) {
+                            visible += 1;
+                            total += amount;
+                            $row.find('.js-extra-row-no').text(visible);
+                        }
+                    });
+
+                    var hasRows = $list.find('.pds-hr-extra__row').length > 0;
+                    var filtering = !!(search || nameFilter || groupFilter);
+                    $list.find('.pds-hr-extra__empty--filter').prop('hidden', !(hasRows && filtering && visible === 0));
+                    $list.find('.pds-hr-extra__footer').prop('hidden', !(hasRows && (!filtering || visible > 0)));
+                    $list.find('.js-extra-list-total[data-list="' + listKey + '"]').text(money(total));
+                    $('.js-extra-list-pill-total[data-list="' + listKey + '"]').text(money(total));
+                }
+
+                $(document).on('input', '.js-extra-list-search', function () {
+                    applyExtraListFilter($(this).data('list'));
+                });
+                $(document).on('change', '.js-extra-list-name-filter, .js-extra-list-group-filter', function () {
+                    applyExtraListFilter($(this).data('list'));
+                });
+                $(document).on('click', '.js-extra-list-clear', function () {
+                    var listKey = $(this).data('list');
+                    $('.js-extra-list-search[data-list="' + listKey + '"]').val('');
+                    $('.js-extra-list-name-filter[data-list="' + listKey + '"]').val('');
+                    $('.js-extra-list-group-filter[data-list="' + listKey + '"]').val('');
+                    applyExtraListFilter(listKey);
+                });
+            })(jQuery);
+        </script>
     @endpush
 </x-master-layout>

@@ -21,6 +21,22 @@
                                 {{ html()->label(__('message.branch_name').' <span class="text-danger">*</span>')->class('form-control-label') }}
                                 {{ html()->text('name', old('name'))->placeholder(__('message.branch_name'))->class('form-control')->required() }}
                             </div>
+                            <div class="form-group col-md-3">
+                                {{ html()->label(__('message.code'))->class('form-control-label') }}
+                                {{ html()->text('code', old('code'))->placeholder('MDY')->class('form-control') }}
+                            </div>
+                            <div class="form-group col-md-3">
+                                {{ html()->label(__('message.city_name'))->class('form-control-label') }}
+                                {{ html()->text('city_name', old('city_name'))->placeholder('Mandalay')->class('form-control') }}
+                            </div>
+                            <div class="form-group col-md-6">
+                                {{ html()->label(__('message.address'))->class('form-control-label') }}
+                                {{ html()->text('address', old('address'))->class('form-control') }}
+                            </div>
+                            <div class="form-group col-md-3">
+                                {{ html()->label(__('message.phone'))->class('form-control-label') }}
+                                {{ html()->text('phone', old('phone'))->class('form-control') }}
+                            </div>
                             <div class="form-group col-md-6">
                                 {{ html()->label(__('message.status').' <span class="text-danger">*</span>')->class('form-control-label') }}
                                 {{ html()->select('status', ['1' => __('message.enable'), '0' => __('message.disable')], old('status', 1))

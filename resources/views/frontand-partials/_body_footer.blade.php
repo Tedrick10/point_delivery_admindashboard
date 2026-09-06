@@ -3,12 +3,48 @@
     $pages = App\Models\Pages::where('status', '1')->get();
 @endphp
 
+<style>
+.footer-contact-link {
+    display: flex !important;
+    align-items: flex-start;
+    gap: 0.75rem;
+    max-width: 100%;
+    position: relative;
+    z-index: 2;
+}
+.footer-contact-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    margin-top: 2px;
+}
+.footer-contact-text {
+    display: block !important;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    font-size: 0.95rem !important;
+    line-height: 1.45;
+    color: #5f6670 !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative;
+    z-index: 3;
+}
+.footer-contact-link:hover .footer-contact-text {
+    color: var(--site-color, #fd7e14) !important;
+}
+</style>
+
 <!-- START  FOOTER SECTION -->
 <footer class="footer mt-auto">
     <section class="py-4 mt-4 border-top border-light footer">
-        <div class="container overflow-hidden">
-            <div class="row gy-4 gy-lg-0 justify-content-xl-between">
-                <div class="col-12 col-md-6 col-lg-5 col-xl-5">
+        <div class="container">
+            <div class="row gy-4 justify-content-between">
+                <div class="col-12 col-md-6 col-lg-4 col-xl-4">
                     <div>
                         @if(getSingleMediaSettingImage(getSettingFirstData('app_content','app_logo_image'),'app_logo_image'))
                             <img src="{{ getSingleMediaSettingImage(getSettingFirstData('app_content', 'app_logo_image'), 'app_logo_image') }}" height="50" width="50" class="me-2">
@@ -17,19 +53,21 @@
                         <p class="mb-3 mt-3 gray-text fs-custom-18">
                             {{ SettingData('download_app', 'download_footer_content') ?? '' }}
                         </p>
-                        <a class="text-decoration-none" href="{{ SettingData('app_content', 'play_store_link') ?? 'javascript:void(0)' }}"
-                            {{ SettingData('app_content', 'play_store_link') != null ? 'target="_blank"' : '' }}>
-                            <img src="{{ asset('frontend-website/assets/website/ic_play_store.png') }}" alt="play_store" class="me-2 mb-2" style="width: 154px;">
-                        </a>
-                        <a href="{{ SettingData('app_content', 'app_store_link') ?? 'javascript:void(0)' }}"
-                            {{ SettingData('app_content', 'app_store_link') != null ? 'target="_blank"' : '' }}>
-                            <img src="{{ asset('frontend-website/assets/website/ic_app_store.png') }}" alt="app_store" class="mb-2" style="width: 154px;">
-                        </a>
-                        <h5 class="mt-4 main-text fs-custom-22">{{ __('message.experience') }} {{ SettingData('app_content', 'app_name') }} {{ __('message.app_on_mobile') }}</h5>
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            <a class="text-decoration-none" href="{{ SettingData('app_content', 'play_store_link') ?? 'javascript:void(0)' }}"
+                                {{ SettingData('app_content', 'play_store_link') != null ? 'target="_blank"' : '' }}>
+                                <img src="{{ asset('frontend-website/assets/website/ic_play_store.png') }}" alt="play_store" style="width: 154px; max-width: 100%; height: auto;">
+                            </a>
+                            <a href="{{ SettingData('app_content', 'app_store_link') ?? 'javascript:void(0)' }}"
+                                {{ SettingData('app_content', 'app_store_link') != null ? 'target="_blank"' : '' }}>
+                                <img src="{{ asset('frontend-website/assets/website/ic_app_store.png') }}" alt="app_store" style="width: 154px; max-width: 100%; height: auto;">
+                            </a>
+                        </div>
+                        <h5 class="mt-3 main-text fs-custom-22">{{ __('message.experience') }} {{ SettingData('app_content', 'app_name') }} {{ __('message.app_on_mobile') }}</h5>
 
                     </div>
                 </div>
-                <div class="col-12 col-md-6 col-lg-3 col-xl-2">
+                <div class="col-12 col-sm-6 col-md-6 col-lg-2 col-xl-2">
                     <div>
                         <h5 class="mb-4 main-text fs-custom-22">{{ SettingData('app_content', 'app_name') }}</h5>
                         <p class="mb-3 footer-p">
@@ -58,41 +96,46 @@
                         </ul>
                     @endif
                 </div>
-                <div class="col-12 col-md-6 col-lg-4 col-xl-3">
+                <div class="col-12 col-sm-6 col-md-6 col-lg-4 col-xl-3">
                     <div>
                         <h5 class="mb-4 main-text fs-custom-22">{{ __('message.contact_us') }}</h5>
-                        <ul class="list-unstyled">
-                            <li class="mb-2">
-                                <a href="{{ $app_settings->site_email ? 'mailto:' . $app_settings->site_email : 'javascript:void(0)' }}" {{ $app_settings->site_email ? 'target="_blank"' : '' }} class="gray-text text-decoration-none footer-p">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        @php
+                            $footerEmail = $app_settings->site_email ?? $app_settings->support_email ?? '';
+                            $footerPhone = $app_settings->support_number ?? '';
+                            $footerAddress = $app_settings->site_description ?? '';
+                        @endphp
+                        <ul class="list-unstyled footer-contact-list mb-0">
+                            <li class="mb-3">
+                                <a href="{{ $footerEmail ? 'mailto:' . $footerEmail : 'javascript:void(0)' }}" {{ $footerEmail ? 'target="_blank"' : '' }} class="footer-contact-link gray-text text-decoration-none">
+                                    <svg class="footer-contact-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                                         <path d="M2 12C2 8.22876 2 6.34315 3.17157 5.17157C4.34315 4 6.22876 4 10 4H14C17.7712 4 19.6569 4 20.8284 5.17157C22 6.34315 22 8.22876 22 12C22 15.7712 22 17.6569 20.8284 18.8284C19.6569 20 17.7712 20 14 20H10C6.22876 20 4.34315 20 3.17157 18.8284C2 17.6569 2 15.7712 2 12Z" stroke="#848484" stroke-width="1.5"/>
                                         <path d="M6 8L8.1589 9.79908C9.99553 11.3296 10.9139 12.0949 12 12.0949C13.0861 12.0949 14.0045 11.3296 15.8411 9.79908L18 8" stroke="#848484" stroke-width="1.5" stroke-linecap="round"/>
                                     </svg>
-                                    {{ $app_settings->site_email ?? '' }}
+                                    <span class="footer-contact-text">{{ $footerEmail !== '' ? $footerEmail : __('message.email') }}</span>
                                 </a>
                             </li>
-                            <li class="mb-2">
-                                <a href="{{ $app_settings->support_number ? 'tel:' . $app_settings->support_number : 'javascript:void(0)' }}" {{ $app_settings->support_number ? 'target="_blank"' : '' }} class="gray-text text-decoration-none footer-p">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <li class="mb-3">
+                                <a href="{{ $footerPhone ? 'tel:' . $footerPhone : 'javascript:void(0)' }}" class="footer-contact-link gray-text text-decoration-none">
+                                    <svg class="footer-contact-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                                         <path d="M10.0376 5.31617L10.6866 6.4791C11.2723 7.52858 11.0372 8.90533 10.1147 9.8278C10.1147 9.8278 8.99578 10.9467 11.0245 12.9755C13.0532 15.0042 14.1722 13.8853 14.1722 13.8853C15.0947 12.9628 16.4714 12.7277 17.5209 13.3134L18.6838 13.9624C20.2686 14.8468 20.4557 17.0692 19.0628 18.4622C18.2258 19.2992 17.2004 19.9505 16.0669 19.9934C14.1588 20.0658 10.9183 19.5829 7.6677 16.3323C4.41713 13.0817 3.93421 9.84122 4.00655 7.93309C4.04952 6.7996 4.7008 5.77423 5.53781 4.93723C6.93076 3.54428 9.15317 3.73144 10.0376 5.31617Z" stroke="#848484" stroke-width="1.5" stroke-linecap="round"/>
                                     </svg>
-                                    {{ $app_settings->support_number ?? '' }}
+                                    <span class="footer-contact-text">{{ $footerPhone !== '' ? $footerPhone : __('message.contact_number') }}</span>
                                 </a>
                             </li>
-                            <li class="mb-2">
-                                <a class="gray-text text-decoration-none footer-p d-flex gap-1" href="{{ $app_settings->site_description ? 'https://www.google.com/maps/search/?api=1&query=' . urlencode($app_settings->site_description) : 'javascript:void(0)' }}" {{ $app_settings->site_description ? 'target="_blank"' : '' }}>
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <li class="mb-3">
+                                <a class="footer-contact-link gray-text text-decoration-none" href="{{ $footerAddress ? 'https://www.google.com/maps/search/?api=1&query=' . urlencode($footerAddress) : 'javascript:void(0)' }}" {{ $footerAddress ? 'target="_blank"' : '' }}>
+                                    <svg class="footer-contact-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                                         <path d="M4 9.64329C4 5.14588 7.58172 1.5 12 1.5C16.4183 1.5 20 5.14588 20 9.64329C20 14.1055 13.4629 21.1744 13.4629 21.1744L12 22.5L10.5371 21.1744C10.5371 21.1744 4 14.1055 4 9.64329Z" stroke="#848484" stroke-width="1.5"/>
                                         <circle cx="12" cy="9.5" r="3" stroke="#848484" stroke-width="1.5"/>
                                     </svg>
-                                    <p>{{ $app_settings->site_description ?? '' }}</p>
+                                    <span class="footer-contact-text">{{ $footerAddress !== '' ? $footerAddress : __('message.address') }}</span>
                                 </a>
                             </li>
                         </ul>
                     </div>
                 </div>
 
-                <div class="col-12 col-md-6 col-lg-5 col-xl-2">
+                <div class="col-12 col-sm-6 col-md-6 col-lg-2 col-xl-2">
                     <div>
                         <h5 class="mb-4 main-text fs-custom-22">{{ __('message.help') }}</h5>
                         <p class="mb-3 footer-p">

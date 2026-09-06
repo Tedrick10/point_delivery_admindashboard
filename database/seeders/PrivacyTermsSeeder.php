@@ -11,112 +11,205 @@ class PrivacyTermsSeeder extends Seeder
     {
         Setting::updateOrCreate(
             ['type' => 'privacy_policy', 'key' => 'privacy_policy'],
-            ['value' => $this->privacyPolicyHtml()]
+            ['value' => $this->userPrivacyPolicyHtml()]
+        );
+
+        Setting::updateOrCreate(
+            ['type' => 'privacy_policy_rider', 'key' => 'privacy_policy_rider'],
+            ['value' => $this->riderPrivacyPolicyHtml()]
         );
 
         Setting::updateOrCreate(
             ['type' => 'terms_condition', 'key' => 'terms_condition'],
-            ['value' => $this->termsConditionHtml()]
+            ['value' => $this->userTermsHtml()]
+        );
+
+        Setting::updateOrCreate(
+            ['type' => 'terms_condition_rider', 'key' => 'terms_condition_rider'],
+            ['value' => $this->riderTermsHtml()]
         );
     }
 
-    private function privacyPolicyHtml(): string
+    private function userPrivacyPolicyHtml(): string
     {
         return <<<'HTML'
-<h2>ကိုယ်ရေးအချက်အလက်မူဝါဒ (Privacy Policy)</h2>
-<p><strong>Point Delivery</strong> သည် သုံးစွဲသူများ၏ ကိုယ်ရေးအချက်အလက်များကို ကာကွယ်ရန် တာဝန်ယူပါသည်။ ဤမူဝါဒသည် အကောင့်ဖွင့်ခြင်း၊ ပစ္စည်းပို့ဆောင်ခြင်းနှင့် ငွေပေးချေခြင်းတို့အတွက် ကျွန်ုပ်တို့ စုဆောင်းသည့် အချက်အလက်များကို ရှင်းလင်းဖော်ပြပါသည်။</p>
-<p><em>ဤစာသားသည် Demo အတွက်သာဖြစ်ပါသည်။</em></p>
+<p><strong>Point Delivery</strong> (“we”, “us”) operates the <strong>Point User</strong> customer application. This Privacy Policy explains how we collect, use, store, and protect personal data when you create an account, place delivery orders, track parcels, and make payments.</p>
 
-<h3>၁။ စုဆောင်းသည့် အချက်အလက်များ</h3>
-<p>ဝန်ဆောင်မှုပေးရန်အတွက် အောက်ပါအချက်အလက်များကို စုဆောင်းနိုင်ပါသည်။</p>
+<h3>1. Information We Collect</h3>
 <ul>
-<li>Os Name၊ Username၊ ဖုန်းနံပါတ်နှင့် လိပ်စာ</li>
-<li>Region နှင့် Township</li>
-<li>KBZ Pay Name နှင့် KBZ Pay Number</li>
-<li>အော်ဒါအချက်အလက်၊ ပို့ဆောင်မှုမှတ်တမ်းနှင့် ငွေပေးချေမှုအခြေအနေ</li>
-<li>အက်ပ်အသုံးပြုမှုနှင့် စက်ပစ္စည်းအချက်အလက် (App version၊ Player ID)</li>
+<li>Account details: name, username, phone number, email, and address</li>
+<li>Delivery details: pickup/drop-off addresses, region, township, city, and order notes</li>
+<li>Payment details: KBZ Pay name/number and payment records needed to settle orders</li>
+<li>Order history, chat/support messages, photos, and signatures when required for delivery proof</li>
+<li>Location data (when permitted) to support pickup and delivery accuracy</li>
+<li>Device and app data: app version, device identifiers, and notification player IDs</li>
 </ul>
 
-<h3>၂။ အချက်အလက်အသုံးပြုပုံ</h3>
-<p>စုဆောင်းထားသော အချက်အလက်များကို အောက်ပါရည်ရွယ်ချက်များအတွက် အသုံးပြုပါသည်။</p>
+<h3>2. How We Use Your Information</h3>
 <ul>
-<li>အကောင့်ဖွင့်ခြင်းနှင့် Username ဖြင့် လုံခြုံစွာ ဝင်ရောက်နိုင်ရန်</li>
-<li>ပစ္စည်းကောက်ယူခြင်း၊ ပို့ဆောင်ခြင်းနှင့် အခြေအနေအသိပေးခြင်း</li>
-<li>KBZ Pay / ငွေသား ငွေရှင်းခြင်းနှင့် ပြေစာထုတ်ပေးခြင်း</li>
-<li>Customer Support နှင့် ပြဿနာဖြေရှင်းခြင်း</li>
-<li>ဝန်ဆောင်မှုတိုးတက်အောင် လုပ်ဆောင်ခြင်း</li>
+<li>Create and secure your Point User account</li>
+<li>Process orders, assign riders, and share status updates</li>
+<li>Handle payments, invoices, and customer support</li>
+<li>Improve service quality, prevent fraud, and maintain platform security</li>
 </ul>
 
-<h3>၃။ မျှဝေခြင်း</h3>
-<p>ပို့ဆောင်မှုပြီးမြောက်ရန် လိုအပ်သည့်အခါ Rider နှင့် သက်ဆိုင်ရာဝန်ထမ်းများသို့ အော်ဒါနှင့် ဆက်သွယ်ရန်အချက်အလက်များကို မျှဝေပါသည်။ ဥပဒေအရ တောင်းဆိုချက်မှလွဲ၍ သင့်အချက်အလက်များကို အခြားကုမ္ပဏီသို့ ရောင်းချမည်မဟုတ်ပါ။</p>
+<h3>3. Sharing</h3>
+<p>We share order and contact details with assigned riders and authorized Point Delivery staff only as needed to complete delivery. We do not sell your personal data. We may disclose information when required by law.</p>
 
-<h3>၄။ သိုလှောင်မှုနှင့် လုံခြုံရေး</h3>
-<p>အချက်အလက်များကို လုံခြုံသော ဆာဗာတွင် သိမ်းဆည်းပြီး ခွင့်ပြုထားသူများသာ ကြည့်ရှုနိုင်အောင် ထိန်းသိမ်းပါသည်။ သို့သော် အင်တာနက်မှတစ်ဆင့် ပေးပို့မှုတွင် အန္တရာယ်အနည်းငယ် ရှိနိုင်သည်ကို သိရှိထားရန် လိုအပ်ပါသည်။</p>
+<h3>4. Storage &amp; Security</h3>
+<p>Data is stored on secured servers with access limited to authorized personnel. No method of transmission over the internet is 100% secure, but we take reasonable safeguards to protect your information.</p>
 
-<h3>၅။ သင့်အခွင့်အရေးများ</h3>
+<h3>5. Your Rights</h3>
 <ul>
-<li>မိမိပရိုဖိုင်အချက်အလက်များကို ကြည့်ရှု၊ ပြင်ဆင်နိုင်သည်</li>
-<li>အကောင့်ဖျက်သိမ်းရန် တောင်းဆိုနိုင်သည်</li>
-<li>မေးမြန်းလိုပါက Customer Support မှတစ်ဆင့် ဆက်သွယ်နိုင်သည်</li>
+<li>View and update your profile information in the app</li>
+<li>Request account deletion from in-app settings or Customer Support</li>
+<li>Contact support about privacy questions or data access requests</li>
 </ul>
 
-<h3>၆။ ဆက်သွယ်ရန်</h3>
-<p>ကိုယ်ရေးအချက်အလက်နှင့် ပတ်သက်၍ မေးမြန်းလိုပါက Point Delivery Support သို့ ဆက်သွယ်ပါ။</p>
-<p>နောက်ဆုံးပြင်ဆင်သည့်ရက် — ၁၉ ဩဂုတ် ၂၀၂၆</p>
+<h3>6. Children</h3>
+<p>Point User is not directed at children under 13. We do not knowingly collect personal data from children under 13.</p>
+
+<h3>7. Changes</h3>
+<p>We may update this policy from time to time. Updates will be published in the app and/or on our website. Continued use means you accept the updated policy.</p>
+
+<h3>8. Contact</h3>
+<p>For privacy questions, contact Point Delivery Customer Support via the Point User app or our website.</p>
+<p>Last updated: 4 September 2026</p>
 HTML;
     }
 
-    private function termsConditionHtml(): string
+    private function riderPrivacyPolicyHtml(): string
     {
         return <<<'HTML'
-<h2>စည်းကမ်းသတ်မှတ်ချက်များ (Terms &amp; Conditions)</h2>
-<p>Point Delivery အက်ပ်နှင့် ဝန်ဆောင်မှုများကို အသုံးပြုခြင်းဖြင့် အောက်ပါစည်းကမ်းများကို သဘောတူသည်ဟု မှတ်ယူပါသည်။</p>
-<p><em>ဤစာသားသည် Demo အတွက်သာဖြစ်ပါသည်။</em></p>
+<p><strong>Point Delivery</strong> (“we”, “us”) operates the <strong>Point Delivery Partner</strong> rider application. This Privacy Policy explains how we collect, use, store, and protect personal data when you register as a rider, accept jobs, navigate routes, upload delivery proof, and settle remittances.</p>
 
-<h3>၁။ အကောင့်</h3>
+<h3>1. Information We Collect</h3>
 <ul>
-<li>အကောင့်ဖွင့်သူသည် Username၊ Password၊ Os Name၊ ဖုန်းနံပါတ်နှင့် လိပ်စာတို့ကို မှန်ကန်စွာ ထည့်သွင်းရမည်။</li>
-<li>Login ကို Username နှင့် Password ဖြင့်သာ ဝင်ရောက်ရမည်။</li>
-<li>မိမိအကောင့်လုံခြုံရေးအတွက် Password ကို လျှို့ဝှက်ထားရှိရမည်။</li>
-<li>မှားယွင်းသော အချက်အလက်ကြောင့် ဖြစ်ပေါ်သည့် နှောင့်နှေးမှုများအတွက် အသုံးပြုသူတွင် တာဝန်ရှိသည်။</li>
+<li>Rider profile: name, username, phone number, email, address, and branch assignment</li>
+<li>Identity / work details needed for partner onboarding and operations</li>
+<li>Job data: assigned orders, pickup/delivery addresses, status updates, and remittance records</li>
+<li>Location data (when permitted) for pickup, navigation, and delivery confirmation</li>
+<li>Camera and gallery access (when permitted) to upload parcel photos, customer photos, and signatures</li>
+<li>Payment details used for rider payouts and remittance reconciliation (e.g. KBZ Pay)</li>
+<li>Device and app data: app version, device identifiers, and notification player IDs</li>
 </ul>
 
-<h3>၂။ ဝန်ဆောင်မှုအသုံးပြုခြင်း</h3>
+<h3>2. How We Use Your Information</h3>
 <ul>
-<li>Point Delivery သည် ပစ္စည်းကောက်ယူခြင်းနှင့် ပို့ဆောင်ခြင်း ဝန်ဆောင်မှုကို ပေးပါသည်။</li>
-<li>တားမြစ်ပစ္စည်း၊ ဥပဒေနှင့်မညီသော ပစ္စည်းများကို ပို့ဆောင်ခွင့်မရှိပါ။</li>
-<li>အော်ဒါအချက်အလက်၊ လက်ခံသူလိပ်စာနှင့် ဖုန်းနံပါတ်ကို မှန်ကန်စွာ ထည့်သွင်းရမည်။</li>
-<li>ကောက်ယူချိန်နှင့် ပို့ဆောင်ချိန်သည် ယာဉ်ကြော၊ ရာသီဥတုနှင့် လိပ်စာအခြေအနေပေါ် မူတည်၍ ပြောင်းလဲနိုင်သည်။</li>
+<li>Create and manage your rider partner account</li>
+<li>Assign deliveries, track job progress, and communicate with customers/office staff</li>
+<li>Verify delivery completion with photos, signatures, and status logs</li>
+<li>Process remittances, fuel/fee calculations, and partner payouts</li>
+<li>Maintain safety, prevent fraud, and improve rider operations</li>
 </ul>
 
-<h3>၃။ ငွေပေးချေမှု</h3>
+<h3>3. Sharing</h3>
+<p>Customer order details are shown to you only for assigned jobs. Your rider identity and contact details may be shared with customers and office staff as needed for pickup/delivery. We do not sell your personal data. We may disclose information when required by law.</p>
+
+<h3>4. Storage &amp; Security</h3>
+<p>Rider operational data is stored on secured servers with role-based access. Location, camera, and gallery permissions are requested only for delivery workflows and can be managed in device settings.</p>
+
+<h3>5. Your Rights</h3>
 <ul>
-<li>ငွေပေးချေမှုကို KBZ Pay သို့မဟုတ် သတ်မှတ်ထားသော နည်းလမ်းများဖြင့် ပြုလုပ်နိုင်သည်။</li>
-<li>KBZ Pay Name နှင့် KBZ Pay Number ကို မှန်ကန်စွာ ထည့်သွင်းရန် တာဝန်ရှိသည်။</li>
-<li>အော်ဒါပြီးဆုံးပြီးနောက် ငွေရှင်းခြင်းနှင့် ပြေစာများကို အက်ပ်အတွင်း ကြည့်ရှုနိုင်သည်။</li>
-<li>မှားယွင်းပေးချေမှုရှိပါက Support သို့ ချက်ချင်း အကြောင်းကြားရမည်။</li>
+<li>View and update your rider profile in the app</li>
+<li>Request account deletion or data assistance via Customer Support / office admin</li>
+<li>Control location and media permissions in your device settings</li>
 </ul>
 
-<h3>၄။ ပို့ဆောင်မှုနှင့် တာဝန်ယူမှု</h3>
+<h3>6. Children</h3>
+<p>The Rider app is intended for adult delivery partners. We do not knowingly onboard children under 13.</p>
+
+<h3>7. Changes</h3>
+<p>We may update this policy from time to time. Updates will be published in the app and/or on our website. Continued use means you accept the updated policy.</p>
+
+<h3>8. Contact</h3>
+<p>For privacy questions, contact Point Delivery Support via the Rider app or our website.</p>
+<p>Last updated: 4 September 2026</p>
+HTML;
+    }
+
+    private function userTermsHtml(): string
+    {
+        return <<<'HTML'
+<p>By using the <strong>Point User</strong> app and Point Delivery services, you agree to these Terms.</p>
+
+<h3>1. Account</h3>
 <ul>
-<li>လက်ခံသူ မရှိခြင်း၊ လိပ်စာမှားခြင်းတို့ကြောင့် ပို့မရပါက ပြန်လည်စီစဉ်နိုင်သည်။</li>
-<li>ပစ္စည်းထုပ်ပိုးမှု မလုံလောက်၍ ပျက်စီးပါက ပို့သူတွင် တာဝန်ရှိနိုင်သည်။</li>
-<li>Point Delivery သည် သဘာဝဘေး၊ ကွန်ရက်ပြတ်တောက်မှု စသည့် ထိန်းချုပ်၍မရသော အကြောင်းများအတွက် တာဝန်မယူပါ။</li>
+<li>Provide accurate username, password, name, phone number, and address.</li>
+<li>Keep your login credentials confidential.</li>
+<li>You are responsible for delays caused by incorrect order or contact information.</li>
 </ul>
 
-<h3>၅။ တားမြစ်ချက်များ</h3>
+<h3>2. Service Use</h3>
 <ul>
-<li>အခြားသူ၏ အကောင့်ကို ခွင့်ပြုချက်မရှိဘဲ အသုံးပြုခြင်း</li>
-<li>စနစ်ကို နှောင့်ယှက်ခြင်း၊ အချက်အလက်ခိုးယူခြင်း</li>
-<li>အတုအယောင် အချက်အလက်ဖြင့် အော်ဒါတင်ခြင်း</li>
+<li>Point Delivery provides parcel pickup and delivery services.</li>
+<li>Prohibited or illegal items may not be shipped.</li>
+<li>Pickup and delivery times may change due to traffic, weather, or address conditions.</li>
 </ul>
 
-<h3>၆။ စည်းကမ်းပြင်ဆင်ခြင်း</h3>
-<p>Point Delivery သည် ဤစည်းကမ်းများကို လိုအပ်သလို ပြင်ဆင်နိုင်ပါသည်။ ပြင်ဆင်ပြီးပါက အက်ပ်အတွင်း ထုတ်ပြန်မည်ဖြစ်ပြီး ဆက်လက်အသုံးပြုခြင်းသည် သဘောတူခြင်းဖြစ်သည်။</p>
+<h3>3. Payments</h3>
+<ul>
+<li>Payments may be made via KBZ Pay or other supported methods.</li>
+<li>Enter correct payment details. Report payment issues to Support immediately.</li>
+</ul>
 
-<h3>၇။ ဆက်သွယ်ရန်</h3>
-<p>မေးခွန်းရှိပါက Point Delivery Customer Support သို့ ဆက်သွယ်ပါ။</p>
-<p>နောက်ဆုံးပြင်ဆင်သည့်ရက် — ၁၉ ဩဂုတ် ၂၀၂၆</p>
+<h3>4. Liability</h3>
+<ul>
+<li>Failed delivery due to wrong address or unavailable recipient may require rescheduling.</li>
+<li>Point Delivery is not liable for events beyond reasonable control (e.g. natural disasters, network outages).</li>
+</ul>
+
+<h3>5. Prohibited Conduct</h3>
+<ul>
+<li>Using another person’s account without permission</li>
+<li>Attempting to disrupt systems or steal data</li>
+<li>Submitting fraudulent orders or information</li>
+</ul>
+
+<h3>6. Contact</h3>
+<p>For questions, contact Point Delivery Customer Support via the Point User app or our website.</p>
+<p>Last updated: 4 September 2026</p>
+HTML;
+    }
+
+    private function riderTermsHtml(): string
+    {
+        return <<<'HTML'
+<p>By using the <strong>Point Delivery Partner</strong> rider app, you agree to these Terms as an independent delivery partner of Point Delivery.</p>
+
+<h3>1. Partner Account</h3>
+<ul>
+<li>Provide accurate personal and work details required for onboarding.</li>
+<li>Keep your account secure and do not share login credentials.</li>
+<li>You must follow office/branch assignment and operating instructions.</li>
+</ul>
+
+<h3>2. Job Performance</h3>
+<ul>
+<li>Accept and complete assigned pickups/deliveries professionally and on time when possible.</li>
+<li>Handle parcels carefully and upload required delivery proof (photo/signature) when requested.</li>
+<li>Do not misuse customer personal information obtained through assigned jobs.</li>
+</ul>
+
+<h3>3. Remittance &amp; Payments</h3>
+<ul>
+<li>Remit collected amounts according to Point Delivery procedures and deadlines.</li>
+<li>Fuel, fees, and payouts follow office rules and app records.</li>
+<li>Report remittance mismatches to the office immediately.</li>
+</ul>
+
+<h3>4. Safety &amp; Conduct</h3>
+<ul>
+<li>Follow traffic and safety laws while performing delivery work.</li>
+<li>Harassment, fraud, or misuse of the platform may result in suspension or termination.</li>
+</ul>
+
+<h3>5. Changes</h3>
+<p>Point Delivery may update these Terms. Continued use of the Rider app means you accept the updated Terms.</p>
+
+<h3>6. Contact</h3>
+<p>For questions, contact Point Delivery Support via the Rider app or our website.</p>
+<p>Last updated: 4 September 2026</p>
 HTML;
     }
 }

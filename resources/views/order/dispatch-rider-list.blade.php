@@ -22,7 +22,21 @@
                 </div>
             </div>
 
+            @include('partials._branch-tabs', [
+                'branchTabs' => $branchTabs ?? collect(),
+                'selectedBranchId' => $selectedBranchId ?? null,
+                'branchTabCounts' => $branchTabCounts ?? [],
+                'includeAll' => false,
+                'routeName' => 'order.dispatch.rider-list',
+                'routeQuery' => array_filter([
+                    'from_date' => $filterFromDate ?? null,
+                    'to_date' => $filterToDate ?? null,
+                    'rider_id' => ($riderFilter ?? 'all') !== 'all' ? $riderFilter : null,
+                ]),
+            ])
+
             <form method="GET" action="{{ route('order.dispatch.rider-list') }}" class="pds-rider-toolbar" id="riderListFilterForm">
+                <input type="hidden" name="branch_id" value="{{ $branchFilter ?? '' }}">
                 <div class="pds-rider-toolbar__fields">
                     <div class="pds-dispatch-field pds-dispatch-field-sm pds-rider-toolbar__grow">
                         <label for="rider_list_rider">{{ __('message.delivery_man') }}</label>
@@ -75,7 +89,7 @@
                     </div>
                 </div>
                 <div class="pds-rider-toolbar__actions">
-                    <a href="{{ route('order.dispatch.rider-list') }}" class="pds-rider-reset-btn">
+                    <a href="{{ route('order.dispatch.rider-list', array_filter(['branch_id' => $selectedBranchId ?? null])) }}" class="pds-rider-reset-btn">
                         <i class="fas fa-eraser" aria-hidden="true"></i>
                         <span>{{ __('message.reset') }}</span>
                     </a>
@@ -127,6 +141,7 @@
                                         $detailParams = array_filter([
                                             'from_date' => $filterFromDate ?: null,
                                             'to_date' => $filterToDate ?: null,
+                                            'branch_id' => $selectedBranchId ?? null,
                                         ]);
                                         $initial = mb_strtoupper(mb_substr(trim($rider->name) ?: 'R', 0, 1));
                                         $avg = (float) ($rider->average_rating ?? 0);

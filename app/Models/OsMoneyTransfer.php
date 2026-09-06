@@ -51,4 +51,9 @@ class OsMoneyTransfer extends Model
     {
         return $this->hasOne(OsCashPayout::class, 'money_transfer_id', 'id');
     }
+
+    public function settlementBatch(): BelongsTo
+    {
+        return $this->belongsTo(OsSettlementBatch::class, 'settlement_batch_id');
+    }
 }

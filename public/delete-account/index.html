@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Delete Account | Point Delivery Service</title>
+  <meta name="description" content="How to delete your Point User or Point Delivery Partner account and associated data." />
+  <style>
+    :root {
+      --orange: #f07a1a;
+      --orange-dark: #d45f08;
+      --ink: #1a1a1a;
+      --muted: #5c5c5c;
+      --bg: #fff7f0;
+      --card: #ffffff;
+      --line: #f0d9c6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Myanmar", sans-serif;
+      background: linear-gradient(180deg, #ffe3cc 0%, var(--bg) 40%, #fff 100%);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 28px 16px 64px; }
+    .brand { font-weight: 800; color: var(--orange-dark); letter-spacing: 0.02em; margin-bottom: 8px; }
+    h1 { margin: 0 0 8px; font-size: 1.75rem; }
+    .sub { color: var(--muted); margin: 0 0 20px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tabs a {
+      flex: 1;
+      text-align: center;
+      text-decoration: none;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 12px;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .tabs a.active {
+      background: var(--orange);
+      border-color: var(--orange);
+      color: #fff;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 22px 20px;
+      box-shadow: 0 8px 24px rgba(240, 122, 26, 0.08);
+    }
+    h2 { font-size: 1.15rem; margin: 22px 0 8px; }
+    h2:first-child { margin-top: 0; }
+    ol, ul { padding-left: 1.2rem; margin: 8px 0 0; }
+    li { margin: 6px 0; }
+    a.mail { color: var(--orange-dark); font-weight: 600; }
+    .note {
+      margin-top: 20px;
+      padding: 12px 14px;
+      background: #fff3e8;
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .home { display: inline-block; margin-top: 18px; color: var(--orange-dark); font-weight: 600; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">POINT DELIVERY SERVICE</div>
+    <h1>Delete Account</h1>
+    <p class="sub">Choose your app, then follow the steps to request account and data deletion.</p>
+
+    <div class="tabs" role="tablist">
+      <a id="tab-user" href="?app=user" role="tab">User App</a>
+      <a id="tab-rider" href="?app=rider" role="tab">Rider App</a>
+    </div>
+
+    <div class="card">
+      <div id="panel-user">
+        <h2>Delete your Point User account</h2>
+        <p>This page explains how to delete your <strong>Point User</strong> account and associated personal data.</p>
+
+        <h2>How to delete in the app</h2>
+        <ol>
+          <li>Open <strong>Point User</strong>.</li>
+          <li>Go to <strong>Account → Delete Account</strong>.</li>
+          <li>Confirm deletion. You will be signed out after the account is deleted.</li>
+        </ol>
+
+        <h2>Request by email / support</h2>
+        <ol>
+          <li>Email <a class="mail" href="mailto:support@pointdelivery.worldwidemyanmar.com">support@pointdelivery.worldwidemyanmar.com</a>.</li>
+          <li>Subject: <strong>Account deletion request – Point User</strong>.</li>
+          <li>Include the phone number or email used to register.</li>
+          <li>We will verify ownership and process the request.</li>
+        </ol>
+
+        <h2>What data is deleted</h2>
+        <ul>
+          <li>Account profile (name, phone, email, login credentials)</li>
+          <li>Profile photo and support/chat attachments linked to your account (where stored)</li>
+          <li>Push notification device tokens</li>
+        </ul>
+
+        <h2>What may be retained</h2>
+        <ul>
+          <li>Completed order/delivery records needed for legal, accounting, dispute, or fraud prevention</li>
+          <li>Anonymized analytics that no longer identify you</li>
+        </ul>
+        <p>Retained records are kept only as long as required, then deleted or anonymized.</p>
+
+        <h2>အကောင့်ဖျက်ရန် (မြန်မာ)</h2>
+        <ol>
+          <li>Point User အက်ပ် → Account → Delete Account</li>
+          <li>သို့မဟုတ် <a class="mail" href="mailto:support@pointdelivery.worldwidemyanmar.com">support@pointdelivery.worldwidemyanmar.com</a> သို့ “Account deletion request – Point User” ခေါင်းစဉ်ဖြင့် ပို့ပါ။</li>
+          <li>မှတ်ပုံတင် ဖုန်း/အီးမေးလ် ထည့်ပေးပါ။</li>
+        </ol>
+      </div>
+
+      <div id="panel-rider" class="hidden">
+        <h2>Delete your Point Delivery Partner account</h2>
+        <p>This page explains how to delete your <strong>Point Delivery Partner</strong> (Rider) account and associated personal data.</p>
+
+        <h2>How to delete in the app</h2>
+        <ol>
+          <li>Open <strong>Point Delivery Partner</strong>.</li>
+          <li>Go to <strong>Profile / Account → Delete Account</strong>.</li>
+          <li>Confirm deletion. You will be signed out after the account is deleted.</li>
+        </ol>
+
+        <h2>Request by email / support</h2>
+        <ol>
+          <li>Email <a class="mail" href="mailto:support@pointdelivery.worldwidemyanmar.com">support@pointdelivery.worldwidemyanmar.com</a>.</li>
+          <li>Subject: <strong>Account deletion request – Point Delivery Partner</strong>.</li>
+          <li>Include the phone number or email used to register.</li>
+          <li>We will verify ownership and process the request.</li>
+        </ol>
+
+        <h2>What data is deleted</h2>
+        <ul>
+          <li>Account profile (name, phone, email, login credentials)</li>
+          <li>Profile photo and support attachments linked to your account (where stored)</li>
+          <li>Push notification device tokens</li>
+        </ul>
+
+        <h2>What may be retained</h2>
+        <ul>
+          <li>Completed delivery records needed for legal, accounting, dispute, or fraud prevention</li>
+          <li>Anonymized analytics that no longer identify you</li>
+        </ul>
+        <p>Retained records are kept only as long as required, then deleted or anonymized.</p>
+
+        <h2>အကောင့်ဖျက်ရန် (မြန်မာ)</h2>
+        <ol>
+          <li>Point Delivery Partner အက်ပ် → Profile / Account → Delete Account</li>
+          <li>သို့မဟုတ် <a class="mail" href="mailto:support@pointdelivery.worldwidemyanmar.com">support@pointdelivery.worldwidemyanmar.com</a> သို့ “Account deletion request – Point Delivery Partner” ခေါင်းစဉ်ဖြင့် ပို့ပါ။</li>
+          <li>မှတ်ပုံတင် ဖုန်း/အီးမေးလ် ထည့်ပေးပါ။</li>
+        </ol>
+      </div>
+
+      <div class="note">
+        Point Delivery Service — account deletion requests for Point User and Point Delivery Partner apps.
+      </div>
+    </div>
+
+    <a class="home" href="/">← Back to Home</a>
+  </div>
+
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var app = (params.get('app') || 'user').toLowerCase();
+      if (app === 'use') app = 'user'; // common typo
+      var isRider = app === 'rider';
+      document.getElementById('panel-user').classList.toggle('hidden', isRider);
+      document.getElementById('panel-rider').classList.toggle('hidden', !isRider);
+      document.getElementById('tab-user').classList.toggle('active', !isRider);
+      document.getElementById('tab-rider').classList.toggle('active', isRider);
+    })();
+  </script>
+</body>
+</html>

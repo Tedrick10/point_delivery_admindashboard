@@ -551,10 +551,12 @@ class SettingController extends Controller
 
     public function termAndCondition(Request $request)
     {
-        $setting_data = Setting::where('type', 'terms_condition')->where('key', 'terms_condition')->first();
+        $user_setting = Setting::where('type', 'terms_condition')->where('key', 'terms_condition')->first();
+        $rider_setting = Setting::where('type', 'terms_condition_rider')->where('key', 'terms_condition_rider')->first();
         $pageTitle = __('message.terms_condition');
         $assets = ['textarea'];
-        return view('setting.term_condition_form', compact('setting_data', 'pageTitle', 'assets'));
+
+        return view('setting.term_condition_form', compact('user_setting', 'rider_setting', 'pageTitle', 'assets'));
     }
 
     public function saveTermAndCondition(Request $request)
@@ -573,17 +575,18 @@ class SettingController extends Controller
         if (!auth()->user()->hasRole('admin')) {
             abort(403, __('message.action_is_unauthorized'));
         }
-        $setting_data = [
-            'type' => 'terms_condition',
-            'key' => 'terms_condition',
-            'value' => $request->value
-        ];
-        $result = Setting::updateOrCreate(['id' => $request->id], $setting_data);
-        if ($result->wasRecentlyCreated) {
-            $message = __('message.save_form', ['form' => __('message.terms_condition')]);
-        } else {
-            $message = __('message.update_form', ['form' => __('message.terms_condition')]);
-        }
+
+        Setting::updateOrCreate(
+            ['type' => 'terms_condition', 'key' => 'terms_condition'],
+            ['value' => $request->user_value]
+        );
+
+        Setting::updateOrCreate(
+            ['type' => 'terms_condition_rider', 'key' => 'terms_condition_rider'],
+            ['value' => $request->rider_value]
+        );
+
+        $message = __('message.update_form', ['form' => __('message.terms_condition')]);
 
         return redirect()->route('term-condition')->withsuccess($message);
     }
@@ -621,11 +624,12 @@ class SettingController extends Controller
 
     public function privacyPolicy(Request $request)
     {
-        $setting_data = Setting::where('type', 'privacy_policy')->where('key', 'privacy_policy')->first();
+        $user_setting = Setting::where('type', 'privacy_policy')->where('key', 'privacy_policy')->first();
+        $rider_setting = Setting::where('type', 'privacy_policy_rider')->where('key', 'privacy_policy_rider')->first();
         $pageTitle = __('message.privacy_policy');
         $assets = ['textarea'];
 
-        return view('setting.privacy_policy_form', compact('setting_data', 'pageTitle', 'assets'));
+        return view('setting.privacy_policy_form', compact('user_setting', 'rider_setting', 'pageTitle', 'assets'));
     }
 
     public function savePrivacyPolicy(Request $request)
@@ -643,17 +647,18 @@ class SettingController extends Controller
         if (!auth()->user()->hasRole('admin')) {
             abort(403, __('message.action_is_unauthorized'));
         }
-        $setting_data = [
-            'type' => 'privacy_policy',
-            'key' => 'privacy_policy',
-            'value' => $request->value
-        ];
-        $result = Setting::updateOrCreate(['id' => $request->id], $setting_data);
-        if ($result->wasRecentlyCreated) {
-            $message = __('message.save_form', ['form' => __('message.privacy_policy')]);
-        } else {
-            $message = __('message.update_form', ['form' => __('message.privacy_policy')]);
-        }
+
+        Setting::updateOrCreate(
+            ['type' => 'privacy_policy', 'key' => 'privacy_policy'],
+            ['value' => $request->user_value]
+        );
+
+        Setting::updateOrCreate(
+            ['type' => 'privacy_policy_rider', 'key' => 'privacy_policy_rider'],
+            ['value' => $request->rider_value]
+        );
+
+        $message = __('message.update_form', ['form' => __('message.privacy_policy')]);
 
         return redirect()->route('privacy-policy')->withsuccess($message);
     }

@@ -275,6 +275,10 @@
                     if ($('#dispatch_item_form').length && typeof window.initDispatchItemForm === 'function') {
                         window.initDispatchItemForm({
                             nrcDataUrl: "{{ asset('data/myanmar-nrc.json') }}",
+                            townshipsUrl: "{{ route('delivery-route-locations.townships') }}",
+                            citiesStoreUrl: "{{ route('delivery-route-locations.cities.store') }}",
+                            townshipsStoreUrl: "{{ route('delivery-route-locations.townships.store') }}",
+                            branchesStoreUrl: "{{ route('delivery-route-locations.branches.store') }}",
                             modalParent: '#remoteModelData'
                         });
                     }
