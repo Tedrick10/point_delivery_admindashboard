@@ -25,7 +25,11 @@ class DeliveryRouteLocationController extends Controller
         $cities = DeliveryCity::query()->withCount('townships')->orderBy('sort_order')->orderBy('name')->get();
         $filterCityId = (int) $request->get('city_id', 0);
         if ($filterCityId <= 0) {
-            $filterCityId = (int) ($cities->first()?->id ?? 0);
+            $panelCity = defaultDeliveryRouteForBranch()['city'] ?? '';
+            $filterCityId = (int) ($cities->first(function ($city) use ($panelCity) {
+                return strcasecmp((string) $city->name, (string) $panelCity) === 0
+                    || (string) $city->name_mm === (string) $panelCity;
+            })?->id ?? $cities->first()?->id ?? 0);
         }
 
         $townships = DeliveryTownship::query()
@@ -179,12 +183,14 @@ class DeliveryRouteLocationController extends Controller
                 Rule::unique('delivery_townships', 'name')->where('delivery_city_id', $request->delivery_city_id),
             ],
             'name_mm' => 'nullable|string|max:120',
+            'deli_amount' => 'nullable|numeric|min:0|max:99999999',
         ]);
 
         $township = DeliveryTownship::query()->create([
             'delivery_city_id' => (int) $data['delivery_city_id'],
             'name' => trim($data['name']),
             'name_mm' => trim((string) ($data['name_mm'] ?? '')) ?: trim($data['name']),
+            'deli_amount' => round((float) ($data['deli_amount'] ?? 0), 2),
             'sort_order' => (int) DeliveryTownship::query()->where('delivery_city_id', $data['delivery_city_id'])->max('sort_order') + 1,
             'status' => 1,
         ]);
@@ -217,6 +223,7 @@ class DeliveryRouteLocationController extends Controller
                     ->ignore($township->id),
             ],
             'name_mm' => 'nullable|string|max:120',
+            'deli_amount' => 'nullable|numeric|min:0|max:99999999',
             'status' => 'nullable|in:0,1',
         ]);
 
@@ -224,6 +231,7 @@ class DeliveryRouteLocationController extends Controller
             'delivery_city_id' => (int) $data['delivery_city_id'],
             'name' => trim($data['name']),
             'name_mm' => trim((string) ($data['name_mm'] ?? '')) ?: trim($data['name']),
+            'deli_amount' => round((float) ($data['deli_amount'] ?? $township->deli_amount), 2),
             'status' => array_key_exists('status', $data) ? (int) $data['status'] : $township->status,
         ])->save();
 
@@ -295,6 +303,7 @@ class DeliveryRouteLocationController extends Controller
             'name' => $township->name,
             'name_mm' => $township->name_mm,
             'label' => $township->displayName(),
+            'deli_amount' => (float) $township->deli_amount,
         ];
     }
 

@@ -24,12 +24,7 @@ class HrLateFineController extends Controller
         $totals = $service->lateFineTotals($rows, $items);
         $sum_bag_deductions = round((float) $bagItems->sum('amount'), 2);
 
-        $staffOptions = HrStaff::query()
-            ->with('user')
-            ->active()
-            ->orderBy('staff_group')
-            ->orderBy('name')
-            ->get(['id', 'code', 'name', 'staff_group', 'user_id']);
+        $staffOptions = $service->payrollStaffOptions();
         $pageTitle = __('message.hr_late_fine_title');
         $assets = [];
         $canEdit = auth()->user()->can('hr-payroll-edit') || auth()->user()->user_type === 'admin';

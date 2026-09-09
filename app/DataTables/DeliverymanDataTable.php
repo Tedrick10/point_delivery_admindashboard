@@ -241,9 +241,18 @@ class DeliverymanDataTable extends DataTable
         }
         $forcedBranchId = forcedBranchId(auth()->user());
         if ($forcedBranchId) {
-            $model->where(function ($query) use ($forcedBranchId) {
-                $query->where('branch_id', $forcedBranchId)
-                    ->orWhereNull('branch_id');
+            $model->where('branch_id', $forcedBranchId);
+        }
+        if (isDispatchHub(auth()->user())) {
+            $model->where('hub_parent_id', (int) auth()->id())
+                ->where(function ($query) {
+                    $query->whereNull('is_dispatch_hub')->orWhere('is_dispatch_hub', 0);
+                });
+        } elseif (\Illuminate\Support\Facades\Schema::hasColumn('users', 'hub_parent_id')) {
+            $model->where(function ($query) {
+                $query->where('is_dispatch_hub', 1)
+                    ->orWhereNull('hub_parent_id')
+                    ->orWhere('hub_parent_id', 0);
             });
         }
 

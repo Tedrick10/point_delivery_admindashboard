@@ -726,7 +726,7 @@ function imageExtention($media)
 function checkMenuRoleAndPermission($menu)
 {
     if (auth()->check()) {
-        if ($menu->data('role') == null && (auth()->user()->hasRole('admin') || isSuperAdmin())) {
+        if ($menu->data('role') == null && (auth()->user()->hasRole('admin') || isSuperAdmin() || isDispatchHub())) {
             return true;
         }
 
@@ -1608,6 +1608,38 @@ function canAccessAllBranches(?User $user = null): bool
 }
 
 /**
+ * Yangon hub accounts (Ngwe Latt Saung / M2M) that receive MDY Assign 100 parcels.
+ */
+function isDispatchHub(?User $user = null): bool
+{
+    $user = $user ?? auth()->user();
+    if (! $user) {
+        return false;
+    }
+
+    return app(\App\Services\DispatchHubService::class)->isHub($user);
+}
+
+function canAccessAdminPanel(?User $user = null): bool
+{
+    $user = $user ?? auth()->user();
+    if (! $user) {
+        return false;
+    }
+
+    if (isDispatchHub($user)) {
+        return true;
+    }
+
+    return isAdminPanelUser($user);
+}
+
+function dispatchHubAccounts()
+{
+    return app(\App\Services\DispatchHubService::class)->accounts();
+}
+
+/**
  * Forced branch id for scoped panel users; null when user can see all branches.
  */
 function forcedBranchId(?User $user = null): ?int
@@ -1623,12 +1655,100 @@ function forcedBranchId(?User $user = null): ?int
 }
 
 /**
- * Canonical destination / settlement branch tab order (Burmese labels).
- * Food(မန္တလေး) is last.
+ * Canonical destination tab names. The signed-in panel's branch is first.
+ * Food(မန္တလေး) stays last.
+ *
+ * @return list<string>
  */
-function destinationBranchOrderSql(): string
+function destinationBranchNamesInTabOrder(?User $user = null): array
 {
-    return "FIELD(name, 'မန္တလေး', 'ရန်ကုန်', 'လားရှိုး', 'တောင်ကြီး', 'ပြင်ဦးလွင်', 'Food(မန္တလေး)')";
+    $canonical = ['မန္တလေး', 'ရန်ကုန်', 'လားရှိုး', 'တောင်ကြီး', 'ပြင်ဦးလွင်', 'Food(မန္တလေး)'];
+    $user = $user ?? auth()->user();
+    $firstId = $user ? (forcedBranchId($user) ?: (int) ($user->branch_id ?? 0)) : 0;
+    if ($firstId <= 0) {
+        return $canonical;
+    }
+
+    $firstName = \App\Models\Branch::query()->where('id', $firstId)->value('name');
+    if (! $firstName || $firstName === $canonical[0]) {
+        return $canonical;
+    }
+
+    $rest = array_values(array_filter($canonical, static fn ($name) => $name !== $firstName));
+
+    return array_merge([$firstName], $rest);
+}
+
+function destinationBranchOrderSql(?User $user = null): string
+{
+    $names = array_map(static function ($name) {
+        return str_replace("'", "\\'", (string) $name);
+    }, destinationBranchNamesInTabOrder($user));
+
+    return "FIELD(name, '".implode("','", $names)."')";
+}
+
+/**
+ * City + first township for a destination / panel branch.
+ *
+ * @return array{city: string, township: string}
+ */
+function defaultDeliveryRouteForBranch(?int $branchId = null): array
+{
+    $branchId = $branchId ?: defaultDestinationBranchId();
+    $fallback = [
+        'city' => (string) config('dispatch_item_cities.default_delivery_city', 'Mandalay'),
+        'township' => (string) config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်'),
+    ];
+
+    $branch = $branchId
+        ? \App\Models\Branch::query()->where('id', $branchId)->first(['id', 'name', 'city_name'])
+        : null;
+    if (! $branch) {
+        return $fallback;
+    }
+
+    $cityKey = trim((string) ($branch->city_name ?: $branch->name));
+    if ($cityKey === '') {
+        return $fallback;
+    }
+
+    $byBranchName = [
+        'ရန်ကုန်' => ['city' => 'Yangon', 'township' => 'အလုံ'],
+        'မန္တလေး' => ['city' => 'Mandalay', 'township' => 'ချမ်းမြသာစည်'],
+        'လားရှိုး' => ['city' => 'Lashio', 'township' => ''],
+        'တောင်ကြီး' => ['city' => 'Taunggyi', 'township' => ''],
+        'ပြင်ဦးလွင်' => ['city' => 'Pyin Oo Lwin', 'township' => ''],
+        'Food(မန္တလေး)' => ['city' => 'Mandalay', 'township' => 'ချမ်းမြသာစည်'],
+    ];
+    $mapped = $byBranchName[(string) ($branch->name ?? '')] ?? null;
+
+    $deliveryCity = null;
+    if (class_exists(\App\Models\DeliveryCity::class)) {
+        $deliveryCity = \App\Models\DeliveryCity::query()
+            ->where(function ($query) use ($cityKey, $mapped, $branch) {
+                $query->where('name', $cityKey)
+                    ->orWhere('name_mm', $cityKey)
+                    ->orWhere('name', $mapped['city'] ?? '')
+                    ->orWhere('name_mm', (string) ($branch->name ?? ''));
+            })
+            ->orderBy('sort_order')
+            ->first();
+    }
+
+    $city = $deliveryCity->name ?? ($mapped['city'] ?? $fallback['city']);
+    $township = trim((string) ($mapped['township'] ?? ''));
+    if ($township === '' && $deliveryCity && method_exists($deliveryCity, 'townships')) {
+        $township = (string) ($deliveryCity->townships()->orderBy('sort_order')->orderBy('name')->value('name') ?? '');
+    }
+    if ($township === '') {
+        $township = $fallback['township'];
+    }
+
+    return [
+        'city' => $city,
+        'township' => $township,
+    ];
 }
 
 /**
@@ -1651,11 +1771,87 @@ function applyDestinationBranchFilter($query, ?int $branchId, string $table = ''
 }
 
 /**
- * Preferred default tab when no branch_id is provided (မန္တလေး).
+ * Items this panel actually owns — stops MDY local rows leaking onto other-city screens.
  */
-function defaultDestinationBranchId($branches = null): ?int
+function applyForcedItemOwnership($query, ?User $user = null, string $table = '')
 {
-    $branches = $branches ?? destinationBranchTabs();
+    $user = $user ?? auth()->user();
+    if (! $user || canAccessAllBranches($user)) {
+        return $query;
+    }
+
+    $prefix = $table !== '' ? $table.'.' : '';
+
+    if (isDispatchHub($user)) {
+        $branchId = (int) ($user->branch_id ?? 0);
+
+        return $query->where(function ($inner) use ($user, $branchId, $prefix) {
+            $inner->where($prefix.'hub_user_id', (int) $user->id);
+            if ($branchId > 0) {
+                $inner->orWhere($prefix.'from_branch_id', $branchId)
+                    ->orWhere($prefix.'to_branch_id', $branchId);
+            }
+        });
+    }
+
+    $forced = forcedBranchId($user);
+    if ($forced) {
+        return $query->where(function ($inner) use ($forced, $prefix) {
+            $inner->where($prefix.'from_branch_id', $forced)
+                ->orWhere($prefix.'to_branch_id', $forced);
+        });
+    }
+
+    return $query;
+}
+
+function applyClientBranchScope($query, ?User $user = null, ?int $branchId = null)
+{
+    $user = $user ?? auth()->user();
+    $forced = forcedBranchId($user);
+    $selected = $branchId ?? (int) request('branch_id', 0);
+
+    if ($forced && $selected > 0 && $selected !== $forced) {
+        return $query->whereRaw('0 = 1');
+    }
+
+    $scopeId = $forced ?: ($selected > 0 ? $selected : defaultDestinationBranchId(null, $user));
+    if ($scopeId) {
+        $query->where('branch_id', $scopeId);
+    }
+
+    return $query;
+}
+
+function mandalayBranchId(): ?int
+{
+    static $id = false;
+    if ($id !== false) {
+        return $id;
+    }
+
+    $found = (int) (\App\Models\Branch::query()
+        ->where('status', 1)
+        ->where('name', 'မန္တလေး')
+        ->value('id') ?? 0);
+
+    $id = $found > 0 ? $found : null;
+
+    return $id;
+}
+
+/**
+ * Preferred default tab: this panel's city, otherwise မန္တလေး.
+ */
+function defaultDestinationBranchId($branches = null, ?User $user = null): ?int
+{
+    $user = $user ?? auth()->user();
+    $forced = forcedBranchId($user);
+    if ($forced) {
+        return $forced;
+    }
+
+    $branches = $branches ?? destinationBranchTabs($user);
     if ($branches->isEmpty()) {
         return null;
     }
@@ -1668,28 +1864,22 @@ function defaultDestinationBranchId($branches = null): ?int
 }
 
 /**
- * Active branches for settlement / list tabs (respects forced branch users).
+ * Active destination tabs — same MDY-style list on every panel.
  *
  * @return \Illuminate\Support\Collection<int, \App\Models\Branch>
  */
 function destinationBranchTabs(?User $user = null)
 {
-    $query = \App\Models\Branch::query()
+    return \App\Models\Branch::query()
         ->where('status', 1)
-        ->orderByRaw(destinationBranchOrderSql())
-        ->orderBy('name');
-
-    $forced = forcedBranchId($user);
-    if ($forced) {
-        $query->where('id', $forced);
-    }
-
-    return $query->get(['id', 'name']);
+        ->orderByRaw(destinationBranchOrderSql($user))
+        ->orderBy('name')
+        ->get(['id', 'name']);
 }
 
 /**
  * Resolve branch_id query for settlement screens.
- * No "All" tab — defaults to မန္တလေး when branch_id is missing.
+ * Tabs stay clickable; default is this panel's city (or မန္တလေး).
  *
  * @return array{0: ?int, 1: string, 2: \Illuminate\Support\Collection<int, \App\Models\Branch>}
  */
@@ -1698,11 +1888,6 @@ function resolveDestinationBranchFilter($request = null, ?User $user = null): ar
     $request = $request ?? request();
     $user = $user ?? auth()->user();
     $branches = destinationBranchTabs($user);
-    $forced = forcedBranchId($user);
-
-    if ($forced) {
-        return [$forced, (string) $forced, $branches];
-    }
 
     $raw = $request->get('branch_id');
     $id = is_numeric($raw) ? (int) $raw : 0;
@@ -1710,7 +1895,7 @@ function resolveDestinationBranchFilter($request = null, ?User $user = null): ar
         return [$id, (string) $id, $branches];
     }
 
-    $defaultId = defaultDestinationBranchId($branches);
+    $defaultId = defaultDestinationBranchId($branches, $user);
     if ($defaultId) {
         return [$defaultId, (string) $defaultId, $branches];
     }
@@ -1729,6 +1914,10 @@ function isAdminPanelUser(?User $user): bool
     }
 
     if ($user->user_type === 'admin') {
+        return true;
+    }
+
+    if (isDispatchHub($user)) {
         return true;
     }
 

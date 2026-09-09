@@ -408,10 +408,12 @@ class DispatchOrderItemController extends Controller
         $deliveryCity = trim((string) ($data['delivery_city'] ?? ''));
         $township = trim((string) ($data['township'] ?? ''));
         if ($deliveryCity === '') {
-            $deliveryCity = config('dispatch_item_cities.default_delivery_city', 'Mandalay');
+            $deliveryCity = defaultDeliveryRouteForBranch($toBranchId ?: $fromBranchId)['city']
+                ?: config('dispatch_item_cities.default_delivery_city', 'Mandalay');
         }
         if ($township === '') {
-            $township = config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်');
+            $township = defaultDeliveryRouteForBranch($toBranchId ?: $fromBranchId)['township']
+                ?: config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်');
         }
 
         $existingCount = DispatchOrderItem::query()

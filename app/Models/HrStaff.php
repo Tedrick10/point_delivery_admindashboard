@@ -61,4 +61,20 @@ class HrStaff extends Model
     {
         return $query->where('status', 1);
     }
+
+    /**
+     * Rider staff belonging to မန္တလေး (not Food(မန္တလေး) / Lashio / Yangon).
+     */
+    public function scopeMandalayRiders($query)
+    {
+        $branchId = function_exists('mandalayBranchId') ? mandalayBranchId() : defaultDestinationBranchId();
+        if (! $branchId) {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($branchId) {
+            $q->where('hr_staff.branch_id', $branchId)
+                ->orWhereHas('user', fn ($u) => $u->where('branch_id', $branchId));
+        });
+    }
 }

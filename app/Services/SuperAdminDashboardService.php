@@ -255,7 +255,7 @@ class SuperAdminDashboardService
         $monthEnd = $period['end'];
         $monthLabel = $period['label'];
 
-        $branches = $this->regionalBranches();
+        $branches = BranchAdminController::operationalBranches();
         $branchIds = $branches->pluck('id')->all() ?: [0];
         $branchAdmins = User::query()
             ->where('user_type', 'admin')
@@ -617,19 +617,6 @@ class SuperAdminDashboardService
             'range' => __('message.sa_period_range'),
             default => __('message.sa_period_month'),
         };
-    }
-
-    private function regionalBranches(): Collection
-    {
-        $regionalNames = BranchAdminController::REGIONAL_BRANCHES;
-        $order = array_flip($regionalNames);
-
-        return Branch::query()
-            ->whereNull('deleted_at')
-            ->whereIn('name', $regionalNames)
-            ->get(['id', 'name', 'status'])
-            ->sortBy(fn ($b) => $order[$b->name] ?? 99)
-            ->values();
     }
 
     private function branchRows(Collection $branches, Collection $adminsByBranch, string $today, string $monthStart, string $monthEnd): array

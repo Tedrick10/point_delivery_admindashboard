@@ -47,11 +47,13 @@ class ExpenseController extends Controller
             $to = $from;
         }
 
-        app(ExpenseRiderFuelSyncService::class)->syncDateRange($from, $to, auth()->id());
-
         [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request);
         $branchTabs = $branches;
         $selectedBranchId = $branchId;
+
+        $fuelSync = app(ExpenseRiderFuelSyncService::class);
+        $fuelSync->syncDateRange($from, $to, auth()->id());
+        $fuelSync->ensureDailyCards($from, $to, $branchId, auth()->id());
 
         $cardsQuery = ExpenseCard::query()
             ->with('items')

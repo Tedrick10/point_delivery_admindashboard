@@ -147,15 +147,47 @@ class HrPayrollService
         return $prefix.$user->id;
     }
 
+    /**
+     * Office staff stay visible. Rider rows are မန္တလေး only.
+     */
+    public function applyPayrollStaffGroupFilter($query, ?string $staffGroup = null)
+    {
+        if ($staffGroup === 'rider') {
+            return $query->where('staff_group', 'rider')->mandalayRiders();
+        }
+
+        if ($staffGroup === 'office') {
+            return $query->where('staff_group', 'office');
+        }
+
+        return $query->where(function ($q) {
+            $q->where('staff_group', 'office')
+                ->orWhere(function ($rider) {
+                    $rider->where('staff_group', 'rider')->mandalayRiders();
+                });
+        });
+    }
+
+    public function payrollStaffOptions(): Collection
+    {
+        $query = HrStaff::query()
+            ->with('user')
+            ->active();
+        $this->applyPayrollStaffGroupFilter($query);
+
+        return $query
+            ->orderBy('staff_group')
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'staff_group', 'user_id']);
+    }
+
     public function ensureLateFineRows(Carbon $month, ?string $staffGroup = null): Collection
     {
         $period = $month->toDateString();
         $finePerMinute = $this->defaultFinePerMinute();
         $absentDayRate = $this->defaultAbsentDayRate();
         $staffQuery = HrStaff::query()->active()->orderBy('staff_group')->orderBy('sort_order')->orderBy('name');
-        if ($staffGroup) {
-            $staffQuery->where('staff_group', $staffGroup);
-        }
+        $this->applyPayrollStaffGroupFilter($staffQuery, $staffGroup);
         $staff = $staffQuery->get();
 
         foreach ($staff as $member) {
@@ -182,9 +214,7 @@ class HrPayrollService
         return HrLateFineRow::query()
             ->with(['staff.user'])
             ->whereDate('period_month', $period)
-            ->when($staffGroup, function ($q) use ($staffGroup) {
-                $q->whereHas('staff', fn ($s) => $s->where('staff_group', $staffGroup));
-            })
+            ->whereHas('staff', fn ($s) => $this->applyPayrollStaffGroupFilter($s, $staffGroup))
             ->get()
             ->sortBy(fn (HrLateFineRow $row) => sprintf(
                 '%s-%05d-%s',
@@ -422,6 +452,7 @@ class HrPayrollService
         $staff = HrStaff::query()
             ->active()
             ->where('staff_group', $staffGroup)
+            ->when($staffGroup === 'rider', fn ($q) => $q->mandalayRiders())
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
@@ -504,7 +535,12 @@ class HrPayrollService
         return HrOfficeSalaryRow::query()
             ->with(['staff.user'])
             ->whereDate('period_month', $period)
-            ->whereHas('staff', fn ($q) => $q->where('staff_group', $staffGroup))
+            ->whereHas('staff', function ($q) use ($staffGroup) {
+                $q->where('staff_group', $staffGroup);
+                if ($staffGroup === 'rider') {
+                    $q->mandalayRiders();
+                }
+            })
             ->get()
             ->sortBy(fn (HrOfficeSalaryRow $row) => sprintf('%05d-%s', $row->staff?->sort_order ?? 9999, $row->staff?->name ?? ''))
             ->values();

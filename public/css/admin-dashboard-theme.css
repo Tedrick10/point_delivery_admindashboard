@@ -9153,9 +9153,46 @@ body.pds-admin .pds-follow-up-address-cell {
 
 body.pds-admin .pds-dispatch-to-assign-table tbody td.pds-follow-up-status-cell,
 body.pds-admin .pds-dispatch-to-assign-table tbody td.pds-follow-up-num-cell,
-body.pds-admin .pds-dispatch-to-assign-table tbody td.pds-follow-up-actions-cell {
+body.pds-admin .pds-dispatch-to-assign-table tbody td.pds-follow-up-actions-cell,
+body.pds-admin .pds-dispatch-to-assign-table tbody td:has(.pds-deli-amount-cell) {
     overflow: visible;
     max-width: none;
+    min-width: 5.5rem;
+}
+
+/* Assign 100 / From MDY: price and (Cust Pay) must not share one squeezed line. */
+body.pds-admin .pds-dispatch-to-assign-table .pds-deli-amount-cell {
+    display: inline-flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+    gap: 0.1rem !important;
+    width: auto !important;
+    max-width: 100% !important;
+    white-space: nowrap !important;
+}
+
+body.pds-admin .pds-dispatch-to-assign-table .pds-deli-amount-price {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    text-align: right !important;
+    overflow: visible !important;
+}
+
+body.pds-admin .pds-dispatch-to-assign-table .pds-deli-amount-type,
+body.pds-admin .pds-dispatch-to-assign-table .pds-deli-amount-type--empty {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    text-align: right !important;
+    font-size: 0.68rem !important;
+    font-weight: 500 !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
 }
 
 body.pds-admin .pds-follow-up-status-cell {
@@ -11015,6 +11052,7 @@ body.pds-admin .pds-rider-bulk-actions {
     align-items: flex-end;
     gap: 0.5rem;
     flex: 0 0 auto;
+    flex-wrap: wrap;
 }
 
 body.pds-admin .pds-rider-bulk-actions .pds-dispatch-field {

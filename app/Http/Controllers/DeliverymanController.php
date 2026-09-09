@@ -67,10 +67,19 @@ class DeliverymanController extends Controller
         $branchTabCounts = User::query()
             ->where('user_type', 'delivery_man')
             ->whereNull('deleted_at')
+            ->when(isDispatchHub(auth()->user()), function ($query) {
+                $query->where('hub_parent_id', (int) auth()->id());
+            })
             ->selectRaw('branch_id, COUNT(*) as total')
             ->groupBy('branch_id')
             ->pluck('total', 'branch_id');
-        $allRiderCount = User::query()->where('user_type', 'delivery_man')->whereNull('deleted_at')->count();
+        $allRiderCount = User::query()
+            ->where('user_type', 'delivery_man')
+            ->whereNull('deleted_at')
+            ->when(isDispatchHub(auth()->user()), function ($query) {
+                $query->where('hub_parent_id', (int) auth()->id());
+            })
+            ->count();
 
         if(request('status') == 'active') {
             $pageTitle = __('message.active_list_form_title',['form' => __('message.delivery_man')] );
@@ -131,6 +140,10 @@ class DeliverymanController extends Controller
         $riders = User::query()
             ->where('user_type', 'delivery_man')
             ->whereNull('deleted_at')
+            ->when(isDispatchHub(auth()->user()), function ($query) {
+                $query->where('hub_parent_id', (int) auth()->id());
+            })
+            ->excludeDispatchHubs()
             ->withAvg('rating as average_rating', 'rating')
             ->withCount('rating as ratings_count')
             ->get()
@@ -267,6 +280,14 @@ class DeliverymanController extends Controller
         $forcedBranchId = forcedBranchId(auth()->user());
         if ($forcedBranchId && ! $request->filled('branch_id')) {
             $request->merge(['branch_id' => $forcedBranchId]);
+        }
+
+        if (isDispatchHub(auth()->user())) {
+            $request->merge([
+                'hub_parent_id' => auth()->id(),
+                'is_dispatch_hub' => 0,
+                'branch_id' => $forcedBranchId ?: (int) (auth()->user()->branch_id ?? 0),
+            ]);
         }
 
         $result = User::create($request->all());

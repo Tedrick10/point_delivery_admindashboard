@@ -168,20 +168,48 @@
         toggleOsPaidField();
     }
 
-    function appendTownshipOption($township, label, value, selected) {
+    function setTownshipOptionAmount(optionEl, amount) {
+        if (amount === undefined || amount === null || amount === '') {
+            return;
+        }
+        var n = parseFloat(amount);
+        if (!isFinite(n) || n < 0) {
+            return;
+        }
+        $(optionEl).attr('data-deli-amount', n).data('deliAmount', n);
+    }
+
+    function appendTownshipOption($township, label, value, selected, deliAmount) {
         if (!label) {
             return;
         }
-        var exists = $township.find('option').filter(function () {
+        var $existing = $township.find('option').filter(function () {
             return $(this).val() === value;
-        }).length > 0;
-        if (exists) {
+        });
+        if ($existing.length) {
+            setTownshipOptionAmount($existing.get(0), deliAmount);
             if (selected) {
                 $township.val(value);
             }
             return;
         }
-        $township.append(new Option(label, value, selected, selected));
+        var option = new Option(label, value, selected, selected);
+        setTownshipOptionAmount(option, deliAmount);
+        $township.append(option);
+    }
+
+    function applyTownshipDeliAmount() {
+        var $opt = $('#item_township option:selected');
+        if (!$opt.length || !String($opt.val() || '').trim()) {
+            return;
+        }
+        var base = parseFloat($opt.attr('data-deli-amount'));
+        if (!isFinite(base) || base < 0) {
+            return;
+        }
+        var size = parseInt($('#item_weight').val(), 10) || 0;
+        var amount = size > 1 ? base + ((size - 1) * 500) : base;
+        $('#deli_amount').val(Math.round(amount)).trigger('input');
     }
 
     function townshipMatchesSelection(town, selected) {
@@ -226,30 +254,13 @@
 
         if (!selectedIsValid) {
             resolvedSelected = '';
-            var $form = $('#dispatch_item_form');
-            if ($form.data('apply-default-township')) {
-                var defaultCity = normalizeName($form.data('default-delivery-city') || 'Mandalay');
-                var defaultTownship = String($form.data('default-township') || '').trim();
-                if (defaultTownship && normalizeName(cityName) === defaultCity) {
-                    resolvedSelected = defaultTownship;
-                }
-            }
         }
 
         towns.forEach(function (town) {
             var label = town.label || town.name_mm || town.name;
             var value = town.name_mm || town.name || label;
-            appendTownshipOption($township, label, value, resolvedSelected ? townshipMatchesManaged(town, resolvedSelected) : false);
+            appendTownshipOption($township, label, value, resolvedSelected ? townshipMatchesManaged(town, resolvedSelected) : false, town.deli_amount);
         });
-
-        if (!$township.val()) {
-            var $firstRealOption = $township.find('option').filter(function () {
-                return String($(this).val() || '').trim() !== '';
-            }).first();
-            if ($firstRealOption.length) {
-                $township.val($firstRealOption.val());
-            }
-        }
 
         if (preserveInvalidSelected && selected && !selectedIsValid) {
             appendTownshipOption($township, selected, selected, true);
@@ -304,12 +315,10 @@
         var normalizedCity = normalizeName(cityName);
         var normalizedState = normalizeName(nrcState);
         var resolvedSelected = selected || '';
-        var $form = $('#dispatch_item_form');
 
         $.getJSON(nrcDataUrl).done(function (data) {
             var states = data.states || [];
             var matchedState = null;
-            var matchedTownship = null;
 
             if (normalizedState) {
                 matchedState = states.find(function (state) {
@@ -326,7 +335,6 @@
                         var townMm = normalizeName(town.name_mm);
                         if (namesMatch(townEn, normalizedCity) || namesMatch(townMm, normalizedCity)) {
                             matchedState = state;
-                            matchedTownship = town;
                         }
                     });
                 });
@@ -349,33 +357,15 @@
 
             if (!selectedIsValid) {
                 resolvedSelected = '';
-                if ($form.data('apply-default-township')) {
-                    var defaultCity = normalizeName($form.data('default-delivery-city') || 'Mandalay');
-                    var defaultTownship = String($form.data('default-township') || '').trim();
-                    if (defaultTownship && normalizedCity === defaultCity) {
-                        resolvedSelected = defaultTownship;
-                    }
-                }
             }
 
             if (matchedState && matchedState.townships && matchedState.townships.length) {
                 matchedState.townships.forEach(function (town) {
                     var label = town.name_mm || town.name_en;
                     var value = label;
-                    var isSelected = resolvedSelected
-                        ? townshipMatchesSelection(town, resolvedSelected)
-                        : !!(matchedTownship && town.name_en === matchedTownship.name_en);
+                    var isSelected = !!(resolvedSelected && townshipMatchesSelection(town, resolvedSelected));
                     appendTownshipOption($township, label, value, isSelected);
                 });
-            }
-
-            if (!$township.val()) {
-                var $firstRealOption = $township.find('option').filter(function () {
-                    return String($(this).val() || '').trim() !== '';
-                }).first();
-                if ($firstRealOption.length) {
-                    $township.val($firstRealOption.val());
-                }
             }
 
             if (preserveInvalidSelected && selected && !selectedIsValid) {
@@ -388,9 +378,6 @@
                 $township.trigger('change');
             }
         }).fail(function () {
-            if (cityName) {
-                appendTownshipOption($township, cityName, cityName, true);
-            }
             if ($township.hasClass('select2-hidden-accessible')) {
                 $township.trigger('change.select2');
             } else {
@@ -420,18 +407,6 @@
         if ($township.hasClass('select2-hidden-accessible')) {
             $township.trigger('change.select2');
         } else {
-            $township.trigger('change');
-        }
-    }
-
-    function ensureTownshipValue() {
-        var $township = $('#item_township');
-        if ($township.val()) {
-            return;
-        }
-        var cityMeta = getSelectedCityMeta();
-        if (cityMeta && cityMeta.name) {
-            appendTownshipOption($township, cityMeta.name, cityMeta.name, true);
             $township.trigger('change');
         }
     }
@@ -619,7 +594,9 @@
                         townshipPayload,
                         function (res) {
                             var township = (res && res.township) || {};
-                            appendAndSelectOption($select, township.label || value, township.name_mm || township.name || value);
+                            appendAndSelectOption($select, township.label || value, township.name_mm || township.name || value, {
+                                'data-deli-amount': township.deli_amount
+                            });
                         },
                         function () {
                             appendAndSelectOption($select, value, value);
@@ -682,7 +659,6 @@
                 var $form = $(this);
                 var $modal = $form.closest('#remoteModelData');
                 var options = $form.data('dispatch-item-options') || {};
-                ensureTownshipValue();
 
                 var requiredFields = [
                     { selector: '#item_received_date', message: 'Received date is required.' },
@@ -799,6 +775,21 @@
             });
         }
 
+        var preserveSavedDeli = (parseFloat($('#deli_amount').val()) || 0) > 0;
+
+        $('#item_township')
+            .off('change.dispatchItemTownshipDeli select2:select.dispatchItemTownshipDeli')
+            .on('select2:select.dispatchItemTownshipDeli', function () {
+                preserveSavedDeli = false;
+                applyTownshipDeliAmount();
+            })
+            .on('change.dispatchItemTownshipDeli', function () {
+                if (preserveSavedDeli) {
+                    return;
+                }
+                applyTownshipDeliAmount();
+            });
+
         function refreshTownships(resetTownship) {
             var cityMeta = getSelectedCityMeta();
             if (!cityMeta) {
@@ -814,9 +805,20 @@
         }
 
         $('#item_delivery_city').off('change.dispatchItemCity').on('change.dispatchItemCity', function () {
+            preserveSavedDeli = false;
             refreshTownships(true);
         });
-        refreshTownships(false);
+
+        var toCityName = String($('#to_branch_id option:selected').data('city-name') || '').trim();
+        var currentCity = String($('#item_delivery_city').val() || '').trim();
+        var cityLooksMdyDefault = !currentCity
+            || normalizeName(currentCity) === normalizeName('Mandalay')
+            || normalizeName(currentCity) === normalizeName('မန္တလေး');
+        if (toCityName && cityLooksMdyDefault && normalizeName(toCityName) !== normalizeName('Mandalay')) {
+            syncCityFromToBranch(true);
+        } else {
+            refreshTownships(false);
+        }
 
         function syncCityFromToBranch(resetTownship) {
             var $opt = $('#to_branch_id option:selected');
@@ -844,6 +846,7 @@
         }
 
         $('#to_branch_id').off('change.dispatchItemTo').on('change.dispatchItemTo', function () {
+            preserveSavedDeli = false;
             syncCityFromToBranch(true);
         });
 

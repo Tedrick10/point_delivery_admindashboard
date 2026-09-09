@@ -51,6 +51,9 @@ class OsSettlementService
             ->when($branchId !== null && $branchId > 0, function ($query) use ($branchId) {
                 applyDestinationBranchFilter($query, $branchId);
             })
+            ->when(true, function ($query) {
+                applyForcedItemOwnership($query);
+            })
             ->where('status', 'completed')
             ->whereNotNull('admin_completed_at')
             ->whereNull('admin_finished_at')

@@ -26,6 +26,11 @@ class DispatchOrderItem extends Model
         'status',
         'delivery_locked',
         'delivery_man_id',
+        'hub_user_id',
+        'hub_inbox_at',
+        'hub_accepted_at',
+        'mdy_inbox_at',
+        'mdy_accepted_at',
         'assigned_at',
         'admin_updated_at',
         'admin_completed_at',
@@ -63,8 +68,13 @@ class DispatchOrderItem extends Model
         'cust_photo_id' => 'integer',
         'cust_sign_id' => 'integer',
         'delivery_man_id' => 'integer',
+        'hub_user_id' => 'integer',
         'delivery_locked' => 'boolean',
         'assigned_at' => 'datetime',
+        'hub_inbox_at' => 'datetime',
+        'hub_accepted_at' => 'datetime',
+        'mdy_inbox_at' => 'datetime',
+        'mdy_accepted_at' => 'datetime',
         'admin_updated_at' => 'datetime',
         'admin_completed_at' => 'datetime',
         'admin_finished_at' => 'datetime',
@@ -125,6 +135,11 @@ class DispatchOrderItem extends Model
     public function deliveryMan()
     {
         return $this->belongsTo(User::class, 'delivery_man_id', 'id');
+    }
+
+    public function hubUser()
+    {
+        return $this->belongsTo(User::class, 'hub_user_id', 'id');
     }
 
     public function fromBranch()

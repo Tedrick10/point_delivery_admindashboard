@@ -31,13 +31,15 @@
             </div>
             <div class="sa-field">
                 <label>{{ __('message.branch') }}</label>
-                <select name="branch_name" required>
+                <select name="branch_id" required>
                     <option value="">{{ __('message.sa_select_branch') }}</option>
-                    @foreach(($regionalBranches ?? []) as $name)
-                        <option value="{{ $name }}" @selected(old('branch_name', $branchName ?? '') === $name)>{{ $name }}</option>
+                    @foreach(($branches ?? []) as $branch)
+                        <option value="{{ $branch->id }}" @selected((int) old('branch_id', $prefillBranchId ?? 0) === (int) $branch->id)>
+                            {{ $branch->displayLabel() }}
+                        </option>
                     @endforeach
                 </select>
-                @error('branch_name')
+                @error('branch_id')
                     <div class="text-danger small mt-1">{{ $message }}</div>
                 @enderror
             </div>

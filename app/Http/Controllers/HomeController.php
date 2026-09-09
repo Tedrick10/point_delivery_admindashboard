@@ -101,6 +101,7 @@ class HomeController extends Controller
         }
         if ($forcedBranchId) {
             $deliverymanQuery->where('branch_id', $forcedBranchId);
+            $userQuery->where('branch_id', $forcedBranchId);
         }
 
         $recent_order = $ordersQuery->whereDate('date', '<=', Carbon::now()->format('Y-m-d'))->whereNotIn('status', ['pending'])->orderBy('date', 'desc')->paginate(10);
@@ -850,6 +851,23 @@ class HomeController extends Controller
                 if ($branchId > 0) {
                     $items->where('branch_id', $branchId);
                 }
+                $hubService = app(\App\Services\DispatchHubService::class);
+                $authUser = auth()->user();
+                if ($hubService->isHub($authUser)) {
+                    $items->where('hub_parent_id', (int) $authUser->id)
+                        ->where(function ($query) {
+                            $query->whereNull('is_dispatch_hub')->orWhere('is_dispatch_hub', 0);
+                        });
+                } else {
+                    $yangonId = $hubService->yangonBranchId();
+                    if ($yangonId && $branchId === (int) $yangonId) {
+                        $items->where('is_dispatch_hub', 1);
+                    } else {
+                        $items->where(function ($query) {
+                            $query->whereNull('is_dispatch_hub')->orWhere('is_dispatch_hub', 0);
+                        });
+                    }
+                }
                 if ($value != '') {
                     $items->where('name', 'LIKE', '%' . $value . '%');
                 }
@@ -869,6 +887,7 @@ class HomeController extends Controller
                 $items = User::select('id', 'name as text', 'contact_number', 'address')
                     ->where('user_type', 'client')
                     ->whereStatus(1);
+                applyClientBranchScope($items);
                 if ($value != '') {
                     $items->where('name', 'LIKE', '%' . $value . '%');
                 }
@@ -886,6 +905,7 @@ class HomeController extends Controller
                 $items = User::select('id', 'name as text', 'contact_number', 'address', 'city_id')
                     ->where('user_type', 'client')
                     ->whereStatus(1);
+                applyClientBranchScope($items);
                 if ($request->filled('id')) {
                     $items->where('id', $request->id);
                 } elseif ($value != '') {

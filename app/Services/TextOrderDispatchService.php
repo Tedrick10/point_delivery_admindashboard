@@ -540,10 +540,12 @@ class TextOrderDispatchService
             'to_branch_id' => $toBranchId,
             'delivery_city' => $deliveryCity !== ''
                 ? $deliveryCity
-                : config('dispatch_item_cities.default_delivery_city', 'Mandalay'),
+                : (defaultDeliveryRouteForBranch($toBranchId ?: $fromBranchId)['city']
+                    ?: config('dispatch_item_cities.default_delivery_city', 'Mandalay')),
             'township' => $township !== ''
                 ? $township
-                : config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်'),
+                : (defaultDeliveryRouteForBranch($toBranchId ?: $fromBranchId)['township']
+                    ?: config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်')),
             'item_name' => trim((string) ($pickup['description'] ?? '')),
             'remark' => $remark,
             'customer_name' => $customerName,
@@ -752,6 +754,11 @@ class TextOrderDispatchService
 
     private function defaultBranchId(): ?int
     {
+        $panelId = function_exists('defaultDestinationBranchId') ? defaultDestinationBranchId() : null;
+        if ($panelId) {
+            return $panelId;
+        }
+
         return resolveDefaultDispatchBranchId(
             config('dispatch_item_cities.default_from_branch', 'MDY To MDY')
         );

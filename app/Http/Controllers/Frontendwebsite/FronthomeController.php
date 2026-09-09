@@ -361,6 +361,11 @@ class FronthomeController extends Controller
                 return redirect()->route('super-admin.login')
                     ->withErrors(['email' => 'Use the Super Admin login page for this account.']);
             }
+            if (isDispatchHub($user) || $role === 'dispatch_hub') {
+                app(\App\Services\DispatchHubService::class)->ensureAccess($user);
+
+                return redirect()->route('home');
+            }
             switch ($role) {
                 case 'admin':
                     return redirect()->route('home');

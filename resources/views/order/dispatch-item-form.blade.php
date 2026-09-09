@@ -17,12 +17,14 @@
     }
     $defaultFromBranchName = config('dispatch_item_cities.default_from_branch', 'မန္တလေး');
     $defaultToBranchName = config('dispatch_item_cities.default_to_branch', $defaultFromBranchName);
-    $defaultBranchId = resolveDefaultDispatchBranchId($defaultFromBranchName);
-    $defaultToBranchId = resolveDefaultDispatchBranchId($defaultToBranchName) ?: $defaultBranchId;
+    $defaultBranchId = defaultDestinationBranchId() ?: resolveDefaultDispatchBranchId($defaultFromBranchName);
+    $defaultToBranchId = $defaultBranchId ?: resolveDefaultDispatchBranchId($defaultToBranchName);
     $mdyBranch = $defaultBranchId ? $branchCities->firstWhere('id', $defaultBranchId) : null;
     $defaultToBranch = $defaultToBranchId ? $branchCities->firstWhere('id', $defaultToBranchId) : $mdyBranch;
-    $defaultDeliveryCity = config('dispatch_item_cities.default_delivery_city', 'Mandalay');
-    $defaultTownship = config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်');
+    $panelRoute = defaultDeliveryRouteForBranch((int) ($defaultToBranchId ?: $defaultBranchId));
+    $defaultDeliveryCity = $panelRoute['city'] ?: config('dispatch_item_cities.default_delivery_city', 'Mandalay');
+    $defaultTownship = $panelRoute['township'] ?: config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်');
+    $mdyPlaceholderCity = (string) config('dispatch_item_cities.default_delivery_city', 'Mandalay');
     $receivedDate = old('received_date', $isEdit && $item->received_date
         ? formatDispatchYangonDate($item->received_date)
         : formatDispatchYangonDate($order->pickup_datetime ?? $order->created_at ?? now('Asia/Yangon')));
@@ -32,16 +34,23 @@
     $toBranchId = old('to_branch_id', $isEdit
         ? ($item->to_branch_id ?: $defaultToBranchId)
         : $defaultToBranchId);
-    $deliveryCity = old('delivery_city', $isEdit
-        ? ($item->delivery_city ?: $defaultDeliveryCity)
-        : $defaultDeliveryCity);
+    $toRoute = defaultDeliveryRouteForBranch((int) $toBranchId ?: (int) $defaultToBranchId);
+    $savedCity = $isEdit ? trim((string) ($item->delivery_city ?? '')) : '';
+    $savedTownship = $isEdit ? trim((string) ($item->township ?? '')) : '';
+    $savedCityIsPlaceholder = $savedCity === ''
+        || strcasecmp($savedCity, $mdyPlaceholderCity) === 0
+        || $savedCity === 'မန္တလေး';
+    $toCityDiffers = $toRoute['city'] !== '' && strcasecmp($toRoute['city'], $mdyPlaceholderCity) !== 0;
+    $deliveryCity = old('delivery_city', ($savedCityIsPlaceholder && $toCityDiffers)
+        ? $toRoute['city']
+        : ($savedCity !== '' ? $savedCity : $defaultDeliveryCity));
     $hasCustomDeliveryCity = $deliveryCity && !collect($deliveryCities)->contains(function ($city) use ($deliveryCity) {
         return strcasecmp((string) ($city['name'] ?? ''), (string) $deliveryCity) === 0
             || strcasecmp((string) ($city['name_mm'] ?? ''), (string) $deliveryCity) === 0;
     });
-    $township = old('township', $isEdit
-        ? ($item->township ?: $defaultTownship)
-        : $defaultTownship);
+    $township = old('township', ($savedCityIsPlaceholder && $toCityDiffers)
+        ? ($toRoute['township'] ?: $defaultTownship)
+        : ($savedTownship !== '' ? $savedTownship : $defaultTownship));
     $itemName = old('item_name', $isEdit ? $item->item_name : '');
     $remark = old('remark', $isEdit ? $item->remark : ($order->description ?? ''));
     $weight = normalizeDispatchItemSize(old('weight', $isEdit ? ($item->weight ?? 0) : 0));
@@ -70,7 +79,7 @@
         <form id="dispatch_item_form" method="POST" novalidate data-dispatch-item-form="1"
               data-default-township="{{ $defaultTownship }}"
               data-default-delivery-city="{{ $defaultDeliveryCity }}"
-              data-apply-default-township="1"
+              data-apply-default-township="0"
               data-disable-os-credit="{{ $disableOsCredit ? '1' : '0' }}"
               action="{{ $isEdit ? route('order.dispatch.item.update', [$orderId, $item->id]) : route('order.dispatch.item.store', $orderId) }}">
             @csrf
@@ -193,7 +202,7 @@
             branchesStoreUrl: "{{ route('delivery-route-locations.branches.store') }}",
             modalParent: '#remoteModelData'
         };
-        var src = "{{ asset('js/dispatch-item-form.js') }}?v=26";
+        var src = "{{ asset('js/dispatch-item-form.js') }}?v=28";
 
         function bootForm() {
             if (typeof window.initDispatchItemForm === 'function') {

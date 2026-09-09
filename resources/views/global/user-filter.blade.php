@@ -26,6 +26,14 @@
                     $approvalCounts = $approvalCounts ?? ['pending' => 0, 'approved' => 0, 'rejected' => 0];
                     $tabQuery = request()->except('status');
                 @endphp
+                @include('partials._branch-tabs', [
+                    'branchTabs' => $branchTabs ?? collect(),
+                    'selectedBranchId' => ($selectedBranchId ?? 0) > 0 ? $selectedBranchId : null,
+                    'branchTabCounts' => $branchTabCounts ?? [],
+                    'includeAll' => false,
+                    'routeName' => 'users.index',
+                    'routeQuery' => array_filter(['status' => $approvalTab]),
+                ])
                 <div class="pds-os-list-tabs" role="tablist" aria-label="{{ __('message.approval_status') }}">
                     @foreach([
                         'pending' => ['label' => __('message.pending'), 'icon' => 'fas fa-clock'],

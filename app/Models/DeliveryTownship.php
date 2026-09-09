@@ -11,12 +11,14 @@ class DeliveryTownship extends Model
         'delivery_city_id',
         'name',
         'name_mm',
+        'deli_amount',
         'sort_order',
         'status',
     ];
 
     protected $casts = [
         'delivery_city_id' => 'integer',
+        'deli_amount' => 'float',
         'sort_order' => 'integer',
         'status' => 'integer',
     ];

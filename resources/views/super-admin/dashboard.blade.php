@@ -291,6 +291,9 @@
                         <p class="sa-branch-card__admin">{{ $row['admin']['name'] }}</p>
                     @else
                         <p class="sa-branch-card__admin is-missing">{{ __('message.sa_no_admin_assigned') }}</p>
+                        <a href="{{ route('super-admin.branch-admins.create', ['branch_id' => $row['id']]) }}" class="sa-btn sa-btn-primary">
+                            {{ __('message.sa_create_admin') }}
+                        </a>
                     @endif
                     <dl class="sa-branch-card__stats">
                         <div><dt>{{ __('message.sa_items') }}</dt><dd>{{ $fmt($row['items_total']) }}</dd></div>

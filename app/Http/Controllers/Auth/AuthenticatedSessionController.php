@@ -87,6 +87,10 @@ class AuthenticatedSessionController extends Controller
             }
             if ($user->hasRole('admin') || ($user->user_type ?? '') === 'admin') {
                 return redirect()->route('home');
+            } elseif (isDispatchHub($user)) {
+                app(\App\Services\DispatchHubService::class)->ensureAccess($user);
+
+                return redirect()->route('home');
             } elseif ($user->hasRole('delivery_man')) {
                 Auth::logout();
                 return redirect()->route('admin-login')->withErrors(__('message.delivery_man_not_login'));

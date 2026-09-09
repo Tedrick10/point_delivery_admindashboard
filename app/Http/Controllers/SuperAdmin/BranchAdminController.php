@@ -13,25 +13,22 @@ use Spatie\Permission\Models\Role;
 
 class BranchAdminController extends Controller
 {
-    /** Regional branches shown on Accounts by branch. */
-    public const REGIONAL_BRANCHES = [
-        'Yangon Branch',
-        'Naypyitaw Branch',
-        'Taungyi Branch',
-        'MDY Branch',
-    ];
+    /**
+     * Destination branches used by Dispatch / Daily Check (မန္တလေး, ရန်ကုန်, …).
+     */
+    public static function operationalBranches()
+    {
+        return Branch::query()
+            ->whereNull('deleted_at')
+            ->where('status', 1)
+            ->orderByRaw(destinationBranchOrderSql())
+            ->orderBy('name')
+            ->get(['id', 'name', 'city_name', 'status']);
+    }
 
     public function index()
     {
-        $this->ensureRegionalBranches();
-
-        $order = array_flip(self::REGIONAL_BRANCHES);
-        $branches = Branch::query()
-            ->whereNull('deleted_at')
-            ->whereIn('name', self::REGIONAL_BRANCHES)
-            ->get()
-            ->sortBy(fn (Branch $b) => $order[$b->name] ?? 99)
-            ->values();
+        $branches = self::operationalBranches();
 
         $admins = User::query()
             ->where('user_type', 'admin')
@@ -48,21 +45,16 @@ class BranchAdminController extends Controller
 
     public function create(Request $request)
     {
-        $this->ensureRegionalBranches();
-
-        $branchName = '';
+        $branches = self::operationalBranches();
         $prefillBranchId = (int) $request->get('branch_id');
-        if ($prefillBranchId > 0) {
-            $branchName = (string) (Branch::query()->whereKey($prefillBranchId)->value('name') ?? '');
-            if (! in_array($branchName, self::REGIONAL_BRANCHES, true)) {
-                $branchName = '';
-            }
+        if ($prefillBranchId > 0 && ! $branches->contains('id', $prefillBranchId)) {
+            $prefillBranchId = 0;
         }
 
         return view('super-admin.branch-admins.form', [
             'admin' => null,
-            'branchName' => old('branch_name', $branchName),
-            'regionalBranches' => self::REGIONAL_BRANCHES,
+            'branches' => $branches,
+            'prefillBranchId' => old('branch_id', $prefillBranchId),
         ]);
     }
 
@@ -72,18 +64,25 @@ class BranchAdminController extends Controller
 
         try {
             DB::transaction(function () use ($data) {
-                $branch = $this->resolveBranchByName($data['branch_name']);
+                $branch = $this->resolveBranch((int) $data['branch_id']);
 
                 if ($this->branchHasAdmin((int) $branch->id)) {
-                    throw new \RuntimeException('This branch already has an Admin account (1 Admin per Branch).');
+                    throw new \RuntimeException(__('message.sa_branch_already_has_admin'));
+                }
+
+                $username = trim((string) ($data['username'] ?? ''));
+                if ($username === '') {
+                    $username = strtolower(preg_replace('/\s+/', '', $data['name']));
                 }
 
                 $user = User::create([
                     'name' => $data['name'],
-                    'username' => $data['username'] ?? strtolower(str_replace(' ', '', $data['name'])),
+                    'username' => $username,
                     'email' => $data['email'],
                     'password' => Hash::make($data['password']),
-                    'contact_number' => $data['contact_number'] ?? null,
+                    'contact_number' => function_exists('normalizeContactNumber')
+                        ? normalizeContactNumber($data['contact_number'] ?? '')
+                        : ($data['contact_number'] ?? null),
                     'user_type' => 'admin',
                     'branch_id' => (int) $branch->id,
                     'status' => (int) ($data['status'] ?? 1),
@@ -94,7 +93,7 @@ class BranchAdminController extends Controller
                 $user->syncRoles([$role->name]);
             });
         } catch (\RuntimeException $e) {
-            return back()->withInput()->withErrors(['branch_name' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['branch_id' => $e->getMessage()]);
         }
 
         return redirect()
@@ -104,8 +103,6 @@ class BranchAdminController extends Controller
 
     public function edit(int $id)
     {
-        $this->ensureRegionalBranches();
-
         $admin = User::query()
             ->where('user_type', 'admin')
             ->whereNull('deleted_at')
@@ -114,8 +111,8 @@ class BranchAdminController extends Controller
 
         return view('super-admin.branch-admins.form', [
             'admin' => $admin,
-            'branchName' => old('branch_name', $admin->branch->name ?? ''),
-            'regionalBranches' => self::REGIONAL_BRANCHES,
+            'branches' => self::operationalBranches(),
+            'prefillBranchId' => old('branch_id', (int) ($admin->branch_id ?? 0)),
         ]);
     }
 
@@ -130,17 +127,19 @@ class BranchAdminController extends Controller
 
         try {
             DB::transaction(function () use ($data, $admin) {
-                $branch = $this->resolveBranchByName($data['branch_name']);
+                $branch = $this->resolveBranch((int) $data['branch_id']);
 
                 if ($this->branchHasAdmin((int) $branch->id, $admin->id)) {
-                    throw new \RuntimeException('This branch already has an Admin account (1 Admin per Branch).');
+                    throw new \RuntimeException(__('message.sa_branch_already_has_admin'));
                 }
 
                 $payload = [
                     'name' => $data['name'],
-                    'username' => $data['username'] ?? $admin->username,
+                    'username' => trim((string) ($data['username'] ?? '')) ?: $admin->username,
                     'email' => $data['email'],
-                    'contact_number' => $data['contact_number'] ?? null,
+                    'contact_number' => function_exists('normalizeContactNumber')
+                        ? normalizeContactNumber($data['contact_number'] ?? '')
+                        : ($data['contact_number'] ?? null),
                     'branch_id' => (int) $branch->id,
                     'status' => (int) ($data['status'] ?? 1),
                     'user_type' => 'admin',
@@ -154,7 +153,7 @@ class BranchAdminController extends Controller
                 $admin->syncRoles(['admin']);
             });
         } catch (\RuntimeException $e) {
-            return back()->withInput()->withErrors(['branch_name' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['branch_id' => $e->getMessage()]);
         }
 
         return redirect()
@@ -180,7 +179,12 @@ class BranchAdminController extends Controller
     {
         return $request->validate([
             'name' => ['required', 'string', 'max:191'],
-            'username' => ['nullable', 'string', 'max:191'],
+            'username' => [
+                'nullable',
+                'string',
+                'max:191',
+                Rule::unique('users', 'username')->ignore($ignoreUserId)->whereNull('deleted_at'),
+            ],
             'email' => [
                 'required',
                 'email',
@@ -188,38 +192,20 @@ class BranchAdminController extends Controller
                 Rule::unique('users', 'email')->ignore($ignoreUserId)->whereNull('deleted_at'),
             ],
             'contact_number' => ['nullable', 'string', 'max:50'],
-            'branch_name' => ['required', 'string', 'max:191', Rule::in(self::REGIONAL_BRANCHES)],
+            'branch_id' => ['required', 'integer', Rule::in(self::operationalBranches()->pluck('id')->all())],
             'password' => [$ignoreUserId ? 'nullable' : 'required', 'string', 'min:6', 'confirmed'],
             'status' => ['nullable', 'in:0,1'],
         ]);
     }
 
-    private function resolveBranchByName(string $name): Branch
+    private function resolveBranch(int $branchId): Branch
     {
-        $name = trim($name);
-        if (! in_array($name, self::REGIONAL_BRANCHES, true)) {
-            throw new \RuntimeException('Please choose Yangon Branch, Naypyitaw Branch, Taungyi Branch, or MDY Branch.');
+        $branch = self::operationalBranches()->firstWhere('id', $branchId);
+        if (! $branch) {
+            throw new \RuntimeException(__('message.sa_select_branch'));
         }
 
-        $this->ensureRegionalBranches();
-
-        $existing = Branch::query()
-            ->whereNull('deleted_at')
-            ->where('name', $name)
-            ->first();
-
-        if ($existing) {
-            if ((int) $existing->status !== 1) {
-                $existing->update(['status' => 1]);
-            }
-
-            return $existing;
-        }
-
-        return Branch::create([
-            'name' => $name,
-            'status' => 1,
-        ]);
+        return Branch::query()->whereNull('deleted_at')->findOrFail($branchId);
     }
 
     private function branchHasAdmin(int $branchId, ?int $ignoreUserId = null): bool
@@ -230,44 +216,5 @@ class BranchAdminController extends Controller
             ->whereNull('deleted_at')
             ->when($ignoreUserId, fn ($q) => $q->where('id', '!=', $ignoreUserId))
             ->exists();
-    }
-
-    private function ensureRegionalBranches(): void
-    {
-        foreach (self::REGIONAL_BRANCHES as $name) {
-            $branch = Branch::withTrashed()
-                ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
-                ->first();
-
-            if ($branch) {
-                if ($branch->trashed()) {
-                    $branch->restore();
-                }
-                if ($branch->name !== $name || (int) $branch->status !== 1) {
-                    $branch->update(['name' => $name, 'status' => 1]);
-                }
-                continue;
-            }
-
-            // Prefer renaming legacy short names → "* Branch" (keep ids + admins).
-            $legacyMap = [
-                'Yangon Branch' => ['yangon'],
-                'MDY Branch' => ['mdy'],
-            ];
-            foreach ($legacyMap[$name] ?? [] as $legacyName) {
-                $legacy = Branch::withTrashed()
-                    ->whereRaw('LOWER(name) = ?', [$legacyName])
-                    ->first();
-                if ($legacy) {
-                    if ($legacy->trashed()) {
-                        $legacy->restore();
-                    }
-                    $legacy->update(['name' => $name, 'status' => 1]);
-                    continue 2;
-                }
-            }
-
-            Branch::create(['name' => $name, 'status' => 1]);
-        }
     }
 }

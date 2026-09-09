@@ -136,6 +136,7 @@ class ClientDataTable extends DataTable
     public function query(User $model)
     {
         $model = User::whereIn('user_type', ['client']);
+        applyClientBranchScope($model, auth()->user(), (int) ($this->branch_id ?? request('branch_id', 0)));
         $city = request()->input('city_id');
         $country = request()->input('country_id');
         $lastActive = request()->input('last_actived_at');

@@ -62,12 +62,24 @@ class ClientController extends Controller
         $selectedCountryId = request('country_id');
         $country = Country::pluck('name', 'id')->prepend(__('message.select_name', ['select' => __('message.country')]), '')->toArray();
 
+        [$selectedBranchId, $branchFilter, $branchTabs] = resolveDestinationBranchFilter(request());
         $osCountQuery = User::query()->where('user_type', 'client')->withTrashed();
+        applyClientBranchScope($osCountQuery, auth()->user(), $selectedBranchId);
         $approvalCounts = [
             'pending' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_PENDING)->count(),
             'approved' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_APPROVED)->count(),
             'rejected' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_REJECTED)->count(),
         ];
+        $branchTabCounts = User::query()
+            ->where('user_type', 'client')
+            ->whereNull('deleted_at')
+            ->selectRaw('branch_id, COUNT(*) as total')
+            ->groupBy('branch_id')
+            ->pluck('total', 'branch_id');
+        if (forcedBranchId()) {
+            $forced = (int) forcedBranchId();
+            $branchTabCounts = $branchTabCounts->only([$forced]);
+        }
 
         if ($approvalTab === 'approved') {
             $pageTitle = __('message.active_list_form_title', ['form' => __('message.online_shop')]);
@@ -81,7 +93,28 @@ class ClientController extends Controller
         $button = $auth_user->can('users-add') ? '<a href="' . route('users.create') . '" class="btn btn-sm btn-primary pds-os-list-add"><i class="fa fa-plus"></i> ' . __('message.add_form_title', ['form' => __('message.online_shop')]) . '</a>' : '';
         $multi_checkbox_delete = $auth_user->can('users-delete') ? '<button id="deleteSelectedBtn" checked-title = "users-checked" class="btn btn-sm btn-outline-danger">' . __('message.delete_selected') . '</button>' : '';
         $export = $auth_user->can('users-add') ? '<a href="'.route('user.excel').'" class="btn btn-sm btn-outline-success loadRemoteModel"><i class="fa fa-download"></i> '. __('message.export').'</a>' : '';
-        return $dataTable->render('global.user-filter', compact('assets', 'pageTitle', 'button', 'auth_user', 'multi_checkbox_delete','params','reset_file_button','selectedCityId','cities','selectedCountryId','country','export', 'approvalTab', 'approvalCounts'));
+        return $dataTable->with([
+            'branch_id' => $selectedBranchId,
+        ])->render('global.user-filter', compact(
+            'assets',
+            'pageTitle',
+            'button',
+            'auth_user',
+            'multi_checkbox_delete',
+            'params',
+            'reset_file_button',
+            'selectedCityId',
+            'cities',
+            'selectedCountryId',
+            'country',
+            'export',
+            'approvalTab',
+            'approvalCounts',
+            'branchTabs',
+            'selectedBranchId',
+            'branchTabCounts',
+            'branchFilter'
+        ));
     }
     public function referenceindex(ReferenceDataTable $dataTable)
     {
@@ -133,6 +166,19 @@ class ClientController extends Controller
 
         $cities = City::where('status', 1)->orderBy('name')->get(['id', 'name']);
         $defaultCityId = auth()->user()->city_id;
+        $panelBranchId = defaultDestinationBranchId();
+        if ($panelBranchId) {
+            $branchCity = \App\Models\Branch::query()->where('id', $panelBranchId)->value('city_name');
+            if ($branchCity) {
+                $matchedCityId = (int) (City::query()
+                    ->where('status', 1)
+                    ->where('name', $branchCity)
+                    ->value('id') ?? 0);
+                if ($matchedCityId > 0) {
+                    $defaultCityId = $matchedCityId;
+                }
+            }
+        }
 
         return view('users.os-account-modal', compact('cities', 'defaultCityId'));
     }
@@ -169,6 +215,7 @@ class ClientController extends Controller
                     'address' => $request->address,
                     'city_id' => $city->id,
                     'country_id' => $city->country_id,
+                    'branch_id' => $existingUser->branch_id ?: (defaultDestinationBranchId() ?: forcedBranchId()),
                     'os_profile' => array_merge(
                         is_array($existingUser->os_profile) ? $existingUser->os_profile : [],
                         $osProfile
@@ -205,6 +252,7 @@ class ClientController extends Controller
             'address' => $request->address,
             'city_id' => $city->id,
             'country_id' => $city->country_id,
+            'branch_id' => defaultDestinationBranchId() ?: forcedBranchId(),
             'user_type' => 'client',
             'status' => 1,
             'approval_status' => User::APPROVAL_APPROVED,
@@ -314,6 +362,10 @@ class ClientController extends Controller
         if ($is_mobile_verification == 0) {
             $payload['otp_verify_at'] = now();
         }
+
+        $payload['branch_id'] = $payload['branch_id']
+            ?? defaultDestinationBranchId()
+            ?: forcedBranchId();
 
         $result = User::create($payload);
         uploadMediaFile($result, $request->profile_image, 'profile_image');

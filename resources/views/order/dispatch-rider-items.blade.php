@@ -79,6 +79,14 @@
                                 <i class="fas fa-sync-alt" aria-hidden="true"></i>
                                 <span>{{ __('message.update') }}</span>
                             </button>
+                            @if(! empty($canReassignRider))
+                                <button type="button" class="pds-assign-action-btn pds-assign-action-btn--rider" id="riderItemsAssignRider" disabled>
+                                    <span class="pds-assign-action-btn__icon" aria-hidden="true">
+                                        <i class="fas fa-motorcycle"></i>
+                                    </span>
+                                    <span class="pds-assign-action-btn__label">{{ __('message.assigned_rider') }}</span>
+                                </button>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -353,9 +361,12 @@
 
     @include('order.partials._dispatch-item-message-modal')
     @include('order.partials._dispatch-item-gate-modal')
+    @if(! empty($canReassignRider))
+        @include('order.partials._rider_assign_modal')
+    @endif
 
     @section('bottom_script')
-        <script src="{{ asset('js/dispatch-item-form.js') }}?v=26"></script>
+        <script src="{{ asset('js/dispatch-item-form.js') }}?v=28"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(document).ready(function () {
@@ -422,7 +433,13 @@
                 });
 
                 var canBulkUpdate = @json($canBulkUpdate);
+                var canReassignRider = @json(! empty($canReassignRider));
+                var currentRiderId = @json((int) $rider->id);
+                var riderBranchId = @json((int) ($rider->branch_id ?? 0));
                 var bulkUpdateUrl = @json(route('order.dispatch.rider-items.bulk-update', ['riderId' => $rider->id]));
+                var reassignUrl = @json(route('order.dispatch.rider-items.reassign', ['riderId' => $rider->id]));
+                var riderSearchUrl = @json(route('ajax-list', ['type' => 'dispatch_deliveryman_search']));
+                var riderCache = [];
 
                 function formatAmount(value) {
                     return Number(value || 0).toLocaleString('en-US', {
@@ -469,6 +486,7 @@
                         total += parseFloat($(this).closest('tr').data('cust-paid')) || 0;
                     });
                     $('#riderItemsSelectedTotal').text(formatAmount(total));
+                    $('#riderItemsAssignRider').prop('disabled', selectedItemIds().length === 0);
                 }
 
                 $('#riderItemsSelectAll').on('change', function () {
@@ -691,6 +709,114 @@
                         photoFile
                     );
                 });
+
+                function renderReassignRiderRows(rows) {
+                    var $body = $('#riderAssignTableBody').empty();
+                    if (!rows.length) {
+                        $body.append('<tr class="pds-dispatch-empty-row"><td colspan="4">' + @json(__('message.no_record_found')) + '</td></tr>');
+                        return;
+                    }
+                    rows.forEach(function (row, idx) {
+                        $('<tr class="pds-dispatch-table-row"></tr>')
+                            .append('<td>' + (idx + 1) + '</td>')
+                            .append('<td>' + (row.name || row.text || '') + '</td>')
+                            .append('<td>' + (row.branch || row.city || '-') + '</td>')
+                            .append('<td>' + (row.phone || '-') + '</td>')
+                            .data('rider', row)
+                            .appendTo($body);
+                    });
+                }
+
+                function filterReassignRiders(term) {
+                    var query = String(term || '').toLowerCase().trim();
+                    if (!query) {
+                        return riderCache;
+                    }
+                    return riderCache.filter(function (row) {
+                        return (row.name || row.text || '').toLowerCase().indexOf(query) !== -1
+                            || String(row.phone || '').toLowerCase().indexOf(query) !== -1
+                            || String(row.city || '').toLowerCase().indexOf(query) !== -1
+                            || String(row.branch || '').toLowerCase().indexOf(query) !== -1;
+                    });
+                }
+
+                function loadReassignRiders(callback) {
+                    var params = {};
+                    if (riderBranchId > 0) {
+                        params.branch_id = riderBranchId;
+                    }
+                    $.get(riderSearchUrl, params, function (res) {
+                        riderCache = (res.results || []).filter(function (row) {
+                            return parseInt(row.id, 10) !== currentRiderId;
+                        });
+                        if (typeof callback === 'function') {
+                            callback(riderCache);
+                        }
+                    });
+                }
+
+                function submitReassignRider(itemIds, riderId) {
+                    var $btn = $('#riderItemsAssignRider');
+                    $btn.prop('disabled', true);
+                    $.ajax({
+                        url: reassignUrl,
+                        type: 'POST',
+                        data: {
+                            _token: $('meta[name="csrf-token"]').attr('content'),
+                            item_ids: itemIds,
+                            delivery_man_id: riderId,
+                        },
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json',
+                        },
+                        success: function (res) {
+                            $('#riderAssignModal').modal('hide');
+                            if (res && res.message) {
+                                notify(res.message, 'success', function () {
+                                    window.location.reload();
+                                });
+                            } else {
+                                window.location.reload();
+                            }
+                        },
+                        error: function (xhr) {
+                            var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                                ? xhr.responseJSON.message
+                                : @json(__('message.something_went_wrong'));
+                            notify(msg, 'error');
+                            $btn.prop('disabled', selectedItemIds().length === 0);
+                        },
+                    });
+                }
+
+                if (canReassignRider) {
+                    $('#riderItemsAssignRider').on('click', function () {
+                        var ids = selectedItemIds();
+                        if (!ids.length) {
+                            notify(@json(__('message.select_items_to_assign')), 'error');
+                            return;
+                        }
+                        $('#rider_modal_search').val('');
+                        loadReassignRiders(function (rows) {
+                            renderReassignRiderRows(rows);
+                        });
+                        $('#riderAssignModal').modal('show');
+                    });
+
+                    $('#rider_modal_search').on('input', function () {
+                        renderReassignRiderRows(filterReassignRiders($(this).val()));
+                    });
+
+                    $(document).on('click', '#riderAssignTableBody .pds-dispatch-table-row', function () {
+                        var rider = $(this).data('rider');
+                        var ids = selectedItemIds();
+                        if (!rider || !rider.id || !ids.length) {
+                            return;
+                        }
+                        submitReassignRider(ids, rider.id);
+                    });
+                }
             });
         </script>
     @endsection

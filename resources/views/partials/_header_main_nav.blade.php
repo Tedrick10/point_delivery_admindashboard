@@ -1,5 +1,8 @@
 @php
-    $pdsUseHeaderNav = Auth::check() && !in_array(Auth::user()->user_type, ['client', 'delivery_man'], true);
+    $pdsUseHeaderNav = Auth::check() && (
+        isDispatchHub(Auth::user())
+        || ! in_array(Auth::user()->user_type, ['client', 'delivery_man'], true)
+    );
     // Menu is built in sidebar; Blade include scope does not leak $MyNavBar, but
     // Lavary shares "MenuList" and we also share "MyNavBar" after filter.
     $pdsNavBar = $MyNavBar ?? ($MenuList ?? null);

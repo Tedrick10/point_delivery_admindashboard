@@ -22,7 +22,21 @@ class DispatchOrderDataTable extends OrderDataTable
             $this->pickupRiders = User::select('id', 'name', 'contact_number')
                 ->where('user_type', 'delivery_man')
                 ->where('status', 1)
+                ->excludeDispatchHubs()
                 ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->when(isDispatchHub(auth()->user()), function ($query) {
+                    $query->where(function ($inner) {
+                        $inner->where('hub_parent_id', (int) auth()->id())
+                            ->orWhereNull('hub_parent_id')
+                            ->orWhere('hub_parent_id', 0);
+                    });
+                }, function ($query) {
+                    if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'hub_parent_id')) {
+                        $query->where(function ($inner) {
+                            $inner->whereNull('hub_parent_id')->orWhere('hub_parent_id', 0);
+                        });
+                    }
+                })
                 ->availableForAssign()
                 ->orderBy('name')
                 ->get();

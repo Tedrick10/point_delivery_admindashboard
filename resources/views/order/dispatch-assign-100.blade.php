@@ -43,16 +43,39 @@
                 <div class="pds-dispatch-to-assign-topbar-copy">
                     <h4 class="pds-dispatch-to-assign-heading">{{ $pageTitle ?? __('message.assign_100') }}</h4>
                     <p class="pds-dispatch-to-assign-subtitle">
+                        @if(!empty($pageSubtitle))
+                            {{ $pageSubtitle }}
+                            <br>
+                        @endif
                         {{ __('message.item_count') }} = <strong id="assign100ItemCount">{{ $items->count() }}</strong>
                     </p>
                 </div>
+                @php
+                    $showAssignAction = $showAssignAction ?? true;
+                    $assignButtonLabel = $assignButtonLabel ?? __('message.assign_rider');
+                    $needsRider = $needsRider ?? true;
+                    $assignActionUrl = $assignActionUrl ?? route('order.dispatch.assign-rider');
+                    $hideBranchTabs = $hideBranchTabs ?? false;
+                    $showSendToMdy = $showSendToMdy ?? false;
+                    $sendToMdyUrl = $sendToMdyUrl ?? route('order.dispatch.send-to-mdy');
+                @endphp
                 <div class="pds-dispatch-to-assign-topbar-actions">
+                    @if($showSendToMdy)
+                    <button type="button" class="pds-assign-action-btn pds-assign-action-btn--rider" id="sendToMdyBtn" disabled>
+                        <span class="pds-assign-action-btn__icon" aria-hidden="true">
+                            <i class="fas fa-share"></i>
+                        </span>
+                        <span class="pds-assign-action-btn__label">{{ __('message.send_to_mdy') }}</span>
+                    </button>
+                    @endif
+                    @if($showAssignAction)
                     <button type="button" class="pds-assign-action-btn pds-assign-action-btn--rider" id="assignRiderBtn" disabled>
                         <span class="pds-assign-action-btn__icon" aria-hidden="true">
-                            <i class="fas fa-motorcycle"></i>
+                            <i class="fas {{ $needsRider ? 'fa-motorcycle' : 'fa-check' }}"></i>
                         </span>
-                        <span class="pds-assign-action-btn__label">{{ __('message.assign_rider') }}</span>
+                        <span class="pds-assign-action-btn__label">{{ $assignButtonLabel }}</span>
                     </button>
+                    @endif
                     <button type="button" class="pds-dispatch-items-icon-btn" onclick="window.print()" title="{{ __('message.print') }}">
                         <i class="fas fa-print"></i>
                     </button>
@@ -64,7 +87,7 @@
                 $activeToBranchId = (int) ($activeToBranchId ?? 0);
                 $tabCounts = $tabCounts ?? collect();
             @endphp
-            @if($destinationBranches->isNotEmpty())
+            @if(!$hideBranchTabs && $destinationBranches->isNotEmpty())
                 <div class="pds-assign-100-tabs">
                     @foreach($destinationBranches as $branchTab)
                         @php $count = (int) ($tabCounts[$branchTab->id] ?? 0); @endphp
@@ -190,7 +213,7 @@
                                         <td>{{ $deliveryRider !== '-' ? $deliveryRider : '-' }}</td>
                                         <td>{{ (float) $item->advance_paid == 0.0 ? '' : number_format((float) $item->advance_paid) }}</td>
                                         <td>{{ number_format((float) $item->item_value) }}</td>
-                                        <td class="text-right">{!! formatDispatchDeliAmountHtml($item) !!}</td>
+                                        <td class="text-right pds-follow-up-num-cell">{!! formatDispatchDeliAmountHtml($item) !!}</td>
                                         <td title="{{ $item->remark }}">{{ stringLong($item->remark ?? '', 'title', 16) ?: '-' }}</td>
                                         <td>
                                             @include('order.dispatch-item-action', ['item' => $item, 'hideGate' => true])
@@ -219,6 +242,11 @@
                 var activeToBranchId = {{ (int) ($activeToBranchId ?? 0) }};
                 var osInputSelector = '#assign_100_os_name';
                 var riderCache = [];
+                var needsRider = @json((bool) ($needsRider ?? true));
+                var assignActionUrl = @json($assignActionUrl ?? route('order.dispatch.assign-rider'));
+                var showAssignAction = @json((bool) ($showAssignAction ?? true));
+                var showSendToMdy = @json((bool) ($showSendToMdy ?? false));
+                var sendToMdyUrl = @json($sendToMdyUrl ?? route('order.dispatch.send-to-mdy'));
 
                 window.reloadDispatchItemsTable = function () {
                     window.location.reload();
@@ -344,10 +372,14 @@
                 function updateAssignRiderButtonState() {
                     var count = getVisibleCheckedItemIds().length;
                     $('#assignRiderBtn').prop('disabled', count === 0);
+                    $('#sendToMdyBtn').prop('disabled', count === 0);
                 }
 
-                function submitAssignRider(itemIds, riderId) {
-                    if (!itemIds.length || !riderId) {
+                function submitAssignAction(itemIds, riderId) {
+                    if (!itemIds.length) {
+                        return;
+                    }
+                    if (needsRider && !riderId) {
                         return;
                     }
 
@@ -360,14 +392,18 @@
 
                     $('#assignRiderBtn').prop('disabled', true);
 
+                    var payload = {
+                        _token: $('meta[name="csrf-token"]').attr('content'),
+                        item_ids: itemIds
+                    };
+                    if (needsRider && riderId) {
+                        payload.delivery_man_id = riderId;
+                    }
+
                     $.ajax({
-                        url: "{{ route('order.dispatch.assign-rider') }}",
+                        url: assignActionUrl,
                         type: 'POST',
-                        data: {
-                            _token: $('meta[name="csrf-token"]').attr('content'),
-                            item_ids: itemIds,
-                            delivery_man_id: riderId
-                        },
+                        data: payload,
                         success: function (res) {
                             $('#riderAssignModal').modal('hide');
                             if (res && res.message && typeof showMessage === 'function') {
@@ -438,7 +474,7 @@
                     if (!rider || !rider.id || !itemIds.length) {
                         return;
                     }
-                    submitAssignRider(itemIds, rider.id);
+                    submitAssignAction(itemIds, rider.id);
                 });
 
                 var assign100FilterTimer;
@@ -468,7 +504,55 @@
                         }
                         return;
                     }
-                    openRiderAssignModal();
+                    if (needsRider) {
+                        openRiderAssignModal();
+                        return;
+                    }
+                    submitAssignAction(itemIds, null);
+                });
+
+                $('#sendToMdyBtn').on('click', function () {
+                    var itemIds = getVisibleCheckedItemIds();
+                    if (!itemIds.length) {
+                        if (typeof errorMessage === 'function') {
+                            errorMessage('{{ __('message.select_items_to_assign') }}');
+                        }
+                        return;
+                    }
+                    if (itemIds.length > 100) {
+                        if (typeof errorMessage === 'function') {
+                            errorMessage('{{ __('message.max_assign_100_items') }}');
+                        }
+                        return;
+                    }
+                    $('#sendToMdyBtn').prop('disabled', true);
+                    $.ajax({
+                        url: sendToMdyUrl,
+                        type: 'POST',
+                        data: {
+                            _token: $('meta[name="csrf-token"]').attr('content'),
+                            item_ids: itemIds
+                        },
+                        success: function (res) {
+                            if (res && res.message && typeof showMessage === 'function') {
+                                showMessage(res.message);
+                            }
+                            if (res && res.redirect) {
+                                window.location.href = res.redirect;
+                                return;
+                            }
+                            window.location.reload();
+                        },
+                        error: function (xhr) {
+                            updateAssignRiderButtonState();
+                            var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                                ? xhr.responseJSON.message
+                                : '{{ __('message.something_went_wrong') }}';
+                            if (typeof errorMessage === 'function') {
+                                errorMessage(msg);
+                            }
+                        }
+                    });
                 });
 
                 updateAssignRiderButtonState();

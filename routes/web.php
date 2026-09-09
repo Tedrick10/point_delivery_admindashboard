@@ -261,11 +261,18 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('dispatch-to-assign', [OrderController::class, 'dispatchToAssign'])->name('order.dispatch.to-assign');
     Route::post('dispatch-to-assign/move', [OrderController::class, 'dispatchMoveToAssign100'])->name('order.dispatch.move-to-assign-100');
     Route::get('dispatch-assign-100', [OrderController::class, 'dispatchAssign100'])->name('order.dispatch.assign-100');
+    Route::get('dispatch-from-mdy-to-ygn', [OrderController::class, 'dispatchFromMdyToYgn'])->name('order.dispatch.from-mdy-to-ygn');
+    Route::get('dispatch-from-mdy/{hub}', [OrderController::class, 'dispatchFromMdyHub'])->name('order.dispatch.from-mdy-hub');
+    Route::post('dispatch-from-mdy/accept', [OrderController::class, 'dispatchFromMdyAccept'])->name('order.dispatch.from-mdy-accept');
+    Route::get('dispatch-from-hub-to-mdy/{hub}', [OrderController::class, 'dispatchFromHubToMdy'])->name('order.dispatch.from-hub-to-mdy');
+    Route::post('dispatch-from-hub-to-mdy/accept', [OrderController::class, 'dispatchFromHubToMdyAccept'])->name('order.dispatch.from-hub-to-mdy-accept');
+    Route::post('dispatch-assign-100/send-to-mdy', [OrderController::class, 'dispatchSendToMdy'])->name('order.dispatch.send-to-mdy');
     Route::post('dispatch-assign-100/assign-rider', [OrderController::class, 'dispatchAssignRider'])->name('order.dispatch.assign-rider');
     Route::get('dispatch-assigned-items', [OrderController::class, 'dispatchAssignedItems'])->name('order.dispatch.assigned-items');
     Route::get('dispatch-rider-list', [OrderController::class, 'dispatchRiderList'])->name('order.dispatch.rider-list');
     Route::get('dispatch-rider-list/{riderId}/items', [OrderController::class, 'dispatchRiderItems'])->name('order.dispatch.rider-items');
     Route::post('dispatch-rider-list/{riderId}/items/bulk-update', [OrderController::class, 'dispatchRiderItemsBulkUpdate'])->name('order.dispatch.rider-items.bulk-update');
+    Route::post('dispatch-rider-list/{riderId}/items/reassign', [OrderController::class, 'dispatchRiderItemsReassign'])->name('order.dispatch.rider-items.reassign');
     Route::post('dispatch-rider-list/{riderId}/items/mark-completed', [OrderController::class, 'dispatchRiderItemsMarkCompleted'])->name('order.dispatch.rider-items.mark-completed');
     Route::get('dispatch-os-list', [OrderController::class, 'dispatchOsList'])->name('order.dispatch.os-list');
     Route::get('dailychecklist', [DailyCheckListController::class, 'index'])->name('order.daily-checklist');

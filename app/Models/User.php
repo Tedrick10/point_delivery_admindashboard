@@ -37,7 +37,8 @@ class User extends Authenticatable implements HasMedia
         'player_id', 'latitude', 'longitude', 'status', 'rider_work_on', 'rider_work_off_date', 'last_notification_seen' , 'login_type', 'uid', 'fcm_token', 'otp_verify_at'
         ,'app_version', 'last_location_update_at', 'app_source','last_actived_at','document_verified_at' ,'is_autoverified_document',
         'is_autoverified_email','is_autoverified_mobile','vehicle_id','referral_code','partner_referral_code','flag','apple_user_identifier',
-        'is_vip', 'welcome_orders_used', 'is_temp_password', 'created_by_admin', 'os_profile',
+        'is_vip', 'welcome_orders_used', 'is_temp_password', 'created_by_admin', 'is_dispatch_hub',
+        'hub_parent_id', 'os_profile',
         'approval_status',
     ];
 
@@ -69,6 +70,8 @@ class User extends Authenticatable implements HasMedia
         'last_location_update_at'   => 'datetime',
         'daily_contact_date' => 'date',
         'os_profile' => 'array',
+        'is_dispatch_hub' => 'boolean',
+        'hub_parent_id' => 'integer',
     ];
 
     /**
@@ -226,6 +229,70 @@ class User extends Authenticatable implements HasMedia
         }
 
         return $query->where('rider_work_on', true);
+    }
+
+    public function isDispatchHub(): bool
+    {
+        return (int) ($this->is_dispatch_hub ?? 0) === 1;
+    }
+
+    public function scopeDispatchHubs($query)
+    {
+        return $query->where('user_type', 'delivery_man')->where('is_dispatch_hub', 1);
+    }
+
+    public function scopeExcludeDispatchHubs($query)
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('users', 'is_dispatch_hub')) {
+            return $query;
+        }
+
+        return $query->where(function ($inner) {
+            $inner->whereNull('is_dispatch_hub')->orWhere('is_dispatch_hub', 0);
+        });
+    }
+
+    /**
+     * MDY / admin Rider List: hubs + regular riders.
+     * Hub panels: only last-mile riders created on that hub.
+     */
+    public function scopeVisibleOnAdminRiderList($query, ?self $viewer = null)
+    {
+        $viewer = $viewer ?? auth()->user();
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('users', 'is_dispatch_hub')) {
+            return $query;
+        }
+
+        if ($viewer && (int) ($viewer->is_dispatch_hub ?? 0) === 1) {
+            return $query->where('hub_parent_id', (int) $viewer->id)
+                ->where(function ($inner) {
+                    $inner->whereNull('is_dispatch_hub')->orWhere('is_dispatch_hub', 0);
+                });
+        }
+
+        return $query->where(function ($outer) {
+            $outer->where('is_dispatch_hub', 1)
+                ->orWhere(function ($regular) {
+                    $regular->where(function ($hubFlag) {
+                        $hubFlag->whereNull('is_dispatch_hub')->orWhere('is_dispatch_hub', 0);
+                    });
+                    if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'hub_parent_id')) {
+                        $regular->where(function ($parent) {
+                            $parent->whereNull('hub_parent_id')->orWhere('hub_parent_id', 0);
+                        });
+                    }
+                });
+        });
+    }
+
+    public function hubParent()
+    {
+        return $this->belongsTo(self::class, 'hub_parent_id');
+    }
+
+    public function hubDeliveryMen()
+    {
+        return $this->hasMany(self::class, 'hub_parent_id');
     }
 
     public function deliveryManDocument(){

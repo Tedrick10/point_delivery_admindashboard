@@ -12,6 +12,7 @@
         // Admin / staff panel — trimmed sidebar
         if (
             Auth::user()->user_type == 'admin' ||
+            isDispatchHub(Auth::user()) ||
             (Auth::user()->user_type != 'client' && Auth::user()->user_type != 'delivery_man')
         ) {
             // Dashboard
@@ -76,14 +77,29 @@
                 ->prepend('<i class="fas fa-user-plus"></i>')
                 ->link->attr(['class' => '']);
 
-            $assign100Count = DispatchOrderItem::where('status', 'assigned')
-                ->whereHas('order', function ($q) {
-                    $q->whereIn('status', ['courier_picked_up', 'courier_departed', 'completed']);
-                })
-                ->count();
+            $hubService = app(\App\Services\DispatchHubService::class);
+            $authUser = Auth::user();
+            $isHubUser = isDispatchHub($authUser);
+            $assign100Count = $hubService->poolCount($isHubUser ? (int) $authUser->id : null);
+            $assign100Label = '<span>' . __('message.assign_100') . '</span>';
+            if ($assign100Count > 0) {
+                $assign100Label =
+                    '<span>' . __('message.assign_100') . ' ' .
+                    '<span class="badge badge-pill badge-warning p-1 animate__animated animate__flash" id="assign100Count">' .
+                    $assign100Count .
+                    '</span></span>';
+            }
 
-            if ($assign100Count == 0) {
-                $menu->order
+            $menu->order
+                ->add($assign100Label, ['class' => 'sidebar-layout'])
+                ->data('permission', 'order-list')
+                ->prepend('<i class="fas fa-users-cog"></i>')
+                ->nickname('assign100')
+                ->link->attr(['class' => ''])
+                ->href('#assign100');
+
+            $addAssign100Child = function () use ($menu) {
+                $menu->assign100
                     ->add('<span>' . __('message.assign_100') . '</span>', [
                         'class' => 'sidebar-layout',
                         'route' => 'order.dispatch.assign-100',
@@ -91,19 +107,49 @@
                     ->data('permission', 'order-list')
                     ->prepend('<i class="fas fa-users-cog"></i>')
                     ->link->attr(['class' => '']);
-            } else {
-                $assign100Badge =
-                    '<span class="badge badge-pill badge-warning p-1 animate__animated animate__flash" id="assign100Count">' .
-                    $assign100Count .
-                    '</span>';
-                $menu->order
-                    ->add('<span>' . __('message.assign_100') . ' ' . $assign100Badge . '</span>', [
+            };
+
+            if ($isHubUser) {
+                $hubInboxCount = $hubService->inboxCount((int) $authUser->id);
+                $hubInboxLabel = '<span>' . __('message.from_mdy_to_ygn') . '</span>';
+                if ($hubInboxCount > 0) {
+                    $hubInboxLabel =
+                        '<span>' . __('message.from_mdy_to_ygn') . ' ' .
+                        '<span class="badge badge-pill badge-info p-1">' .
+                        $hubInboxCount .
+                        '</span></span>';
+                }
+                $menu->assign100
+                    ->add($hubInboxLabel, [
                         'class' => 'sidebar-layout',
-                        'route' => 'order.dispatch.assign-100',
+                        'route' => 'order.dispatch.from-mdy-to-ygn',
                     ])
                     ->data('permission', 'order-list')
-                    ->prepend('<i class="fas fa-users-cog"></i>')
+                    ->prepend('<i class="fas fa-truck-loading"></i>')
                     ->link->attr(['class' => '']);
+                $addAssign100Child();
+            } else {
+                $addAssign100Child();
+                foreach ($hubService->accounts() as $hubAccount) {
+                    $inboundCount = $hubService->inboundCount((int) $hubAccount->id);
+                    $hubLabelText = $hubService->inboundMenuLabel($hubAccount);
+                    $hubLabel = '<span>' . e($hubLabelText) . '</span>';
+                    if ($inboundCount > 0) {
+                        $hubLabel =
+                            '<span>' . e($hubLabelText) . ' ' .
+                            '<span class="badge badge-pill badge-info p-1">' .
+                            $inboundCount .
+                            '</span></span>';
+                    }
+                    $menu->assign100
+                        ->add($hubLabel, [
+                            'class' => 'sidebar-layout',
+                            'route' => ['order.dispatch.from-hub-to-mdy', $hubAccount->id],
+                        ])
+                        ->data('permission', 'order-list')
+                        ->prepend('<i class="fas fa-truck-loading"></i>')
+                        ->link->attr(['class' => '']);
+                }
             }
 
             $assignedItemCount = DispatchOrderItem::query()

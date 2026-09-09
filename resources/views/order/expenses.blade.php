@@ -175,13 +175,6 @@
                         <p>{{ __('message.no_record_found') }}</p>
                     </div>
                 @endforelse
-
-                @if($canEdit)
-                    <button type="button" class="pds-expense-card pds-expense-card--add" id="expenses-add-card" title="{{ __('message.expenses_add_card') }}">
-                        <span class="pds-expense-card--add__plus">+</span>
-                        <span class="pds-expense-card--add__label">{{ __('message.expenses_add_card') }}</span>
-                    </button>
-                @endif
             </div>
         </div>
     </div>
@@ -751,7 +744,6 @@
                 }
             }
 
-            document.getElementById('expenses-add-card')?.addEventListener('click', () => openForm('create'));
             document.getElementById('expense-add-row')?.addEventListener('click', () => {
                 if (viewingOnly) return;
                 addRow({ subject: '', amount: '' });

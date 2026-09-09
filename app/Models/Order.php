@@ -154,12 +154,16 @@ class Order extends Model implements HasMedia
     public function scopeMyOrder($query)
     {
         $user = auth()->user();
-        if (in_array($user->user_type, ['admin', 'super_admin'], true)) {
+        $isHub = function_exists('isDispatchHub') && isDispatchHub($user);
+        if (in_array($user->user_type, ['admin', 'super_admin'], true) || $isHub) {
             $branchId = function_exists('forcedBranchId') ? forcedBranchId($user) : null;
             if ($branchId) {
-                return $query->whereHas('dispatchItems', function ($q) use ($branchId) {
-                    $q->where('from_branch_id', $branchId)
-                        ->orWhere('to_branch_id', $branchId);
+                return $query->where(function ($outer) use ($branchId) {
+                    $outer->whereHas('client', function ($client) use ($branchId) {
+                        $client->where('branch_id', $branchId);
+                    })->orWhereHas('dispatchItems', function ($q) use ($branchId) {
+                        $q->where('from_branch_id', $branchId);
+                    });
                 });
             }
 

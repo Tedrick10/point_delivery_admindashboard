@@ -238,8 +238,9 @@ class OrderDataTable extends DataTable
 
         if ($auth->user_type == 'client') {
             $query->where('client_id', $auth->id);
-        }
-        if (!in_array($auth->user_type, ['client', 'admin']) && $auth->city_id) {
+        } elseif (function_exists('isDispatchHub') && isDispatchHub($auth)) {
+            $query->myOrder();
+        } elseif (!in_array($auth->user_type, ['client', 'admin', 'super_admin'], true) && $auth->city_id) {
             $query->where('city_id', $auth->city_id);
         }
 

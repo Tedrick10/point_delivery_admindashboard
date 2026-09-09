@@ -679,10 +679,12 @@ class DispatchOrderWorkflowService
         $items = (clone $movedQuery)->get();
         $moved = 0;
 
+        $hubService = app(\App\Services\DispatchHubService::class);
         foreach ($items as $item) {
             $item->status = 'assigned';
             $item->assigned_at = now();
             $item->received_date = Carbon::now('Asia/Yangon')->toDateString();
+            $hubService->claimLocalOriginItem($item, $order, auth()->user());
             $item->save();
             $moved++;
         }
@@ -710,6 +712,9 @@ class DispatchOrderWorkflowService
         return DispatchOrderItem::query()
             ->where('status', 'assigned')
             ->whereNull('delivery_man_id')
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('dispatch_order_items', 'hub_user_id'), function ($query) {
+                $query->whereNull('hub_user_id');
+            })
             ->where(function ($query) use ($today) {
                 $query->whereNull('received_date')
                     ->orWhere('received_date', '<', $today);
@@ -730,6 +735,9 @@ class DispatchOrderWorkflowService
         return DispatchOrderItem::query()
             ->where('order_id', $order->id)
             ->where('status', 'assigned')
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('dispatch_order_items', 'hub_user_id'), function ($query) {
+                $query->whereNull('hub_user_id');
+            })
             ->update([
                 'status' => 'collected',
                 'assigned_at' => null,
@@ -743,6 +751,9 @@ class DispatchOrderWorkflowService
     {
         return DispatchOrderItem::query()
             ->where('status', 'assigned')
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('dispatch_order_items', 'hub_user_id'), function ($query) {
+                $query->whereNull('hub_user_id');
+            })
             ->whereHas('order', function ($q) {
                 $q->whereNotIn('status', ['courier_picked_up', 'courier_departed', 'completed']);
             })

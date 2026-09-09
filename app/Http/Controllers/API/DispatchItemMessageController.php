@@ -45,9 +45,13 @@ class DispatchItemMessageController extends Controller
             ->keyBy('id');
 
         $osName = trim((string) ($user->name ?? ''));
+        $osUsername = trim((string) ($user->username ?? ''));
+        $osPhone = trim((string) (function_exists('normalizeContactNumber')
+            ? normalizeContactNumber($user->contact_number ?? '')
+            : ($user->contact_number ?? '')));
         $osProfileImage = resolveUploadedProfileImageUrl($user, true);
 
-        $data = $threads->map(function ($row) use ($items, $lastMessages, $osName, $osProfileImage) {
+        $data = $threads->map(function ($row) use ($items, $lastMessages, $osName, $osUsername, $osPhone, $osProfileImage) {
             $item = $items->get($row->dispatch_order_item_id);
             $last = $lastMessages->get($row->last_message_id);
             $lastText = trim((string) ($last?->message ?? ''));
@@ -62,6 +66,8 @@ class DispatchItemMessageController extends Controller
                 'order_id' => $item?->order_id,
                 'parcel_id' => $item?->code ?: ('#'.$row->dispatch_order_item_id),
                 'os_name' => $osName !== '' ? $osName : null,
+                'os_username' => $osUsername !== '' ? $osUsername : null,
+                'os_phone' => $osPhone !== '' ? $osPhone : null,
                 'os_profile_image' => $osProfileImage,
                 'customer_name' => trim((string) ($item?->customer_name ?? '')) ?: null,
                 'customer_phone' => trim((string) ($item?->customer_phone ?? '')) ?: null,
@@ -86,6 +92,8 @@ class DispatchItemMessageController extends Controller
                 return strcmp((string) ($b['last_message_at'] ?? ''), (string) ($a['last_message_at'] ?? ''));
             })
             ->values();
+
+        $data = $this->filterMessageThreads($data, $request);
 
         $totalUnread = (int) $data->filter(function ($row) {
             return (int) ($row['unread_count'] ?? 0) > 0;
@@ -228,6 +236,59 @@ class DispatchItemMessageController extends Controller
             'message' => __('message.save_form', ['form' => __('message.chat')]),
             'data' => new DispatchItemMessageResource($message->fresh(['sender', 'media'])),
         ]);
+    }
+
+    /**
+     * Filter OS message threads by username (OS / customer name) and phone.
+     */
+    protected function filterMessageThreads($threads, Request $request)
+    {
+        $search = trim((string) $request->get('search', ''));
+        $username = trim((string) $request->get('username', ''));
+        $phone = trim((string) $request->get('phone', ''));
+
+        if ($search === '' && $username === '' && $phone === '') {
+            return $threads;
+        }
+
+        $phoneDigits = preg_replace('/\D+/', '', $phone !== '' ? $phone : $search) ?? '';
+
+        return $threads->filter(function ($row) use ($search, $username, $phone, $phoneDigits) {
+            $osName = (string) ($row['os_name'] ?? '');
+            $osUsername = (string) ($row['os_username'] ?? '');
+            $osPhone = (string) ($row['os_phone'] ?? '');
+            $customerName = (string) ($row['customer_name'] ?? '');
+            $customerPhone = (string) ($row['customer_phone'] ?? '');
+            $parcelId = (string) ($row['parcel_id'] ?? '');
+            $combinedPhone = trim($osPhone.' '.$customerPhone);
+            $combinedPhoneDigits = preg_replace('/\D+/', '', $combinedPhone) ?? '';
+
+            $matchUsername = static function (string $term) use ($osName, $osUsername, $customerName, $parcelId): bool {
+                if ($term === '') {
+                    return true;
+                }
+
+                return stripos($osName, $term) !== false
+                    || stripos($osUsername, $term) !== false
+                    || stripos($customerName, $term) !== false
+                    || stripos($parcelId, $term) !== false;
+            };
+
+            $matchPhone = static function (string $term, string $digits) use ($combinedPhone, $combinedPhoneDigits): bool {
+                if ($term === '' && $digits === '') {
+                    return true;
+                }
+
+                return ($term !== '' && stripos($combinedPhone, $term) !== false)
+                    || ($digits !== '' && $combinedPhoneDigits !== '' && str_contains($combinedPhoneDigits, $digits));
+            };
+
+            if ($username === '' && $phone === '' && $search !== '') {
+                return $matchUsername($search) || $matchPhone($search, $phoneDigits);
+            }
+
+            return $matchUsername($username) && $matchPhone($phone, $phoneDigits);
+        })->values();
     }
 
     protected function assertCanAccessItem($user, DispatchOrderItem $item): void

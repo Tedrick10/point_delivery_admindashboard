@@ -276,6 +276,7 @@ class OrderController extends Controller
             'contact_number' => normalizeContactNumber($request->os_phone),
             'address' => $request->os_address,
         ];
+        $pickupPoint = $this->stampHubOriginOnPickupPoint($pickupPoint);
 
         // Delivery/customer details are filled per item — never copy OS pickup into delivery.
         $deliveryPoint = [
@@ -660,31 +661,53 @@ class OrderController extends Controller
         app(DispatchOrderWorkflowService::class)->reclaimPrematureAssign100Items();
         app(DispatchOrderWorkflowService::class)->refreshAssign100PoolReceivedDates();
 
+        $hubService = app(\App\Services\DispatchHubService::class);
+        $authUser = auth()->user();
+        $isHubUser = $hubService->isHub($authUser);
+        if ($isHubUser) {
+            $hubService->claimLocalOriginItemsForHub($authUser);
+        }
+
         $destinationBranches = \App\Models\Branch::query()
             ->where('status', 1)
-            ->orderByRaw(destinationBranchOrderSql())
+            ->orderByRaw(destinationBranchOrderSql($authUser))
             ->orderBy('name')
             ->get(['id', 'name', 'city_name']);
 
-        $tabCounts = DispatchOrderItem::query()
-            ->where('status', 'assigned')
+        $tabQuery = DispatchOrderItem::query()->where('status', 'assigned');
+        if ($isHubUser) {
+            $hubService->applyHubPool($tabQuery, (int) $authUser->id);
+        } else {
+            $hubService->applyMdyPool($tabQuery);
+        }
+        $tabCounts = $tabQuery
             ->selectRaw('to_branch_id, COUNT(*) as total')
             ->groupBy('to_branch_id')
             ->pluck('total', 'to_branch_id');
 
         $activeToBranchId = (int) $request->input('to_branch_id', 0);
         if ($activeToBranchId <= 0) {
-            $preferred = $destinationBranches->firstWhere('name', 'မန္တလေး')
-                ?: $destinationBranches->first(fn ($b) => (int) ($tabCounts[$b->id] ?? 0) > 0)
-                ?: $destinationBranches->first();
-            $activeToBranchId = (int) ($preferred?->id ?? 0);
+            if ($isHubUser) {
+                $activeToBranchId = (int) (forcedBranchId($authUser) ?: ($authUser->branch_id ?? 0));
+            } else {
+                $preferred = $destinationBranches->firstWhere('name', 'မန္တလေး')
+                    ?: $destinationBranches->first(fn ($b) => (int) ($tabCounts[$b->id] ?? 0) > 0)
+                    ?: $destinationBranches->first();
+                $activeToBranchId = (int) ($preferred?->id ?? 0);
+            }
         }
 
         $itemsQuery = DispatchOrderItem::query()
             ->where('status', 'assigned')
-            ->with(['order.client', 'order.delivery_man', 'fromBranch', 'toBranch', 'deliveryMan'])
+            ->with(['order.client', 'order.delivery_man', 'fromBranch', 'toBranch', 'deliveryMan', 'hubUser'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
+
+        if ($isHubUser) {
+            $hubService->applyHubPool($itemsQuery, (int) $authUser->id);
+        } else {
+            $hubService->applyMdyPool($itemsQuery);
+        }
 
         if ($activeToBranchId > 0) {
             $itemsQuery->where('to_branch_id', $activeToBranchId);
@@ -693,16 +716,306 @@ class OrderController extends Controller
         $items = $itemsQuery->get();
 
         $pageTitle = __('message.assign_100');
+        $pageSubtitle = $isHubUser
+            ? __('message.hub_assign_100_subtitle')
+            : null;
         $assets = [];
+        $assignMode = 'pool';
+        $hideBranchTabs = false;
+        $assignActionUrl = route('order.dispatch.assign-rider');
+        $assignButtonLabel = __('message.assign_rider');
+        $needsRider = true;
+        $showSendToMdy = $isHubUser;
+        $sendToMdyUrl = route('order.dispatch.send-to-mdy');
 
         return view('order.dispatch-assign-100', compact(
             'pageTitle',
+            'pageSubtitle',
             'assets',
             'items',
             'destinationBranches',
             'activeToBranchId',
-            'tabCounts'
+            'tabCounts',
+            'assignMode',
+            'hideBranchTabs',
+            'assignActionUrl',
+            'assignButtonLabel',
+            'needsRider',
+            'showSendToMdy',
+            'sendToMdyUrl'
         ));
+    }
+
+    public function dispatchFromMdyToYgn()
+    {
+        if (! auth()->user()->can('order-list')) {
+            return redirect()->back()->withErrors(__('message.demo_permission_denied'));
+        }
+
+        $hub = auth()->user();
+        if (! isDispatchHub($hub)) {
+            return redirect()->route('order.dispatch.assign-100')->withErrors(__('message.demo_permission_denied'));
+        }
+
+        return $this->renderHubInbox($hub, true);
+    }
+
+    public function dispatchFromMdyHub($hub)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return redirect()->back()->withErrors(__('message.demo_permission_denied'));
+        }
+
+        $hubService = app(\App\Services\DispatchHubService::class);
+        $hubUser = $hubService->findHub((int) $hub);
+        if (! $hubUser) {
+            return redirect()->route('order.dispatch.assign-100')->withErrors(__('message.no_record_found'));
+        }
+
+        $authUser = auth()->user();
+        if (isDispatchHub($authUser) && (int) $authUser->id !== (int) $hubUser->id) {
+            return redirect()->route('order.dispatch.from-mdy-to-ygn');
+        }
+
+        $isOwner = isDispatchHub($authUser) && (int) $authUser->id === (int) $hubUser->id;
+
+        return $this->renderHubInbox($hubUser, $isOwner, $isOwner ? 'inbox' : 'queue');
+    }
+
+    public function dispatchFromMdyAccept(Request $request)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $hub = auth()->user();
+        if (! isDispatchHub($hub)) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $request->validate([
+            'item_ids' => 'required|array|min:1|max:100',
+            'item_ids.*' => 'integer|exists:dispatch_order_items,id',
+        ]);
+
+        $hubService = app(\App\Services\DispatchHubService::class);
+        $items = DispatchOrderItem::query()
+            ->whereIn('id', $request->item_ids)
+            ->where('status', 'assigned');
+        $hubService->applyHubInbox($items, (int) $hub->id);
+        $items = $items->get(['id', 'order_id']);
+
+        if ($items->isEmpty()) {
+            return response()->json(['message' => __('message.no_record_found')], 422);
+        }
+
+        $updated = DispatchOrderItem::query()
+            ->whereIn('id', $items->pluck('id'))
+            ->where('hub_user_id', $hub->id)
+            ->whereNull('hub_accepted_at')
+            ->update([
+                'hub_accepted_at' => now(),
+                'assigned_at' => now(),
+                'received_date' => Carbon::now('Asia/Yangon')->toDateString(),
+            ]);
+
+        if ($updated === 0) {
+            return response()->json(['message' => __('message.no_record_found')], 422);
+        }
+
+        $audit = app(DispatchOrderAuditService::class);
+        foreach ($items->groupBy('order_id') as $orderId => $orderItems) {
+            $order = Order::find($orderId);
+            if ($order) {
+                try {
+                    $audit->logMovedToAssign100($order, $orderItems->count());
+                } catch (\Throwable $e) {
+                    \Log::warning('dispatch audit failed after hub accept to assign 100', [
+                        'order_id' => $orderId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        return response()->json([
+            'message' => __('message.move_to_hub_assign_100_success', ['count' => $updated]),
+            'redirect' => route('order.dispatch.assign-100'),
+        ]);
+    }
+
+    public function dispatchFromHubToMdy($hub)
+    {
+        if (! auth()->user()->can('order-list') || isDispatchHub(auth()->user())) {
+            return redirect()->back()->withErrors(__('message.demo_permission_denied'));
+        }
+
+        $hubService = app(\App\Services\DispatchHubService::class);
+        $hubUser = $hubService->findHub((int) $hub);
+        if (! $hubUser) {
+            return redirect()->route('order.dispatch.assign-100')->withErrors(__('message.no_record_found'));
+        }
+
+        $itemsQuery = DispatchOrderItem::query()
+            ->where('status', 'assigned')
+            ->with(['order.client', 'order.delivery_man', 'fromBranch', 'toBranch', 'deliveryMan', 'hubUser'])
+            ->orderByDesc('mdy_inbox_at')
+            ->orderByDesc('id');
+        $hubService->applyMdyInbound($itemsQuery, (int) $hubUser->id);
+        $items = $itemsQuery->get();
+
+        $pageTitle = $hubService->inboundMenuLabel($hubUser);
+        $pageSubtitle = __('message.hub_to_mdy_subtitle');
+        $assets = [];
+        $destinationBranches = collect();
+        $activeToBranchId = 0;
+        $tabCounts = collect();
+        $assignMode = 'mdy_inbound';
+        $hideBranchTabs = true;
+        $assignActionUrl = route('order.dispatch.from-hub-to-mdy-accept');
+        $assignButtonLabel = __('message.move_to_hub_assign_100');
+        $needsRider = false;
+        $showAssignAction = true;
+
+        return view('order.dispatch-assign-100', compact(
+            'pageTitle',
+            'pageSubtitle',
+            'assets',
+            'items',
+            'destinationBranches',
+            'activeToBranchId',
+            'tabCounts',
+            'assignMode',
+            'hideBranchTabs',
+            'assignActionUrl',
+            'assignButtonLabel',
+            'needsRider',
+            'showAssignAction'
+        ));
+    }
+
+    public function dispatchFromHubToMdyAccept(Request $request)
+    {
+        if (! auth()->user()->can('order-edit') || isDispatchHub(auth()->user())) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $request->validate([
+            'item_ids' => 'required|array|min:1|max:100',
+            'item_ids.*' => 'integer|exists:dispatch_order_items,id',
+        ]);
+
+        $items = DispatchOrderItem::query()
+            ->whereIn('id', $request->item_ids)
+            ->where('status', 'assigned')
+            ->whereNotNull('hub_user_id')
+            ->whereNotNull('mdy_inbox_at')
+            ->whereNull('mdy_accepted_at')
+            ->get(['id', 'order_id']);
+
+        if ($items->isEmpty()) {
+            return response()->json(['message' => __('message.no_record_found')], 422);
+        }
+
+        $mdyId = function_exists('mandalayBranchId') ? mandalayBranchId() : null;
+        $acceptPayload = [
+            'hub_user_id' => null,
+            'hub_inbox_at' => null,
+            'hub_accepted_at' => null,
+            'mdy_inbox_at' => null,
+            'mdy_accepted_at' => now(),
+            'assigned_at' => now(),
+            'received_date' => Carbon::now('Asia/Yangon')->toDateString(),
+        ];
+        if ($mdyId) {
+            $acceptPayload['to_branch_id'] = $mdyId;
+        }
+
+        $updated = DispatchOrderItem::query()
+            ->whereIn('id', $items->pluck('id'))
+            ->update($acceptPayload);
+
+        if ($updated === 0) {
+            return response()->json(['message' => __('message.no_record_found')], 422);
+        }
+
+        $audit = app(DispatchOrderAuditService::class);
+        foreach ($items->groupBy('order_id') as $orderId => $orderItems) {
+            $order = Order::find($orderId);
+            if ($order) {
+                try {
+                    $audit->logMovedToAssign100($order, $orderItems->count());
+                } catch (\Throwable $e) {
+                    \Log::warning('dispatch audit failed after MDY accept from hub', [
+                        'order_id' => $orderId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        return response()->json([
+            'message' => __('message.move_to_hub_assign_100_success', ['count' => $updated]),
+            'redirect' => route('order.dispatch.assign-100'),
+        ]);
+    }
+
+    public function dispatchSendToMdy(Request $request)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $hub = auth()->user();
+        if (! isDispatchHub($hub)) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $request->validate([
+            'item_ids' => 'required|array|min:1|max:100',
+            'item_ids.*' => 'integer|exists:dispatch_order_items,id',
+        ]);
+
+        $hubService = app(\App\Services\DispatchHubService::class);
+        $hubService->claimLocalOriginItemsForHub($hub);
+        $items = DispatchOrderItem::query()
+            ->whereIn('id', $request->item_ids)
+            ->where('status', 'assigned');
+        $hubService->applyHubPool($items, (int) $hub->id);
+        $items = $items->get(['id']);
+
+        if ($items->isEmpty()) {
+            return response()->json(['message' => __('message.no_record_found')], 422);
+        }
+
+        $mdyId = function_exists('mandalayBranchId') ? mandalayBranchId() : null;
+        $yangonId = $hubService->yangonBranchId();
+        $payload = [
+            'hub_user_id' => $hub->id,
+            'mdy_inbox_at' => now(),
+            'mdy_accepted_at' => null,
+            'assigned_at' => now(),
+            'received_date' => Carbon::now('Asia/Yangon')->toDateString(),
+        ];
+        if ($mdyId) {
+            $payload['to_branch_id'] = $mdyId;
+        }
+        if ($yangonId) {
+            $payload['from_branch_id'] = $yangonId;
+        }
+
+        $updated = DispatchOrderItem::query()
+            ->whereIn('id', $items->pluck('id'))
+            ->update($payload);
+
+        if ($updated === 0) {
+            return response()->json(['message' => __('message.no_record_found')], 422);
+        }
+
+        return response()->json([
+            'message' => __('message.send_to_mdy_success', ['count' => $updated]),
+            'redirect' => route('order.dispatch.assign-100'),
+        ]);
     }
 
     public function dispatchAssignRider(Request $request)
@@ -733,10 +1046,22 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.rider_work_off_assign_blocked')], 422);
         }
 
+        $hubService = app(\App\Services\DispatchHubService::class);
+        $assigner = auth()->user();
+        $assignerIsHub = $hubService->isHub($assigner);
+        $riderIsHub = $hubService->isHub($rider);
+
         $poolItems = DispatchOrderItem::query()
             ->whereIn('id', $request->item_ids)
-            ->where('status', 'assigned')
-            ->get();
+            ->where('status', 'assigned');
+
+        if ($assignerIsHub) {
+            $hubService->applyHubPool($poolItems, (int) $assigner->id);
+        } else {
+            $hubService->applyMdyPool($poolItems);
+        }
+
+        $poolItems = $poolItems->get();
 
         if ($poolItems->isEmpty()) {
             return response()->json(['message' => __('message.no_record_found')], 422);
@@ -753,8 +1078,47 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.assign_100_rider_branch_mismatch')], 422);
         }
 
+        $yangonId = $hubService->yangonBranchId();
+        if ($assignerIsHub) {
+            if ($riderIsHub || (int) ($rider->hub_parent_id ?? 0) !== (int) $assigner->id) {
+                return response()->json(['message' => __('message.assign_100_hub_delivery_man_only')], 422);
+            }
+        } elseif ($riderIsHub) {
+            if ($yangonId && $toBranchId !== (int) $yangonId) {
+                return response()->json(['message' => __('message.assign_100_rider_branch_mismatch')], 422);
+            }
+        } elseif ($yangonId && $toBranchId === (int) $yangonId) {
+            return response()->json(['message' => __('message.assign_100_yangon_hub_required')], 422);
+        }
+
+        if ($riderIsHub) {
+            $updated = DispatchOrderItem::query()
+                ->whereIn('id', $poolItems->pluck('id'))
+                ->where('status', 'assigned')
+                ->whereNull('hub_user_id')
+                ->update([
+                    'hub_user_id' => $rider->id,
+                    'hub_inbox_at' => now(),
+                    'hub_accepted_at' => null,
+                    'assigned_at' => now(),
+                    'received_date' => Carbon::now('Asia/Yangon')->toDateString(),
+                ]);
+
+            if ($updated === 0) {
+                return response()->json(['message' => __('message.no_record_found')], 422);
+            }
+
+            return response()->json([
+                'message' => __('message.dispatch_hub_assigned_success', [
+                    'count' => $updated,
+                    'hub' => $rider->name,
+                ]),
+                'redirect' => route('order.dispatch.assign-100'),
+            ]);
+        }
+
         $updated = DispatchOrderItem::query()
-            ->whereIn('id', $request->item_ids)
+            ->whereIn('id', $poolItems->pluck('id'))
             ->where('status', 'assigned')
             ->when($toBranchId > 0, fn ($q) => $q->where('to_branch_id', $toBranchId))
             ->update([
@@ -769,7 +1133,7 @@ class OrderController extends Controller
         }
 
         $items = DispatchOrderItem::query()
-            ->whereIn('id', $request->item_ids)
+            ->whereIn('id', $poolItems->pluck('id'))
             ->where('delivery_man_id', $rider->id)
             ->get();
 
@@ -802,6 +1166,55 @@ class OrderController extends Controller
             ]),
             'redirect' => route('order.dispatch.assign-100'),
         ]);
+    }
+
+    private function renderHubInbox(User $hubUser, bool $canAccept, string $scope = 'inbox')
+    {
+        $hubService = app(\App\Services\DispatchHubService::class);
+        $itemsQuery = DispatchOrderItem::query()
+            ->where('status', 'assigned')
+            ->with(['order.client', 'order.delivery_man', 'fromBranch', 'toBranch', 'deliveryMan', 'hubUser'])
+            ->orderByDesc('hub_inbox_at')
+            ->orderByDesc('id');
+        if ($scope === 'queue') {
+            $hubService->applyHubQueue($itemsQuery, (int) $hubUser->id);
+        } else {
+            $hubService->applyHubInbox($itemsQuery, (int) $hubUser->id);
+        }
+        $items = $itemsQuery->get();
+
+        $pageTitle = $canAccept
+            ? __('message.from_mdy_to_ygn')
+            : __('message.from_mdy_to_hub', ['hub' => $hubUser->name]);
+        $pageSubtitle = $scope === 'queue'
+            ? __('message.hub_queue_admin_subtitle')
+            : __('message.hub_inbox_subtitle');
+        $assets = [];
+        $destinationBranches = collect();
+        $activeToBranchId = (int) ($hubUser->branch_id ?? 0);
+        $tabCounts = collect();
+        $assignMode = 'hub_inbox';
+        $hideBranchTabs = true;
+        $assignActionUrl = route('order.dispatch.from-mdy-accept');
+        $assignButtonLabel = __('message.move_to_hub_assign_100');
+        $needsRider = false;
+        $showAssignAction = $canAccept;
+
+        return view('order.dispatch-assign-100', compact(
+            'pageTitle',
+            'pageSubtitle',
+            'assets',
+            'items',
+            'destinationBranches',
+            'activeToBranchId',
+            'tabCounts',
+            'assignMode',
+            'hideBranchTabs',
+            'assignActionUrl',
+            'assignButtonLabel',
+            'needsRider',
+            'showAssignAction'
+        ));
     }
 
     /**
@@ -961,14 +1374,48 @@ class OrderController extends Controller
             ];
         }
 
+        if (! isDispatchHub(auth()->user())
+            && \Illuminate\Support\Facades\Schema::hasColumn('dispatch_order_items', 'hub_user_id')
+        ) {
+            $hubRows = DispatchOrderItem::query()
+                ->selectRaw('hub_user_id, COUNT(*) as total')
+                ->whereNotNull('hub_user_id')
+                ->where('status', 'assigned')
+                ->when(\Illuminate\Support\Facades\Schema::hasColumn('dispatch_order_items', 'mdy_inbox_at'), function ($query) {
+                    $query->whereNull('mdy_inbox_at');
+                })
+                ->where(function ($dateQuery) use ($fromDay, $toDay) {
+                    $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
+                })
+                ->groupBy('hub_user_id')
+                ->get();
+            foreach ($hubRows as $row) {
+                $hubId = (int) $row->hub_user_id;
+                $existing = $countsByRider[$hubId] ?? [
+                    'courier_assigned' => 0,
+                    'courier_departed' => 0,
+                    'pending' => 0,
+                    'delivered' => 0,
+                    'completed' => 0,
+                    'finished' => 0,
+                    'total' => 0,
+                ];
+                $existing['courier_assigned'] += (int) $row->total;
+                $existing['total'] += (int) $row->total;
+                $countsByRider[$hubId] = $existing;
+            }
+        }
+
         $branchRiderQuery = User::query()
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->visibleOnAdminRiderList(auth()->user())
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId));
 
         $branchTabCounts = User::query()
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->visibleOnAdminRiderList(auth()->user())
             ->whereIn('id', array_keys($countsByRider) ?: [0])
             ->whereNotNull('branch_id')
             ->where('branch_id', '>', 0)
@@ -1160,6 +1607,8 @@ class OrderController extends Controller
         $filterToDate = $toDateRaw;
         [, $branchFilter] = resolveDestinationBranchFilter($request, auth()->user());
 
+        $canReassignRider = $status === 'pending' && (auth()->user()->can('order-edit') || auth()->user()->user_type === 'admin');
+
         return view('order.dispatch-rider-items', compact(
             'pageTitle',
             'assets',
@@ -1171,6 +1620,7 @@ class OrderController extends Controller
             'isDelivered',
             'isCompleted',
             'canBulkUpdate',
+            'canReassignRider',
             'bulkActions',
             'filterFromDate',
             'filterToDate',
@@ -1179,6 +1629,111 @@ class OrderController extends Controller
             'search',
             'branchFilter'
         ));
+    }
+
+    /**
+     * Parcel Pending — move selected items to another delivery rider as Assigned.
+     */
+    public function dispatchRiderItemsReassign(Request $request, $riderId)
+    {
+        if (! auth()->user()->can('order-edit') && auth()->user()->user_type !== 'admin') {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $data = $request->validate([
+            'item_ids' => 'required|array|min:1',
+            'item_ids.*' => 'integer',
+            'delivery_man_id' => 'required|integer|exists:users,id',
+        ]);
+
+        $fromRider = User::query()
+            ->where('id', $riderId)
+            ->where('user_type', 'delivery_man')
+            ->first();
+
+        if (! $fromRider) {
+            return response()->json([
+                'message' => __('message.not_found_entry', ['name' => __('message.delivery_man')]),
+            ], 404);
+        }
+
+        $toRider = User::query()
+            ->where('id', (int) $data['delivery_man_id'])
+            ->where('user_type', 'delivery_man')
+            ->where('status', 1)
+            ->availableForAssign()
+            ->first();
+
+        if (! $toRider) {
+            return response()->json([
+                'message' => __('message.not_found_entry', ['name' => __('message.delivery_man')]),
+            ], 422);
+        }
+
+        if (! $toRider->isRiderWorkOn()) {
+            return response()->json(['message' => __('message.rider_work_off_assign_blocked')], 422);
+        }
+
+        if ((int) $fromRider->id === (int) $toRider->id) {
+            return response()->json(['message' => __('message.dispatch_rider_reassign_same')], 422);
+        }
+
+        $fromBranchId = (int) ($fromRider->branch_id ?? 0);
+        $toBranchId = (int) ($toRider->branch_id ?? 0);
+        if ($fromBranchId > 0 && $toBranchId > 0 && $fromBranchId !== $toBranchId) {
+            return response()->json(['message' => __('message.assign_100_rider_branch_mismatch')], 422);
+        }
+
+        $ids = array_values(array_unique(array_map('intval', $data['item_ids'])));
+        $items = DispatchOrderItem::query()
+            ->where('delivery_man_id', $fromRider->id)
+            ->where('status', 'pending')
+            ->whereIn('id', $ids)
+            ->get();
+
+        if ($items->isEmpty()) {
+            return response()->json(['message' => __('message.no_record_found')], 422);
+        }
+
+        $updated = DispatchOrderItem::query()
+            ->whereIn('id', $items->pluck('id')->all())
+            ->update([
+                'delivery_man_id' => $toRider->id,
+                'status' => 'courier_assigned',
+                'assigned_at' => now(),
+                'received_date' => Carbon::now('Asia/Yangon')->toDateString(),
+                'admin_updated_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        $items = DispatchOrderItem::query()->whereIn('id', $items->pluck('id')->all())->get();
+        $audit = app(DispatchOrderAuditService::class);
+        $push = app(\App\Services\AppPushService::class);
+        foreach ($items->groupBy('order_id') as $orderId => $orderItems) {
+            $order = Order::find($orderId);
+            if ($order) {
+                $audit->logDeliveryRiderAssigned($order, $toRider, $orderItems->count());
+            }
+        }
+
+        foreach ($items as $item) {
+            try {
+                $push->notifyRiderDeliveryAssigned($toRider, $item);
+            } catch (\Throwable $e) {
+                \Log::warning('push failed after pending rider reassign', [
+                    'item_id' => $item->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return response()->json([
+            'message' => __('message.dispatch_rider_reassigned_success', [
+                'count' => $updated,
+                'rider' => $toRider->name,
+            ]),
+            'updated' => $updated,
+        ]);
     }
 
     /**
@@ -1484,12 +2039,14 @@ class OrderController extends Controller
                 return true;
             });
 
-        $branchTabCounts = DispatchOrderItem::query()
+        $branchTabCountsQuery = DispatchOrderItem::query()
             ->where('status', 'completed')
             ->whereNotNull('admin_completed_at')
             ->whereNull('admin_finished_at')
             ->where('admin_completed_at', '>=', dailyCheckListDayBounds($fromDay)['start'])
-            ->where('admin_completed_at', '<', dailyCheckListDayBounds($toDay)['end'])
+            ->where('admin_completed_at', '<', dailyCheckListDayBounds($toDay)['end']);
+        applyForcedItemOwnership($branchTabCountsQuery);
+        $branchTabCounts = $branchTabCountsQuery
             ->selectRaw('COALESCE(NULLIF(to_branch_id, 0), from_branch_id) as branch_key, COUNT(*) as total')
             ->groupBy('branch_key')
             ->pluck('total', 'branch_key');
@@ -1577,9 +2134,9 @@ class OrderController extends Controller
 
         $osOptions = User::query()
             ->where('user_type', 'client')
-            ->where('status', 1)
-            ->orderBy('name')
-            ->get(['id', 'name']);
+            ->where('status', 1);
+        applyClientBranchScope($osOptions);
+        $osOptions = $osOptions->orderBy('name')->get(['id', 'name']);
 
         $pageTitle = __('message.os_list');
         $assets = [];
@@ -2831,7 +3388,7 @@ class OrderController extends Controller
         ];
 
         $existingPickup = is_array($order->pickup_point) ? $order->pickup_point : [];
-        $pickupPoint = array_merge($existingPickup, $pickupPoint);
+        $pickupPoint = $this->stampHubOriginOnPickupPoint(array_merge($existingPickup, $pickupPoint));
 
         $deliveryPoint = is_array($order->delivery_point) ? $order->delivery_point : [];
         if ((int) ($order->is_shop_order ?? 0) !== 1 && (int) ($order->is_gate_order ?? 0) !== 1) {
@@ -2965,14 +3522,45 @@ class OrderController extends Controller
             });
     }
 
+    private function stampHubOriginOnPickupPoint(array $pickupPoint): array
+    {
+        $user = auth()->user();
+        if (! isDispatchHub($user)) {
+            return $pickupPoint;
+        }
+
+        $pickupPoint['hub_user_id'] = (int) $user->id;
+        $originBranchId = defaultDestinationBranchId() ?: (int) ($user->branch_id ?? 0);
+        if ($originBranchId > 0) {
+            $pickupPoint['from_branch_id'] = $originBranchId;
+        }
+
+        return $pickupPoint;
+    }
+
     private function getDispatchPickupRiders()
     {
+        $authUser = auth()->user();
         $branchId = defaultDestinationBranchId();
 
         return User::select('id', 'name', 'contact_number')
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->excludeDispatchHubs()
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->when(isDispatchHub($authUser), function ($query) use ($authUser) {
+                $query->where(function ($inner) use ($authUser) {
+                    $inner->where('hub_parent_id', (int) $authUser->id)
+                        ->orWhereNull('hub_parent_id')
+                        ->orWhere('hub_parent_id', 0);
+                });
+            }, function ($query) {
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'hub_parent_id')) {
+                    $query->where(function ($inner) {
+                        $inner->whereNull('hub_parent_id')->orWhere('hub_parent_id', 0);
+                    });
+                }
+            })
             ->availableForAssign()
             ->orderBy('name')
             ->get();

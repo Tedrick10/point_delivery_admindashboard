@@ -183,8 +183,8 @@ return new class extends Migration
             ['branch' => 'မန္တလေး', 'name' => 'Aung Aung', 'email' => 'rider.demo1@demo.local', 'phone' => '+95911100001'],
             ['branch' => 'မန္တလေး', 'name' => 'Hla Hla', 'email' => 'rider.demo2@demo.local', 'phone' => '+95911100002'],
             ['branch' => 'မန္တလေး', 'name' => 'Ko Ko', 'email' => 'rider.demo3@demo.local', 'phone' => '+95911100003'],
-            ['branch' => 'ရန်ကုန်', 'name' => 'YGN Rider 1', 'email' => 'rider.ygn1@demo.local', 'phone' => '+95922220001'],
-            ['branch' => 'ရန်ကုန်', 'name' => 'YGN Rider 2', 'email' => 'rider.ygn2@demo.local', 'phone' => '+95922220002'],
+            ['branch' => 'ရန်ကုန်', 'name' => 'Yangon Ngwe Latt Saung', 'email' => 'rider.ygn1@demo.local', 'phone' => '+95922220001'],
+            ['branch' => 'ရန်ကုန်', 'name' => 'Yangon M2M', 'email' => 'rider.ygn2@demo.local', 'phone' => '+95922220002'],
             ['branch' => 'လားရှိုး', 'name' => 'LSO Rider 1', 'email' => 'rider.lso1@demo.local', 'phone' => '+95933330001'],
             ['branch' => 'လားရှိုး', 'name' => 'LSO Rider 2', 'email' => 'rider.lso2@demo.local', 'phone' => '+95933330002'],
             ['branch' => 'တောင်ကြီး', 'name' => 'TGY Rider 1', 'email' => 'rider.tgy1@demo.local', 'phone' => '+95944440001'],
@@ -218,6 +218,13 @@ return new class extends Migration
                 'is_autoverified_document' => 1,
                 'deleted_at' => null,
             ];
+
+            if (Schema::hasColumn('users', 'is_dispatch_hub')) {
+                $payload['is_dispatch_hub'] = in_array($demo['email'], [
+                    'rider.ygn1@demo.local',
+                    'rider.ygn2@demo.local',
+                ], true) ? 1 : 0;
+            }
 
             if ($user) {
                 $user->fill($payload)->save();

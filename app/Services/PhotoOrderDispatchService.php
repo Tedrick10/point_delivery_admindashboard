@@ -47,8 +47,10 @@ class PhotoOrderDispatchService
                     'customer_phone' => '',
                     'customer_address' => '',
                     'remark' => $remark,
-                    'delivery_city' => config('dispatch_item_cities.default_delivery_city', 'Mandalay'),
-                    'township' => config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်'),
+                    'delivery_city' => defaultDeliveryRouteForBranch()['city']
+                        ?: config('dispatch_item_cities.default_delivery_city', 'Mandalay'),
+                    'township' => defaultDeliveryRouteForBranch()['township']
+                        ?: config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်'),
                     'credit_to' => $creditTo,
                     'item_value' => $itemValue,
                     'deli_amount' => $deliAmount,
@@ -67,10 +69,12 @@ class PhotoOrderDispatchService
                     $patch['remark'] = $remark;
                 }
                 if (trim((string) ($item->township ?? '')) === '') {
-                    $patch['township'] = config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်');
+                    $patch['township'] = defaultDeliveryRouteForBranch()['township']
+                        ?: config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်');
                 }
                 if (trim((string) ($item->delivery_city ?? '')) === '') {
-                    $patch['delivery_city'] = config('dispatch_item_cities.default_delivery_city', 'Mandalay');
+                    $patch['delivery_city'] = defaultDeliveryRouteForBranch()['city']
+                        ?: config('dispatch_item_cities.default_delivery_city', 'Mandalay');
                 }
                 // Seed User App money-collect only when still blank AND rider has not set pay mode.
                 if ($collectMoney

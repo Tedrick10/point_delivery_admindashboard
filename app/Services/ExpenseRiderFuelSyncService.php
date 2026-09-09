@@ -123,6 +123,50 @@ class ExpenseRiderFuelSyncService
     }
 
     /**
+     * Create a card for every Yangon calendar day in [from, to] that is already
+     * one day old (today = 10th → through the 9th). Missing days get an empty card.
+     */
+    public function ensureDailyCards(string $from, string $to, ?int $branchId = null, ?int $userId = null): void
+    {
+        $fromDay = Carbon::parse($from, 'Asia/Yangon')->startOfDay();
+        $toDay = Carbon::parse($to, 'Asia/Yangon')->startOfDay();
+        $yesterday = now('Asia/Yangon')->subDay()->startOfDay();
+
+        if ($toDay->gt($yesterday)) {
+            $toDay = $yesterday->copy();
+        }
+        if ($fromDay->gt($toDay)) {
+            return;
+        }
+
+        $branchId = $branchId && $branchId > 0
+            ? $branchId
+            : (function_exists('defaultDestinationBranchId') ? defaultDestinationBranchId() : null);
+
+        for ($day = $fromDay->copy(); $day->lte($toDay); $day->addDay()) {
+            $date = $day->toDateString();
+            $query = ExpenseCard::query()->whereDate('expense_date', $date);
+            if ($branchId) {
+                $query->where('branch_id', $branchId);
+            } else {
+                $query->whereNull('branch_id');
+            }
+
+            if (! $query->exists()) {
+                ExpenseCard::query()->create([
+                    'expense_date' => $date,
+                    'branch_id' => $branchId,
+                    'total_amount' => 0,
+                    'created_by' => $userId,
+                    'updated_by' => $userId,
+                ]);
+            }
+
+            $this->syncExpenseDate($date, $userId, $branchId);
+        }
+    }
+
+    /**
      * @return list<int>
      */
     protected function branchIdsForExpenseDay(string $expenseDay, ?int $branchId = null): array
