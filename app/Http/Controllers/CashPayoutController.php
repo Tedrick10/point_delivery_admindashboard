@@ -44,6 +44,7 @@ class CashPayoutController extends Controller
         $riders = User::query()
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->visibleOnAdminRiderList(auth()->user())
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('name')
             ->get(['id', 'name', 'contact_number']);

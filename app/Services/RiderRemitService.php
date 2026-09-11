@@ -118,6 +118,7 @@ class RiderRemitService
         return User::query()
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->visibleOnAdminRiderList(auth()->user())
             ->orderBy('name')
             ->get(['id', 'name', 'username', 'contact_number', 'rider_work_on', 'rider_work_off_date'])
             ->filter(fn (User $user) => $this->isDisplayableRider($user))
@@ -294,9 +295,18 @@ class RiderRemitService
         $dues = $this->dueByRider($branchId, $day);
         $saved = $this->openRemitsByRider($branchId, $day);
 
+        $visibleIds = User::query()
+            ->where('user_type', 'delivery_man')
+            ->visibleOnAdminRiderList(auth()->user())
+            ->when($branchId && $branchId > 0, fn ($q) => $q->where('branch_id', $branchId))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->flip();
+
         $active = User::query()
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->visibleOnAdminRiderList(auth()->user())
             ->when($branchId && $branchId > 0, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('name')
             ->get(['id', 'name', 'username', 'contact_number'])
@@ -307,7 +317,7 @@ class RiderRemitService
             ->merge($dues->keys()->filter(fn ($id) => (float) ($dues->get($id)?->due ?? 0) > 0))
             ->merge($saved->keys())
             ->map(fn ($id) => (int) $id)
-            ->filter(fn ($id) => $id > 0 && (! $branchId || $active->has($id)))
+            ->filter(fn ($id) => $id > 0 && $visibleIds->has($id))
             ->unique()
             ->values();
 

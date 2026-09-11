@@ -14,9 +14,12 @@ class MoneyTransferController extends Controller
             return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
         }
 
-        $yangonToday = now('Asia/Yangon')->format('d-m-Y');
-        $fromDateRaw = trim((string) $request->get('from_date', $yangonToday));
-        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw));
+        $defaultDay = yangonSettlementDefaultDate();
+        $fromDateRaw = trim((string) $request->get('from_date', $defaultDay));
+        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw !== '' ? $fromDateRaw : $defaultDay));
+        if ($fromDateRaw === '') {
+            $fromDateRaw = $defaultDay;
+        }
         $fromDay = $service->parseDate($fromDateRaw)->toDateString();
         $toDay = $service->parseDate($toDateRaw)->toDateString();
 

@@ -167,6 +167,44 @@ class DispatchOrderItem extends Model
         return $this->belongsTo(Media::class, 'pending_photo_id', 'id');
     }
 
+    public function pendingRemarks()
+    {
+        return $this->hasMany(DispatchItemPendingRemark::class, 'dispatch_order_item_id')
+            ->orderBy('pending_at')
+            ->orderBy('id');
+    }
+
+    /**
+     * All Pending remark/image entries (history first, else current item fields).
+     */
+    public function displayPendingRemarks()
+    {
+        if (\Illuminate\Support\Facades\Schema::hasTable('dispatch_item_pending_remarks')) {
+            $this->loadMissing(['pendingRemarks.photoMedia']);
+            if ($this->pendingRemarks->isNotEmpty()) {
+                return $this->pendingRemarks;
+            }
+        }
+
+        $remark = trim((string) ($this->remark ?? ''));
+        $photoId = (int) ($this->pending_photo_id ?? 0);
+        $looksPending = $photoId > 0 || (string) ($this->status ?? '') === 'pending';
+        if (! $looksPending || ($remark === '' && $photoId <= 0)) {
+            return collect();
+        }
+
+        $this->loadMissing('pendingPhotoMedia');
+        $row = new DispatchItemPendingRemark([
+            'remark' => $remark,
+            'photo_id' => $photoId,
+            'pending_at' => $this->admin_updated_at ?: $this->updated_at,
+            'delivery_man_id' => $this->delivery_man_id,
+        ]);
+        $row->setRelation('photoMedia', $this->pendingPhotoMedia);
+
+        return collect([$row]);
+    }
+
     public function deliveredPhotoMedia()
     {
         return $this->belongsTo(Media::class, 'delivered_photo_id', 'id');

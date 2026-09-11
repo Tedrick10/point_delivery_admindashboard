@@ -350,6 +350,15 @@ function riderRemitBusinessDayBounds(string $dayYmd): array
 }
 
 /**
+ * Default From / To / Date on OS List, Daily Check, Money Transfer, Rider ငွေအပ်.
+ * One Yangon calendar day behind today (10th → 9th).
+ */
+function yangonSettlementDefaultDate(string $format = 'd-m-Y'): string
+{
+    return now('Asia/Yangon')->subDay()->format($format);
+}
+
+/**
  * Daily Check List invoice day (Asia/Yangon).
  *
  * Same lag as Rider ငွေအပ်: first admin Completed on Yangon day C → C − 1.
@@ -5247,6 +5256,27 @@ function resolveNameInitial(?string $name, string $fallback = 'O'): string
     }
 
     return mb_strtoupper(mb_substr($name, 0, 1));
+}
+
+function recordDispatchItemPendingRemark(
+    \App\Models\DispatchOrderItem $item,
+    string $remark,
+    int $photoId,
+    ?int $riderId = null,
+    ?int $createdBy = null
+): void {
+    if (! \Illuminate\Support\Facades\Schema::hasTable('dispatch_item_pending_remarks')) {
+        return;
+    }
+
+    \App\Models\DispatchItemPendingRemark::query()->create([
+        'dispatch_order_item_id' => (int) $item->id,
+        'delivery_man_id' => $riderId ?: ((int) ($item->delivery_man_id ?? 0) ?: null),
+        'remark' => $remark,
+        'photo_id' => max(0, $photoId),
+        'pending_at' => now(),
+        'created_by' => $createdBy ?: (auth()->id() ?: null),
+    ]);
 }
 
 function storeDispatchItemProofPhoto(\App\Models\DispatchOrderItem $item, $file, string $type): int

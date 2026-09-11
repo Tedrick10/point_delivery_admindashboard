@@ -34,6 +34,7 @@ class DispatchOrderItemResource extends JsonResource
             'photo_url' => $photoUrl,
             'pending_photo_id' => (int) ($this->pending_photo_id ?? 0),
             'pending_photo_url' => $this->resolvePendingPhotoUrl(),
+            'pending_remarks' => $this->resolvePendingRemarks(),
             'delivered_photo_id' => (int) ($this->delivered_photo_id ?? 0),
             'delivered_photo_url' => $this->resolveDeliveredPhotoUrl(),
             'delivered_type' => $this->delivered_type,
@@ -116,6 +117,29 @@ class DispatchOrderItemResource extends JsonResource
         }
 
         return null;
+    }
+
+    protected function resolvePendingRemarks(): array
+    {
+        if (! $this->resource instanceof DispatchOrderItem) {
+            return [];
+        }
+
+        return $this->resource->displayPendingRemarks()
+            ->map(function ($row) {
+                return [
+                    'remark' => (string) ($row->remark ?? ''),
+                    'photo_id' => (int) ($row->photo_id ?? 0),
+                    'photo_url' => $row->photoUrl(),
+                    'pending_date' => $row->pendingDateLabel(),
+                    'pending_at' => $row->pending_at
+                        ? $row->pending_at->copy()->timezone('Asia/Yangon')->toIso8601String()
+                        : null,
+                    'delivery_man_id' => $row->delivery_man_id ? (int) $row->delivery_man_id : null,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     protected function resolvePendingPhotoUrl(): ?string

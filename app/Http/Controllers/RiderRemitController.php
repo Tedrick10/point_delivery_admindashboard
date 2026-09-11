@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Branch;
 use App\Models\RiderRemit;
+use App\Models\User;
 use App\Services\RiderRemitAuditService;
 use App\Services\RiderRemitService;
 use Illuminate\Http\Request;
@@ -16,8 +17,11 @@ class RiderRemitController extends Controller
             return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
         }
 
-        $yangonToday = now('Asia/Yangon')->format('d-m-Y');
-        $dateRaw = trim((string) $request->get('date', $yangonToday));
+        $defaultDay = yangonSettlementDefaultDate();
+        $dateRaw = trim((string) $request->get('date', $defaultDay));
+        if ($dateRaw === '') {
+            $dateRaw = $defaultDay;
+        }
         $day = $service->parseDate($dateRaw)->toDateString();
 
         $branchFilter = $request->get('branch_id', 'all');
@@ -42,15 +46,22 @@ class RiderRemitController extends Controller
         $defaultFuel = $service->defaultFuelAmount();
         $selectedBranchId = $branchId;
 
+        $visibleRiderIds = User::query()
+            ->where('user_type', 'delivery_man')
+            ->visibleOnAdminRiderList($loginUser)
+            ->pluck('id');
+
         $branchTabCounts = RiderRemit::query()
             ->whereDate('remit_date', $day)
             ->whereNotNull('branch_id')
             ->where('branch_id', '>', 0)
+            ->whereIn('delivery_man_id', $visibleRiderIds)
             ->selectRaw('branch_id, COUNT(DISTINCT delivery_man_id) as total')
             ->groupBy('branch_id')
             ->pluck('total', 'branch_id');
         $allBranchCount = (int) RiderRemit::query()
             ->whereDate('remit_date', $day)
+            ->whereIn('delivery_man_id', $visibleRiderIds)
             ->distinct()
             ->count('delivery_man_id');
 
@@ -203,7 +214,7 @@ class RiderRemitController extends Controller
             return response()->json(['message' => __('message.demo_permission_denied')], 403);
         }
 
-        $day = $service->parseDate(trim((string) $request->get('date', now('Asia/Yangon')->format('d-m-Y'))))->toDateString();
+        $day = $service->parseDate(trim((string) $request->get('date', yangonSettlementDefaultDate())))->toDateString();
         $branchFilter = $request->get('branch_id', 'all');
         $branchId = $branchFilter === 'all' || $branchFilter === '' || $branchFilter === null
             ? 0

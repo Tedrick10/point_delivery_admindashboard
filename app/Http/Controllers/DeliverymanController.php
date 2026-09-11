@@ -67,18 +67,14 @@ class DeliverymanController extends Controller
         $branchTabCounts = User::query()
             ->where('user_type', 'delivery_man')
             ->whereNull('deleted_at')
-            ->when(isDispatchHub(auth()->user()), function ($query) {
-                $query->where('hub_parent_id', (int) auth()->id());
-            })
+            ->visibleOnAdminRiderList(auth()->user())
             ->selectRaw('branch_id, COUNT(*) as total')
             ->groupBy('branch_id')
             ->pluck('total', 'branch_id');
         $allRiderCount = User::query()
             ->where('user_type', 'delivery_man')
             ->whereNull('deleted_at')
-            ->when(isDispatchHub(auth()->user()), function ($query) {
-                $query->where('hub_parent_id', (int) auth()->id());
-            })
+            ->visibleOnAdminRiderList(auth()->user())
             ->count();
 
         if(request('status') == 'active') {
@@ -140,9 +136,7 @@ class DeliverymanController extends Controller
         $riders = User::query()
             ->where('user_type', 'delivery_man')
             ->whereNull('deleted_at')
-            ->when(isDispatchHub(auth()->user()), function ($query) {
-                $query->where('hub_parent_id', (int) auth()->id());
-            })
+            ->visibleOnAdminRiderList(auth()->user())
             ->excludeDispatchHubs()
             ->withAvg('rating as average_rating', 'rating')
             ->withCount('rating as ratings_count')
@@ -720,7 +714,9 @@ class DeliverymanController extends Controller
         $start = $startDate ? Carbon::parse($startDate)->format('Y-m-d') : null;
         $end   = $endDate ? Carbon::parse($endDate)->format('Y-m-d') : null;
 
-       $deliverymanData = User::where('user_type','delivery_man')->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
+       $deliverymanData = User::where('user_type','delivery_man')
+            ->visibleOnAdminRiderList(auth()->user())
+            ->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
             ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))->get();
 
         $export = new UsersExport($deliverymanData, $request);
@@ -753,7 +749,9 @@ class DeliverymanController extends Controller
         $startDate = $request->input('from_date') ;
         $endDate   = $request->input('to_date') ;
 
-        $deliverymanData = User::where('user_type','delivery_man')->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
+        $deliverymanData = User::where('user_type','delivery_man')
+            ->visibleOnAdminRiderList(auth()->user())
+            ->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
             ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))->get();
 
         $export = new UsersExport($deliverymanData, $request);

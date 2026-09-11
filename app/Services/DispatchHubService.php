@@ -243,14 +243,30 @@ class DispatchHubService
         return $claimed;
     }
 
-    public function inboundMenuLabel(User $hub): string
+    public function inboundMenuLabel(?User $hub = null): string
     {
-        $isM2m = str_contains(strtolower((string) $hub->email), 'ygn2')
-            || str_contains((string) $hub->name, 'M2M');
+        return __('message.from_yangon_to_mdy');
+    }
 
-        return __('message.from_hub_to_mdy', [
-            'hub' => $isM2m ? 'M2M' : $hub->name,
-        ]);
+    public function hubAccountIds(): array
+    {
+        return $this->accounts()->pluck('id')->map(fn ($id) => (int) $id)->filter()->values()->all();
+    }
+
+    public function applyYangonInbound($query)
+    {
+        $hubIds = $this->hubAccountIds();
+        if ($hubIds === []
+            || ! Schema::hasColumn('dispatch_order_items', 'hub_user_id')
+            || ! Schema::hasColumn('dispatch_order_items', 'mdy_inbox_at')
+        ) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        return $query
+            ->whereIn('hub_user_id', $hubIds)
+            ->whereNotNull('mdy_inbox_at')
+            ->whereNull('mdy_accepted_at');
     }
 
     public function applyMdyPool($query)
@@ -347,15 +363,19 @@ class DispatchHubService
         return (int) $query->count();
     }
 
-    public function inboundCount(int $hubId): int
+    public function inboundCount(?int $hubId = null): int
     {
-        if ($hubId <= 0 || ! Schema::hasColumn('dispatch_order_items', 'mdy_inbox_at')) {
+        if (! Schema::hasColumn('dispatch_order_items', 'mdy_inbox_at')) {
             return 0;
         }
 
         $query = \App\Models\DispatchOrderItem::query()
             ->where('status', 'assigned');
-        $this->applyMdyInbound($query, $hubId);
+        if ($hubId && $hubId > 0) {
+            $this->applyMdyInbound($query, $hubId);
+        } else {
+            $this->applyYangonInbound($query);
+        }
 
         return (int) $query->count();
     }

@@ -264,6 +264,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('dispatch-from-mdy-to-ygn', [OrderController::class, 'dispatchFromMdyToYgn'])->name('order.dispatch.from-mdy-to-ygn');
     Route::get('dispatch-from-mdy/{hub}', [OrderController::class, 'dispatchFromMdyHub'])->name('order.dispatch.from-mdy-hub');
     Route::post('dispatch-from-mdy/accept', [OrderController::class, 'dispatchFromMdyAccept'])->name('order.dispatch.from-mdy-accept');
+    Route::get('dispatch-from-yangon-to-mdy', [OrderController::class, 'dispatchFromYangonToMdy'])->name('order.dispatch.from-yangon-to-mdy');
     Route::get('dispatch-from-hub-to-mdy/{hub}', [OrderController::class, 'dispatchFromHubToMdy'])->name('order.dispatch.from-hub-to-mdy');
     Route::post('dispatch-from-hub-to-mdy/accept', [OrderController::class, 'dispatchFromHubToMdyAccept'])->name('order.dispatch.from-hub-to-mdy-accept');
     Route::post('dispatch-assign-100/send-to-mdy', [OrderController::class, 'dispatchSendToMdy'])->name('order.dispatch.send-to-mdy');

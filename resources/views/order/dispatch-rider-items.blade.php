@@ -208,24 +208,8 @@
                                         <td class="text-right pds-rider-money js-item-os-to-pay js-item-os-to-pay-signed {{ $osToPayDisplay < 0 ? 'pds-os-to-pay-negative' : '' }}">
                                             {{ number_format($osToPayDisplay) }}
                                         </td>
-                                        <td title="{{ $item->remark }}">
-                                            <div>{{ stringLong($item->remark ?? '', 'title', 16) ?: '-' }}</div>
-                                            @php
-                                                $pendingPhotoUrl = null;
-                                                if ((int) ($item->pending_photo_id ?? 0) > 0) {
-                                                    $pendingMedia = $item->pendingPhotoMedia;
-                                                    if ($pendingMedia) {
-                                                        $pendingPhotoUrl = function_exists('mediaPublicUrl')
-                                                            ? (mediaPublicUrl($pendingMedia) ?: mediaAbsoluteUrl($pendingMedia))
-                                                            : mediaAbsoluteUrl($pendingMedia);
-                                                    }
-                                                }
-                                            @endphp
-                                            @if($pendingPhotoUrl)
-                                                <a href="{{ $pendingPhotoUrl }}" target="_blank" rel="noopener" class="d-inline-block mt-1">
-                                                    <img src="{{ $pendingPhotoUrl }}" alt="Pending" style="width: 88px; height: 88px; object-fit: cover; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff;">
-                                                </a>
-                                            @endif
+                                        <td>
+                                            @include('order.partials._pending-remark-history', ['item' => $item, 'photoSize' => 88])
                                         </td>
                                         <td>
                                             @include('order.dispatch-item-action', ['item' => $item])
@@ -361,6 +345,7 @@
 
     @include('order.partials._dispatch-item-message-modal')
     @include('order.partials._dispatch-item-gate-modal')
+    @include('order.partials._pending-remark-history-modal')
     @if(! empty($canReassignRider))
         @include('order.partials._rider_assign_modal')
     @endif

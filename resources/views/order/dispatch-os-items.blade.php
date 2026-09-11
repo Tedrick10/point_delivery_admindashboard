@@ -192,24 +192,8 @@
                                         <td class="text-right pds-rider-money js-item-os-to-pay js-item-os-to-pay-slip {{ $osToPaySlip['is_receive'] ? 'pds-os-to-pay-negative' : '' }}">
                                             {{ $osToPaySlip['formatted'] }}
                                         </td>
-                                        <td title="{{ $item->remark }}">
-                                            <div>{{ stringLong($item->remark ?? '', 'title', 16) ?: '-' }}</div>
-                                            @php
-                                                $pendingPhotoUrl = null;
-                                                if ((int) ($item->pending_photo_id ?? 0) > 0) {
-                                                    $pendingMedia = $item->pendingPhotoMedia;
-                                                    if ($pendingMedia) {
-                                                        $pendingPhotoUrl = function_exists('mediaPublicUrl')
-                                                            ? (mediaPublicUrl($pendingMedia) ?: mediaAbsoluteUrl($pendingMedia))
-                                                            : mediaAbsoluteUrl($pendingMedia);
-                                                    }
-                                                }
-                                            @endphp
-                                            @if($pendingPhotoUrl)
-                                                <a href="{{ $pendingPhotoUrl }}" target="_blank" rel="noopener" class="d-inline-block mt-1">
-                                                    <img src="{{ $pendingPhotoUrl }}" alt="Pending" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb;">
-                                                </a>
-                                            @endif
+                                        <td>
+                                            @include('order.partials._pending-remark-history', ['item' => $item, 'photoSize' => 48])
                                         </td>
                                         <td>
                                             @include('order.dispatch-item-action', ['item' => $item])
@@ -248,6 +232,7 @@
 
     @include('order.partials._dispatch-item-message-modal')
     @include('order.partials._dispatch-item-gate-modal')
+    @include('order.partials._pending-remark-history-modal')
 
     @section('bottom_script')
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>

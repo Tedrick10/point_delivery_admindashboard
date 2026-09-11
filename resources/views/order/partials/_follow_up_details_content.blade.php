@@ -43,28 +43,10 @@
     </div>
     <div class="pds-follow-up-details-item pds-follow-up-details-item-wide">
         <span class="pds-follow-up-details-label">{{ __('message.remark_label') }}</span>
-        <span class="pds-follow-up-details-value">{{ $item->remark ?: '-' }}</span>
+        <span class="pds-follow-up-details-value">
+            @include('order.partials._pending-remark-history', ['item' => $item, 'photoSize' => 120])
+        </span>
     </div>
-    @php
-        $pendingPhotoUrl = null;
-        if ((int) ($item->pending_photo_id ?? 0) > 0) {
-            $item->loadMissing('pendingPhotoMedia');
-            $pendingMedia = $item->pendingPhotoMedia;
-            if ($pendingMedia && function_exists('mediaPublicUrl')) {
-                $pendingPhotoUrl = mediaPublicUrl($pendingMedia) ?: mediaAbsoluteUrl($pendingMedia);
-            }
-        }
-    @endphp
-    @if($pendingPhotoUrl)
-        <div class="pds-follow-up-details-item pds-follow-up-details-item-wide">
-            <span class="pds-follow-up-details-label">Pending Image</span>
-            <span class="pds-follow-up-details-value">
-                <a href="{{ $pendingPhotoUrl }}" target="_blank" rel="noopener" class="pds-follow-up-pending-photo">
-                    <img src="{{ $pendingPhotoUrl }}" alt="Pending" style="max-width: 160px; max-height: 120px; border-radius: 10px; object-fit: cover; border: 1px solid #e5e7eb;">
-                </a>
-            </span>
-        </div>
-    @endif
     @php
         $deliveredPhotoUrl = function_exists('dispatchItemProofPhotoUrl')
             ? dispatchItemProofPhotoUrl($item, 'delivered')

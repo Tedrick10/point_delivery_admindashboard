@@ -18270,3 +18270,322 @@ body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-datatable tbody tr:ho
         -webkit-overflow-scrolling: touch;
     }
 }
+
+body.pds-admin .pds-pending-total-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: 0;
+    background: linear-gradient(135deg, #fff7ed, #ffedd5);
+    color: #c2410c;
+    border-radius: 999px;
+    padding: 0.28rem 0.7rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    box-shadow: 0 0 0 1px rgba(234, 88, 12, 0.16);
+    cursor: pointer;
+    white-space: nowrap;
+    position: relative;
+    z-index: 2;
+}
+body.pds-admin .pds-pending-total-btn strong {
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: #ea580c;
+    color: #fff;
+    display: inline-grid;
+    place-items: center;
+    font-size: 0.72rem;
+}
+body.pds-admin .pds-pending-total-btn:hover {
+    background: linear-gradient(135deg, #ffedd5, #fed7aa);
+}
+
+body.pds-admin #pdsPendingRemarkHistoryModal {
+    z-index: 1080;
+}
+body.pds-admin #pdsPendingRemarkHistoryModal .modal-dialog,
+body.pds-admin .pds-pending-history-dialog {
+    max-width: 440px;
+    width: calc(100% - 24px);
+    margin: 1.25rem auto;
+    pointer-events: none;
+}
+body.pds-admin #pdsPendingRemarkHistoryModal.has-preview .pds-pending-history-dialog {
+    max-width: min(900px, calc(100vw - 24px));
+}
+body.pds-admin .pds-pending-history-stage {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 16px;
+    pointer-events: none;
+}
+body.pds-admin .pds-pending-history-stage > * {
+    pointer-events: auto;
+}
+body.pds-admin .pds-pending-history-modal {
+    border: 0;
+    border-radius: 24px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 28px 70px rgba(15, 23, 42, 0.22);
+    flex: 1 1 420px;
+    max-width: 440px;
+    width: 100%;
+}
+body.pds-admin #pdsPendingRemarkHistoryModal.has-preview .pds-pending-history-modal {
+    max-width: 420px;
+}
+body.pds-admin .pds-pending-history-preview {
+    flex: 0 0 min(400px, 38vw);
+    width: min(400px, 38vw);
+    min-width: 260px;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 24px;
+    box-shadow: 0 28px 70px rgba(15, 23, 42, 0.22);
+    overflow: hidden;
+}
+body.pds-admin .pds-pending-history-preview[hidden] {
+    display: none !important;
+}
+body.pds-admin .pds-pending-history-preview__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem 1.05rem 0.85rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+body.pds-admin .pds-pending-history-preview__head h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 800;
+    color: #111827;
+}
+body.pds-admin .pds-pending-history-preview__close {
+    border: 0;
+    background: #f8fafc;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    color: #64748b;
+    display: grid;
+    place-items: center;
+}
+body.pds-admin .pds-pending-history-preview__close:hover {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+body.pds-admin .pds-pending-history-preview__frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+    min-height: 280px;
+    padding: 14px;
+    background: #0f172a;
+}
+body.pds-admin .pds-pending-history-preview__frame img {
+    display: block;
+    max-width: 100%;
+    max-height: min(62vh, 540px);
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+body.pds-admin .pds-pending-history-modal__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1.1rem 1.2rem 1rem;
+    background: #fff;
+    border-bottom: 1px solid #f1f5f9;
+}
+body.pds-admin .pds-pending-history-modal__brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+body.pds-admin .pds-pending-history-modal__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(160deg, #ff8a3d, #fe6f07);
+    color: #fff;
+    font-size: 1rem;
+    flex-shrink: 0;
+    box-shadow: 0 10px 20px rgba(254, 111, 7, 0.22);
+}
+body.pds-admin .pds-pending-history-modal__title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #111827;
+    letter-spacing: -0.02em;
+}
+body.pds-admin .pds-pending-history-modal__count {
+    display: inline-flex;
+    margin-top: 0.28rem;
+    padding: 0.12rem 0.5rem;
+    border-radius: 999px;
+    background: #fff7ed;
+    color: #c2410c;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+body.pds-admin .pds-pending-history-modal__close {
+    border: 0;
+    background: #f8fafc;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    color: #64748b;
+    display: grid;
+    place-items: center;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+body.pds-admin .pds-pending-history-modal__close:hover {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+body.pds-admin .pds-pending-history-modal__body {
+    padding: 0.35rem 0 1.15rem;
+    max-height: 72vh;
+    overflow: auto;
+    background: #fcfcfd;
+}
+body.pds-admin .pds-pending-history-timeline {
+    position: relative;
+    padding: 0.55rem 1.2rem 0.15rem 1.15rem;
+}
+body.pds-admin .pds-pending-history-timeline::before {
+    content: "";
+    position: absolute;
+    top: 1.55rem;
+    bottom: 1.4rem;
+    left: 2.05rem;
+    width: 2px;
+    background: #ffe4c7;
+}
+body.pds-admin .pds-pending-history-card {
+    position: relative;
+    display: flex;
+    gap: 0.85rem;
+    padding: 0.7rem 0;
+}
+body.pds-admin .pds-pending-history-card__rail {
+    width: 28px;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+    z-index: 1;
+}
+body.pds-admin .pds-pending-history-card__index {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    background: #fff;
+    color: #ea580c;
+    font-size: 0.72rem;
+    font-weight: 800;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 0 0 4px #fcfcfd, 0 0 0 6px #fed7aa;
+}
+body.pds-admin .pds-pending-history-card__main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 0.8rem;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 0 0 1px #f1f5f9;
+}
+body.pds-admin .pds-pending-history-card__copy {
+    flex: 1;
+    min-width: 0;
+}
+body.pds-admin .pds-pending-history-card__meta {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.35rem;
+}
+body.pds-admin .pds-pending-history-card__date {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    background: #fff7ed;
+    color: #c2410c;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+body.pds-admin .pds-pending-history-card__date i {
+    font-size: 0.68rem;
+}
+body.pds-admin .pds-pending-history-card__remark {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #111827;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    font-weight: 600;
+}
+body.pds-admin .pds-pending-history-card.is-previewing .pds-pending-history-card__main {
+    box-shadow: 0 0 0 2px #fe6f07;
+}
+body.pds-admin .pds-pending-history-card__photo {
+    display: block;
+    flex-shrink: 0;
+    width: 72px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+    cursor: pointer;
+}
+body.pds-admin .pds-pending-history-card__photo:hover {
+    transform: none;
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.12);
+}
+body.pds-admin .pds-pending-history-card__photo img {
+    display: block;
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    background: #fff;
+}
+@media (max-width: 860px) {
+    body.pds-admin #pdsPendingRemarkHistoryModal.has-preview .pds-pending-history-dialog {
+        max-width: min(440px, calc(100vw - 24px));
+    }
+    body.pds-admin .pds-pending-history-stage {
+        flex-direction: column;
+    }
+    body.pds-admin .pds-pending-history-preview,
+    body.pds-admin #pdsPendingRemarkHistoryModal.has-preview .pds-pending-history-modal {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        flex: none;
+    }
+}

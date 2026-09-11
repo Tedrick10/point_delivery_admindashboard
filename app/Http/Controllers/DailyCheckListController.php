@@ -22,9 +22,12 @@ class DailyCheckListController extends Controller
             return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
         }
 
-        $yangonToday = now('Asia/Yangon')->format('d-m-Y');
-        $fromDateRaw = trim((string) $request->get('from_date', $yangonToday));
-        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw));
+        $defaultDay = yangonSettlementDefaultDate();
+        $fromDateRaw = trim((string) $request->get('from_date', $defaultDay));
+        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw !== '' ? $fromDateRaw : $defaultDay));
+        if ($fromDateRaw === '') {
+            $fromDateRaw = $defaultDay;
+        }
         $fromDay = $service->parseDate($fromDateRaw)->toDateString();
         $toDay = $service->parseDate($toDateRaw)->toDateString();
 
@@ -79,6 +82,7 @@ class DailyCheckListController extends Controller
         $riderOptions = User::query()
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
+            ->visibleOnAdminRiderList(auth()->user())
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('name')
             ->get(['id', 'name']);
@@ -328,9 +332,12 @@ class DailyCheckListController extends Controller
 
     protected function filteredRows(Request $request, DailyCheckListService $service)
     {
-        $yangonToday = now('Asia/Yangon')->format('d-m-Y');
-        $fromDateRaw = trim((string) $request->get('from_date', $yangonToday));
-        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw));
+        $defaultDay = yangonSettlementDefaultDate();
+        $fromDateRaw = trim((string) $request->get('from_date', $defaultDay));
+        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw !== '' ? $fromDateRaw : $defaultDay));
+        if ($fromDateRaw === '') {
+            $fromDateRaw = $defaultDay;
+        }
         $fromDay = $service->parseDate($fromDateRaw)->toDateString();
         $toDay = $service->parseDate($toDateRaw)->toDateString();
 

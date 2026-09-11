@@ -165,6 +165,7 @@
     </div>
 
     @include('order.partials._os_search_modal')
+    @include('order.partials._pending-remark-history-modal')
 
     <div class="modal fade" id="followUpDetailsModal" tabindex="-1" role="dialog" aria-labelledby="followUpDetailsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">

@@ -91,7 +91,7 @@ class HomeController extends Controller
                 $userQuery->whereBetween('created_at', [$params['from_date'], $params['to_date']]);
             }
         }
-        $deliverymanQuery = User::query();
+        $deliverymanQuery = User::query()->visibleOnAdminRiderList(auth()->user());
         if ($params['from_date'] && $params['to_date']) {
             if ($params['from_date'] == $params['to_date']) {
                 $deliverymanQuery->whereDate('created_at', '=', [$params['from_date']]);
@@ -823,7 +823,8 @@ class HomeController extends Controller
             case 'deliveryman_name':
                 $items = User::select('id', 'name as text', 'contact_number')
                     ->where('user_type', 'delivery_man')
-                    ->whereStatus(1);
+                    ->whereStatus(1)
+                    ->visibleOnAdminRiderList(auth()->user());
                 if ($value != '') {
                     $items->where('name', 'LIKE', '%' . $value . '%');
                 }
@@ -1346,6 +1347,7 @@ class HomeController extends Controller
 
         $deliveryMen = User::where('user_type', 'delivery_man')
             ->where('status', '1')
+            ->visibleOnAdminRiderList(auth()->user())
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
             ->select('latitude', 'longitude', 'name', 'id', 'created_at', 'latitude', 'longitude')

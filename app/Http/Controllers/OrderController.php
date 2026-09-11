@@ -457,6 +457,7 @@ class OrderController extends Controller
                 'deliveryMan',
                 'pendingPhotoMedia',
                 'deliveredPhotoMedia',
+                'pendingRemarks.photoMedia',
             ])
             ->orderByDesc('received_date')
             ->orderByDesc('id')
@@ -846,25 +847,26 @@ class OrderController extends Controller
 
     public function dispatchFromHubToMdy($hub)
     {
+        return redirect()->route('order.dispatch.from-yangon-to-mdy');
+    }
+
+    public function dispatchFromYangonToMdy()
+    {
         if (! auth()->user()->can('order-list') || isDispatchHub(auth()->user())) {
             return redirect()->back()->withErrors(__('message.demo_permission_denied'));
         }
 
         $hubService = app(\App\Services\DispatchHubService::class);
-        $hubUser = $hubService->findHub((int) $hub);
-        if (! $hubUser) {
-            return redirect()->route('order.dispatch.assign-100')->withErrors(__('message.no_record_found'));
-        }
 
         $itemsQuery = DispatchOrderItem::query()
             ->where('status', 'assigned')
             ->with(['order.client', 'order.delivery_man', 'fromBranch', 'toBranch', 'deliveryMan', 'hubUser'])
             ->orderByDesc('mdy_inbox_at')
             ->orderByDesc('id');
-        $hubService->applyMdyInbound($itemsQuery, (int) $hubUser->id);
+        $hubService->applyYangonInbound($itemsQuery);
         $items = $itemsQuery->get();
 
-        $pageTitle = $hubService->inboundMenuLabel($hubUser);
+        $pageTitle = $hubService->inboundMenuLabel();
         $pageSubtitle = __('message.hub_to_mdy_subtitle');
         $assets = [];
         $destinationBranches = collect();
@@ -1551,7 +1553,7 @@ class OrderController extends Controller
         $itemsQuery = DispatchOrderItem::query()
             ->where('delivery_man_id', $rider->id)
             ->where('status', $queryStatus)
-            ->with(['order.client', 'fromBranch', 'toBranch', 'deliveryMan', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia'])
+            ->with(['order.client', 'fromBranch', 'toBranch', 'deliveryMan', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia'])
             ->orderByDesc('id')
             ->where(function ($dateQuery) use ($fromDay, $toDay) {
                 $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
@@ -1572,7 +1574,10 @@ class OrderController extends Controller
                     ->orWhere('customer_phone', 'like', "%{$search}%")
                     ->orWhere('customer_address', 'like', "%{$search}%")
                     ->orWhere('township', 'like', "%{$search}%")
-                    ->orWhere('remark', 'like', "%{$search}%");
+                    ->orWhere('remark', 'like', "%{$search}%")
+                    ->orWhereHas('pendingRemarks', function ($history) use ($search) {
+                        $history->where('remark', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -1907,6 +1912,15 @@ class OrderController extends Controller
             }
 
             $item->forceFill($fill)->save();
+            if ($toStatus === 'pending') {
+                recordDispatchItemPendingRemark(
+                    $item,
+                    (string) $remark,
+                    (int) $pendingPhotoId,
+                    (int) ($item->delivery_man_id ?? $rider->id),
+                    (int) ($admin->id ?? 0)
+                );
+            }
             $updated++;
 
             $order = $item->order;
@@ -2006,9 +2020,12 @@ class OrderController extends Controller
             return redirect()->back()->withErrors($message);
         }
 
-        $yangonToday = Carbon::now('Asia/Yangon')->format('d-m-Y');
-        $fromDateRaw = trim((string) $request->get('from_date', $yangonToday));
-        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw));
+        $defaultDay = yangonSettlementDefaultDate();
+        $fromDateRaw = trim((string) $request->get('from_date', $defaultDay));
+        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw !== '' ? $fromDateRaw : $defaultDay));
+        if ($fromDateRaw === '') {
+            $fromDateRaw = $defaultDay;
+        }
         $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
         $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
         if ($toDay < $fromDay) {
@@ -2176,9 +2193,12 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.something_went_wrong')], 422);
         }
 
-        $yangonToday = Carbon::now('Asia/Yangon')->format('d-m-Y');
-        $fromDateRaw = trim((string) $request->get('from_date', $yangonToday));
-        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw));
+        $defaultDay = yangonSettlementDefaultDate();
+        $fromDateRaw = trim((string) $request->get('from_date', $defaultDay));
+        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw !== '' ? $fromDateRaw : $defaultDay));
+        if ($fromDateRaw === '') {
+            $fromDateRaw = $defaultDay;
+        }
         $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
         $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
         $osId = (int) $osId;
@@ -2502,9 +2522,12 @@ class OrderController extends Controller
             }
         }
 
-        $yangonToday = Carbon::now('Asia/Yangon')->format('d-m-Y');
-        $fromDateRaw = trim((string) $request->get('from_date', $yangonToday));
-        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw));
+        $defaultDay = yangonSettlementDefaultDate();
+        $fromDateRaw = trim((string) $request->get('from_date', $defaultDay));
+        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw !== '' ? $fromDateRaw : $defaultDay));
+        if ($fromDateRaw === '') {
+            $fromDateRaw = $defaultDay;
+        }
         $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
         $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
         if ($toDay < $fromDay) {
@@ -2515,7 +2538,7 @@ class OrderController extends Controller
         $search = trim((string) $request->get('search', ''));
 
         $itemsQuery = DispatchOrderItem::query()
-            ->with(['order.client.city', 'order.city', 'pendingPhotoMedia', 'deliveredPhotoMedia'])
+            ->with(['order.client.city', 'order.city', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia'])
             ->whereHas('order', function ($q) use ($osId) {
                 if ($osId > 0) {
                     $q->where('client_id', $osId);
@@ -2564,7 +2587,10 @@ class OrderController extends Controller
                     ->orWhere('customer_phone', 'like', "%{$search}%")
                     ->orWhere('customer_address', 'like', "%{$search}%")
                     ->orWhere('township', 'like', "%{$search}%")
-                    ->orWhere('remark', 'like', "%{$search}%");
+                    ->orWhere('remark', 'like', "%{$search}%")
+                    ->orWhereHas('pendingRemarks', function ($history) use ($search) {
+                        $history->where('remark', 'like', "%{$search}%");
+                    });
             });
         }
 

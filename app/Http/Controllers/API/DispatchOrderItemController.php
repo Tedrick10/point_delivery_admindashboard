@@ -724,7 +724,7 @@ class DispatchOrderItemController extends Controller
         $query = DispatchOrderItem::query()
             ->where($riderScope)
             ->whereIn('status', $statuses)
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
         $this->applyDeliveryListDayFilter($query, $fromDay, $toDay);
@@ -813,7 +813,7 @@ class DispatchOrderItemController extends Controller
             ->whereHas('order', function ($q) use ($user) {
                 $q->where('client_id', $user->id);
             })
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
         $this->applyDeliveryListDayFilter($query, $fromDay, $toDay);
@@ -899,7 +899,7 @@ class DispatchOrderItemController extends Controller
         }
 
         $items = $query
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id')
             ->get();
@@ -945,7 +945,7 @@ class DispatchOrderItemController extends Controller
             ->whereHas('order', function ($q) use ($user) {
                 $q->where('client_id', $user->id);
             })
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city'])
             ->first();
 
         if (! $item) {
@@ -980,7 +980,7 @@ class DispatchOrderItemController extends Controller
             ->where('id', $itemId)
             ->where('delivery_man_id', $user->id)
             ->whereIn('status', $statuses)
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city'])
             ->first();
 
         if (! $item) {
@@ -1156,7 +1156,16 @@ class DispatchOrderItemController extends Controller
         }
 
         $item->forceFill($fill)->save();
-        $item = $item->fresh(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'deliveryMan', 'order.city']);
+        if ($toStatus === 'pending') {
+            recordDispatchItemPendingRemark(
+                $item,
+                (string) $remark,
+                (int) ($fill['pending_photo_id'] ?? 0),
+                (int) $user->id,
+                (int) $user->id
+            );
+        }
+        $item = $item->fresh(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city']);
 
         $order = $item->order;
         if ($order) {
