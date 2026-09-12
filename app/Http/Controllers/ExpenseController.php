@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ExpenseCard;
 use App\Models\ExpenseItem;
 use App\Models\ExpenseSummary;
+use App\Services\ExpenseAgentFeeSyncService;
 use App\Services\ExpenseRiderFuelSyncService;
 use App\Services\ExpenseSummaryService;
 use Carbon\Carbon;
@@ -54,6 +55,14 @@ class ExpenseController extends Controller
         $fuelSync = app(ExpenseRiderFuelSyncService::class);
         $fuelSync->syncDateRange($from, $to, auth()->id());
         $fuelSync->ensureDailyCards($from, $to, $branchId, auth()->id());
+
+        $agentSync = app(ExpenseAgentFeeSyncService::class);
+        $cursor = Carbon::parse($from)->startOfDay();
+        $end = Carbon::parse($to)->startOfDay();
+        while ($cursor->lte($end)) {
+            $agentSync->syncExpenseDate($cursor->toDateString(), auth()->id(), $branchId);
+            $cursor->addDay();
+        }
 
         $cardsQuery = ExpenseCard::query()
             ->with('items')
@@ -192,6 +201,57 @@ class ExpenseController extends Controller
         ]);
     }
 
+    public function agentFeeTotal(Request $request)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        try {
+            $expenseDay = Carbon::parse((string) $request->get('date', now('Asia/Yangon')->toDateString()))
+                ->toDateString();
+        } catch (\Throwable $e) {
+            $expenseDay = now('Asia/Yangon')->toDateString();
+        }
+
+        $agentSync = app(ExpenseAgentFeeSyncService::class);
+        [$branchId] = resolveDestinationBranchFilter($request);
+        $total = $agentSync->agentTotalForExpenseDay($expenseDay, $branchId);
+
+        return response()->json([
+            'date' => $expenseDay,
+            'subject' => $agentSync->subject(),
+            'amount' => $total,
+            'branch_id' => $branchId,
+        ]);
+    }
+
+    public function agentFeePhotos(Request $request)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        try {
+            $expenseDay = Carbon::parse((string) $request->get('date', now('Asia/Yangon')->toDateString()))
+                ->toDateString();
+        } catch (\Throwable $e) {
+            $expenseDay = now('Asia/Yangon')->toDateString();
+        }
+
+        $agentSync = app(ExpenseAgentFeeSyncService::class);
+        [$branchId] = resolveDestinationBranchFilter($request);
+        $photos = $agentSync->deliveredProofsForExpenseDay($expenseDay, $branchId);
+
+        return response()->json([
+            'date' => $expenseDay,
+            'branch_id' => $branchId,
+            'subject' => $agentSync->subject(),
+            'count' => count($photos),
+            'photos' => $photos,
+        ]);
+    }
+
     public function store(Request $request)
     {
         if (! auth()->user()->can('order-edit')) {
@@ -225,6 +285,11 @@ class ExpenseController extends Controller
 
                 $this->syncItems($card, $data['items']);
                 app(ExpenseRiderFuelSyncService::class)->syncExpenseDate(
+                    $data['expense_date'],
+                    auth()->id(),
+                    $cardBranchId
+                );
+                app(ExpenseAgentFeeSyncService::class)->syncExpenseDate(
                     $data['expense_date'],
                     auth()->id(),
                     $cardBranchId
@@ -275,10 +340,15 @@ class ExpenseController extends Controller
                     'updated_by' => auth()->id(),
                 ])->save();
 
-                // Manual rows from form; Rider ဆီဖိုး is re-synced from remits below.
+                // Manual rows from form; Rider ဆီဖိုး / Agent ရငွေ are re-synced below.
                 ExpenseItem::query()->where('expense_card_id', $card->id)->delete();
                 $this->syncItems($card, $data['items']);
                 app(ExpenseRiderFuelSyncService::class)->syncExpenseDate(
+                    $data['expense_date'],
+                    auth()->id(),
+                    (int) ($card->branch_id ?? 0) ?: null
+                );
+                app(ExpenseAgentFeeSyncService::class)->syncExpenseDate(
                     $data['expense_date'],
                     auth()->id(),
                     (int) ($card->branch_id ?? 0) ?: null
@@ -434,7 +504,7 @@ class ExpenseController extends Controller
                 'image' => $item->image,
                 'image_url' => $item->imageUrl(),
                 'source' => $item->source,
-                'locked' => $item->source === ExpenseItem::SOURCE_RIDER_FUEL,
+                'locked' => $item->isLockedSource(),
             ])->values()->all(),
         ];
     }

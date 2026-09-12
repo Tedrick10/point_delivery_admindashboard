@@ -130,24 +130,26 @@
                 $addAssign100Child();
             } else {
                 $addAssign100Child();
-                $inboundCount = $hubService->inboundCount();
-                $hubLabelText = $hubService->inboundMenuLabel();
-                $hubLabel = '<span>' . e($hubLabelText) . '</span>';
-                if ($inboundCount > 0) {
-                    $hubLabel =
-                        '<span>' . e($hubLabelText) . ' ' .
-                        '<span class="badge badge-pill badge-info p-1">' .
-                        $inboundCount .
-                        '</span></span>';
+                foreach ($hubService->accounts() as $hubAccount) {
+                    $inboundCount = $hubService->inboundCount((int) $hubAccount->id);
+                    $hubLabelText = $hubService->inboundMenuLabel($hubAccount);
+                    $hubLabel = '<span>' . e($hubLabelText) . '</span>';
+                    if ($inboundCount > 0) {
+                        $hubLabel =
+                            '<span>' . e($hubLabelText) . ' ' .
+                            '<span class="badge badge-pill badge-info p-1">' .
+                            $inboundCount .
+                            '</span></span>';
+                    }
+                    $menu->assign100
+                        ->add($hubLabel, [
+                            'class' => 'sidebar-layout',
+                            'route' => ['order.dispatch.from-hub-to-mdy', $hubAccount->id],
+                        ])
+                        ->data('permission', 'order-list')
+                        ->prepend('<i class="fas fa-truck-loading"></i>')
+                        ->link->attr(['class' => '']);
                 }
-                $menu->assign100
-                    ->add($hubLabel, [
-                        'class' => 'sidebar-layout',
-                        'route' => 'order.dispatch.from-yangon-to-mdy',
-                    ])
-                    ->data('permission', 'order-list')
-                    ->prepend('<i class="fas fa-truck-loading"></i>')
-                    ->link->attr(['class' => '']);
             }
 
             $assignedItemCount = DispatchOrderItem::query()

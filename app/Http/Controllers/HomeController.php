@@ -849,9 +849,6 @@ class HomeController extends Controller
                             ->whereNotNull('document_verified_at');
                     });
                 $branchId = (int) request('branch_id', 0);
-                if ($branchId > 0) {
-                    $items->where('branch_id', $branchId);
-                }
                 $hubService = app(\App\Services\DispatchHubService::class);
                 $authUser = auth()->user();
                 if ($hubService->isHub($authUser)) {
@@ -859,7 +856,22 @@ class HomeController extends Controller
                         ->where(function ($query) {
                             $query->whereNull('is_dispatch_hub')->orWhere('is_dispatch_hub', 0);
                         });
+                    if ($branchId > 0) {
+                        $items->where(function ($query) use ($branchId) {
+                            $query->where('branch_id', $branchId)
+                                ->orWhere(function ($mdy) {
+                                    if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'is_mdy_return')) {
+                                        $mdy->where('is_mdy_return', 1);
+                                    } else {
+                                        $mdy->whereRaw('0 = 1');
+                                    }
+                                });
+                        });
+                    }
                 } else {
+                    if ($branchId > 0) {
+                        $items->where('branch_id', $branchId);
+                    }
                     $yangonId = $hubService->yangonBranchId();
                     if ($yangonId && $branchId === (int) $yangonId) {
                         $items->where('is_dispatch_hub', 1);
@@ -867,6 +879,11 @@ class HomeController extends Controller
                         $items->where(function ($query) {
                             $query->whereNull('is_dispatch_hub')->orWhere('is_dispatch_hub', 0);
                         });
+                        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'is_mdy_return')) {
+                            $items->where(function ($query) {
+                                $query->whereNull('is_mdy_return')->orWhere('is_mdy_return', 0);
+                            });
+                        }
                     }
                 }
                 if ($value != '') {

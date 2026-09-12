@@ -258,7 +258,7 @@
                         }
                     });
                     $('#remoteModelData').modal();
-                    $('#remoteModelData').find('form').not('#os_account_form, [data-os-account-form], #dispatch_item_form, [data-dispatch-item-form]').each(function () {
+                    $('#remoteModelData').find('form').not('#os_account_form, [data-os-account-form], #dispatch_item_form, [data-dispatch-item-form], #admin_mark_rider_done_form, [data-admin-rider-done-form]').each(function () {
                         $(this).validator();
                     });
                     $(".datepicker").flatpickr({

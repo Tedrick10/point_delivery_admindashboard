@@ -312,6 +312,72 @@ class PickupParcelDispatchService
         return $items->every(fn (DispatchOrderItem $item) => (float) ($item->weight ?? 0) > 0);
     }
 
+    public function itemRequiresPickupPhoto(Order $order, DispatchOrderItem $item): bool
+    {
+        if (($item->remark ?? '') === 'rider_added') {
+            return (int) ($item->photo_id ?? 0) <= 0;
+        }
+
+        if ((int) ($order->is_photo_order ?? 0) === 1) {
+            return false;
+        }
+
+        return (int) ($item->photo_id ?? 0) <= 0;
+    }
+
+    public function inferPickupPayMode(DispatchOrderItem $item): string
+    {
+        $stored = (string) ($item->pickup_pay_mode ?? '');
+        if (in_array($stored, ['os_pay', 'customer_pay', 'pay_done'], true)) {
+            return $stored;
+        }
+
+        if ((float) ($item->os_paid ?? 0) > 0) {
+            return 'pay_done';
+        }
+
+        return (($item->credit_to ?? 'customer') === 'os') ? 'os_pay' : 'customer_pay';
+    }
+
+    /**
+     * Apply rider pickup payment fields onto an item (same rules as delivery app).
+     */
+    public function applyPickupItemPayment(DispatchOrderItem $item, string $payMode, float $deliAmount, float $itemValue): array
+    {
+        if (! in_array($payMode, ['os_pay', 'customer_pay', 'pay_done'], true)) {
+            $payMode = $this->inferPickupPayMode($item);
+        }
+
+        if ($payMode === 'pay_done') {
+            $creditTo = 'os';
+            $osPaid = $deliAmount;
+        } elseif ($payMode === 'os_pay') {
+            $creditTo = 'os';
+            $osPaid = 0;
+        } else {
+            $creditTo = 'customer';
+            $osPaid = 0;
+        }
+
+        $amounts = DispatchOrderItem::computeAmounts(
+            $itemValue,
+            $deliAmount,
+            (float) ($item->advance_paid ?? 0),
+            $osPaid,
+            $creditTo
+        );
+
+        return [
+            'item_value' => $itemValue,
+            'deli_amount' => $deliAmount,
+            'credit_to' => $creditTo,
+            'os_paid' => $osPaid,
+            'pickup_pay_mode' => $payMode,
+            'cust_get' => $amounts['cust_get'],
+            'os_to_pay' => $amounts['os_to_pay'],
+        ];
+    }
+
     public function pickupProofImageUrls(Order $order): array
     {
         if (! $this->isDispatchPickupOrder($order)) {

@@ -58,6 +58,9 @@ class DispatchOrderItem extends Model
         'os_to_pay',
         'gate_amount',
         'gate_os_paid',
+        'point_amount',
+        'agent_amount',
+        'agent_expense_branch_id',
     ];
 
     protected $casts = [
@@ -94,6 +97,9 @@ class DispatchOrderItem extends Model
         'os_to_pay' => 'double',
         'gate_amount' => 'double',
         'gate_os_paid' => 'double',
+        'point_amount' => 'double',
+        'agent_amount' => 'double',
+        'agent_expense_branch_id' => 'integer',
     ];
 
     protected static function booted(): void

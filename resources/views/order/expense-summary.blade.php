@@ -84,7 +84,7 @@
                                     'amount' => (float) $i->amount,
                                     'image' => $i->hasUploadedImage() ? $i->image : null,
                                     'image_url' => $i->imageUrl(),
-                                    'locked' => $i->source === \App\Models\ExpenseItem::SOURCE_RIDER_FUEL,
+                                    'locked' => $i->isLockedSource(),
                                 ])->values() ?? collect();
                                 $cardDate = $card?->expense_date?->format('Y-m-d')
                                     ?? $row->summary_date?->format('Y-m-d');

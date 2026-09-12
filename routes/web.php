@@ -299,6 +299,8 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('os-receive/{id}/reject', [OsReceiveSettlementController::class, 'reject'])->name('order.os-receive.reject');
     Route::get('expenses', [ExpenseController::class, 'index'])->name('order.expenses');
     Route::get('expenses/rider-fuel-total', [ExpenseController::class, 'riderFuelTotal'])->name('order.expenses.rider-fuel-total');
+    Route::get('expenses/agent-fee-total', [ExpenseController::class, 'agentFeeTotal'])->name('order.expenses.agent-fee-total');
+    Route::get('expenses/agent-fee-photos', [ExpenseController::class, 'agentFeePhotos'])->name('order.expenses.agent-fee-photos');
     Route::post('expenses', [ExpenseController::class, 'store'])->name('order.expenses.store');
     Route::put('expenses/{id}', [ExpenseController::class, 'update'])->name('order.expenses.update');
     Route::post('expenses/{id}/generate', [ExpenseController::class, 'generate'])->name('order.expenses.generate');
@@ -362,6 +364,8 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('dispatch-order/{id}/assign-pickup-rider', [OrderController::class, 'dispatchAssignPickupRider'])->name('order.dispatch.assign-pickup-rider');
     Route::post('dispatch-order/{id}/restore-pickup-cancelled', [OrderController::class, 'dispatchRestorePickupCancelled'])->name('order.dispatch.restore-pickup-cancelled');
     Route::post('dispatch-order/{id}/move-pre-pickup-to-order-list', [OrderController::class, 'dispatchMovePrePickupToOrderList'])->name('order.dispatch.move-pre-pickup-to-order-list');
+    Route::get('dispatch-order/{id}/mark-rider-done', [OrderController::class, 'dispatchMarkRiderDoneForm'])->name('order.dispatch.mark-rider-done.form');
+    Route::post('dispatch-order/{id}/mark-rider-done', [OrderController::class, 'dispatchMarkRiderDone'])->name('order.dispatch.mark-rider-done');
     Route::post('dispatch-order/{id}/status', [OrderController::class, 'updateDispatchStatus'])->name('order.dispatch.status');
     Route::get('order/live-version', [OrderController::class, 'liveVersion'])->name('order.live-version');
     Route::resource('order', OrderController::class);

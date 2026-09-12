@@ -5,6 +5,7 @@
     $workflow = app(\App\Services\DispatchOrderWorkflowService::class);
     $isPickupCancelled = $workflow->isPickupErrorCancelled($order);
     $isPrePickUp = request('dispatch_status') === 'pre_order' || $workflow->isPrePickUpOrder($order);
+    $canMarkRiderDone = $workflow->canAdminMarkRiderDone($order);
 ?>
 <div class="pds-dispatch-row-actions">
     @if($delete_at == null)
@@ -15,6 +16,13 @@
                data-order-id="{{ $id }}"
                title="{{ __('message.move_to_order_list') }}">
                 {{ __('message.move_to_order_list') }}
+            </a>
+        @endif
+        @if($canMarkRiderDone && $auth_user->can('order-edit'))
+            <a href="{{ route('order.dispatch.mark-rider-done.form', $id) }}"
+               class="pds-dispatch-action-rider-done loadRemoteModel"
+               title="{{ __('message.admin_mark_rider_done') }}">
+                {{ __('message.admin_mark_rider_done') }}
             </a>
         @endif
         @if($isPickupCancelled && $auth_user->can('order-edit'))

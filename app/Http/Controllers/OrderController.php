@@ -599,6 +599,182 @@ class OrderController extends Controller
         ]);
     }
 
+    public function dispatchMarkRiderDoneForm($id)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            $message = __('message.demo_permission_denied');
+            return response()->json(['message' => $message], 403);
+        }
+
+        $order = Order::with(['delivery_man'])->find($id);
+        if (! $order) {
+            return response()->json(['message' => __('message.not_found_entry', ['name' => __('message.order')])], 404);
+        }
+
+        $workflow = app(DispatchOrderWorkflowService::class);
+        if (! $workflow->canAdminMarkRiderDone($order)) {
+            return response()->json(['message' => __('message.admin_rider_done_not_allowed')], 422);
+        }
+
+        $pickupService = app(\App\Services\PickupParcelDispatchService::class);
+        if ($pickupService->isDispatchPickupOrder($order)) {
+            $pickupService->ensureDispatchItems($order->fresh());
+        }
+
+        $items = DispatchOrderItem::query()
+            ->where('order_id', $order->id)
+            ->where('status', 'collected')
+            ->with('photoMedia')
+            ->orderBy('id')
+            ->get();
+
+        return view('order.dispatch-mark-rider-done', [
+            'order' => $order,
+            'items' => $items,
+            'pickupService' => $pickupService,
+            'isDispatchPickup' => $pickupService->isDispatchPickupOrder($order),
+        ]);
+    }
+
+    public function dispatchMarkRiderDone(Request $request, $id)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $order = Order::find($id);
+        if (! $order) {
+            return response()->json(['message' => __('message.not_found_entry', ['name' => __('message.order')])], 404);
+        }
+
+        $workflow = app(DispatchOrderWorkflowService::class);
+        $pickupService = app(\App\Services\PickupParcelDispatchService::class);
+        $audit = app(DispatchOrderAuditService::class);
+
+        if (! $workflow->canAdminMarkRiderDone($order)) {
+            return response()->json(['message' => __('message.admin_rider_done_not_allowed')], 422);
+        }
+
+        if ($pickupService->isDispatchPickupOrder($order)) {
+            $pickupService->ensureDispatchItems($order->fresh());
+
+            $itemsInput = $request->input('items', []);
+            if (! is_array($itemsInput)) {
+                $itemsInput = [];
+            }
+
+            $collectedItems = DispatchOrderItem::query()
+                ->where('order_id', $order->id)
+                ->where('status', 'collected')
+                ->orderBy('id')
+                ->get();
+
+            if ($collectedItems->isEmpty()) {
+                return response()->json(['message' => __('message.pickup_item_size_required')], 422);
+            }
+
+            foreach ($collectedItems as $index => $item) {
+                $payload = $itemsInput[$item->id] ?? [];
+                if (! is_array($payload)) {
+                    $payload = [];
+                }
+
+                $weight = normalizeDispatchItemSize($payload['weight'] ?? $item->weight ?? 0);
+                $deliAmount = (float) ($payload['deli_amount'] ?? $item->deli_amount ?? 0);
+                $itemValue = (float) ($payload['item_value'] ?? $item->item_value ?? 0);
+                $payMode = (string) ($payload['pay_mode'] ?? $pickupService->inferPickupPayMode($item));
+
+                if ($weight <= 0) {
+                    return response()->json([
+                        'message' => __('message.admin_rider_done_item_size_required', ['item' => $index + 1]),
+                    ], 422);
+                }
+
+                if ($deliAmount <= 0) {
+                    return response()->json([
+                        'message' => __('message.admin_rider_done_item_deli_required', ['item' => $index + 1]),
+                    ], 422);
+                }
+
+                $before = $audit->itemSnapshot($item);
+                $fill = array_merge(
+                    ['weight' => $weight],
+                    $pickupService->applyPickupItemPayment($item, $payMode, $deliAmount, $itemValue)
+                );
+
+                $photoFile = $request->file('items.' . $item->id . '.photo');
+                if ($photoFile) {
+                    $mediaId = storeDispatchItemProofPhoto($item, $photoFile, 'pickup_time');
+                    if ($mediaId > 0) {
+                        $pickupService->attachPickupPhotoToItem($order, (int) $item->id, $mediaId);
+                        $item->refresh();
+                    }
+                }
+
+                $item->forceFill($fill)->save();
+                try {
+                    $audit->logAdminItemInfo($order, $item->fresh(), auth()->user(), $before);
+                } catch (\Throwable $e) {
+                    \Log::warning('dispatch audit failed after admin rider-done item save', [
+                        'order_id' => $order->id,
+                        'item_id' => $item->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            $order = $order->fresh();
+
+            if (! $pickupService->allCollectedItemsHaveSize($order)) {
+                return response()->json(['message' => __('message.pickup_item_size_required')], 422);
+            }
+
+            if (! $pickupService->allCollectedItemsHavePickupPhotos($order)) {
+                $required = $pickupService->requiredPickupPhotoCount($order);
+
+                return response()->json([
+                    'message' => __('message.pickup_parcel_photos_required', ['count' => max(1, $required)]),
+                ], 422);
+            }
+        }
+
+        try {
+            $order = $workflow->markRiderPickupDoneByAdmin($order->fresh());
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        try {
+            saveOrderHistory([
+                'history_type' => 'courier_picked_up',
+                'order_id' => $order->id,
+                'order' => $order,
+            ]);
+        } catch (\Throwable $e) {
+            \Log::warning('saveOrderHistory failed after admin mark rider done', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        try {
+            $audit->logAdminMarkedRiderDone($order, auth()->user());
+        } catch (\Throwable $e) {
+            \Log::warning('dispatch audit failed after admin mark rider done', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $workflow->syncOrderWorkflow($order->fresh(['dispatchItems', 'delivery_man']));
+
+        return response()->json([
+            'status' => true,
+            'message' => __('message.admin_rider_done_success'),
+            'order_id' => $order->id,
+        ]);
+    }
+
     public function dispatchMoveToAssign100(Request $request)
     {
         if (!auth()->user()->can('order-edit')) {
@@ -726,7 +902,7 @@ class OrderController extends Controller
         $assignActionUrl = route('order.dispatch.assign-rider');
         $assignButtonLabel = __('message.assign_rider');
         $needsRider = true;
-        $showSendToMdy = $isHubUser;
+        $showSendToMdy = false;
         $sendToMdyUrl = route('order.dispatch.send-to-mdy');
 
         return view('order.dispatch-assign-100', compact(
@@ -847,7 +1023,52 @@ class OrderController extends Controller
 
     public function dispatchFromHubToMdy($hub)
     {
-        return redirect()->route('order.dispatch.from-yangon-to-mdy');
+        if (! auth()->user()->can('order-list') || isDispatchHub(auth()->user())) {
+            return redirect()->back()->withErrors(__('message.demo_permission_denied'));
+        }
+
+        $hubService = app(\App\Services\DispatchHubService::class);
+        $hubUser = $hubService->findHub((int) $hub);
+        if (! $hubUser) {
+            return redirect()->route('order.dispatch.assign-100')->withErrors(__('message.no_record_found'));
+        }
+
+        $itemsQuery = DispatchOrderItem::query()
+            ->where('status', 'assigned')
+            ->with(['order.client', 'order.delivery_man', 'fromBranch', 'toBranch', 'deliveryMan', 'hubUser'])
+            ->orderByDesc('mdy_inbox_at')
+            ->orderByDesc('id');
+        $hubService->applyMdyInbound($itemsQuery, (int) $hubUser->id);
+        $items = $itemsQuery->get();
+
+        $pageTitle = $hubService->inboundMenuLabel($hubUser);
+        $pageSubtitle = __('message.hub_to_mdy_subtitle');
+        $assets = [];
+        $destinationBranches = collect();
+        $activeToBranchId = 0;
+        $tabCounts = collect();
+        $assignMode = 'mdy_inbound';
+        $hideBranchTabs = true;
+        $assignActionUrl = route('order.dispatch.from-hub-to-mdy-accept');
+        $assignButtonLabel = __('message.move_to_hub_assign_100');
+        $needsRider = false;
+        $showAssignAction = true;
+
+        return view('order.dispatch-assign-100', compact(
+            'pageTitle',
+            'pageSubtitle',
+            'assets',
+            'items',
+            'destinationBranches',
+            'activeToBranchId',
+            'tabCounts',
+            'assignMode',
+            'hideBranchTabs',
+            'assignActionUrl',
+            'assignButtonLabel',
+            'needsRider',
+            'showAssignAction'
+        ));
     }
 
     public function dispatchFromYangonToMdy()
@@ -1052,6 +1273,7 @@ class OrderController extends Controller
         $assigner = auth()->user();
         $assignerIsHub = $hubService->isHub($assigner);
         $riderIsHub = $hubService->isHub($rider);
+        $riderIsMdyReturn = $hubService->isMdyReturn($rider);
 
         $poolItems = DispatchOrderItem::query()
             ->whereIn('id', $request->item_ids)
@@ -1076,7 +1298,7 @@ class OrderController extends Controller
 
         $toBranchId = (int) $toBranchIds->first();
         $riderBranchId = (int) ($rider->branch_id ?? 0);
-        if ($toBranchId > 0 && $riderBranchId > 0 && $riderBranchId !== $toBranchId) {
+        if (! $riderIsMdyReturn && $toBranchId > 0 && $riderBranchId > 0 && $riderBranchId !== $toBranchId) {
             return response()->json(['message' => __('message.assign_100_rider_branch_mismatch')], 422);
         }
 
@@ -1084,6 +1306,39 @@ class OrderController extends Controller
         if ($assignerIsHub) {
             if ($riderIsHub || (int) ($rider->hub_parent_id ?? 0) !== (int) $assigner->id) {
                 return response()->json(['message' => __('message.assign_100_hub_delivery_man_only')], 422);
+            }
+
+            // Yangon hub → MDY delivery man = From Yangon To MDY inbox
+            if ($riderIsMdyReturn) {
+                $hubService->claimLocalOriginItemsForHub($assigner);
+                $mdyId = $hubService->mandalayBranchId();
+                $payload = [
+                    'hub_user_id' => $assigner->id,
+                    'mdy_inbox_at' => now(),
+                    'mdy_accepted_at' => null,
+                    'assigned_at' => now(),
+                    'received_date' => Carbon::now('Asia/Yangon')->toDateString(),
+                ];
+                if ($mdyId) {
+                    $payload['to_branch_id'] = $mdyId;
+                }
+                if ($yangonId) {
+                    $payload['from_branch_id'] = $yangonId;
+                }
+
+                $updated = DispatchOrderItem::query()
+                    ->whereIn('id', $poolItems->pluck('id'))
+                    ->where('status', 'assigned')
+                    ->update($payload);
+
+                if ($updated === 0) {
+                    return response()->json(['message' => __('message.no_record_found')], 422);
+                }
+
+                return response()->json([
+                    'message' => __('message.send_to_mdy_success', ['count' => $updated]),
+                    'redirect' => route('order.dispatch.assign-100'),
+                ]);
             }
         } elseif ($riderIsHub) {
             if ($yangonId && $toBranchId !== (int) $yangonId) {
@@ -1117,6 +1372,10 @@ class OrderController extends Controller
                 ]),
                 'redirect' => route('order.dispatch.assign-100'),
             ]);
+        }
+
+        if ($riderIsMdyReturn) {
+            return response()->json(['message' => __('message.assign_100_hub_delivery_man_only')], 422);
         }
 
         $updated = DispatchOrderItem::query()
@@ -1613,6 +1872,7 @@ class OrderController extends Controller
         [, $branchFilter] = resolveDestinationBranchFilter($request, auth()->user());
 
         $canReassignRider = $status === 'pending' && (auth()->user()->can('order-edit') || auth()->user()->user_type === 'admin');
+        $isIntercityDelivered = isOtherDestinationBranch((int) ($rider->branch_id ?? 0));
 
         return view('order.dispatch-rider-items', compact(
             'pageTitle',
@@ -1632,7 +1892,8 @@ class OrderController extends Controller
             'fromDay',
             'toDay',
             'search',
-            'branchFilter'
+            'branchFilter',
+            'isIntercityDelivered'
         ));
     }
 
@@ -1760,18 +2021,35 @@ class OrderController extends Controller
             'remark' => 'nullable|string|max:1000',
             'pending_photo' => 'nullable|image|max:10240',
             'delivered_photo' => 'nullable|image|max:10240',
-            'delivered_type' => 'nullable|string|in:gate,other',
+            'delivered_type' => 'nullable|string|in:gate,other,intercity',
             'gate_amount' => 'nullable|numeric|min:0',
+            'point_amount' => 'nullable|numeric|min:0',
+            'agent_amount' => 'nullable|numeric|min:0',
         ];
         if ($toStatus === 'pending') {
             $rules['remark'] = 'required|string|max:1000';
             $rules['pending_photo'] = 'required|image|max:10240';
         }
+
+        $riderPreview = User::query()
+            ->where('id', $riderId)
+            ->where('user_type', 'delivery_man')
+            ->first(['id', 'branch_id', 'user_type']);
+        $isIntercityDelivered = $riderPreview
+            ? isOtherDestinationBranch((int) ($riderPreview->branch_id ?? 0))
+            : false;
+
         if ($toStatus === 'completed') {
-            $rules['delivered_type'] = 'required|string|in:gate,other';
             $rules['delivered_photo'] = 'required|image|max:10240';
-            if ((string) $request->input('delivered_type') === 'gate') {
-                $rules['gate_amount'] = 'required|numeric|min:0';
+            if ($isIntercityDelivered) {
+                $rules['delivered_type'] = 'required|string|in:intercity';
+                $rules['point_amount'] = 'required|numeric|min:0';
+                $rules['agent_amount'] = 'required|numeric|min:0';
+            } else {
+                $rules['delivered_type'] = 'required|string|in:gate,other';
+                if ((string) $request->input('delivered_type') === 'gate') {
+                    $rules['gate_amount'] = 'required|numeric|min:0';
+                }
             }
         }
         $data = $request->validate($rules);
@@ -1869,6 +2147,9 @@ class OrderController extends Controller
         $deliveredPhotoId = 0;
         $deliveredType = null;
         $gateAmount = null;
+        $pointAmount = null;
+        $agentAmount = null;
+        $agentExpenseBranchId = null;
         if ($toStatus === 'completed') {
             $deliveredType = (string) $data['delivered_type'];
             $deliveredPhotoId = $this->storeAdminDeliveredProofPhoto(
@@ -1881,8 +2162,14 @@ class OrderController extends Controller
             if ($deliveredType === 'gate') {
                 $gateAmount = round((float) ($data['gate_amount'] ?? 0), 2);
             }
+            if ($deliveredType === 'intercity') {
+                $pointAmount = round((float) ($data['point_amount'] ?? 0), 2);
+                $agentAmount = round((float) ($data['agent_amount'] ?? 0), 2);
+                $agentExpenseBranchId = panelExpenseBranchId($admin);
+            }
         }
 
+        $syncedExpenseDays = [];
         foreach ($items as $item) {
             try {
                 $workflow->assertDeliveryStatusTransition($item, $toStatus, $remark);
@@ -1908,6 +2195,12 @@ class OrderController extends Controller
                 $fill['rider_remit_date'] = resolveRiderRemitDate((int) ($item->delivery_man_id ?? 0));
                 if ($deliveredType === 'gate' && $gateAmount !== null) {
                     $fill['gate_amount'] = $gateAmount;
+                }
+                if ($deliveredType === 'intercity') {
+                    $fill['point_amount'] = $pointAmount ?? 0;
+                    $fill['agent_amount'] = $agentAmount ?? 0;
+                    $fill['agent_expense_branch_id'] = $agentExpenseBranchId;
+                    $syncedExpenseDays[(string) $fill['rider_remit_date']] = true;
                 }
             }
 
@@ -1969,6 +2262,17 @@ class OrderController extends Controller
                         'error' => $e->getMessage(),
                     ]);
                 }
+            }
+        }
+
+        if ($syncedExpenseDays !== []) {
+            $agentSync = app(\App\Services\ExpenseAgentFeeSyncService::class);
+            foreach (array_keys($syncedExpenseDays) as $expenseDay) {
+                $agentSync->syncExpenseDate(
+                    (string) $expenseDay,
+                    (int) ($admin->id ?? 0) ?: null,
+                    $agentExpenseBranchId
+                );
             }
         }
 

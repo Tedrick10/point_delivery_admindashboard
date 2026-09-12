@@ -37,7 +37,7 @@ class User extends Authenticatable implements HasMedia
         'player_id', 'latitude', 'longitude', 'status', 'rider_work_on', 'rider_work_off_date', 'last_notification_seen' , 'login_type', 'uid', 'fcm_token', 'otp_verify_at'
         ,'app_version', 'last_location_update_at', 'app_source','last_actived_at','document_verified_at' ,'is_autoverified_document',
         'is_autoverified_email','is_autoverified_mobile','vehicle_id','referral_code','partner_referral_code','flag','apple_user_identifier',
-        'is_vip', 'welcome_orders_used', 'is_temp_password', 'created_by_admin', 'is_dispatch_hub',
+        'is_vip', 'welcome_orders_used', 'is_temp_password', 'created_by_admin', 'is_dispatch_hub', 'is_mdy_return',
         'hub_parent_id', 'os_profile',
         'approval_status',
     ];
@@ -71,6 +71,7 @@ class User extends Authenticatable implements HasMedia
         'daily_contact_date' => 'date',
         'os_profile' => 'array',
         'is_dispatch_hub' => 'boolean',
+        'is_mdy_return' => 'boolean',
         'hub_parent_id' => 'integer',
     ];
 
@@ -234,6 +235,11 @@ class User extends Authenticatable implements HasMedia
     public function isDispatchHub(): bool
     {
         return (int) ($this->is_dispatch_hub ?? 0) === 1;
+    }
+
+    public function isMdyReturn(): bool
+    {
+        return (int) ($this->is_mdy_return ?? 0) === 1;
     }
 
     public function scopeDispatchHubs($query)

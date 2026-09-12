@@ -35,6 +35,32 @@ class DispatchHubService
         return $user !== null && (int) ($user->is_dispatch_hub ?? 0) === 1;
     }
 
+    public function isMdyReturn(?User $user): bool
+    {
+        return $user !== null && (int) ($user->is_mdy_return ?? 0) === 1;
+    }
+
+    public function mandalayBranchId(): ?int
+    {
+        if (function_exists('mandalayBranchId')) {
+            return mandalayBranchId();
+        }
+
+        static $id = false;
+        if ($id !== false) {
+            return $id;
+        }
+
+        $found = (int) (\App\Models\Branch::query()
+            ->where('status', 1)
+            ->where('name', 'မန္တလေး')
+            ->value('id') ?? 0);
+
+        $id = $found > 0 ? $found : null;
+
+        return $id;
+    }
+
     public function accounts(): Collection
     {
         if (! Schema::hasColumn('users', 'is_dispatch_hub')) {
@@ -245,7 +271,16 @@ class DispatchHubService
 
     public function inboundMenuLabel(?User $hub = null): string
     {
-        return __('message.from_yangon_to_mdy');
+        if (! $hub) {
+            return __('message.from_yangon_to_mdy');
+        }
+
+        $isM2m = str_contains(strtolower((string) $hub->email), 'ygn2')
+            || str_contains((string) $hub->name, 'M2M');
+
+        return __('message.from_hub_to_mdy', [
+            'hub' => $isM2m ? 'M2M' : $hub->name,
+        ]);
     }
 
     public function hubAccountIds(): array

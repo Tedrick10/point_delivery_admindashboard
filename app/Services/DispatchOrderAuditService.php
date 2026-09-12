@@ -165,6 +165,25 @@ class DispatchOrderAuditService
         ]);
     }
 
+    public function logAdminMarkedRiderDone(Order $order, ?User $admin = null): void
+    {
+        $admin = $admin ?: auth()->user();
+        $adminName = $admin?->name ?: $this->t('dispatch_audit_account_admin');
+        $details = $this->formatPickupCompletedDetails($order);
+
+        $this->record($order, self::TYPE_PICKUP_COMPLETED, $this->t('dispatch_audit_admin_marked_rider_done', [
+            'admin' => $adminName,
+            'order' => $order->id,
+        ]), [
+            'admin_id' => $admin?->id,
+            'admin_name' => $adminName,
+            'details' => $details,
+            'action' => 'Admin Rider Done',
+            'actor_role' => 'admin',
+            'items' => $this->buildItemCards($order),
+        ]);
+    }
+
     public function logDeliveryRiderAssigned(Order $order, User $rider, int $itemCount = 1, ?User $admin = null): void
     {
         $admin = $admin ?: auth()->user();

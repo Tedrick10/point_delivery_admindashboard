@@ -19,6 +19,15 @@ class ExpenseItem extends Model
     ];
 
     public const SOURCE_RIDER_FUEL = 'rider_fuel';
+    public const SOURCE_AGENT_FEE = 'agent_fee';
+
+    public function isLockedSource(): bool
+    {
+        return in_array((string) ($this->source ?? ''), [
+            self::SOURCE_RIDER_FUEL,
+            self::SOURCE_AGENT_FEE,
+        ], true);
+    }
 
     public function hasImage(): bool
     {

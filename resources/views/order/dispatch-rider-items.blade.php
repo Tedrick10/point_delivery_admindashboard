@@ -282,7 +282,9 @@
                         </span>
                         <div>
                             <h5 class="pds-delivered-modal__title">{{ __('message.delivered') }}</h5>
-                            <p class="pds-delivered-modal__sub">{{ __('message.delivered_type_choose_hint') }}</p>
+                            <p class="pds-delivered-modal__sub">
+                                {{ !empty($isIntercityDelivered) ? __('message.delivered_intercity_hint') : __('message.delivered_type_choose_hint') }}
+                            </p>
                         </div>
                     </div>
                     <button type="button" class="pds-delivered-modal__close" data-dismiss="modal" aria-label="Close">
@@ -291,35 +293,53 @@
                 </div>
 
                 <div class="pds-delivered-modal__body">
-                    <div class="pds-delivered-modal__section-label">{{ __('message.delivered_type_choose') }}</div>
-                    <div class="pds-delivered-modal__choices" role="radiogroup" aria-label="{{ __('message.delivered_type_choose') }}">
-                        <label class="pds-delivered-choice is-active" data-delivered-choice="other">
-                            <input type="radio" name="rider_delivered_type" value="other" checked>
-                            <span class="pds-delivered-choice__icon" aria-hidden="true"><i class="fas fa-map-marker-alt"></i></span>
-                            <span class="pds-delivered-choice__copy">
-                                <strong>{{ __('message.delivered_type_other') }}</strong>
-                                <em>{{ __('message.delivered_type_other_hint') }}</em>
-                            </span>
-                            <span class="pds-delivered-choice__check" aria-hidden="true"><i class="fas fa-check"></i></span>
-                        </label>
-                        <label class="pds-delivered-choice" data-delivered-choice="gate">
-                            <input type="radio" name="rider_delivered_type" value="gate">
-                            <span class="pds-delivered-choice__icon is-gate" aria-hidden="true"><i class="fas fa-archway"></i></span>
-                            <span class="pds-delivered-choice__copy">
-                                <strong>{{ __('message.delivered_type_gate') }}</strong>
-                                <em>{{ __('message.delivered_type_gate_hint') }}</em>
-                            </span>
-                            <span class="pds-delivered-choice__check" aria-hidden="true"><i class="fas fa-check"></i></span>
-                        </label>
-                    </div>
-
-                    <div class="pds-delivered-modal__gate" id="riderDeliveredGateAmountWrap" hidden>
-                        <label for="riderDeliveredGateAmount">{{ __('message.gate_amount') }}</label>
-                        <div class="pds-delivered-modal__gate-input">
-                            <span>Ks</span>
-                            <input type="number" min="0" step="1" id="riderDeliveredGateAmount" value="0" inputmode="numeric">
+                    @if(!empty($isIntercityDelivered))
+                        <input type="hidden" name="rider_delivered_type" value="intercity" id="riderDeliveredTypeIntercity">
+                        <div class="pds-delivered-modal__gate" id="riderDeliveredPointAmountWrap">
+                            <label for="riderDeliveredPointAmount">{{ __('message.point_income') }}</label>
+                            <div class="pds-delivered-modal__gate-input">
+                                <span>Ks</span>
+                                <input type="number" min="0" step="1" id="riderDeliveredPointAmount" value="" inputmode="numeric" required>
+                            </div>
                         </div>
-                    </div>
+                        <div class="pds-delivered-modal__gate" id="riderDeliveredAgentAmountWrap">
+                            <label for="riderDeliveredAgentAmount">{{ __('message.agent_income') }}</label>
+                            <div class="pds-delivered-modal__gate-input">
+                                <span>Ks</span>
+                                <input type="number" min="0" step="1" id="riderDeliveredAgentAmount" value="" inputmode="numeric" required>
+                            </div>
+                        </div>
+                    @else
+                        <div class="pds-delivered-modal__section-label">{{ __('message.delivered_type_choose') }}</div>
+                        <div class="pds-delivered-modal__choices" role="radiogroup" aria-label="{{ __('message.delivered_type_choose') }}">
+                            <label class="pds-delivered-choice is-active" data-delivered-choice="other">
+                                <input type="radio" name="rider_delivered_type" value="other" checked>
+                                <span class="pds-delivered-choice__icon" aria-hidden="true"><i class="fas fa-map-marker-alt"></i></span>
+                                <span class="pds-delivered-choice__copy">
+                                    <strong>{{ __('message.delivered_type_other') }}</strong>
+                                    <em>{{ __('message.delivered_type_other_hint') }}</em>
+                                </span>
+                                <span class="pds-delivered-choice__check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                            </label>
+                            <label class="pds-delivered-choice" data-delivered-choice="gate">
+                                <input type="radio" name="rider_delivered_type" value="gate">
+                                <span class="pds-delivered-choice__icon is-gate" aria-hidden="true"><i class="fas fa-archway"></i></span>
+                                <span class="pds-delivered-choice__copy">
+                                    <strong>{{ __('message.delivered_type_gate') }}</strong>
+                                    <em>{{ __('message.delivered_type_gate_hint') }}</em>
+                                </span>
+                                <span class="pds-delivered-choice__check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                            </label>
+                        </div>
+
+                        <div class="pds-delivered-modal__gate" id="riderDeliveredGateAmountWrap" hidden>
+                            <label for="riderDeliveredGateAmount">{{ __('message.gate_amount') }}</label>
+                            <div class="pds-delivered-modal__gate-input">
+                                <span>Ks</span>
+                                <input type="number" min="0" step="1" id="riderDeliveredGateAmount" value="0" inputmode="numeric">
+                            </div>
+                        </div>
+                    @endif
 
                     <div class="pds-delivered-modal__section-label">{{ __('message.delivered_photo') }}</div>
                     <label class="pds-delivered-upload" for="riderDeliveredPhotoInput" id="riderDeliveredUploadLabel">
@@ -422,6 +442,7 @@
                 var currentRiderId = @json((int) $rider->id);
                 var riderBranchId = @json((int) ($rider->branch_id ?? 0));
                 var bulkUpdateUrl = @json(route('order.dispatch.rider-items.bulk-update', ['riderId' => $rider->id]));
+                var isIntercityDelivered = @json(!empty($isIntercityDelivered));
                 var reassignUrl = @json(route('order.dispatch.rider-items.reassign', ['riderId' => $rider->id]));
                 var riderSearchUrl = @json(route('ajax-list', ['type' => 'dispatch_deliveryman_search']));
                 var riderCache = [];
@@ -489,7 +510,7 @@
 
                 updateSelectedTotal();
 
-                function submitBulkUpdate(toStatus, remark, photoFile, deliveredType, gateAmount, deliveredPhotoFile) {
+                function submitBulkUpdate(toStatus, remark, photoFile, deliveredType, gateAmount, deliveredPhotoFile, pointAmount, agentAmount) {
                     var ids = selectedItemIds();
                     if (!ids.length) {
                         notify(@json(__('message.select_items_to_assign')), 'error');
@@ -513,6 +534,12 @@
                     }
                     if (gateAmount !== null && gateAmount !== undefined && gateAmount !== '') {
                         formData.append('gate_amount', gateAmount);
+                    }
+                    if (pointAmount !== null && pointAmount !== undefined && pointAmount !== '') {
+                        formData.append('point_amount', pointAmount);
+                    }
+                    if (agentAmount !== null && agentAmount !== undefined && agentAmount !== '') {
+                        formData.append('agent_amount', agentAmount);
                     }
                     if (deliveredPhotoFile) {
                         formData.append('delivered_photo', deliveredPhotoFile);
@@ -635,16 +662,21 @@
                     }
 
                     if (action === 'completed') {
-                        $('input[name="rider_delivered_type"][value="other"]').prop('checked', true);
-                        $('#riderDeliveredGateAmount').val('0');
+                        if (!isIntercityDelivered) {
+                            $('input[name="rider_delivered_type"][value="other"]').prop('checked', true);
+                            $('#riderDeliveredGateAmount').val('0');
+                            syncDeliveredGateAmountVisibility();
+                        } else {
+                            $('#riderDeliveredPointAmount').val('');
+                            $('#riderDeliveredAgentAmount').val('');
+                        }
                         $('#riderDeliveredPhotoInput').val('');
                         resetDeliveredUploadLabel();
-                        syncDeliveredGateAmountVisibility();
                         $('#riderDeliveredTypeModal').modal('show');
                         return;
                     }
 
-                    submitBulkUpdate(action, null, null, null, null, null);
+                    submitBulkUpdate(action, null, null, null, null, null, null, null);
                 });
 
                 $(document).on('click', '#riderPendingRemarkConfirm', function (e) {
@@ -661,22 +693,49 @@
                         return;
                     }
                     $('#riderPendingRemarkModal').modal('hide');
-                    submitBulkUpdate('pending', remark, photoFile, null, null, null);
+                    submitBulkUpdate('pending', remark, photoFile, null, null, null, null, null);
                 });
 
                 $(document).on('click', '#riderDeliveredTypeConfirm', function (e) {
                     e.preventDefault();
-                    var deliveredType = String($('input[name="rider_delivered_type"]:checked').val() || '').trim();
                     var photoInput = document.getElementById('riderDeliveredPhotoInput');
                     var photoFile = photoInput && photoInput.files && photoInput.files[0] ? photoInput.files[0] : null;
+
+                    if (!photoFile) {
+                        notify(@json(__('message.delivered_photo_required')), 'error');
+                        return;
+                    }
+
+                    if (isIntercityDelivered) {
+                        var pointAmount = $('#riderDeliveredPointAmount').val();
+                        var agentAmount = $('#riderDeliveredAgentAmount').val();
+                        if (pointAmount === '' || pointAmount === null || Number(pointAmount) < 0) {
+                            notify(@json(__('message.point_income_required')), 'error');
+                            return;
+                        }
+                        if (agentAmount === '' || agentAmount === null || Number(agentAmount) < 0) {
+                            notify(@json(__('message.agent_income_required')), 'error');
+                            return;
+                        }
+                        $('#riderDeliveredTypeModal').modal('hide');
+                        submitBulkUpdate(
+                            'completed',
+                            null,
+                            null,
+                            'intercity',
+                            null,
+                            photoFile,
+                            pointAmount,
+                            agentAmount
+                        );
+                        return;
+                    }
+
+                    var deliveredType = String($('input[name="rider_delivered_type"]:checked').val() || '').trim();
                     var gateAmount = $('#riderDeliveredGateAmount').val();
 
                     if (deliveredType !== 'gate' && deliveredType !== 'other') {
                         notify(@json(__('message.delivered_type_required')), 'error');
-                        return;
-                    }
-                    if (!photoFile) {
-                        notify(@json(__('message.delivered_photo_required')), 'error');
                         return;
                     }
                     if (deliveredType === 'gate' && (gateAmount === '' || gateAmount === null || Number(gateAmount) < 0)) {
@@ -691,7 +750,9 @@
                         null,
                         deliveredType,
                         deliveredType === 'gate' ? gateAmount : null,
-                        photoFile
+                        photoFile,
+                        null,
+                        null
                     );
                 });
 

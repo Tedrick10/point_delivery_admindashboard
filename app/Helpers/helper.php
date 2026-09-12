@@ -1850,6 +1850,44 @@ function mandalayBranchId(): ?int
 }
 
 /**
+ * Destination branch that is neither မန္တလေး nor ရန်ကုန်
+ * (လားရှိုး / တောင်ကြီး / ပြင်ဦးလွင် / Food…).
+ */
+function isOtherDestinationBranch(?int $branchId): bool
+{
+    $branchId = (int) ($branchId ?? 0);
+    if ($branchId <= 0) {
+        return false;
+    }
+
+    $mdyId = mandalayBranchId();
+    $ygnId = app(\App\Services\DispatchHubService::class)->yangonBranchId();
+
+    if ($mdyId && $branchId === (int) $mdyId) {
+        return false;
+    }
+    if ($ygnId && $branchId === (int) $ygnId) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Expense / panel branch for MDY or Yangon admin when recording intercity Agent fees.
+ */
+function panelExpenseBranchId(?User $user = null): ?int
+{
+    $user = $user ?? auth()->user();
+    $forced = forcedBranchId($user);
+    if ($forced) {
+        return $forced;
+    }
+
+    return defaultDestinationBranchId(null, $user);
+}
+
+/**
  * Preferred default tab: this panel's city, otherwise မန္တလေး.
  */
 function defaultDestinationBranchId($branches = null, ?User $user = null): ?int

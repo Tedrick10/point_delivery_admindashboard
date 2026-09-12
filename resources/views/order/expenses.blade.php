@@ -80,7 +80,10 @@
                             'amount' => (float) $i->amount,
                             'image' => $i->hasUploadedImage() ? $i->image : null,
                             'image_url' => $i->imageUrl(),
-                            'locked' => $i->source === \App\Models\ExpenseItem::SOURCE_RIDER_FUEL,
+                            'locked' => $i->isLockedSource(),
+                            'lockKind' => $i->source === \App\Models\ExpenseItem::SOURCE_AGENT_FEE
+                                ? 'agent'
+                                : ($i->source === \App\Models\ExpenseItem::SOURCE_RIDER_FUEL ? 'fuel' : null),
                         ])->values();
                         $isGenerated = in_array((int) $card->id, $generatedCardIds ?? [], true);
                         $canGenerate = ! $isGenerated
@@ -101,14 +104,32 @@
                                 $riderFuelItems = $displayItems->filter(
                                     fn ($i) => $i->source === \App\Models\ExpenseItem::SOURCE_RIDER_FUEL
                                 );
+                                $agentFeeItems = $displayItems->filter(
+                                    fn ($i) => $i->source === \App\Models\ExpenseItem::SOURCE_AGENT_FEE
+                                );
                                 $manualItems = $displayItems->reject(
-                                    fn ($i) => $i->source === \App\Models\ExpenseItem::SOURCE_RIDER_FUEL
+                                    fn ($i) => in_array($i->source, [
+                                        \App\Models\ExpenseItem::SOURCE_RIDER_FUEL,
+                                        \App\Models\ExpenseItem::SOURCE_AGENT_FEE,
+                                    ], true)
                                 );
                             @endphp
                             @foreach($riderFuelItems as $item)
                                 <div class="pds-expense-card__rider-fuel">
                                     <span>{{ $item->subject }}</span>
                                     <em>{{ number_format($item->amount) }}</em>
+                                </div>
+                            @endforeach
+                            @foreach($agentFeeItems as $item)
+                                <div class="pds-expense-card__rider-fuel">
+                                    <span>{{ $item->subject }}</span>
+                                    <em>{{ number_format($item->amount) }}</em>
+                                    <button type="button"
+                                            class="pds-expense-card__agent-photos js-agent-fee-photos"
+                                            data-date="{{ $card->expense_date->format('Y-m-d') }}"
+                                            title="{{ __('message.expenses_agent_fee_view_photos') }}">
+                                        <i class="fas fa-image" aria-hidden="true"></i>
+                                    </button>
                                 </div>
                             @endforeach
                             <ul class="pds-expense-card__list">
@@ -128,7 +149,7 @@
                                         @endif
                                     </li>
                                 @empty
-                                    @if($riderFuelItems->isEmpty())
+                                    @if($riderFuelItems->isEmpty() && $agentFeeItems->isEmpty())
                                         <li class="is-empty">{{ __('message.no_record_found') }}</li>
                                     @endif
                                 @endforelse
@@ -231,6 +252,33 @@
         </div>
     </div>
 
+    {{-- Agent ရငွေ delivered delivered photos --}}
+    <div class="pds-expense-modal" id="expense-agent-photos-modal" hidden>
+        <div class="pds-expense-modal__backdrop" data-close="agent-photos"></div>
+        <div class="pds-expense-modal__stage pds-expense-agent-photos-stage">
+            <div class="pds-expense-modal__dialog pds-expense-agent-photos-dialog" role="dialog" aria-modal="true">
+                <header class="pds-expense-modal__header">
+                    <h5 id="expense-agent-photos-title">{{ __('message.expenses_agent_fee_photos') }}</h5>
+                    <button type="button" class="pds-expense-modal__preview-close" id="expense-agent-photos-close" title="{{ __('message.close') }}" data-close="agent-photos">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </header>
+                <div class="pds-expense-agent-photos__body" id="expense-agent-photos-body"></div>
+            </div>
+            <aside class="pds-expense-modal__preview" id="expense-agent-photo-preview" hidden>
+                <header class="pds-expense-modal__header">
+                    <h5 id="expense-agent-photo-preview-title">{{ __('message.expenses_image_view') }}</h5>
+                    <button type="button" class="pds-expense-modal__preview-close" id="expense-agent-photo-preview-close" title="{{ __('message.close') }}">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </header>
+                <div class="pds-expense-image-view">
+                    <img id="expense-agent-photo-preview-img" src="" alt="">
+                </div>
+            </aside>
+        </div>
+    </div>
+
     {{-- Delete confirm modal --}}
     <div class="pds-expense-modal" id="expense-delete-modal" hidden>
         <div class="pds-expense-modal__backdrop" data-close="delete"></div>
@@ -280,6 +328,8 @@
                 destroy: @json(route('order.expenses.destroy', ['id' => '__ID__'])),
                 generate: @json(route('order.expenses.generate', ['id' => '__ID__'])),
                 riderFuel: @json(route('order.expenses.rider-fuel-total')),
+                agentFee: @json(route('order.expenses.agent-fee-total')),
+                agentFeePhotos: @json(route('order.expenses.agent-fee-photos')),
             };
             const demoImagePath = @json(\App\Models\ExpenseItem::DEMO_IMAGE);
             const i18n = {
@@ -291,6 +341,13 @@
                 saveOk: @json(__('message.expenses_saved')),
                 deleteOk: @json(__('message.expenses_deleted')),
                 riderFuelSubject: @json(__('message.expenses_rider_fuel')),
+                agentFeeSubject: @json(__('message.expenses_agent_fee')),
+                agentFeeHint: @json(__('message.expenses_agent_fee_hint')),
+                agentFeePhotos: @json(__('message.expenses_agent_fee_photos')),
+                agentFeePhotosEmpty: @json(__('message.expenses_agent_fee_photos_empty')),
+                agentFeeViewPhotos: @json(__('message.expenses_agent_fee_view_photos')),
+                pointIncome: @json(__('message.point_income')),
+                agentIncome: @json(__('message.agent_income')),
                 generateLabel: @json(__('message.expense_summary_generate')),
                 generatedLabel: @json(__('message.expense_summary_generated_btn')),
                 generateOk: @json(__('message.expense_summary_generated')),
@@ -366,6 +423,102 @@
                 formModal?.classList.remove('has-preview');
             }
 
+            const agentPhotosModal = document.getElementById('expense-agent-photos-modal');
+            const agentPhotosBody = document.getElementById('expense-agent-photos-body');
+            const agentPhotosTitle = document.getElementById('expense-agent-photos-title');
+            const agentPhotoPreview = document.getElementById('expense-agent-photo-preview');
+            const agentPhotoPreviewImg = document.getElementById('expense-agent-photo-preview-img');
+            const agentPhotoPreviewTitle = document.getElementById('expense-agent-photo-preview-title');
+
+            function closeAgentPhotoSidePreview() {
+                agentPhotosModal?.classList.remove('has-preview');
+                agentPhotosBody?.querySelectorAll('.pds-expense-agent-photos__card.is-active').forEach((el) => {
+                    el.classList.remove('is-active');
+                });
+                if (agentPhotoPreview) agentPhotoPreview.hidden = true;
+                if (agentPhotoPreviewImg) agentPhotoPreviewImg.removeAttribute('src');
+            }
+
+            function openAgentPhotoSidePreview(url, meta) {
+                if (!url || !agentPhotoPreview || !agentPhotoPreviewImg) return;
+                agentPhotoPreviewImg.src = url;
+                if (agentPhotoPreviewTitle) {
+                    agentPhotoPreviewTitle.textContent = meta || i18n.imageView;
+                }
+                agentPhotoPreview.hidden = false;
+                agentPhotosModal?.classList.add('has-preview');
+            }
+
+            function closeAgentFeePhotos() {
+                closeAgentPhotoSidePreview();
+                if (agentPhotosModal) agentPhotosModal.hidden = true;
+                if (agentPhotosBody) agentPhotosBody.innerHTML = '';
+            }
+
+            function renderAgentFeePhotos(photos) {
+                if (!agentPhotosBody) return;
+                closeAgentPhotoSidePreview();
+                if (!photos.length) {
+                    agentPhotosBody.innerHTML = `<p class="pds-expense-agent-photos__empty">${escapeAttr(i18n.agentFeePhotosEmpty)}</p>`;
+                    return;
+                }
+                agentPhotosBody.innerHTML = photos.map((p, idx) => `
+                    <article class="pds-expense-agent-photos__card" data-photo-index="${idx}">
+                        <button type="button"
+                                class="pds-expense-agent-photos__thumb js-agent-photo-enlarge"
+                                data-url="${escapeAttr(p.photo_url || '')}"
+                                data-label="${escapeAttr(p.order_id ? ('Order #' + p.order_id) : i18n.imageView)}">
+                            <img src="${escapeAttr(p.photo_url || '')}" alt="">
+                        </button>
+                        <div class="pds-expense-agent-photos__meta">
+                            ${p.order_id ? `<span>Order #${escapeAttr(p.order_id)}</span>` : ''}
+                            <strong>${escapeAttr(i18n.pointIncome)}: ${fmt(p.point_amount)}</strong>
+                            <strong>${escapeAttr(i18n.agentIncome)}: ${fmt(p.agent_amount)}</strong>
+                        </div>
+                    </article>
+                `).join('');
+                agentPhotosBody.querySelectorAll('.js-agent-photo-enlarge').forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        const url = btn.getAttribute('data-url');
+                        if (!url) return;
+                        const card = btn.closest('.pds-expense-agent-photos__card');
+                        agentPhotosBody.querySelectorAll('.pds-expense-agent-photos__card.is-active').forEach((el) => {
+                            el.classList.remove('is-active');
+                        });
+                        card?.classList.add('is-active');
+                        openAgentPhotoSidePreview(url, btn.getAttribute('data-label') || i18n.imageView);
+                    });
+                });
+            }
+
+            async function openAgentFeePhotos(date) {
+                const day = date || dateInput?.value || '';
+                if (!day || !agentPhotosModal) return;
+                if (agentPhotosTitle) {
+                    agentPhotosTitle.textContent = i18n.agentFeePhotos + ' · ' + day;
+                }
+                if (agentPhotosBody) {
+                    agentPhotosBody.innerHTML = '<p class="pds-expense-agent-photos__empty">...</p>';
+                }
+                closeAgentPhotoSidePreview();
+                agentPhotosModal.hidden = false;
+                try {
+                    const url = routes.agentFeePhotos
+                        + '?date=' + encodeURIComponent(day)
+                        + (selectedBranchId ? '&branch_id=' + encodeURIComponent(selectedBranchId) : '');
+                    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        throw new Error(data.message || i18n.noticeError);
+                    }
+                    renderAgentFeePhotos(Array.isArray(data.photos) ? data.photos : []);
+                } catch (err) {
+                    if (agentPhotosBody) {
+                        agentPhotosBody.innerHTML = `<p class="pds-expense-agent-photos__empty">${escapeAttr(err.message || i18n.noticeError)}</p>`;
+                    }
+                }
+            }
+
             function fmt(n) {
                 return Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
             }
@@ -375,6 +528,16 @@
                     subject: i18n.riderFuelSubject,
                     amount: Number(amount || 0),
                     locked: true,
+                    lockKind: 'fuel',
+                };
+            }
+
+            function agentFeeRow(amount) {
+                return {
+                    subject: i18n.agentFeeSubject,
+                    amount: Number(amount || 0),
+                    locked: true,
+                    lockKind: 'agent',
                 };
             }
 
@@ -394,10 +557,32 @@
                 }
             }
 
+            async function fetchAgentFeeAmount(date) {
+                try {
+                    const url = routes.agentFee
+                        + '?date=' + encodeURIComponent(date || '')
+                        + (selectedBranchId ? '&branch_id=' + encodeURIComponent(selectedBranchId) : '');
+                    const res = await fetch(url, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                    });
+                    if (!res.ok) return 0;
+                    const data = await res.json();
+                    return Number(data.amount || 0);
+                } catch (e) {
+                    return 0;
+                }
+            }
+
             async function refreshLockedRiderFuelAmount() {
-                const lockedAmount = rowsEl.querySelector('.pds-expense-modal__row.is-locked .js-amount');
-                if (!lockedAmount) return;
-                lockedAmount.value = await fetchRiderFuelAmount(dateInput.value);
+                const rows = rowsEl.querySelectorAll('.pds-expense-modal__row.is-locked');
+                for (const row of rows) {
+                    const amountInput = row.querySelector('.js-amount');
+                    if (!amountInput) continue;
+                    const kind = row.dataset.lockKind || 'fuel';
+                    amountInput.value = kind === 'agent'
+                        ? await fetchAgentFeeAmount(dateInput.value)
+                        : await fetchRiderFuelAmount(dateInput.value);
+                }
                 refreshFormTotal();
             }
 
@@ -434,12 +619,31 @@
                     } catch (e) {}
                 }
                 if (!editingId) {
-                    // Add Expense Card: always start with locked Rider ဆီဖိုး.
                     const fuelAmt = await fetchRiderFuelAmount(dateInput.value);
-                    items = [riderFuelRow(fuelAmt), { subject: '', amount: '' }];
+                    const agentAmt = await fetchAgentFeeAmount(dateInput.value);
+                    items = [riderFuelRow(fuelAmt)];
+                    if (agentAmt > 0) {
+                        items.push(agentFeeRow(agentAmt));
+                    }
+                    items.push({ subject: '', amount: '' });
                 } else if (!items.some((row) => row.locked)) {
                     const fuelAmt = await fetchRiderFuelAmount(dateInput.value);
-                    items = [riderFuelRow(fuelAmt), ...items];
+                    const agentAmt = await fetchAgentFeeAmount(dateInput.value);
+                    const manual = items.slice();
+                    items = [riderFuelRow(fuelAmt)];
+                    if (agentAmt > 0) {
+                        items.push(agentFeeRow(agentAmt));
+                    }
+                    items = items.concat(manual);
+                } else {
+                    // Ensure agent fee locked row appears when amount exists.
+                    const agentAmt = await fetchAgentFeeAmount(dateInput.value);
+                    const hasAgent = items.some((row) => row.lockKind === 'agent' || row.subject === i18n.agentFeeSubject);
+                    if (agentAmt > 0 && !hasAgent) {
+                        const fuelIdx = items.findIndex((row) => row.lockKind === 'fuel' || row.subject === i18n.riderFuelSubject);
+                        const insertAt = fuelIdx >= 0 ? fuelIdx + 1 : 0;
+                        items.splice(insertAt, 0, agentFeeRow(agentAmt));
+                    }
                 }
                 items.forEach(addRow);
                 closeImageView();
@@ -448,6 +652,7 @@
 
             function closeForm() {
                 closeImageView();
+                closeAgentFeePhotos();
                 formModal.hidden = true;
                 editingId = null;
                 setFormViewMode(false);
@@ -488,14 +693,21 @@
             }
 
             function addRow(item) {
-                const isRiderFuel = !!item?.locked;
-                const locked = isRiderFuel || viewingOnly;
+                const isLockedAuto = !!item?.locked;
+                const locked = isLockedAuto || viewingOnly;
+                const lockKind = item?.lockKind
+                    || (item?.subject === i18n.agentFeeSubject ? 'agent' : (isLockedAuto ? 'fuel' : ''));
                 const row = document.createElement('div');
                 row.className = 'pds-expense-modal__row' + (locked ? ' is-locked' : '');
+                if (lockKind) {
+                    row.dataset.lockKind = lockKind;
+                }
                 const amountVal = item?.amount === '' || item?.amount == null ? (locked ? '0' : '') : item.amount;
                 const existingImage = isRealImage(item) ? (item?.image || '') : '';
                 const imageUrl = isRealImage(item) ? (item?.image_url || '') : '';
-                const showImage = !isRiderFuel;
+                const lockHint = lockKind === 'agent' ? i18n.agentFeeHint : @json(__('message.expenses_rider_fuel_hint'));
+                const showImage = !isLockedAuto;
+                const showAgentPhotosBtn = isLockedAuto && lockKind === 'agent';
                 row.innerHTML = `
                     <input type="text" class="form-control js-subject" placeholder="${@json(__('message.expenses_subject'))}" value="${escapeAttr(item?.subject || '')}" ${locked ? 'readonly' : ''}>
                     <input type="number" min="0" step="1" class="form-control js-amount" placeholder="0" value="${amountVal}" ${locked ? 'readonly' : ''}>
@@ -509,9 +721,15 @@
                                     : '<i class="fas fa-camera" aria-hidden="true"></i>'}
                             </button>
                         </div>`
-                        : `<span class="pds-expense-modal__image-spacer"></span>`}
+                        : (showAgentPhotosBtn
+                            ? `<div class="pds-expense-modal__image-wrap">
+                                <button type="button" class="pds-expense-modal__image-btn has-image js-agent-fee-photos" title="${escapeAttr(i18n.agentFeeViewPhotos)}">
+                                    <i class="fas fa-image" aria-hidden="true"></i>
+                                </button>
+                            </div>`
+                            : `<span class="pds-expense-modal__image-spacer"></span>`)}
                     ${locked
-                        ? `<span class="pds-expense-modal__row-lock" title="${viewingOnly ? escapeAttr(i18n.lockedHint) : @json(__('message.expenses_rider_fuel_hint'))}">🔒</span>`
+                        ? `<span class="pds-expense-modal__row-lock" title="${viewingOnly ? escapeAttr(i18n.lockedHint) : escapeAttr(lockHint)}">🔒</span>`
                         : `<button type="button" class="pds-expense-modal__row-del" title="Remove">&times;</button>`}
                 `;
                 if (showImage) {
@@ -533,6 +751,11 @@
                         if (!file) return;
                         setImagePreview(imageBtn, null, URL.createObjectURL(file));
                         if (existingInput) existingInput.value = '';
+                    });
+                }
+                if (showAgentPhotosBtn) {
+                    row.querySelector('.js-agent-fee-photos')?.addEventListener('click', () => {
+                        openAgentFeePhotos(dateInput?.value || '');
                     });
                 }
                 const delBtn = row.querySelector('.pds-expense-modal__row-del');
@@ -774,7 +997,18 @@
                 row?.querySelector('.js-image-input')?.click();
             });
 
+            document.getElementById('expense-agent-photos-close')?.addEventListener('click', closeAgentFeePhotos);
+            agentPhotosModal?.querySelector('[data-close="agent-photos"]')?.addEventListener('click', closeAgentFeePhotos);
+            document.getElementById('expense-agent-photo-preview-close')?.addEventListener('click', closeAgentPhotoSidePreview);
+
             document.getElementById('expenses-board')?.addEventListener('click', (e) => {
+                const agentPhotosBtn = e.target.closest('.js-agent-fee-photos');
+                if (agentPhotosBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openAgentFeePhotos(agentPhotosBtn.getAttribute('data-date') || '');
+                    return;
+                }
                 const card = e.target.closest('.pds-expense-card');
                 if (!card || card.classList.contains('pds-expense-card--add')) return;
                 const thumb = e.target.closest('.js-card-image');

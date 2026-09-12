@@ -214,6 +214,50 @@ class DispatchOrderWorkflowService
         return in_array($order->status, ['courier_picked_up', 'courier_departed', 'completed'], true);
     }
 
+    /**
+     * Admin can force Rider Done when a pickup rider is assigned but has not
+     * pressed Pick Up Completed yet (same effect as courier_picked_up).
+     */
+    public function canAdminMarkRiderDone(Order $order): bool
+    {
+        if (empty($order->delivery_man_id)) {
+            return false;
+        }
+
+        if ($this->hasPhysicalPickupCompleted($order)) {
+            return false;
+        }
+
+        if ($this->isPrePickUpOrder($order)) {
+            return false;
+        }
+
+        if (in_array((string) ($order->status ?? ''), ['cancelled', 'completed', 'draft', 'pickup_error'], true)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function markRiderPickupDoneByAdmin(Order $order): Order
+    {
+        if (! $this->canAdminMarkRiderDone($order)) {
+            if (empty($order->delivery_man_id)) {
+                throw new \InvalidArgumentException(__('message.admin_rider_done_requires_pickup_rider'));
+            }
+
+            if ($this->hasPhysicalPickupCompleted($order)) {
+                throw new \InvalidArgumentException(__('message.admin_rider_done_already'));
+            }
+
+            throw new \InvalidArgumentException(__('message.admin_rider_done_not_allowed'));
+        }
+
+        $order->forceFill(['status' => 'courier_picked_up'])->save();
+
+        return $order->fresh(['delivery_man', 'dispatchItems']);
+    }
+
     public function isReadyForAssign100(Order $order): bool
     {
         if (empty($order->delivery_man_id)) {
