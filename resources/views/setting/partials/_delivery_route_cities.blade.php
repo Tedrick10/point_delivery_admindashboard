@@ -1,5 +1,14 @@
+@php
+    $drRoutes = $drRoutes ?? [
+        'index' => 'delivery-route-locations.index',
+        'cities.store' => 'delivery-route-locations.cities.store',
+        'cities.update' => 'delivery-route-locations.cities.update',
+        'cities.destroy' => 'delivery-route-locations.cities.destroy',
+    ];
+    $indexIsSa = ($drRoutes['index'] ?? '') === 'super-admin.screens.show';
+@endphp
 @if($canEdit)
-    <form method="POST" action="{{ route('delivery-route-locations.cities.store') }}" class="pds-route-form">
+    <form method="POST" action="{{ route($drRoutes['cities.store']) }}" class="pds-route-form">
         @csrf
         <div class="pds-route-form__field">
             <label for="city_name">{{ __('message.city') }}</label>
@@ -30,7 +39,7 @@
                     <td>{{ $index + 1 }}</td>
                     <td>
                         @if($canEdit)
-                            <form method="POST" action="{{ route('delivery-route-locations.cities.update', $city->id) }}" class="pds-route-inline-form">
+                            <form method="POST" action="{{ route($drRoutes['cities.update'], $city->id) }}" class="pds-route-inline-form">
                                 @csrf
                                 @method('PUT')
                                 <input type="hidden" name="name" value="{{ $city->name }}">
@@ -43,13 +52,15 @@
                         @endif
                     </td>
                     <td>
-                        <a href="{{ route('delivery-route-locations.index', ['tab' => 'township', 'city_id' => $city->id]) }}">
+                        <a href="{{ route($drRoutes['index'], $indexIsSa
+                            ? ['screen' => 'delivery-route', 'tab' => 'township', 'city_id' => $city->id]
+                            : ['tab' => 'township', 'city_id' => $city->id]) }}">
                             {{ $city->townships_count }}
                         </a>
                     </td>
                     @if($canEdit)
                         <td>
-                            <form method="POST" action="{{ route('delivery-route-locations.cities.destroy', $city->id) }}"
+                            <form method="POST" action="{{ route($drRoutes['cities.destroy'], $city->id) }}"
                                   onsubmit="return confirm(@json(__('message.delete_form', ['form' => $city->displayName()])));">
                                 @csrf
                                 @method('DELETE')

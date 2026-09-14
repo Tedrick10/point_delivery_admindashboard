@@ -60,7 +60,8 @@ class ExpenseController extends Controller
         $cursor = Carbon::parse($from)->startOfDay();
         $end = Carbon::parse($to)->startOfDay();
         while ($cursor->lte($end)) {
-            $agentSync->syncExpenseDate($cursor->toDateString(), auth()->id(), $branchId);
+            // Sync every destination branch so Agent ရငွေ sits on the rider branch, not only the open tab.
+            $agentSync->syncExpenseDate($cursor->toDateString(), auth()->id(), null);
             $cursor->addDay();
         }
 

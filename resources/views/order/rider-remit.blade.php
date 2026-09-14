@@ -143,6 +143,7 @@
                                         <span class="pds-rider-remit-read js-rr-due-total">{{ number_format($summary->due_total) }}</span>
                                     </td>
                                 </tr>
+                                @if(empty($isOtherBranchRemit))
                                 <tr class="pds-rider-remit-row is-fuel">
                                     <th class="pds-rider-remit-label">{{ __('message.rider_remit_fuel') }}</th>
                                     @foreach($riders as $rider)
@@ -154,8 +155,11 @@
                                         <span class="pds-rider-remit-read js-rr-fuel-total">{{ number_format($summary->fuel_total ?? 0) }}</span>
                                     </td>
                                 </tr>
-                                <tr class="pds-rider-remit-row is-fee">
-                                    <th class="pds-rider-remit-label">{{ __('message.rider_remit_fee') }}</th>
+                                @endif
+                                <tr class="pds-rider-remit-row {{ !empty($isOtherBranchRemit) ? 'is-half-deli' : 'is-fee' }}">
+                                    <th class="pds-rider-remit-label">
+                                        {{ !empty($isOtherBranchRemit) ? __('message.rider_remit_half_deli') : __('message.rider_remit_fee') }}
+                                    </th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}" data-rr-fee="{{ (float) ($rider->fee_amount ?? 0) }}">
                                             <span class="pds-rider-remit-read js-rr-fee">{{ number_format((float) ($rider->fee_amount ?? 0)) }}</span>

@@ -1872,7 +1872,14 @@ class OrderController extends Controller
         [, $branchFilter] = resolveDestinationBranchFilter($request, auth()->user());
 
         $canReassignRider = $status === 'pending' && (auth()->user()->can('order-edit') || auth()->user()->user_type === 'admin');
-        $isIntercityDelivered = isOtherDestinationBranch((int) ($rider->branch_id ?? 0));
+        $isIntercityDelivered = usesIntercityDeliveredFlow((int) ($rider->branch_id ?? 0));
+        $deliverySettlementMode = $isIntercityDelivered
+            ? branchDeliverySettlementMode((int) ($rider->branch_id ?? 0))
+            : \App\Models\Branch::SETTLEMENT_MANUAL;
+        $riderBranchName = (string) (
+            \App\Models\Branch::query()->where('id', (int) ($rider->branch_id ?? 0))->value('name')
+            ?: ($rider->branch->name ?? '')
+        );
 
         return view('order.dispatch-rider-items', compact(
             'pageTitle',
@@ -1893,7 +1900,9 @@ class OrderController extends Controller
             'toDay',
             'search',
             'branchFilter',
-            'isIntercityDelivered'
+            'isIntercityDelivered',
+            'deliverySettlementMode',
+            'riderBranchName'
         ));
     }
 
@@ -2036,15 +2045,19 @@ class OrderController extends Controller
             ->where('user_type', 'delivery_man')
             ->first(['id', 'branch_id', 'user_type']);
         $isIntercityDelivered = $riderPreview
-            ? isOtherDestinationBranch((int) ($riderPreview->branch_id ?? 0))
+            ? usesIntercityDeliveredFlow((int) ($riderPreview->branch_id ?? 0))
             : false;
+        $settlementMode = $isIntercityDelivered
+            ? branchDeliverySettlementMode((int) ($riderPreview->branch_id ?? 0))
+            : \App\Models\Branch::SETTLEMENT_MANUAL;
 
         if ($toStatus === 'completed') {
             $rules['delivered_photo'] = 'required|image|max:10240';
             if ($isIntercityDelivered) {
                 $rules['delivered_type'] = 'required|string|in:intercity';
-                $rules['point_amount'] = 'required|numeric|min:0';
-                $rules['agent_amount'] = 'required|numeric|min:0';
+                if ($settlementMode !== \App\Models\Branch::SETTLEMENT_HALF_DELI) {
+                    $rules['agent_amount'] = 'required|numeric|min:0';
+                }
             } else {
                 $rules['delivered_type'] = 'required|string|in:gate,other';
                 if ((string) $request->input('delivered_type') === 'gate') {
@@ -2149,7 +2162,9 @@ class OrderController extends Controller
         $gateAmount = null;
         $pointAmount = null;
         $agentAmount = null;
+        $agentAmountsByItem = [];
         $agentExpenseBranchId = null;
+        $halfDeliTotal = 0.0;
         if ($toStatus === 'completed') {
             $deliveredType = (string) $data['delivered_type'];
             $deliveredPhotoId = $this->storeAdminDeliveredProofPhoto(
@@ -2163,9 +2178,40 @@ class OrderController extends Controller
                 $gateAmount = round((float) ($data['gate_amount'] ?? 0), 2);
             }
             if ($deliveredType === 'intercity') {
-                $pointAmount = round((float) ($data['point_amount'] ?? 0), 2);
-                $agentAmount = round((float) ($data['agent_amount'] ?? 0), 2);
-                $agentExpenseBranchId = panelExpenseBranchId($admin);
+                $pointAmount = 0;
+                $agentExpenseBranchId = (int) ($rider->branch_id ?? 0) ?: null;
+                if ($settlementMode === \App\Models\Branch::SETTLEMENT_HALF_DELI) {
+                    foreach ($items as $row) {
+                        $share = halfDeliAmount((float) ($row->deli_amount ?? 0));
+                        $agentAmountsByItem[(int) $row->id] = $share;
+                        $halfDeliTotal = round($halfDeliTotal + $share, 2);
+                    }
+                    $agentAmount = $halfDeliTotal;
+                } elseif ($settlementMode === \App\Models\Branch::SETTLEMENT_MANUAL_HALF_DELI) {
+                    $submitted = round((float) ($data['agent_amount'] ?? 0), 2);
+                    $expected = 0.0;
+                    foreach ($items as $row) {
+                        $expected = round($expected + halfDeliAmount((float) ($row->deli_amount ?? 0)), 2);
+                    }
+                    if (abs($submitted - $expected) < 0.011) {
+                        foreach ($items as $row) {
+                            $share = halfDeliAmount((float) ($row->deli_amount ?? 0));
+                            $agentAmountsByItem[(int) $row->id] = $share;
+                        }
+                        $agentAmount = $expected;
+                    } else {
+                        $agentAmountsByItem = $this->distributeAgentAmountAcrossItems($items, $submitted);
+                        $agentAmount = $submitted;
+                    }
+                    $halfDeliTotal = $agentAmount;
+                } else {
+                    $submitted = round((float) ($data['agent_amount'] ?? 0), 2);
+                    $agentAmount = $submitted;
+                    foreach ($items as $row) {
+                        $agentAmountsByItem[(int) $row->id] = $submitted;
+                    }
+                    $halfDeliTotal = round($submitted * max(1, $items->count()), 2);
+                }
             }
         }
 
@@ -2198,7 +2244,7 @@ class OrderController extends Controller
                 }
                 if ($deliveredType === 'intercity') {
                     $fill['point_amount'] = $pointAmount ?? 0;
-                    $fill['agent_amount'] = $agentAmount ?? 0;
+                    $fill['agent_amount'] = $agentAmountsByItem[(int) $item->id] ?? ($agentAmount ?? 0);
                     $fill['agent_expense_branch_id'] = $agentExpenseBranchId;
                     $syncedExpenseDays[(string) $fill['rider_remit_date']] = true;
                 }
@@ -2268,18 +2314,62 @@ class OrderController extends Controller
         if ($syncedExpenseDays !== []) {
             $agentSync = app(\App\Services\ExpenseAgentFeeSyncService::class);
             foreach (array_keys($syncedExpenseDays) as $expenseDay) {
+                // Sync all branches for the day so a wrong MDY card line is cleared too.
                 $agentSync->syncExpenseDate(
                     (string) $expenseDay,
                     (int) ($admin->id ?? 0) ?: null,
-                    $agentExpenseBranchId
+                    null
                 );
             }
         }
 
         return response()->json([
-            'message' => __('message.rider_items_status_updated', ['count' => $updated]),
+            'message' => ($deliveredType === 'intercity' && $settlementMode === \App\Models\Branch::SETTLEMENT_HALF_DELI)
+                ? __('message.delivered_half_deli_success', [
+                    'branch' => (string) (
+                        \App\Models\Branch::query()->where('id', (int) ($rider->branch_id ?? 0))->value('name')
+                        ?: __('message.branch')
+                    ),
+                    'amount' => number_format((float) $halfDeliTotal, 0),
+                ])
+                : __('message.rider_items_status_updated', ['count' => $updated]),
             'updated' => $updated,
+            'settlement_mode' => $settlementMode,
+            'half_deli_total' => $halfDeliTotal,
         ]);
+    }
+
+    /**
+     * Split a batch Agent amount across items by deli weight.
+     *
+     * @param  \Illuminate\Support\Collection<int, DispatchOrderItem>  $items
+     * @return array<int, float>
+     */
+    protected function distributeAgentAmountAcrossItems($items, float $total): array
+    {
+        $total = round(max(0, $total), 2);
+        $count = max(1, $items->count());
+        $weights = [];
+        foreach ($items as $row) {
+            $weights[(int) $row->id] = max(0.0, (float) ($row->deli_amount ?? 0));
+        }
+        $sumW = array_sum($weights);
+        $out = [];
+        $assigned = 0.0;
+        $ids = array_keys($weights);
+        foreach ($ids as $i => $id) {
+            if ($i === count($ids) - 1) {
+                $share = round($total - $assigned, 2);
+            } elseif ($sumW > 0) {
+                $share = round($total * ($weights[$id] / $sumW), 2);
+            } else {
+                $share = round($total / $count, 2);
+            }
+            $out[$id] = max(0, $share);
+            $assigned = round($assigned + $out[$id], 2);
+        }
+
+        return $out;
     }
 
     /**

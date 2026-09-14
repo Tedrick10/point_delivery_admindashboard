@@ -203,6 +203,31 @@ class SuperAdminDashboardService
                 ['label' => __('message.hr_group_office'), 'value' => \App\Models\HrStaff::query()->active()->where('staff_group', 'office')->count(), 'money' => false],
                 ['label' => __('message.hr_day_rate'), 'value' => __('message.sa_office_day_rate_auto'), 'money' => false, 'raw' => true],
             ],
+            'network' => [
+                ['label' => __('message.sa_metric_branches'), 'value' => $s['branches'], 'money' => false],
+                ['label' => __('message.sa_metric_branch_admins'), 'value' => $s['branch_admins'], 'money' => false],
+                ['label' => __('message.sa_missing'), 'value' => $s['branches_without_admin'], 'money' => false],
+                ['label' => __('message.sa_metric_riders'), 'value' => $s['riders_active'], 'money' => false],
+                ['label' => __('message.sa_in_progress'), 'value' => $s['in_progress'], 'money' => false],
+                ['label' => __('message.sa_cod_pending'), 'value' => $s['cod_pending'], 'money' => true],
+            ],
+            'delivery-route' => [
+                ['label' => __('message.sa_metric_branches'), 'value' => $s['branches'], 'money' => false],
+                ['label' => __('message.sa_active'), 'value' => $s['active_branches'], 'money' => false],
+                ['label' => __('message.sa_missing'), 'value' => $s['branches_without_admin'], 'money' => false],
+            ],
+            'kyo-shin' => (static function () {
+                $rows = app(\App\Services\KyoShinService::class)->summaries();
+                $total = collect($rows)->sum('total');
+                $paid = collect($rows)->sum('advanced_paid');
+
+                return [
+                    ['label' => __('message.kyo_shin_total'), 'value' => $total, 'money' => true],
+                    ['label' => __('message.kyo_shin_advanced_paid'), 'value' => $paid, 'money' => true],
+                    ['label' => __('message.kyo_shin_remain'), 'value' => $total - $paid, 'money' => true],
+                    ['label' => __('message.kyo_shin_branches'), 'value' => count($rows), 'money' => false],
+                ];
+            })(),
             default => [],
         };
 
@@ -238,6 +263,15 @@ class SuperAdminDashboardService
                     $colItems => number_format($r['items_month']),
                     $colRiders => number_format($r['riders']),
                     $colCod => number_format($r['cod'], 0).' Ks',
+                ],
+            ])->all(),
+            'network', 'delivery-route' => collect($byBranch)->map(fn ($r) => [
+                'name' => $r['name'],
+                'cols' => [
+                    __('message.branch_settlement_mode') => $r['settlement_label'] ?? __('message.branch_settlement_manual'),
+                    __('message.sa_branch_admins') => $r['admin']['name'] ?? __('message.sa_no_admin_assigned'),
+                    $colRiders => number_format($r['riders']),
+                    $colActive => number_format($r['in_progress']),
                 ],
             ])->all(),
             default => [],
@@ -634,10 +668,20 @@ class SuperAdminDashboardService
                 ->whereBetween(DB::raw('DATE(created_at)'), [$monthStart, $monthEnd]);
 
             $admin = $adminsByBranch->get($bid);
+            $settlementMode = method_exists($branch, 'settlementMode')
+                ? $branch->settlementMode()
+                : \App\Models\Branch::SETTLEMENT_MANUAL;
+            $settlementLabel = match ($settlementMode) {
+                \App\Models\Branch::SETTLEMENT_HALF_DELI => __('message.branch_settlement_half_deli'),
+                \App\Models\Branch::SETTLEMENT_MANUAL_HALF_DELI => __('message.branch_settlement_manual_half_deli'),
+                default => __('message.branch_settlement_manual'),
+            };
             $rows[] = [
                 'id' => $bid,
                 'name' => $branch->name,
                 'status' => (int) $branch->status,
+                'settlement_mode' => $settlementMode,
+                'settlement_label' => $settlementLabel,
                 'admin' => $admin ? [
                     'id' => $admin->id,
                     'name' => $admin->name,
@@ -652,7 +696,7 @@ class SuperAdminDashboardService
                     ->whereNull('admin_completed_at')
                     ->count(),
                 'in_progress' => (clone $branchItems)
-                    ->whereNotIn('status', ['completed', 'cancelled', 'return', 'returned'])
+                    ->whereNotIn('status', ['completed', 'return', 'returned', 'cancelled'])
                     ->count(),
                 'cancelled' => (clone $branchItems)
                     ->whereIn('status', ['cancelled', 'return', 'returned'])

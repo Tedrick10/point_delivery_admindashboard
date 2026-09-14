@@ -6,34 +6,22 @@ use App\Models\Branch;
 use App\Models\DispatchOrderItem;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\DispatchHubService;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema;
 
 /**
- * Real dispatch items for Rider List status columns (today, MDY Branch).
+ * Demo dispatch items so Rider List shows counts for:
+ * - MDY panel → ရန်ကုန် hubs
+ * - Yangon hubs → မန္တလေး (MDY) return riders
+ * - Local MDY riders (optional sample)
  */
 class RiderListSampleSeeder extends Seeder
 {
     public function run(): void
     {
         $today = Carbon::now('Asia/Yangon')->toDateString();
-
-        $branch = Branch::query()
-            ->where('status', 1)
-            ->where(function ($q) {
-                $q->where('name', 'like', '%MDY Branch%')
-                    ->orWhere('name', 'MDY Branch');
-            })
-            ->first()
-            ?? Branch::query()->where('status', 1)->orderBy('id')->first();
-
-        if (! $branch) {
-            $this->command?->warn('No active branch found.');
-
-            return;
-        }
-
-        $branchId = (int) $branch->id;
 
         $src = DispatchOrderItem::query()
             ->with('order')
@@ -43,22 +31,6 @@ class RiderListSampleSeeder extends Seeder
 
         if (! $src || ! $src->order) {
             $this->command?->warn('No dispatch item template found.');
-
-            return;
-        }
-
-        $riders = User::query()
-            ->where('user_type', 'delivery_man')
-            ->where('status', 1)
-            ->orderBy('name')
-            ->get();
-
-        $zin = $riders->first(fn (User $u) => stripos((string) $u->name, 'Zin Min') !== false);
-        $others = $riders->filter(fn (User $u) => ! $zin || (int) $u->id !== (int) $zin->id)->take(4);
-        $riders = collect($zin ? [$zin] : [])->merge($others)->take(5)->values();
-
-        if ($riders->count() < 5) {
-            $this->command?->warn('Need at least 5 active riders.');
 
             return;
         }
@@ -75,76 +47,343 @@ class RiderListSampleSeeder extends Seeder
             return;
         }
 
-        DispatchOrderItem::query()
-            ->whereDate('received_date', $today)
-            ->where('item_name', 'like', 'Rider List sample %')
-            ->delete();
+        $mdyBranchId = (int) (Branch::query()->where('status', 1)->where('name', 'မန္တလေး')->value('id') ?? 0);
+        $ygnBranchId = (int) (Branch::query()->where('status', 1)->where('name', 'ရန်ကုန်')->value('id') ?? 0);
+        if ($mdyBranchId <= 0 || $ygnBranchId <= 0) {
+            $this->command?->warn('မန္တလေး / ရန်ကုန် branches missing.');
 
-        // Today only — On Way (+ Assigned/Pending). No Delivered / Completed / Finished.
-        $profiles = [
-            ['assigned' => 1, 'onway' => 2, 'pending' => 1],
-            ['assigned' => 1, 'onway' => 3, 'pending' => 0],
-            ['assigned' => 2, 'onway' => 2, 'pending' => 1],
-            ['assigned' => 1, 'onway' => 3, 'pending' => 1],
-            ['assigned' => 1, 'onway' => 4, 'pending' => 0],
-        ];
+            return;
+        }
 
-        $itemValues = [10000, 12000, 8500, 15000, 9500];
-        $deliValues = [3000, 3500, 2500, 4000, 3200];
         $order = $this->orderForClient($src, (int) $client->id);
 
-        foreach ($riders as $i => $rider) {
-            $profile = $profiles[$i] ?? ['assigned' => 1, 'onway' => 2, 'pending' => 0];
+        DispatchOrderItem::query()
+            ->where(function ($q) {
+                $q->where('item_name', 'like', 'Rider List sample %')
+                    ->orWhere('remark', 'Rider List cross-hub sample');
+            })
+            ->delete();
 
-            $seq = 1;
-            foreach (['assigned' => 'courier_assigned', 'pending' => 'pending'] as $key => $status) {
-                for ($n = 0; $n < (int) ($profile[$key] ?? 0); $n++) {
+        $this->seedYangonHubSamples($src, $order, $today, $mdyBranchId, $ygnBranchId);
+        $this->seedMdyReturnSamples($src, $order, $today, $mdyBranchId, $ygnBranchId);
+        $this->seedLocalMdySamples($src, $order, $today, $mdyBranchId);
+        $this->seedLashioSamples($src, $today, $mdyBranchId);
+
+        $this->command?->info(sprintf('Rider List demo seeded for %s (Yangon hubs + MDY return + local MDY + Lashio).', $today));
+    }
+
+    protected function seedYangonHubSamples(
+        DispatchOrderItem $src,
+        Order $order,
+        string $today,
+        int $mdyBranchId,
+        int $ygnBranchId
+    ): void {
+        $hubs = User::query()
+            ->where('user_type', 'delivery_man')
+            ->where('status', 1)
+            ->where('is_dispatch_hub', 1)
+            ->orderBy('id')
+            ->get();
+
+        if ($hubs->isEmpty()) {
+            $this->command?->warn('No Yangon hub accounts found.');
+
+            return;
+        }
+
+        foreach ($hubs as $i => $hub) {
+            // MDY panel Yangon tab: Assign 100 pool counted on the hub.
+            for ($n = 1; $n <= 2; $n++) {
+                $this->createSampleItem(
+                    $src,
+                    $order,
+                    $hub,
+                    $today,
+                    $ygnBranchId,
+                    $mdyBranchId,
+                    10000 + ($i * 500) + ($n * 100),
+                    3000,
+                    'Rider List sample '.$hub->name.' hub-assigned-'.$n,
+                    'assigned',
+                    null,
+                    null,
+                    hubUserId: (int) $hub->id,
+                    clearDeliveryMan: true
+                );
+            }
+
+            // Last-mile activity on the hub account itself.
+            $this->createSampleItem(
+                $src,
+                $order,
+                $hub,
+                $today,
+                $ygnBranchId,
+                $ygnBranchId,
+                12000,
+                3500,
+                'Rider List sample '.$hub->name.' assigned-1',
+                'courier_assigned'
+            );
+            $this->createSampleItem(
+                $src,
+                $order,
+                $hub,
+                $today,
+                $ygnBranchId,
+                $ygnBranchId,
+                8500,
+                2500,
+                'Rider List sample '.$hub->name.' onway-1',
+                'courier_departed'
+            );
+            $this->createSampleItem(
+                $src,
+                $order,
+                $hub,
+                $today,
+                $ygnBranchId,
+                $ygnBranchId,
+                15000,
+                4000,
+                'Rider List sample '.$hub->name.' pending-1',
+                'pending'
+            );
+
+            $this->command?->info('Hub '.$hub->name.' — Assign100 + Assigned/OnWay/Pending seeded');
+        }
+    }
+
+    protected function seedMdyReturnSamples(
+        DispatchOrderItem $src,
+        Order $order,
+        string $today,
+        int $mdyBranchId,
+        int $ygnBranchId
+    ): void {
+        $hubService = app(DispatchHubService::class);
+        $hubs = User::query()
+            ->where('user_type', 'delivery_man')
+            ->where('status', 1)
+            ->where('is_dispatch_hub', 1)
+            ->orderBy('id')
+            ->get();
+
+        foreach ($hubs as $hub) {
+            $rider = $hubService->ensureMdyReturnDeliveryMan($hub);
+            if (! $rider) {
+                continue;
+            }
+
+            $profiles = [
+                ['status' => 'courier_assigned', 'label' => 'assigned', 'count' => 2],
+                ['status' => 'courier_departed', 'label' => 'onway', 'count' => 2],
+                ['status' => 'pending', 'label' => 'pending', 'count' => 1],
+            ];
+
+            foreach ($profiles as $profile) {
+                for ($n = 1; $n <= (int) $profile['count']; $n++) {
                     $this->createSampleItem(
                         $src,
                         $order,
                         $rider,
                         $today,
-                        $branchId,
-                        $itemValues[($i + $n) % 5],
-                        $deliValues[($i + $n) % 5],
-                        'Rider List sample '.$rider->name.' '.$key.'-'.$seq,
-                        $status,
-                        null,
-                        null
+                        $ygnBranchId,
+                        $mdyBranchId,
+                        11000 + ($n * 250),
+                        3200,
+                        'Rider List sample '.$rider->name.' hub'.$hub->id.' '.$profile['label'].'-'.$n,
+                        $profile['status'],
+                        hubUserId: (int) $hub->id
                     );
-                    $seq++;
                 }
             }
 
-            for ($n = 0; $n < (int) ($profile['onway'] ?? 0); $n++) {
-                $this->createSampleItem(
-                    $src,
-                    $order,
-                    $rider,
-                    $today,
-                    $branchId,
-                    $itemValues[($i + $n + 1) % 5],
-                    $deliValues[($i + $n + 1) % 5],
-                    'Rider List sample '.$rider->name.' onway-'.($n + 1),
-                    'courier_departed',
-                    null,
-                    null,
-                    0,
-                    0,
-                    null
-                );
-            }
-
             $this->command?->info(sprintf(
-                'Rider %s — A:%d W:%d P:%d (On Way sample, no Gate)',
-                $rider->name,
-                $profile['assigned'] ?? 0,
-                $profile['onway'] ?? 0,
-                $profile['pending'] ?? 0
+                'MDY return under %s — A:2 W:2 P:1 seeded (rider #%d)',
+                $hub->name,
+                (int) $rider->id
             ));
         }
+    }
 
-        $this->command?->info(sprintf('Done %s (%s): Rider List On Way sample seeded (no Gate).', $today, $branch->name));
+    protected function seedLocalMdySamples(
+        DispatchOrderItem $src,
+        Order $order,
+        string $today,
+        int $mdyBranchId
+    ): void {
+        $riders = User::query()
+            ->where('user_type', 'delivery_man')
+            ->where('status', 1)
+            ->where('branch_id', $mdyBranchId)
+            ->where(function ($q) {
+                $q->whereNull('is_dispatch_hub')->orWhere('is_dispatch_hub', 0);
+            })
+            ->where(function ($q) {
+                if (Schema::hasColumn('users', 'is_mdy_return')) {
+                    $q->whereNull('is_mdy_return')->orWhere('is_mdy_return', 0);
+                }
+            })
+            ->where(function ($q) {
+                if (Schema::hasColumn('users', 'hub_parent_id')) {
+                    $q->whereNull('hub_parent_id')->orWhere('hub_parent_id', 0);
+                }
+            })
+            ->orderBy('name')
+            ->limit(3)
+            ->get();
+
+        foreach ($riders as $i => $rider) {
+            $this->createSampleItem(
+                $src,
+                $order,
+                $rider,
+                $today,
+                $mdyBranchId,
+                $mdyBranchId,
+                9000 + ($i * 500),
+                3000,
+                'Rider List sample '.$rider->name.' assigned-1',
+                'courier_assigned'
+            );
+            $this->createSampleItem(
+                $src,
+                $order,
+                $rider,
+                $today,
+                $mdyBranchId,
+                $mdyBranchId,
+                10000 + ($i * 500),
+                3500,
+                'Rider List sample '.$rider->name.' onway-1',
+                'courier_departed'
+            );
+        }
+
+        if ($riders->isNotEmpty()) {
+            $this->command?->info('Local MDY riders: '.$riders->count().' seeded');
+        }
+    }
+
+    protected function seedLashioSamples(DispatchOrderItem $src, string $today, int $mdyBranchId): void
+    {
+        $lsoBranchId = (int) (Branch::query()->where('status', 1)->where('name', 'လားရှိုး')->value('id') ?? 0);
+        if ($lsoBranchId <= 0) {
+            $this->command?->warn('လားရှိုး branch missing.');
+
+            return;
+        }
+
+        $client = User::query()
+            ->where('email', 'os.lso.nanghom@demo.local')
+            ->where('user_type', 'client')
+            ->where('status', 1)
+            ->first()
+            ?: User::query()
+                ->where('user_type', 'client')
+                ->where('branch_id', $lsoBranchId)
+                ->where('status', 1)
+                ->orderBy('id')
+                ->first();
+
+        if (! $client) {
+            $this->command?->warn('No Lashio OS client found.');
+
+            return;
+        }
+
+        $order = $this->orderForClient($src, (int) $client->id);
+        $order->city_id = (int) ($client->city_id ?: $order->city_id);
+        $order->save();
+
+        $riders = User::query()
+            ->where('user_type', 'delivery_man')
+            ->where('status', 1)
+            ->where('branch_id', $lsoBranchId)
+            ->where(function ($q) {
+                $q->whereNull('is_dispatch_hub')->orWhere('is_dispatch_hub', 0);
+            })
+            ->where(function ($q) {
+                if (Schema::hasColumn('users', 'hub_parent_id')) {
+                    $q->whereNull('hub_parent_id')->orWhere('hub_parent_id', 0);
+                }
+            })
+            ->where('email', 'like', 'rider.lso%@demo.local')
+            ->where('email', 'not like', 'rider.lso.pickup%')
+            ->orderBy('name')
+            ->get();
+
+        if ($riders->isEmpty()) {
+            $this->command?->warn('No Lashio last-mile riders found.');
+
+            return;
+        }
+
+        $completedAt = Carbon::parse($today.' 10:30:00', 'Asia/Yangon');
+
+        foreach ($riders as $i => $rider) {
+            $this->createSampleItem(
+                $src,
+                $order,
+                $rider,
+                $today,
+                $mdyBranchId,
+                $lsoBranchId,
+                18000 + ($i * 500),
+                4500,
+                'Rider List sample '.$rider->name.' assigned-1',
+                'courier_assigned',
+                deliveryCity: 'Lashio',
+                township: 'လားရှိုး'
+            );
+            $this->createSampleItem(
+                $src,
+                $order,
+                $rider,
+                $today,
+                $mdyBranchId,
+                $lsoBranchId,
+                16000 + ($i * 500),
+                4500,
+                'Rider List sample '.$rider->name.' onway-1',
+                'courier_departed',
+                deliveryCity: 'Lashio',
+                township: 'လားရှိုး'
+            );
+            $this->createSampleItem(
+                $src,
+                $order,
+                $rider,
+                $today,
+                $mdyBranchId,
+                $lsoBranchId,
+                14000 + ($i * 400),
+                4500,
+                'Rider List sample '.$rider->name.' pending-1',
+                'pending',
+                deliveryCity: 'Lashio',
+                township: 'လားရှိုး'
+            );
+            $this->createSampleItem(
+                $src,
+                $order,
+                $rider,
+                $today,
+                $mdyBranchId,
+                $lsoBranchId,
+                22000 + ($i * 600),
+                4500,
+                'Rider List sample '.$rider->name.' completed-1',
+                'completed',
+                adminCompletedAt: $completedAt->copy()->subHours(2),
+                deliveryCity: 'Lashio',
+                township: 'လားရှိုး'
+            );
+        }
+
+        $this->command?->info('Lashio riders: '.$riders->count().' seeded (MDY → လားရှိုး).');
     }
 
     protected function createSampleItem(
@@ -152,16 +391,21 @@ class RiderListSampleSeeder extends Seeder
         Order $order,
         User $rider,
         string $today,
-        int $branchId,
+        int $fromBranchId,
+        int $toBranchId,
         int $itemValue,
         int $deliAmount,
         string $name,
         string $status,
-        ?Carbon $adminCompletedAt,
-        ?Carbon $adminFinishedAt,
+        ?Carbon $adminCompletedAt = null,
+        ?Carbon $adminFinishedAt = null,
         int $gateAmount = 0,
         int $gateOsPaid = 0,
-        ?string $deliveredType = null
+        ?string $deliveredType = null,
+        ?int $hubUserId = null,
+        bool $clearDeliveryMan = false,
+        ?string $deliveryCity = null,
+        ?string $township = null
     ): void {
         $calc = DispatchOrderItem::computeAmounts($itemValue, $deliAmount, 0, 0, 'customer');
 
@@ -172,11 +416,13 @@ class RiderListSampleSeeder extends Seeder
         ]);
         $item->order_id = $order->id;
         $item->code = DispatchOrderItem::generateCode();
-        $item->delivery_man_id = (int) $rider->id;
-        $item->from_branch_id = $branchId;
-        $item->to_branch_id = $branchId;
+        $item->delivery_man_id = $clearDeliveryMan ? null : (int) $rider->id;
+        $item->from_branch_id = $fromBranchId;
+        $item->to_branch_id = $toBranchId;
         $item->item_name = $name;
-        $item->remark = 'Rider List sample';
+        $item->remark = str_contains($name, 'hub-assigned') || str_contains($name, 'hub')
+            ? 'Rider List cross-hub sample'
+            : 'Rider List sample';
         $item->item_value = $itemValue;
         $item->deli_amount = $deliAmount;
         $item->os_paid = 0;
@@ -189,7 +435,16 @@ class RiderListSampleSeeder extends Seeder
         $item->cust_get = $calc['cust_get'];
         $item->os_to_pay = $calc['os_to_pay'];
         $item->customer_name = (string) $rider->name;
+        if ($deliveryCity || $township) {
+            $item->customer_address = trim(($township ?: $deliveryCity).', Lashio');
+        }
         $item->status = $status;
+        if ($deliveryCity) {
+            $item->delivery_city = $deliveryCity;
+        }
+        if ($township) {
+            $item->township = $township;
+        }
         $item->delivery_locked = false;
         $item->delivered_photo_id = 0;
         $item->pending_photo_id = 0;
@@ -202,6 +457,26 @@ class RiderListSampleSeeder extends Seeder
         $item->received_date = $today;
         $item->assigned_at = $today.' 09:00:00';
         $item->rider_remit_at = null;
+        $item->delivered_at = null;
+        $item->rider_remit_date = null;
+
+        if (Schema::hasColumn('dispatch_order_items', 'hub_user_id')) {
+            $item->hub_user_id = $hubUserId;
+        }
+        if (Schema::hasColumn('dispatch_order_items', 'hub_inbox_at')) {
+            $item->hub_inbox_at = $hubUserId ? ($today.' 08:30:00') : null;
+        }
+        if (Schema::hasColumn('dispatch_order_items', 'hub_accepted_at')) {
+            $item->hub_accepted_at = $hubUserId && ! $clearDeliveryMan ? ($today.' 09:00:00') : null;
+        }
+        if (Schema::hasColumn('dispatch_order_items', 'mdy_inbox_at')) {
+            // Keep null so MDY panel still counts Assign 100 on Yangon hubs.
+            $item->mdy_inbox_at = null;
+        }
+        if (Schema::hasColumn('dispatch_order_items', 'mdy_accepted_at')) {
+            $item->mdy_accepted_at = null;
+        }
+
         $item->save();
     }
 

@@ -41,6 +41,26 @@ return [
             ['route' => 'order.rider-remit', 'label_key' => 'sa_link_rider_remit_sheet'],
         ],
     ],
+    'delivery-route' => [
+        'title_key' => 'sa_screen_delivery_route',
+        'subtitle_key' => 'sa_screen_delivery_route_sub',
+        'icon' => 'fa-map-marker-alt',
+        // CRUD is embedded on this screen — no external workspace links.
+        'workspace' => null,
+        'links' => [],
+    ],
+    'network' => [
+        'title_key' => 'sa_screen_network',
+        'subtitle_key' => 'sa_screen_network_sub',
+        'icon' => 'fa-sitemap',
+        'workspace' => null,
+        'links' => [
+            ['route' => 'super-admin.branch-admins.index', 'label_key' => 'sa_branch_admins'],
+            ['route' => 'super-admin.screens.show', 'label_key' => 'sa_link_delivery_route', 'params' => ['screen' => 'delivery-route', 'tab' => 'from_to']],
+            ['route' => 'super-admin.screens.show', 'label_key' => 'sa_screen_rider_remit', 'params' => ['screen' => 'rider-remit']],
+            ['route' => 'super-admin.screens.show', 'label_key' => 'sa_screen_late_fine', 'params' => ['screen' => 'late-fine']],
+        ],
+    ],
     'cash-payout' => [
         'title_key' => 'sa_screen_cash_payout',
         'subtitle_key' => 'sa_screen_cash_payout_sub',
@@ -57,6 +77,15 @@ return [
         'workspace' => 'order.os-receive',
         'links' => [
             ['route' => 'order.os-receive', 'label_key' => 'sa_link_os_receive_pay'],
+        ],
+    ],
+    'kyo-shin' => [
+        'title_key' => 'sa_screen_kyo_shin',
+        'subtitle_key' => 'sa_screen_kyo_shin_sub',
+        'icon' => 'fa-coins',
+        'workspace' => 'order.kyo-shin',
+        'links' => [
+            ['route' => 'order.kyo-shin', 'label_key' => 'sa_link_kyo_shin'],
         ],
     ],
     'expenses' => [

@@ -34,6 +34,45 @@
 @endphp
 
 <div class="sa-dash">
+    @if(($s['branches_without_admin'] ?? 0) > 0)
+        <section class="sa-dash-alert">
+            <div>
+                <strong>{{ __('message.sa_network_alerts') }}</strong>
+                <p>{{ __('message.sa_missing_admins_alert', ['count' => (int) $s['branches_without_admin']]) }}</p>
+            </div>
+            <a href="{{ route('super-admin.screens.show', 'network') }}" class="sa-btn sa-btn-primary">
+                {{ __('message.sa_screen_network') }}
+            </a>
+        </section>
+    @endif
+
+    <section class="sa-dash-actions">
+        <a href="{{ route('super-admin.screens.show', 'network') }}" class="sa-dash-actions__item">
+            <i class="fas fa-sitemap"></i>
+            <span>{{ __('message.sa_screen_network') }}</span>
+        </a>
+        <a href="{{ route('super-admin.screens.show', ['screen' => 'delivery-route', 'tab' => 'from_to']) }}" class="sa-dash-actions__item">
+            <i class="fas fa-map-marker-alt"></i>
+            <span>{{ __('message.sa_screen_delivery_route') }}</span>
+        </a>
+        <a href="{{ route('super-admin.branch-admins.index') }}" class="sa-dash-actions__item">
+            <i class="fas fa-user-shield"></i>
+            <span>{{ __('message.sa_branch_admins') }}</span>
+        </a>
+        <a href="{{ route('super-admin.screens.show', 'rider-remit') }}" class="sa-dash-actions__item">
+            <i class="fas fa-gas-pump"></i>
+            <span>{{ __('message.sa_fuel_default_title') }}</span>
+        </a>
+        <a href="{{ route('super-admin.screens.show', 'dispatch') }}" class="sa-dash-actions__item">
+            <i class="fas fa-truck-moving"></i>
+            <span>{{ __('message.sa_screen_dispatch') }}</span>
+        </a>
+        <a href="{{ route('super-admin.screens.hub') }}" class="sa-dash-actions__item">
+            <i class="fas fa-th-large"></i>
+            <span>{{ __('message.sa_all_screens') }}</span>
+        </a>
+    </section>
+
     {{-- Summary banner --}}
     <section class="sa-dash-banner">
         <div class="sa-dash-banner__main">
@@ -274,18 +313,28 @@
                 <h2>{{ __('message.sa_branches_title') }}</h2>
                 <p>{{ __('message.sa_regional_performance') }} · {{ $monthLabel }}</p>
             </div>
-            <a href="{{ route('super-admin.branch-admins.index') }}" class="sa-btn sa-btn-primary">
-                <i class="fas fa-user-shield"></i> {{ __('message.sa_manage_admins') }}
-            </a>
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="{{ route('super-admin.screens.show', ['screen' => 'delivery-route', 'tab' => 'from_to']) }}" class="sa-btn sa-btn-primary">
+                    <i class="fas fa-plus"></i> {{ __('message.sa_new_branch') }}
+                </a>
+                <a href="{{ route('super-admin.branch-admins.index') }}" class="sa-btn sa-btn-ghost">
+                    <i class="fas fa-user-shield"></i> {{ __('message.sa_manage_admins') }}
+                </a>
+            </div>
         </header>
         <div class="sa-branch-grid">
             @forelse($byBranch as $row)
                 <article class="sa-branch-card {{ !$row['status'] ? 'is-off' : '' }}">
                     <header class="sa-branch-card__head">
                         <h3>{{ $row['name'] }}</h3>
-                        @if(!$row['status'])
-                            <span class="sa-badge sa-badge-off">{{ __('message.sa_off') }}</span>
-                        @endif
+                        <div class="sa-branch-card__badges">
+                            @if(!empty($row['settlement_label']))
+                                <span class="sa-mode-badge sa-mode-badge--{{ $row['settlement_mode'] ?? 'manual' }}">{{ $row['settlement_label'] }}</span>
+                            @endif
+                            @if(!$row['status'])
+                                <span class="sa-badge sa-badge-off">{{ __('message.sa_off') }}</span>
+                            @endif
+                        </div>
                     </header>
                     @if($row['admin'])
                         <p class="sa-branch-card__admin">{{ $row['admin']['name'] }}</p>
@@ -313,6 +362,9 @@
     <div class="sa-dash-quick">
         <a href="{{ route('super-admin.screens.hub') }}" class="sa-btn sa-btn-ghost">
             <i class="fas fa-th-large"></i> {{ __('message.sa_all_screens') }}
+        </a>
+        <a href="{{ route('super-admin.screens.show', 'network') }}" class="sa-btn sa-btn-primary">
+            <i class="fas fa-sitemap"></i> {{ __('message.sa_screen_network') }}
         </a>
     </div>
 </div>

@@ -143,6 +143,84 @@ class DispatchHubService
         } catch (\Throwable $e) {
             // Permission cache reset is best-effort.
         }
+
+        $this->ensureMdyReturnDeliveryMan($user);
+    }
+
+    /**
+     * Ensure each Yangon hub has a မန္တလေး (MDY) return rider for cross-hub deliver / assign.
+     */
+    public function ensureMdyReturnDeliveryMan(User $hub): ?User
+    {
+        if (! $this->isHub($hub)
+            || ! Schema::hasColumn('users', 'hub_parent_id')
+            || ! Schema::hasColumn('users', 'is_mdy_return')
+        ) {
+            return null;
+        }
+
+        $existing = User::withTrashed()
+            ->where('user_type', 'delivery_man')
+            ->where('hub_parent_id', (int) $hub->id)
+            ->where(function ($q) {
+                $q->where('is_mdy_return', 1);
+                $mdyId = $this->mandalayBranchId();
+                if ($mdyId) {
+                    $q->orWhere('branch_id', (int) $mdyId);
+                }
+            })
+            ->orderByDesc('is_mdy_return')
+            ->orderBy('id')
+            ->first();
+
+        $mdyBranchId = (int) ($this->mandalayBranchId() ?? 0);
+        $now = now();
+        $emailLocal = 'rider.mdy.hub'.(int) $hub->id;
+        $email = $emailLocal.'@demo.local';
+
+        $payload = [
+            'name' => 'မန္တလေး (MDY)',
+            'username' => $emailLocal,
+            'contact_number' => '+9592222'.str_pad((string) ((int) $hub->id % 10000), 4, '0', STR_PAD_LEFT),
+            'user_type' => 'delivery_man',
+            'status' => 1,
+            'is_dispatch_hub' => 0,
+            'is_mdy_return' => 1,
+            'hub_parent_id' => (int) $hub->id,
+            'branch_id' => $mdyBranchId > 0 ? $mdyBranchId : ((int) ($hub->branch_id ?? 0) ?: null),
+            'country_id' => (int) ($hub->country_id ?? 1) ?: 1,
+            'city_id' => (int) ($hub->city_id ?? 1) ?: 1,
+            'rider_work_on' => true,
+            'email_verified_at' => $now,
+            'otp_verify_at' => $now,
+            'document_verified_at' => $now,
+            'is_autoverified_email' => 1,
+            'is_autoverified_mobile' => 1,
+            'is_autoverified_document' => 1,
+            'deleted_at' => null,
+        ];
+
+        if ($existing) {
+            $existing->fill($payload)->save();
+
+            return $existing->fresh();
+        }
+
+        $byEmail = User::withTrashed()->where('email', $email)->first();
+        if ($byEmail) {
+            $byEmail->fill($payload)->save();
+
+            return $byEmail->fresh();
+        }
+
+        $payload['email'] = $email;
+        $payload['password'] = \Illuminate\Support\Facades\Hash::make('12345678');
+        $user = User::create($payload);
+        if ($user && method_exists($user, 'assignRole') && ! $user->hasRole('delivery_man')) {
+            $user->assignRole('delivery_man');
+        }
+
+        return $user;
     }
 
     public function originHubIdForOrder(?\App\Models\Order $order, ?User $actor = null): ?int

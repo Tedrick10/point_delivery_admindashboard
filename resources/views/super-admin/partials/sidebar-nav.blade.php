@@ -5,12 +5,16 @@
         'daily-check' => 'fa-clipboard-check',
         'money-transfer' => 'fa-exchange-alt',
         'rider-remit' => 'fa-motorcycle',
+        'delivery-route' => 'fa-map-marker-alt',
         'cash-payout' => 'fa-money-bill-wave',
         'os-receive' => 'fa-hand-holding-usd',
+        'kyo-shin' => 'fa-coins',
         'expenses' => 'fa-receipt',
         'expense-summary' => 'fa-file-invoice-dollar',
         'late-fine' => 'fa-user-clock',
+        'office-salary' => 'fa-briefcase',
         'rider-salary' => 'fa-coins',
+        'network' => 'fa-sitemap',
     ];
 @endphp
 <a href="{{ route('super-admin.dashboard') }}" class="{{ request()->routeIs('super-admin.dashboard') ? 'active' : '' }}">

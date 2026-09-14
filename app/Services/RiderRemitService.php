@@ -109,29 +109,153 @@ class RiderRemitService
     }
 
     /**
-     * Active delivery riders for Super Admin ဆီဖိုး controls.
+     * Active delivery riders for Super Admin ဆီဖိုး controls (MDY + Yangon only).
      *
-     * @return \Illuminate\Support\Collection<int, object{id:int,name:string,fuel_amount:float}>
+     * @return \Illuminate\Support\Collection<int, object{id:int,name:string,fuel_amount:float,branch_id:int}>
      */
     public function fuelControlRiders(): Collection
     {
-        return User::query()
-            ->where('user_type', 'delivery_man')
-            ->where('status', 1)
-            ->visibleOnAdminRiderList(auth()->user())
-            ->orderBy('name')
-            ->get(['id', 'name', 'username', 'contact_number', 'rider_work_on', 'rider_work_off_date'])
-            ->filter(fn (User $user) => $this->isDisplayableRider($user))
-            ->map(fn (User $user) => (object) [
-                'id' => (int) $user->id,
-                'name' => $this->displayName($user, (int) $user->id),
-                'fuel_amount' => $this->riderFuelAmount((int) $user->id),
-            ])
+        return collect($this->fuelControlRiderGroups())
+            ->flatMap(fn (array $group) => $group['rows'])
+            ->unique('id')
             ->values();
     }
 
-    protected function resolveFuelAmount(int $riderId, ?float $savedFuel, int $itemCount): float
+    /**
+     * Super Admin ဆီဖိုး sections:
+     * - MDY Branch Rider List
+     * - one section per Yangon hub (Ngwe Latt Saung / M2M) with that hub + its riders
+     *
+     * @return list<array{key:string,title:string,rows:Collection<int, object>}>
+     */
+    public function fuelControlRiderGroups(): array
     {
+        $mdyId = function_exists('mandalayBranchId') ? (int) (mandalayBranchId() ?? 0) : 0;
+        $ygnId = (int) (app(\App\Services\DispatchHubService::class)->yangonBranchId() ?? 0);
+        $allowed = array_values(array_filter([$mdyId, $ygnId]));
+        $groups = [];
+
+        if ($allowed === []) {
+            return $groups;
+        }
+
+        $users = User::query()
+            ->where('user_type', 'delivery_man')
+            ->where('status', 1)
+            ->whereIn('branch_id', $allowed)
+            ->when(
+                \Illuminate\Support\Facades\Schema::hasColumn('users', 'is_mdy_return'),
+                fn ($q) => $q->where(function ($inner) {
+                    $inner->whereNull('is_mdy_return')->orWhere('is_mdy_return', 0);
+                })
+            )
+            ->orderBy('name')
+            ->get([
+                'id', 'name', 'username', 'contact_number', 'branch_id',
+                'is_dispatch_hub', 'hub_parent_id', 'rider_work_on', 'rider_work_off_date',
+            ])
+            ->filter(fn (User $user) => $this->isDisplayableRider($user))
+            ->values();
+
+        $toRow = fn (User $user) => (object) [
+            'id' => (int) $user->id,
+            'name' => $this->displayName($user, (int) $user->id),
+            'branch_id' => (int) ($user->branch_id ?? 0),
+            'is_hub' => (int) ($user->is_dispatch_hub ?? 0) === 1,
+            'hub_parent_id' => (int) ($user->hub_parent_id ?? 0),
+            'fuel_amount' => $this->riderFuelAmount((int) $user->id),
+        ];
+
+        if ($mdyId > 0) {
+            $mdyRows = $users
+                ->filter(fn (User $u) => (int) ($u->branch_id ?? 0) === $mdyId
+                    && (int) ($u->is_dispatch_hub ?? 0) !== 1)
+                ->map($toRow)
+                ->values();
+
+            $groups[] = [
+                'key' => 'mdy',
+                'title' => (string) __('message.sa_rider_fuel_mdy_list'),
+                'rows' => $mdyRows,
+            ];
+        }
+
+        if ($ygnId > 0) {
+            $hubs = $users
+                ->filter(fn (User $u) => (int) ($u->branch_id ?? 0) === $ygnId
+                    && (int) ($u->is_dispatch_hub ?? 0) === 1)
+                ->sortBy('name')
+                ->values();
+
+            foreach ($hubs as $hub) {
+                $hubId = (int) $hub->id;
+                $childRows = $users
+                    ->filter(fn (User $u) => (int) ($u->hub_parent_id ?? 0) === $hubId
+                        && (int) ($u->is_dispatch_hub ?? 0) !== 1)
+                    ->map($toRow)
+                    ->sortBy('name')
+                    ->values();
+
+                $rows = collect([$toRow($hub)])->merge($childRows)->values();
+
+                $groups[] = [
+                    'key' => 'yangon-hub-'.$hubId,
+                    'title' => (string) $hub->name,
+                    'rows' => $rows,
+                ];
+            }
+
+            // Orphan Yangon last-mile riders (no hub parent) — keep visible if any.
+            $orphan = $users
+                ->filter(fn (User $u) => (int) ($u->branch_id ?? 0) === $ygnId
+                    && (int) ($u->is_dispatch_hub ?? 0) !== 1
+                    && (int) ($u->hub_parent_id ?? 0) <= 0)
+                ->map($toRow)
+                ->values();
+
+            if ($orphan->isNotEmpty()) {
+                $groups[] = [
+                    'key' => 'yangon-other',
+                    'title' => (string) __('message.sa_rider_fuel_yangon_list'),
+                    'rows' => $orphan,
+                ];
+            }
+        }
+
+        return $groups;
+    }
+
+    /**
+     * @deprecated Prefer fuelControlRiderGroups(); kept for callers needing flat MDY/Yangon bags.
+     *
+     * @return array{mdy: Collection<int, object>, yangon: Collection<int, object>}
+     */
+    public function fuelControlRidersByBranch(): array
+    {
+        $groups = $this->fuelControlRiderGroups();
+        $mdy = collect();
+        $yangon = collect();
+
+        foreach ($groups as $group) {
+            if (($group['key'] ?? '') === 'mdy') {
+                $mdy = $group['rows'];
+            } else {
+                $yangon = $yangon->merge($group['rows']);
+            }
+        }
+
+        return [
+            'mdy' => $mdy->values(),
+            'yangon' => $yangon->unique('id')->values(),
+        ];
+    }
+
+    protected function resolveFuelAmount(int $riderId, ?float $savedFuel, int $itemCount, bool $isOtherBranch = false): float
+    {
+        if ($isOtherBranch) {
+            return 0.0;
+        }
+
         $saved = round((float) ($savedFuel ?? 0), 2);
         if ($saved > 0) {
             return $saved;
@@ -140,13 +264,29 @@ class RiderRemitService
         return $itemCount >= 1 ? $this->riderFuelAmount($riderId) : 0.0;
     }
 
-    protected function resolveFeeAmount($savedFee, float $gate): float
+    /**
+     * Local MDY/YGN: တန်ဆာခ from Gate. Half Deli sheets: Agent ရငွေ.
+     */
+    protected function resolveFeeAmount($savedFee, float $gateOrAgent, bool $isOtherBranch = false): float
     {
+        if ($isOtherBranch) {
+            return round($gateOrAgent, 2);
+        }
+
         if ($savedFee !== null && (float) $savedFee > 0) {
             return round((float) $savedFee, 2);
         }
 
-        return round($gate, 2);
+        return round($gateOrAgent, 2);
+    }
+
+    /**
+     * Half Deli sheet (no ဆီဖိုး): other cities, MDY→Yangon hubs, Yangon hub→MDY riders.
+     */
+    protected function isOtherBranchRemit(?int $branchId): bool
+    {
+        return function_exists('usesHalfDeliOnRiderRemit')
+            && usesHalfDeliOnRiderRemit((int) ($branchId ?? 0));
     }
 
     /**
@@ -231,6 +371,7 @@ class RiderRemitService
     {
         $branchStore = $this->branchStore($branchId);
         $dues = $this->dueByRider($branchId, $day);
+        $isOtherBranch = $this->isOtherBranchRemit($branchId);
         $updated = 0;
 
         foreach ($dues as $dueRow) {
@@ -247,12 +388,17 @@ class RiderRemitService
 
             $due = round((float) ($dueRow->due ?? 0), 2);
             $gate = round((float) ($dueRow->gate ?? 0), 2);
+            $agent = round((float) ($dueRow->agent ?? 0), 2);
             $savedFuel = (float) ($open?->fuel_amount ?? 0);
             $savedFee = $open?->fee_amount;
             $savedDue = (float) ($open?->due_amount ?? 0);
 
-            $fuel = $this->resolveFuelAmount($riderId, $savedFuel, $itemCount);
-            $fee = $this->resolveFeeAmount($savedFee, $gate);
+            $fuel = $this->resolveFuelAmount($riderId, $savedFuel, $itemCount, $isOtherBranch);
+            $fee = $this->resolveFeeAmount(
+                $isOtherBranch ? null : $savedFee,
+                $isOtherBranch ? $agent : $gate,
+                $isOtherBranch
+            );
             $nextDue = $savedDue > 0 ? $savedDue : $due;
 
             if ($open && abs($savedFuel - $fuel) < 0.001 && abs((float) $savedFee - $fee) < 0.001 && abs($savedDue - $nextDue) < 0.001) {
@@ -327,8 +473,9 @@ class RiderRemitService
             ->keyBy('id');
 
         $submitted = $this->latestSubmittedByRider($branchId, $day);
+        $isOtherBranch = $this->isOtherBranchRemit($branchId);
 
-        $riders = $riderIds->map(function ($riderId) use ($dues, $saved, $submitted, $users, $day, $branchId) {
+        $riders = $riderIds->map(function ($riderId) use ($dues, $saved, $submitted, $users, $day, $branchId, $isOtherBranch) {
             $user = $users->get($riderId);
             $remit = $saved->get($riderId);
             $openItemCount = (int) ($dues->get($riderId)?->item_count ?? 0);
@@ -345,15 +492,19 @@ class RiderRemitService
 
             $due = (float) ($dues->get($riderId)?->due ?? 0);
             $gate = (float) ($dues->get($riderId)?->gate ?? 0);
+            $agent = (float) ($dues->get($riderId)?->agent ?? 0);
             $itemCount = (int) ($dues->get($riderId)?->item_count ?? 0);
             $denoms = $this->normalizeDenoms($remit?->denominations);
 
             $prepaid = (float) ($remit?->prepaid_amount ?? 0);
-            // Delivered ways → auto ဆီဖိုး from rider/global default until a positive saved value exists.
+            // Other branches: no ဆီဖိုး. Half Deli = Agent ရငွေ (auto).
             $savedFuel = (float) ($remit?->fuel_amount ?? 0);
-            $fuel = $this->resolveFuelAmount($riderId, $savedFuel, $itemCount);
-            // Auto-fill တန်ဆာခ from Rider List Gate when unset / still 0.
-            $fee = $this->resolveFeeAmount($remit?->fee_amount, $gate);
+            $fuel = $this->resolveFuelAmount($riderId, $savedFuel, $itemCount, $isOtherBranch);
+            $fee = $this->resolveFeeAmount(
+                $isOtherBranch ? null : $remit?->fee_amount,
+                $isOtherBranch ? $agent : $gate,
+                $isOtherBranch
+            );
             $kpay = (float) ($remit?->kpay_amount ?? 0);
             $cash = $this->cashFromDenoms($denoms);
             $remaining = round($due - $prepaid - $fuel - $fee, 2);
@@ -369,6 +520,7 @@ class RiderRemitService
                 'item_count' => $itemCount,
                 'due_amount' => $due,
                 'gate_amount' => $gate,
+                'agent_amount' => $agent,
                 'prepaid_amount' => $prepaid,
                 'fuel_amount' => $fuel,
                 'fee_amount' => $fee,
@@ -407,6 +559,7 @@ class RiderRemitService
                 'submitted_count' => $riders->filter(fn ($r) => $r->is_submitted ?? false)->count(),
                 'has_open_items' => (int) $dues->sum(fn ($d) => (int) ($d->item_count ?? 0)) > 0,
             ],
+            'is_other_branch' => $isOtherBranch,
         ];
     }
 
@@ -636,19 +789,26 @@ class RiderRemitService
         $dues = $this->dueByRider($branchId > 0 ? $branchId : null, $day);
         $due = (float) ($dues->get($riderId)?->due ?? 0);
         $gate = (float) ($dues->get($riderId)?->gate ?? 0);
+        $agent = (float) ($dues->get($riderId)?->agent ?? 0);
 
         $this->assertRiderCanEnterData($branchId, $riderId, $day);
 
         $before = $open;
 
         $itemCount = (int) ($dues->get($riderId)?->item_count ?? 0);
-        // ဆီဖိုး / တန်ဆာခ are system-controlled (SA / Gate) — never overwrite from sheet posts.
+        $isOtherBranch = $this->isOtherBranchRemit($branchId);
+        // ဆီဖိုး / တန်ဆာခ|Half Deli are system-controlled — never overwrite from sheet posts.
         $fuel = $this->resolveFuelAmount(
             $riderId,
             $open !== null ? (float) $open->fuel_amount : null,
-            $itemCount
+            $itemCount,
+            $isOtherBranch
         );
-        $fee = $this->resolveFeeAmount($open?->fee_amount, $gate);
+        $fee = $this->resolveFeeAmount(
+            $isOtherBranch ? null : $open?->fee_amount,
+            $isOtherBranch ? $agent : $gate,
+            $isOtherBranch
+        );
 
         $row = RiderRemit::query()->updateOrCreate(
             [
@@ -808,12 +968,12 @@ class RiderRemitService
      * Delivered parcels (status=completed) for Rider ငွေအပ် sheet day.
      * Bucketed by rider_remit_date (Completed lock: before → yesterday, after → today). Does not wait for Finished.
      *
-     * @return Collection<int, object{delivery_man_id:int, due:float, gate:float, item_count:int}>
+     * @return Collection<int, object{delivery_man_id:int, due:float, gate:float, agent:float, item_count:int}>
      */
     protected function dueByRider(?int $branchId, string $day): Collection
     {
         $items = $this->remittableItemsQuery($branchId, $day)
-            ->get(['id', 'delivery_man_id', 'cust_get', 'gate_amount']);
+            ->get(['id', 'delivery_man_id', 'cust_get', 'gate_amount', 'agent_amount']);
 
         return $items
             ->groupBy(fn (DispatchOrderItem $item) => (int) $item->delivery_man_id)
@@ -822,6 +982,7 @@ class RiderRemitService
                     'delivery_man_id' => (int) $riderId,
                     'due' => round($group->sum(fn (DispatchOrderItem $i) => (float) ($i->cust_get ?? 0)), 2),
                     'gate' => round($group->sum(fn (DispatchOrderItem $i) => (float) ($i->gate_amount ?? 0)), 2),
+                    'agent' => round($group->sum(fn (DispatchOrderItem $i) => (float) ($i->agent_amount ?? 0)), 2),
                     'item_count' => $group->count(),
                 ];
             });

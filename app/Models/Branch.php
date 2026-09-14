@@ -12,6 +12,19 @@ class Branch extends Model
     use HasFactory;
     use SoftDeletes;
 
+    public const SETTLEMENT_MANUAL = 'manual';
+
+    public const SETTLEMENT_MANUAL_HALF_DELI = 'manual_half_deli';
+
+    public const SETTLEMENT_HALF_DELI = 'half_deli';
+
+    /** @var list<string> */
+    public const SETTLEMENT_MODES = [
+        self::SETTLEMENT_MANUAL,
+        self::SETTLEMENT_MANUAL_HALF_DELI,
+        self::SETTLEMENT_HALF_DELI,
+    ];
+
     protected $fillable = [
         'name',
         'code',
@@ -19,6 +32,7 @@ class Branch extends Model
         'address',
         'phone',
         'status',
+        'delivery_settlement_mode',
     ];
 
     protected function casts(): array
@@ -46,5 +60,23 @@ class Branch extends Model
         }
 
         return (string) $this->name;
+    }
+
+    public function settlementMode(): string
+    {
+        $mode = (string) ($this->delivery_settlement_mode ?? self::SETTLEMENT_MANUAL);
+
+        return in_array($mode, self::SETTLEMENT_MODES, true)
+            ? $mode
+            : self::SETTLEMENT_MANUAL;
+    }
+
+    public static function normalizeSettlementMode(?string $mode): string
+    {
+        $mode = trim((string) $mode);
+
+        return in_array($mode, self::SETTLEMENT_MODES, true)
+            ? $mode
+            : self::SETTLEMENT_MANUAL;
     }
 }

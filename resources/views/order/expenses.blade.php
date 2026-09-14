@@ -472,7 +472,6 @@
                         </button>
                         <div class="pds-expense-agent-photos__meta">
                             ${p.order_id ? `<span>Order #${escapeAttr(p.order_id)}</span>` : ''}
-                            <strong>${escapeAttr(i18n.pointIncome)}: ${fmt(p.point_amount)}</strong>
                             <strong>${escapeAttr(i18n.agentIncome)}: ${fmt(p.agent_amount)}</strong>
                         </div>
                     </article>

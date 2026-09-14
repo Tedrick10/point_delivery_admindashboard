@@ -24,6 +24,8 @@ class ExpenseAgentFeeSyncService
         }
 
         $expenseDay = Carbon::parse($expenseDay)->toDateString();
+        $this->repairAgentExpenseBranchesForDay($expenseDay);
+
         foreach ($this->branchIdsForExpenseDay($expenseDay, $branchId) as $id) {
             $this->upsertAgentFeeOnExpenseDay(
                 $expenseDay,
@@ -41,26 +43,11 @@ class ExpenseAgentFeeSyncService
         }
 
         $day = Carbon::parse($expenseDay)->toDateString();
+        $this->repairAgentExpenseBranchesForDay($day);
 
-        return round((float) DispatchOrderItem::query()
-            ->where('status', 'completed')
-            ->where('delivered_type', 'intercity')
-            ->where(function ($q) use ($day) {
-                $q->whereDate('rider_remit_date', $day)
-                    ->orWhere(function ($inner) use ($day) {
-                        $inner->whereNull('rider_remit_date')->whereDate('delivered_at', $day);
-                    });
-            })
+        return round((float) $this->intercityAgentItemsQuery($day)
             ->when($branchId && $branchId > 0, function ($q) use ($branchId) {
-                $q->where(function ($inner) use ($branchId) {
-                    $inner->where('agent_expense_branch_id', $branchId);
-                    if (Schema::hasColumn('dispatch_order_items', 'to_branch_id')) {
-                        $inner->orWhere(function ($fallback) use ($branchId) {
-                            $fallback->whereNull('agent_expense_branch_id')
-                                ->where('to_branch_id', $branchId);
-                        });
-                    }
-                });
+                $this->applyAgentBranchFilter($q, $branchId);
             })
             ->sum('agent_amount'), 2);
     }
@@ -75,31 +62,34 @@ class ExpenseAgentFeeSyncService
         }
 
         $tabIds = function_exists('destinationBranchTabs')
-            ? destinationBranchTabs()->pluck('id')->map(fn ($id) => (int) $id)->filter()->values()
+            ? collect(destinationBranchTabs()->pluck('id')->all())->map(fn ($id) => (int) $id)->filter()->values()
             : collect();
 
-        $fromItems = DispatchOrderItem::query()
-            ->where('status', 'completed')
-            ->where('delivered_type', 'intercity')
-            ->where('agent_expense_branch_id', '>', 0)
-            ->where(function ($q) use ($expenseDay) {
-                $q->whereDate('rider_remit_date', $expenseDay)
-                    ->orWhere(function ($inner) use ($expenseDay) {
-                        $inner->whereNull('rider_remit_date')->whereDate('delivered_at', $expenseDay);
-                    });
-            })
-            ->pluck('agent_expense_branch_id')
-            ->map(fn ($id) => (int) $id);
+        $fromItems = collect(
+            $this->intercityAgentItemsQuery($expenseDay)
+                ->where(function ($q) {
+                    $q->where('agent_expense_branch_id', '>', 0);
+                    if (Schema::hasColumn('users', 'branch_id')) {
+                        $q->orWhereHas('deliveryMan', fn ($u) => $u->where('branch_id', '>', 0));
+                    }
+                })
+                ->with('deliveryMan:id,branch_id')
+                ->get(['id', 'agent_expense_branch_id', 'delivery_man_id'])
+                ->map(fn (DispatchOrderItem $item) => $this->resolveAgentExpenseBranchId($item))
+                ->all()
+        )->filter()->values();
 
-        $fromCards = ExpenseCard::query()
-            ->whereDate('expense_date', $expenseDay)
-            ->where('branch_id', '>', 0)
-            ->pluck('branch_id')
-            ->map(fn ($id) => (int) $id);
+        $fromCards = collect(
+            ExpenseCard::query()
+                ->whereDate('expense_date', $expenseDay)
+                ->where('branch_id', '>', 0)
+                ->pluck('branch_id')
+                ->all()
+        )->map(fn ($id) => (int) $id)->filter()->values();
 
         $ids = $fromItems->merge($fromCards)->unique()->filter()->values();
         if ($tabIds->isNotEmpty()) {
-            $ids = $ids->intersect($tabIds)->values();
+            $ids = $ids->intersect($tabIds->all())->values();
         }
 
         if ($ids->isEmpty()) {
@@ -214,28 +204,13 @@ class ExpenseAgentFeeSyncService
         }
 
         $day = Carbon::parse($expenseDay)->toDateString();
+        $this->repairAgentExpenseBranchesForDay($day);
 
-        $items = DispatchOrderItem::query()
-            ->where('status', 'completed')
-            ->where('delivered_type', 'intercity')
+        $items = $this->intercityAgentItemsQuery($day)
             ->where('agent_amount', '>', 0)
             ->where('delivered_photo_id', '>', 0)
-            ->where(function ($q) use ($day) {
-                $q->whereDate('rider_remit_date', $day)
-                    ->orWhere(function ($inner) use ($day) {
-                        $inner->whereNull('rider_remit_date')->whereDate('delivered_at', $day);
-                    });
-            })
             ->when($branchId && $branchId > 0, function ($q) use ($branchId) {
-                $q->where(function ($inner) use ($branchId) {
-                    $inner->where('agent_expense_branch_id', $branchId);
-                    if (Schema::hasColumn('dispatch_order_items', 'to_branch_id')) {
-                        $inner->orWhere(function ($fallback) use ($branchId) {
-                            $fallback->whereNull('agent_expense_branch_id')
-                                ->where('to_branch_id', $branchId);
-                        });
-                    }
-                });
+                $this->applyAgentBranchFilter($q, $branchId);
             })
             ->with('deliveredPhotoMedia')
             ->orderBy('id')
@@ -272,5 +247,78 @@ class ExpenseAgentFeeSyncService
         }
 
         return $rows;
+    }
+
+    /**
+     * Fix rows that stored MDY/YGN panel id instead of the rider's destination branch.
+     */
+    protected function repairAgentExpenseBranchesForDay(string $expenseDay): void
+    {
+        if (! Schema::hasColumn('dispatch_order_items', 'agent_expense_branch_id')) {
+            return;
+        }
+
+        $items = $this->intercityAgentItemsQuery($expenseDay)
+            ->with('deliveryMan:id,branch_id')
+            ->get(['id', 'agent_expense_branch_id', 'delivery_man_id']);
+
+        foreach ($items as $item) {
+            $correct = $this->resolveAgentExpenseBranchId($item);
+            if (! $correct) {
+                continue;
+            }
+            if ((int) ($item->agent_expense_branch_id ?? 0) === $correct) {
+                continue;
+            }
+            $item->forceFill(['agent_expense_branch_id' => $correct])->save();
+        }
+    }
+
+    protected function resolveAgentExpenseBranchId(DispatchOrderItem $item): ?int
+    {
+        $riderBranch = (int) (optional($item->deliveryMan)->branch_id ?? 0);
+        if ($riderBranch > 0 && function_exists('isOtherDestinationBranch') && isOtherDestinationBranch($riderBranch)) {
+            return $riderBranch;
+        }
+
+        $stored = (int) ($item->agent_expense_branch_id ?? 0);
+        if ($stored > 0 && function_exists('isOtherDestinationBranch') && isOtherDestinationBranch($stored)) {
+            return $stored;
+        }
+
+        if ($riderBranch > 0) {
+            return $riderBranch;
+        }
+
+        return $stored > 0 ? $stored : null;
+    }
+
+    protected function intercityAgentItemsQuery(string $day)
+    {
+        return DispatchOrderItem::query()
+            ->where('status', 'completed')
+            ->where('delivered_type', 'intercity')
+            ->where(function ($q) use ($day) {
+                $q->whereDate('rider_remit_date', $day)
+                    ->orWhere(function ($inner) use ($day) {
+                        $inner->whereNull('rider_remit_date')->whereDate('delivered_at', $day);
+                    });
+            });
+    }
+
+    protected function applyAgentBranchFilter($query, int $branchId): void
+    {
+        // Source of truth = rider's destination branch (not MDY/YGN panel).
+        $query->where(function ($inner) use ($branchId) {
+            $inner->whereHas('deliveryMan', fn ($u) => $u->where('branch_id', $branchId));
+            $inner->orWhere(function ($fallback) use ($branchId) {
+                $fallback->where('agent_expense_branch_id', $branchId)
+                    ->where(function ($missingRider) {
+                        $missingRider->whereNull('delivery_man_id')
+                            ->orWhere('delivery_man_id', 0)
+                            ->orWhereDoesntHave('deliveryMan');
+                    });
+            });
+        });
     }
 }

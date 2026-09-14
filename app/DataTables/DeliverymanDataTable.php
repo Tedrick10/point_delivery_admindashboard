@@ -239,9 +239,13 @@ class DeliverymanDataTable extends DataTable
                 ->orWhereNull('last_actived_at');
             }
         }
-        $forcedBranchId = forcedBranchId(auth()->user());
-        if ($forcedBranchId) {
-            $model->where('branch_id', $forcedBranchId);
+        // Hub panels use destination tabs (ရန်ကုန် / မန္တလေး / …). Do not lock to hub city
+        // or MDY return riders disappear when the မန္တလေး tab is selected.
+        if (! isDispatchHub(auth()->user())) {
+            $forcedBranchId = forcedBranchId(auth()->user());
+            if ($forcedBranchId) {
+                $model->where('branch_id', $forcedBranchId);
+            }
         }
         $model->visibleOnAdminRiderList(auth()->user());
 

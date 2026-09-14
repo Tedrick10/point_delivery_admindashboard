@@ -1874,7 +1874,96 @@ function isOtherDestinationBranch(?int $branchId): bool
 }
 
 /**
- * Expense / panel branch for MDY or Yangon admin when recording intercity Agent fees.
+ * Rider List Delivered uses Agent/Half-Deli flow when the rider's branch
+ * differs from the panel branch (MDY ↔ YGN, hubs ↔ MDY, other cities, cross-panel).
+ */
+function usesIntercityDeliveredFlow(?int $riderBranchId, ?User $user = null): bool
+{
+    $riderBranchId = (int) ($riderBranchId ?? 0);
+    if ($riderBranchId <= 0) {
+        return false;
+    }
+
+    if (isOtherDestinationBranch($riderBranchId)) {
+        return true;
+    }
+
+    $user = $user ?? auth()->user();
+    $panelBranchId = (int) (forcedBranchId($user) ?: 0);
+    if ($panelBranchId <= 0) {
+        if (function_exists('isDispatchHub') && isDispatchHub($user)) {
+            $panelBranchId = (int) (app(\App\Services\DispatchHubService::class)->yangonBranchId() ?? 0);
+        } else {
+            $panelBranchId = (int) (defaultDestinationBranchId(null, $user) ?: 0);
+        }
+    }
+
+    if ($panelBranchId > 0 && $riderBranchId !== $panelBranchId) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Super Admin settlement mode for a destination / rider branch.
+ */
+function branchDeliverySettlementMode(?int $branchId): string
+{
+    $branchId = (int) ($branchId ?? 0);
+    if ($branchId <= 0 || ! \Illuminate\Support\Facades\Schema::hasColumn('branches', 'delivery_settlement_mode')) {
+        return \App\Models\Branch::SETTLEMENT_MANUAL;
+    }
+
+    $mode = \App\Models\Branch::query()->where('id', $branchId)->value('delivery_settlement_mode');
+
+    return \App\Models\Branch::normalizeSettlementMode(is_string($mode) ? $mode : null);
+}
+
+/**
+ * Half Deli fee for one item (half of DeliAmount).
+ */
+function halfDeliAmount(float $deliAmount): float
+{
+    return round(max(0, $deliAmount) / 2, 2);
+}
+
+/**
+ * Rider ငွေအပ် sheet uses Half Deli (no ဆီဖိုး) for:
+ * - other destination branches, OR
+ * - MDY/admin viewing ရန်ကုန် tab (Yangon hubs), OR
+ * - Yangon hub viewing မန္တလေး tab (MDY return riders).
+ */
+function usesHalfDeliOnRiderRemit(?int $branchId, ?User $user = null): bool
+{
+    $branchId = (int) ($branchId ?? 0);
+    if ($branchId <= 0) {
+        return false;
+    }
+
+    if (isOtherDestinationBranch($branchId)) {
+        return true;
+    }
+
+    $user = $user ?? auth()->user();
+    $mdyId = (int) (mandalayBranchId() ?? 0);
+    $ygnId = (int) (app(\App\Services\DispatchHubService::class)->yangonBranchId() ?? 0);
+
+    // Yangon hub panel → MDY riders tab: Half Deli only.
+    if ($mdyId > 0 && $branchId === $mdyId && isDispatchHub($user)) {
+        return true;
+    }
+
+    // MDY / non-hub admin → Yangon hubs tab: Half Deli only.
+    if ($ygnId > 0 && $branchId === $ygnId && ! isDispatchHub($user)) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Panel city branch (MDY / Yangon / forced). Prefer rider branch for Agent ရငွေ instead.
  */
 function panelExpenseBranchId(?User $user = null): ?int
 {

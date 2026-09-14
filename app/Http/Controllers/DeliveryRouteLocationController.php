@@ -6,53 +6,23 @@ use App\Models\Branch;
 use App\Models\DeliveryCity;
 use App\Models\DeliveryTownship;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class DeliveryRouteLocationController extends Controller
 {
     public function index(Request $request)
     {
-        if (! auth()->user()->can('order-list')) {
-            return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
+        // Branch / hub panels cannot manage this — Super Admin only.
+        if (! function_exists('isSuperAdmin') || ! isSuperAdmin(auth()->user())) {
+            abort(403, __('message.demo_permission_denied'));
         }
 
-        $tab = trim((string) $request->get('tab', 'from_to'));
-        if (! in_array($tab, ['from_to', 'city', 'township'], true)) {
-            $tab = 'from_to';
-        }
-
-        $branches = Branch::query()->orderByRaw(destinationBranchOrderSql())->orderBy('name')->get();
-        $cities = DeliveryCity::query()->withCount('townships')->orderBy('sort_order')->orderBy('name')->get();
-        $filterCityId = (int) $request->get('city_id', 0);
-        if ($filterCityId <= 0) {
-            $panelCity = defaultDeliveryRouteForBranch()['city'] ?? '';
-            $filterCityId = (int) ($cities->first(function ($city) use ($panelCity) {
-                return strcasecmp((string) $city->name, (string) $panelCity) === 0
-                    || (string) $city->name_mm === (string) $panelCity;
-            })?->id ?? $cities->first()?->id ?? 0);
-        }
-
-        $townships = DeliveryTownship::query()
-            ->with('city')
-            ->when($filterCityId > 0, fn ($q) => $q->where('delivery_city_id', $filterCityId))
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get();
-
-        $pageTitle = __('message.delivery_route_locations_title');
-        $assets = [];
-        $canEdit = auth()->user()->can('order-edit');
-
-        return view('setting.delivery-route-locations', compact(
-            'pageTitle',
-            'assets',
-            'tab',
-            'branches',
-            'cities',
-            'townships',
-            'filterCityId',
-            'canEdit'
-        ));
+        return redirect()->route('super-admin.screens.show', [
+            'screen' => 'delivery-route',
+            'tab' => $request->get('tab', 'from_to'),
+            'city_id' => $request->get('city_id'),
+        ]);
     }
 
     public function storeBranch(Request $request)
@@ -90,14 +60,19 @@ class DeliveryRouteLocationController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:255|unique:branches,name,'.$branch->id.',id,deleted_at,NULL',
             'status' => 'nullable|in:0,1',
+            'delivery_settlement_mode' => 'nullable|string|in:'.implode(',', Branch::SETTLEMENT_MODES),
         ]);
 
         $name = trim($data['name']);
-        $branch->fill([
+        $fill = [
             'name' => $name,
             'city_name' => $name,
             'status' => array_key_exists('status', $data) ? (int) $data['status'] : $branch->status,
-        ])->save();
+        ];
+        if (array_key_exists('delivery_settlement_mode', $data) && Schema::hasColumn('branches', 'delivery_settlement_mode')) {
+            $fill['delivery_settlement_mode'] = Branch::normalizeSettlementMode($data['delivery_settlement_mode'] ?? null);
+        }
+        $branch->fill($fill)->save();
 
         return $this->ok($request, __('message.update_form', ['form' => __('message.from').' / '.__('message.to')]), 'from_to');
     }
@@ -132,8 +107,7 @@ class DeliveryRouteLocationController extends Controller
             ]);
         }
 
-        return redirect()->route('delivery-route-locations.index', ['tab' => 'city'])
-            ->withSuccess(__('message.save_form', ['form' => __('message.city')]));
+        return $this->redirectAfterMutation('city', __('message.save_form', ['form' => __('message.city')]));
     }
 
     public function updateCity(Request $request, int $id)
@@ -202,10 +176,11 @@ class DeliveryRouteLocationController extends Controller
             ]);
         }
 
-        return redirect()->route('delivery-route-locations.index', [
-            'tab' => 'township',
-            'city_id' => $township->delivery_city_id,
-        ])->withSuccess(__('message.save_form', ['form' => __('message.township')]));
+        return $this->redirectAfterMutation(
+            'township',
+            __('message.save_form', ['form' => __('message.township')]),
+            (int) $township->delivery_city_id
+        );
     }
 
     public function updateTownship(Request $request, int $id)
@@ -235,10 +210,11 @@ class DeliveryRouteLocationController extends Controller
             'status' => array_key_exists('status', $data) ? (int) $data['status'] : $township->status,
         ])->save();
 
-        return redirect()->route('delivery-route-locations.index', [
-            'tab' => 'township',
-            'city_id' => $township->delivery_city_id,
-        ])->withSuccess(__('message.update_form', ['form' => __('message.township')]));
+        return $this->redirectAfterMutation(
+            'township',
+            __('message.update_form', ['form' => __('message.township')]),
+            (int) $township->delivery_city_id
+        );
     }
 
     public function destroyTownship(Request $request, int $id)
@@ -248,10 +224,11 @@ class DeliveryRouteLocationController extends Controller
         $cityId = $township->delivery_city_id;
         $township->delete();
 
-        return redirect()->route('delivery-route-locations.index', [
-            'tab' => 'township',
-            'city_id' => $cityId,
-        ])->withSuccess(__('message.delete_form', ['form' => __('message.township')]));
+        return $this->redirectAfterMutation(
+            'township',
+            __('message.delete_form', ['form' => __('message.township')]),
+            (int) $cityId
+        );
     }
 
     public function townships(Request $request)
@@ -309,7 +286,12 @@ class DeliveryRouteLocationController extends Controller
 
     protected function assertCanEdit(): void
     {
-        if (! auth()->user()->can('order-edit')) {
+        $this->assertSuperAdmin();
+    }
+
+    protected function assertSuperAdmin(): void
+    {
+        if (! function_exists('isSuperAdmin') || ! isSuperAdmin(auth()->user())) {
             abort(403, __('message.demo_permission_denied'));
         }
     }
@@ -320,6 +302,18 @@ class DeliveryRouteLocationController extends Controller
             return response()->json(['message' => $message]);
         }
 
-        return redirect()->route('delivery-route-locations.index', ['tab' => $tab])->withSuccess($message);
+        return $this->redirectAfterMutation($tab, $message);
+    }
+
+    protected function redirectAfterMutation(string $tab, string $message, ?int $cityId = null)
+    {
+        $params = ['screen' => 'delivery-route', 'tab' => $tab];
+        if ($tab === 'township' && $cityId) {
+            $params['city_id'] = $cityId;
+        }
+
+        return redirect()
+            ->route('super-admin.screens.show', $params)
+            ->withSuccess($message);
     }
 }

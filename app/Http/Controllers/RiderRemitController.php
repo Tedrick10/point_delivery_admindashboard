@@ -42,6 +42,7 @@ class RiderRemitController extends Controller
         $denoms = RiderRemit::DENOMS;
         $riders = $sheet['riders'];
         $summary = $sheet['summary'];
+        $isOtherBranchRemit = (bool) ($sheet['is_other_branch'] ?? false);
         $storeBranchId = $branchId && $branchId > 0 ? $branchId : 0;
         $defaultFuel = $service->defaultFuelAmount();
         $selectedBranchId = $branchId;
@@ -81,7 +82,8 @@ class RiderRemitController extends Controller
             'denoms',
             'day',
             'storeBranchId',
-            'defaultFuel'
+            'defaultFuel',
+            'isOtherBranchRemit'
         ));
     }
 

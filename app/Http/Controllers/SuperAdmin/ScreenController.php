@@ -5,6 +5,8 @@ namespace App\Http\Controllers\SuperAdmin;
 use App\Http\Controllers\Controller;
 use App\Models\HrStaff;
 use App\Services\HrPayrollService;
+use App\Services\KyoShinService;
+use App\Services\NetworkControlService;
 use App\Services\RiderRemitService;
 use App\Services\SuperAdminDashboardService;
 use Illuminate\Http\Request;
@@ -39,6 +41,10 @@ class ScreenController extends Controller
         $riderSalaryStaff = collect();
         $officeSalaryStaff = collect();
         $riderFuelStaff = collect();
+        $riderFuelGroups = [];
+        $deliveryRoute = null;
+        $networkControl = null;
+        $kyoShinControl = null;
         if ($screen === 'late-fine') {
             $payroll = app(HrPayrollService::class);
             $lateFineDefaults = [
@@ -70,7 +76,14 @@ class ScreenController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name', 'staff_group', 'monthly_salary', 'sort_order']);
         } elseif ($screen === 'rider-remit') {
-            $riderFuelStaff = app(RiderRemitService::class)->fuelControlRiders();
+            $riderFuelGroups = app(RiderRemitService::class)->fuelControlRiderGroups();
+            $riderFuelStaff = collect($riderFuelGroups)->flatMap(fn ($g) => $g['rows'])->unique('id')->values();
+        } elseif ($screen === 'delivery-route') {
+            $deliveryRoute = DeliveryRouteController::screenPayload($request);
+        } elseif ($screen === 'network') {
+            $networkControl = app(NetworkControlService::class)->payload();
+        } elseif ($screen === 'kyo-shin') {
+            $kyoShinControl = app(KyoShinService::class)->summaries();
         }
 
         return view('super-admin.screens.show', [
@@ -83,7 +96,7 @@ class ScreenController extends Controller
             'defaultFuel' => $screen === 'rider-remit'
                 ? app(RiderRemitService::class)->defaultFuelAmount()
                 : null,
-            'defaultOfficeSalary' => $screen === 'office-salary'
+            'defaultOfficeSalary' => in_array($screen, ['office-salary', 'network'], true)
                 ? app(HrPayrollService::class)->defaultOfficeMonthlySalary()
                 : null,
             'lateFineDefaults' => $lateFineDefaults,
@@ -91,6 +104,10 @@ class ScreenController extends Controller
             'riderSalaryStaff' => $riderSalaryStaff,
             'officeSalaryStaff' => $officeSalaryStaff,
             'riderFuelStaff' => $riderFuelStaff,
+            'riderFuelGroups' => $riderFuelGroups,
+            'deliveryRoute' => $deliveryRoute,
+            'networkControl' => $networkControl,
+            'kyoShinControl' => $kyoShinControl,
         ]);
     }
 }

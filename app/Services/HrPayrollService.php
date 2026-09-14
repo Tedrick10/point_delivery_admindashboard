@@ -300,7 +300,25 @@ class HrPayrollService
 
     public function defaultOfficeMonthlySalary(): float
     {
-        return 600000;
+        $raw = SettingData('hr_payroll', 'office_monthly_salary');
+        if ($raw === null || $raw === '') {
+            return 600000.0;
+        }
+
+        $amount = (float) $raw;
+
+        return $amount >= 0 ? $amount : 600000.0;
+    }
+
+    public function setDefaultOfficeMonthlySalary(float $amount): float
+    {
+        $amount = max(0, round($amount, 2));
+        \App\Models\Setting::query()->updateOrCreate(
+            ['type' => 'hr_payroll', 'key' => 'office_monthly_salary'],
+            ['value' => (string) $amount]
+        );
+
+        return $amount;
     }
 
     public function updateStaffWayRate(HrStaff $staff, float $rate): HrStaff

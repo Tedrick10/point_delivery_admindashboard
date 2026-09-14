@@ -39,6 +39,15 @@ class DeliverymanController extends Controller
             $message = __('message.demo_permission_denied');
             return redirect()->back()->withErrors($message);
         }
+
+        if (isDispatchHub(auth()->user())) {
+            try {
+                app(\App\Services\DispatchHubService::class)->ensureMdyReturnDeliveryMan(auth()->user());
+            } catch (\Throwable $e) {
+                // List should still load if ensure fails.
+            }
+        }
+
         $pageTitle = __('message.list_form_title', ['form' => __('message.delivery_man')]);
         $auth_user = authSession();
         $assets = ['datatable'];

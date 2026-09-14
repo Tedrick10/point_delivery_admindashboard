@@ -177,7 +177,7 @@
                                         $totalGateAmount += $gateAmount;
                                         $totalOsToPay += $osToPayDisplay;
                                     @endphp
-                                    <tr data-cust-paid="{{ $custPaid }}">
+                                    <tr data-cust-paid="{{ $custPaid }}" data-deli-amount="{{ $deliAmount }}">
                                         <td class="pds-rider-sticky-col pds-rider-sticky-col--no">{{ $index + 1 }}</td>
                                         @if($canBulkUpdate)
                                         <td class="pds-rider-sticky-col pds-rider-sticky-col--check">
@@ -282,8 +282,18 @@
                         </span>
                         <div>
                             <h5 class="pds-delivered-modal__title">{{ __('message.delivered') }}</h5>
-                            <p class="pds-delivered-modal__sub">
-                                {{ !empty($isIntercityDelivered) ? __('message.delivered_intercity_hint') : __('message.delivered_type_choose_hint') }}
+                            <p class="pds-delivered-modal__sub" id="riderDeliveredModalHint">
+                                @if(!empty($isIntercityDelivered))
+                                    @if(($deliverySettlementMode ?? '') === \App\Models\Branch::SETTLEMENT_HALF_DELI)
+                                        {{ __('message.delivered_intercity_hint_half_deli') }}
+                                    @elseif(($deliverySettlementMode ?? '') === \App\Models\Branch::SETTLEMENT_MANUAL_HALF_DELI)
+                                        {{ __('message.delivered_intercity_hint_manual_half_deli') }}
+                                    @else
+                                        {{ __('message.delivered_intercity_hint') }}
+                                    @endif
+                                @else
+                                    {{ __('message.delivered_type_choose_hint') }}
+                                @endif
                             </p>
                         </div>
                     </div>
@@ -295,20 +305,15 @@
                 <div class="pds-delivered-modal__body">
                     @if(!empty($isIntercityDelivered))
                         <input type="hidden" name="rider_delivered_type" value="intercity" id="riderDeliveredTypeIntercity">
-                        <div class="pds-delivered-modal__gate" id="riderDeliveredPointAmountWrap">
-                            <label for="riderDeliveredPointAmount">{{ __('message.point_income') }}</label>
-                            <div class="pds-delivered-modal__gate-input">
-                                <span>Ks</span>
-                                <input type="number" min="0" step="1" id="riderDeliveredPointAmount" value="" inputmode="numeric" required>
+                        @if(($deliverySettlementMode ?? '') !== \App\Models\Branch::SETTLEMENT_HALF_DELI)
+                            <div class="pds-delivered-modal__gate" id="riderDeliveredAgentAmountWrap">
+                                <label for="riderDeliveredAgentAmount">{{ __('message.agent_income') }}</label>
+                                <div class="pds-delivered-modal__gate-input">
+                                    <span>Ks</span>
+                                    <input type="number" min="0" step="1" id="riderDeliveredAgentAmount" value="" inputmode="numeric" required>
+                                </div>
                             </div>
-                        </div>
-                        <div class="pds-delivered-modal__gate" id="riderDeliveredAgentAmountWrap">
-                            <label for="riderDeliveredAgentAmount">{{ __('message.agent_income') }}</label>
-                            <div class="pds-delivered-modal__gate-input">
-                                <span>Ks</span>
-                                <input type="number" min="0" step="1" id="riderDeliveredAgentAmount" value="" inputmode="numeric" required>
-                            </div>
-                        </div>
+                        @endif
                     @else
                         <div class="pds-delivered-modal__section-label">{{ __('message.delivered_type_choose') }}</div>
                         <div class="pds-delivered-modal__choices" role="radiogroup" aria-label="{{ __('message.delivered_type_choose') }}">
@@ -443,6 +448,8 @@
                 var riderBranchId = @json((int) ($rider->branch_id ?? 0));
                 var bulkUpdateUrl = @json(route('order.dispatch.rider-items.bulk-update', ['riderId' => $rider->id]));
                 var isIntercityDelivered = @json(!empty($isIntercityDelivered));
+                var deliverySettlementMode = @json($deliverySettlementMode ?? \App\Models\Branch::SETTLEMENT_MANUAL);
+                var riderBranchName = @json($riderBranchName ?? '');
                 var reassignUrl = @json(route('order.dispatch.rider-items.reassign', ['riderId' => $rider->id]));
                 var riderSearchUrl = @json(route('ajax-list', ['type' => 'dispatch_deliveryman_search']));
                 var riderCache = [];
@@ -472,6 +479,15 @@
                         SnackBar({ message: message, status: status });
                     }
                     if (typeof onDone === 'function') onDone();
+                }
+
+                function selectedHalfDeliTotal() {
+                    var total = 0;
+                    $('#riderItemsTable tbody .pds-rider-item-check:checked').each(function () {
+                        var deli = parseFloat($(this).closest('tr').data('deli-amount')) || 0;
+                        total += Math.round(Math.max(0, deli) / 2);
+                    });
+                    return total;
                 }
 
                 function selectedItemIds() {
@@ -666,9 +682,11 @@
                             $('input[name="rider_delivered_type"][value="other"]').prop('checked', true);
                             $('#riderDeliveredGateAmount').val('0');
                             syncDeliveredGateAmountVisibility();
-                        } else {
-                            $('#riderDeliveredPointAmount').val('');
-                            $('#riderDeliveredAgentAmount').val('');
+                        } else if (deliverySettlementMode !== 'half_deli') {
+                            var halfTotal = selectedHalfDeliTotal();
+                            $('#riderDeliveredAgentAmount').val(
+                                deliverySettlementMode === 'manual_half_deli' && halfTotal > 0 ? halfTotal : ''
+                            );
                         }
                         $('#riderDeliveredPhotoInput').val('');
                         resetDeliveredUploadLabel();
@@ -707,15 +725,13 @@
                     }
 
                     if (isIntercityDelivered) {
-                        var pointAmount = $('#riderDeliveredPointAmount').val();
-                        var agentAmount = $('#riderDeliveredAgentAmount').val();
-                        if (pointAmount === '' || pointAmount === null || Number(pointAmount) < 0) {
-                            notify(@json(__('message.point_income_required')), 'error');
-                            return;
-                        }
-                        if (agentAmount === '' || agentAmount === null || Number(agentAmount) < 0) {
-                            notify(@json(__('message.agent_income_required')), 'error');
-                            return;
+                        var agentAmount = null;
+                        if (deliverySettlementMode !== 'half_deli') {
+                            agentAmount = $('#riderDeliveredAgentAmount').val();
+                            if (agentAmount === '' || agentAmount === null || Number(agentAmount) < 0) {
+                                notify(@json(__('message.agent_income_required')), 'error');
+                                return;
+                            }
                         }
                         $('#riderDeliveredTypeModal').modal('hide');
                         submitBulkUpdate(
@@ -725,7 +741,7 @@
                             'intercity',
                             null,
                             photoFile,
-                            pointAmount,
+                            null,
                             agentAmount
                         );
                         return;

@@ -18,6 +18,7 @@ class RedirectSuperAdminFromBranchPanel
         'order.rider-remit',
         'order.cash-payout',
         'order.os-receive',
+        'order.kyo-shin',
         'order.daily-checklist',
         'order.dispatch.',
         'order.index',

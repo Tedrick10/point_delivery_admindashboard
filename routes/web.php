@@ -35,7 +35,9 @@ use App\Http\Controllers\SuperAdmin\LateFineSettingsController as SuperAdminLate
 use App\Http\Controllers\SuperAdmin\RiderRemitSettingsController as SuperAdminRiderRemitSettingsController;
 use App\Http\Controllers\SuperAdmin\RiderSalarySettingsController as SuperAdminRiderSalarySettingsController;
 use App\Http\Controllers\SuperAdmin\OfficeSalarySettingsController as SuperAdminOfficeSalarySettingsController;
+use App\Http\Controllers\SuperAdmin\KyoShinSettingsController as SuperAdminKyoShinSettingsController;
 use App\Http\Controllers\SuperAdmin\ScreenController as SuperAdminScreenController;
+use App\Http\Controllers\SuperAdmin\DeliveryRouteController as SuperAdminDeliveryRouteController;
 use App\Http\Controllers\WalkThroughController;
 use App\Http\Controllers\PushNotificationController;
 use App\Http\Controllers\OrderController;
@@ -43,6 +45,7 @@ use App\Http\Controllers\DailyCheckListController;
 use App\Http\Controllers\MoneyTransferController;
 use App\Http\Controllers\CashPayoutController;
 use App\Http\Controllers\OsReceiveSettlementController;
+use App\Http\Controllers\KyoShinController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\ExpenseSummaryController;
 use App\Http\Controllers\DeliveryRouteLocationController;
@@ -297,6 +300,10 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('os-receive', [OsReceiveSettlementController::class, 'index'])->name('order.os-receive');
     Route::post('os-receive/{id}/approve', [OsReceiveSettlementController::class, 'approve'])->name('order.os-receive.approve');
     Route::post('os-receive/{id}/reject', [OsReceiveSettlementController::class, 'reject'])->name('order.os-receive.reject');
+    Route::get('kyo-shin', [KyoShinController::class, 'index'])->name('order.kyo-shin');
+    Route::get('kyo-shin/{osId}/items', [KyoShinController::class, 'items'])->name('order.kyo-shin.items');
+    Route::post('kyo-shin/{osId}/mark-paid', [KyoShinController::class, 'markAdvancedPaid'])->name('order.kyo-shin.mark-paid');
+    Route::post('kyo-shin/{osId}/finish', [KyoShinController::class, 'markFinished'])->name('order.kyo-shin.finish');
     Route::get('expenses', [ExpenseController::class, 'index'])->name('order.expenses');
     Route::get('expenses/rider-fuel-total', [ExpenseController::class, 'riderFuelTotal'])->name('order.expenses.rider-fuel-total');
     Route::get('expenses/agent-fee-total', [ExpenseController::class, 'agentFeeTotal'])->name('order.expenses.agent-fee-total');
@@ -630,6 +637,27 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
         Route::get('dashboard', [SuperAdminDashboardController::class, 'index']);
         Route::get('screens', [SuperAdminScreenController::class, 'hub'])->name('screens.hub');
         Route::get('screens/{screen}', [SuperAdminScreenController::class, 'show'])->name('screens.show');
+
+        // From / To / City CRUD (Super Admin panel only)
+        Route::post('delivery-route/branches', [SuperAdminDeliveryRouteController::class, 'storeBranch'])
+            ->name('delivery-route.branches.store');
+        Route::put('delivery-route/branches/{id}', [SuperAdminDeliveryRouteController::class, 'updateBranch'])
+            ->name('delivery-route.branches.update');
+        Route::delete('delivery-route/branches/{id}', [SuperAdminDeliveryRouteController::class, 'destroyBranch'])
+            ->name('delivery-route.branches.destroy');
+        Route::post('delivery-route/cities', [SuperAdminDeliveryRouteController::class, 'storeCity'])
+            ->name('delivery-route.cities.store');
+        Route::put('delivery-route/cities/{id}', [SuperAdminDeliveryRouteController::class, 'updateCity'])
+            ->name('delivery-route.cities.update');
+        Route::delete('delivery-route/cities/{id}', [SuperAdminDeliveryRouteController::class, 'destroyCity'])
+            ->name('delivery-route.cities.destroy');
+        Route::post('delivery-route/townships', [SuperAdminDeliveryRouteController::class, 'storeTownship'])
+            ->name('delivery-route.townships.store');
+        Route::put('delivery-route/townships/{id}', [SuperAdminDeliveryRouteController::class, 'updateTownship'])
+            ->name('delivery-route.townships.update');
+        Route::delete('delivery-route/townships/{id}', [SuperAdminDeliveryRouteController::class, 'destroyTownship'])
+            ->name('delivery-route.townships.destroy');
+
         Route::post('rider-remit/default-fuel', [SuperAdminRiderRemitSettingsController::class, 'saveDefaultFuel'])
             ->name('rider-remit.default-fuel');
         Route::put('rider-remit/riders/{id}/fuel', [SuperAdminRiderRemitSettingsController::class, 'updateRiderFuel'])
@@ -642,6 +670,10 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
             ->name('rider-salary.staff.way-rate');
         Route::put('office-salary/staff/{id}/monthly-salary', [SuperAdminOfficeSalarySettingsController::class, 'updateMonthlySalary'])
             ->name('office-salary.staff.monthly-salary');
+        Route::post('office-salary/default', [SuperAdminOfficeSalarySettingsController::class, 'saveDefault'])
+            ->name('office-salary.default');
+        Route::post('kyo-shin/total', [SuperAdminKyoShinSettingsController::class, 'saveTotal'])
+            ->name('kyo-shin.total');
         Route::resource('branch-admins', SuperAdminBranchAdminController::class)->except(['show']);
     });
 });

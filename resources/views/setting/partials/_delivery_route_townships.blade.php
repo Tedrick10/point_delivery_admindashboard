@@ -1,4 +1,16 @@
-<form method="GET" action="{{ route('delivery-route-locations.index') }}" class="pds-route-form">
+@php
+    $drRoutes = $drRoutes ?? [
+        'index' => 'delivery-route-locations.index',
+        'townships.store' => 'delivery-route-locations.townships.store',
+        'townships.update' => 'delivery-route-locations.townships.update',
+        'townships.destroy' => 'delivery-route-locations.townships.destroy',
+    ];
+    $indexIsSa = ($drRoutes['index'] ?? '') === 'super-admin.screens.show';
+@endphp
+<form method="GET" action="{{ route($drRoutes['index'], $indexIsSa ? ['screen' => 'delivery-route'] : []) }}" class="pds-route-form">
+    @if($indexIsSa)
+        <input type="hidden" name="screen" value="delivery-route">
+    @endif
     <input type="hidden" name="tab" value="township">
     <div class="pds-route-form__field">
         <label for="filter_city_id">{{ __('message.city') }}</label>
@@ -11,7 +23,7 @@
 </form>
 
 @if($canEdit)
-    <form method="POST" action="{{ route('delivery-route-locations.townships.store') }}" class="pds-route-form">
+    <form method="POST" action="{{ route($drRoutes['townships.store']) }}" class="pds-route-form">
         @csrf
         <input type="hidden" name="delivery_city_id" value="{{ $filterCityId }}">
         <div class="pds-route-form__field">
@@ -52,7 +64,7 @@
                     <td>{{ $township->city?->displayName() }}</td>
                     @if($canEdit)
                         <td>
-                            <form id="township-update-{{ $township->id }}" method="POST" action="{{ route('delivery-route-locations.townships.update', $township->id) }}">
+                            <form id="township-update-{{ $township->id }}" method="POST" action="{{ route($drRoutes['townships.update'], $township->id) }}">
                                 @csrf
                                 @method('PUT')
                                 <input type="hidden" name="delivery_city_id" value="{{ $township->delivery_city_id }}">
@@ -68,7 +80,7 @@
                         <td>
                             <div class="pds-route-actions">
                                 <button form="township-update-{{ $township->id }}" type="submit" class="pds-cash-payout-btn pds-cash-payout-btn--ok">{{ __('message.update') }}</button>
-                                <form method="POST" action="{{ route('delivery-route-locations.townships.destroy', $township->id) }}"
+                                <form method="POST" action="{{ route($drRoutes['townships.destroy'], $township->id) }}"
                                       onsubmit="return confirm(@json(__('message.delete_form', ['form' => $township->displayName()])));">
                                     @csrf
                                     @method('DELETE')

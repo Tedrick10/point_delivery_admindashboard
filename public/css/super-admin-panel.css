@@ -974,7 +974,67 @@ body.sa-panel {
 .sa-dash-quick {
     display: flex;
     justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
 }
+.sa-dash-alert {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 1rem;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+}
+.sa-dash-alert p {
+    margin: 4px 0 0;
+    color: #9a3412;
+}
+.sa-dash-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 1rem;
+}
+.sa-dash-actions__item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    color: #0f172a;
+    text-decoration: none;
+    font-weight: 700;
+    transition: border-color .15s ease, transform .15s ease;
+}
+.sa-dash-actions__item i { color: #0f766e; }
+.sa-dash-actions__item:hover {
+    border-color: #99f6e4;
+    transform: translateY(-1px);
+}
+.sa-branch-card__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+}
+.sa-mode-badge {
+    display: inline-flex;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #f1f5f9;
+    color: #334155;
+}
+.sa-mode-badge--half_deli { background: #ecfdf5; color: #0f766e; }
+.sa-mode-badge--manual_half_deli { background: #eff6ff; color: #1d4ed8; }
 
 /* Legacy shared */
 .sa-stats {
@@ -1573,6 +1633,44 @@ body.sa-panel {
 }
 .sa-late-fine-staff-panel {
     margin: 0 0 1.25rem;
+}
+.sa-rider-fuel-group {
+    margin-top: 1.1rem;
+}
+.sa-rider-fuel-group + .sa-rider-fuel-group {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #e2e8f0;
+}
+.sa-rider-fuel-group__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
+}
+.sa-rider-fuel-group__head h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+.sa-rider-fuel-group__head span {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #64748b;
+}
+.sa-rider-fuel-hub-tag {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    background: #fff7ed;
+    color: #c2410c;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
 }
 .sa-late-fine-allowance-form {
     display: inline-flex;

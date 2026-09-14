@@ -190,6 +190,18 @@
                 ->prepend('<i class="fas fa-store"></i>')
                 ->link->attr(['class' => '']);
 
+            $kyoShinScopes = app(\App\Services\KyoShinService::class)->allowedScopeKeys(Auth::user());
+            if ($kyoShinScopes !== []) {
+                $menu->order
+                    ->add('<span>' . __('message.kyo_shin_title') . '</span>', [
+                        'class' => 'sidebar-layout',
+                        'route' => 'order.kyo-shin',
+                    ])
+                    ->data('permission', 'order-list')
+                    ->prepend('<i class="fas fa-coins"></i>')
+                    ->link->attr(['class' => '']);
+            }
+
             $menu->order
                 ->add('<span>' . __('message.daily_check_list') . '</span>', [
                     'class' => 'sidebar-layout',
@@ -343,15 +355,7 @@
                 ->prepend('<i class="fa fa-user-tie"></i>')
                 ->link->attr(['class' => '']);
 
-            // From / To / City / Township
-            $menu
-                ->add('<span>' . __('message.delivery_route_locations_title') . '</span>', [
-                    'class' => request()->is('delivery-route-locations*') ? 'active' : '',
-                    'route' => 'delivery-route-locations.index',
-                ])
-                ->data('permission', 'order-list')
-                ->prepend('<i class="fas fa-map-marker-alt"></i>')
-                ->link->attr(['class' => '']);
+            // From / To / City — managed only in Super Admin panel (not branch sidebar)
 
             // My Salary — visible to office accounts (own salary)
             $menu
