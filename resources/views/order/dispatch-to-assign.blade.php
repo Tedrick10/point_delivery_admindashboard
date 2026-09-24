@@ -1,4 +1,11 @@
 <x-master-layout :assets="$assets ?? []">
+    <style>
+        .pds-kyo-shin-row-badge {
+            display: inline-flex; align-items: center; margin-left: 6px;
+            padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
+            background: #ffedd5; color: #c2410c; letter-spacing: .02em;
+        }
+    </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page">
         <div class="pds-dispatch-to-assign-screen">
             <div class="pds-dispatch-to-assign-topbar">
@@ -77,20 +84,24 @@
                             <thead>
                                 <tr>
                                     <th>{{ __('message.no') }}</th>
+                                    <th>{{ __('message.order') }}</th>
+                                    <th>{{ __('message.received_date') }}</th>
+                                    <th>{{ __('message.voucher_code') }}</th>
+                                    <th>{{ __('message.status') }}</th>
+                                    <th>{{ __('message.from_to') }}</th>
                                     <th>{{ __('message.os_name') }}</th>
-                                    <th>{{ __('message.os_phone') }}</th>
                                     <th>{{ __('message.os_address') }}</th>
+                                    <th>{{ __('message.pickup') }}</th>
                                     <th>{{ __('message.customer_name') }}</th>
                                     <th>{{ __('message.phone') }}</th>
                                     <th>{{ __('message.address') }}</th>
-                                    <th>{{ __('message.admin_status') }}</th>
-                                    <th>{{ __('message.rider_status') }}</th>
-                                    <th>{{ __('message.status') }}</th>
+                                    <th>{{ __('message.township') }}</th>
+                                    <th>{{ __('message.delivery_man') }}</th>
+                                    <th>{{ __('message.cust_paid') }}</th>
                                     <th>{{ __('message.item_value') }}</th>
                                     <th>{{ __('message.deli_amount') }}</th>
-                                    <th>{{ __('message.pickup_rider') }}</th>
-                                    <th>{{ __('message.delivery_rider') }}</th>
-                                    <th>{{ __('message.details') }}</th>
+                                    <th>{{ __('message.remark_label') }}</th>
+                                    <th>{{ __('message.action') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -99,10 +110,20 @@
                                         $order = $item->order;
                                         $workflow = app(\App\Services\DispatchOrderWorkflowService::class);
                                         $osName = resolveDispatchOsName($order);
-                                        $osPhone = resolveDispatchOsPhone($order);
                                         $osAddress = resolveDispatchOsAddress($order);
                                         $pickupRider = optional($order?->delivery_man)->name ?? '-';
                                         $deliveryRider = optional($item->deliveryMan)->name ?? '-';
+                                        $fromTo = trim((optional($item->fromBranch)->name ?? '-') . ' - ' . (optional($item->toBranch)->name ?? '-'));
+                                        $township = \App\Models\DispatchOrderItem::deliveryCityLabel($item->delivery_city);
+                                        if ($township === '-' && $item->township) {
+                                            $township = $item->township;
+                                        }
+                                        $orderDate = $order?->created_at
+                                            ? \Carbon\Carbon::parse($order->created_at)->format('d-m-Y')
+                                            : '-';
+                                        $receivedDate = $item->received_date
+                                            ? \Carbon\Carbon::parse($item->received_date)->format('d-m-Y')
+                                            : '-';
                                     @endphp
                                     <tr
                                         data-os-name="{{ $osName !== '-' ? $osName : '' }}"
@@ -112,37 +133,34 @@
                                         data-follow-up-status="{{ $workflow->followUpStatusKey($item) }}"
                                     >
                                         <td class="to-assign-row-no">{{ $index + 1 }}</td>
-                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--name" title="{{ $osName }}">{{ $osName }}</span></td>
-                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--phone">{{ $osPhone }}</span></td>
-                                        <td class="pds-follow-up-address-cell" title="{{ $osAddress }}">
-                                            <span class="pds-follow-up-cell pds-follow-up-cell--address">{{ stringLong($osAddress, 'title', 36) ?: '-' }}</span>
-                                        </td>
-                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--name" title="{{ $item->customer_name }}">{{ $item->customer_name ?: '-' }}</span></td>
-                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--phone">{{ $item->customer_phone ?: '-' }}</span></td>
-                                        <td class="pds-follow-up-address-cell" title="{{ $item->customer_address }}">
-                                            <span class="pds-follow-up-cell pds-follow-up-cell--address">{{ stringLong($item->customer_address ?? '', 'title', 36) ?: '-' }}</span>
-                                        </td>
-                                        <td class="pds-follow-up-status-cell">
-                                            @if($order)
-                                                @include('order.dispatch-admin-status', ['order' => $order])
-                                            @else
-                                                -
-                                            @endif
-                                        </td>
-                                        <td class="pds-follow-up-status-cell">
-                                            @if($order)
-                                                @include('order.dispatch-rider-status', ['order' => $order])
-                                            @else
-                                                -
+                                        <td>{{ $orderDate }}</td>
+                                        <td>{{ $receivedDate }}</td>
+                                        <td>
+                                            {{ $item->code ?? '-' }}
+                                            @if($item->kyoShinItem)
+                                                <span class="pds-kyo-shin-row-badge">{{ __('message.kyo_shin_title') }}</span>
                                             @endif
                                         </td>
                                         <td class="pds-follow-up-status-cell">
                                             <span class="pds-dispatch-status {{ $workflow->followUpItemStatusClass($item) }}" title="{{ $workflow->followUpItemStatusLabel($item) }}">{{ $workflow->followUpItemStatusLabel($item) }}</span>
                                         </td>
+                                        <td>{{ $fromTo }}</td>
+                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--name" title="{{ $osName }}">{{ $osName }}</span></td>
+                                        <td class="pds-follow-up-address-cell" title="{{ $osAddress }}">
+                                            <span class="pds-follow-up-cell pds-follow-up-cell--address">{{ stringLong($osAddress, 'title', 18) ?: '-' }}</span>
+                                        </td>
+                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--rider" title="{{ $pickupRider }}">{{ $pickupRider }}</span></td>
+                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--name" title="{{ $item->customer_name }}">{{ $item->customer_name ?: '-' }}</span></td>
+                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--phone">{{ $item->customer_phone ?: '-' }}</span></td>
+                                        <td class="pds-follow-up-address-cell" title="{{ $item->customer_address }}">
+                                            <span class="pds-follow-up-cell pds-follow-up-cell--address">{{ stringLong($item->customer_address ?? '', 'title', 18) ?: '-' }}</span>
+                                        </td>
+                                        <td>{{ $township }}</td>
+                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--rider" title="{{ $deliveryRider }}">{{ $deliveryRider !== '-' ? $deliveryRider : '-' }}</span></td>
+                                        <td>{{ (float) $item->advance_paid == 0.0 ? '' : number_format((float) $item->advance_paid) }}</td>
                                         <td class="pds-follow-up-num-cell">{{ number_format((float) $item->item_value) }}</td>
                                         <td class="text-right pds-follow-up-num-cell">{!! formatDispatchDeliAmountHtml($item) !!}</td>
-                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--rider" title="{{ $pickupRider }}">{{ $pickupRider }}</span></td>
-                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--rider" title="{{ $deliveryRider }}">{{ $deliveryRider }}</span></td>
+                                        <td title="{{ $item->remark }}">{{ stringLong($item->remark ?? '', 'title', 16) ?: '-' }}</td>
                                         <td class="pds-follow-up-actions-cell">
                                             <button type="button"
                                                     class="pds-follow-up-details-btn"

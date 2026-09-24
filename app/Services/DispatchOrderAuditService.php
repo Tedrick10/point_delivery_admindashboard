@@ -224,6 +224,8 @@ class DispatchOrderAuditService
             'courier_departed' => 'dispatch_audit_item_on_way',
             'completed' => 'dispatch_audit_item_delivered',
             'pending' => 'dispatch_audit_item_pending',
+            'return' => 'dispatch_audit_item_return',
+            'os_returned' => 'dispatch_audit_item_os_returned',
             default => 'dispatch_audit_item_status',
         };
 
@@ -303,6 +305,8 @@ class DispatchOrderAuditService
             'courier_assigned' => $this->t('follow_up_status_assigned'),
             'courier_departed' => $this->t('follow_up_status_on_way'),
             'pending' => $this->t('follow_up_status_pending'),
+            'return' => $this->t('follow_up_status_return'),
+            'os_returned' => $this->t('follow_up_status_os_returned'),
             'completed' => $this->t('follow_up_status_delivered'),
             default => strtoupper(str_replace('_', ' ', $status)),
         };
@@ -505,6 +509,12 @@ class DispatchOrderAuditService
             return;
         }
 
+        // First-time create / seed (blank → value) stays out of DeliAmount Audit Log.
+        // Only real updates (previous DeliAmount already set) are logged.
+        if ($from <= 0) {
+            return;
+        }
+
         $actor = $actor ?: auth()->user();
         $actorName = $actor?->name ?: match ($actorRole) {
             'rider' => $this->t('dispatch_audit_account_rider'),
@@ -571,6 +581,7 @@ class DispatchOrderAuditService
         $order->loadMissing(['orderHistoryasc', 'client', 'delivery_man', 'dispatchItems']);
 
         $entries = collect();
+        $seenKeys = [];
 
         foreach ($order->orderHistoryasc as $history) {
             $type = (string) ($history->history_type ?? '');
@@ -578,9 +589,20 @@ class DispatchOrderAuditService
             $at = $history->datetime ?? $history->created_at;
 
             if ($type === self::TYPE_DELI_AMOUNT) {
+                if ($this->isInitialDeliAmountSeed($data)) {
+                    continue;
+                }
+                $dedupeKey = $this->deliAmountDedupeKey((int) $order->id, $data, $at);
+                if ($dedupeKey !== null && isset($seenKeys[$dedupeKey])) {
+                    continue;
+                }
                 $presented = $this->presentHistory($history, $order);
                 if ($presented) {
+                    $presented['sort_at'] = Carbon::parse($at)->timestamp;
                     $entries->push($presented);
+                    if ($dedupeKey !== null) {
+                        $seenKeys[$dedupeKey] = true;
+                    }
                 }
                 continue;
             }
@@ -596,7 +618,14 @@ class DispatchOrderAuditService
 
             $legacy = $this->legacyDeliAmountEntry($order, $data, $at);
             if ($legacy) {
+                $dedupeKey = $this->deliAmountDedupeKey((int) $order->id, $data, $at);
+                if ($dedupeKey !== null && isset($seenKeys[$dedupeKey])) {
+                    continue;
+                }
                 $entries->push($legacy);
+                if ($dedupeKey !== null) {
+                    $seenKeys[$dedupeKey] = true;
+                }
             }
         }
 
@@ -624,6 +653,10 @@ class DispatchOrderAuditService
             $toDay = $fromDay;
         }
 
+        // OrderHistory datetime is stored in app TZ (UTC). Filter by Yangon calendar day.
+        $fromUtc = Carbon::parse($fromDay, $tz)->startOfDay()->utc()->format('Y-m-d H:i:s');
+        $toUtc = Carbon::parse($toDay, $tz)->endOfDay()->utc()->format('Y-m-d H:i:s');
+
         $histories = OrderHistory::query()
             ->with(['order:id'])
             ->whereIn('history_type', [
@@ -632,15 +665,15 @@ class DispatchOrderAuditService
                 self::TYPE_RIDER_ITEM_INFO,
                 self::TYPE_OS_ITEM_INFO,
             ])
-            ->where(function ($q) use ($fromDay, $toDay) {
-                $q->where(function ($d) use ($fromDay, $toDay) {
+            ->where(function ($q) use ($fromUtc, $toUtc) {
+                $q->where(function ($d) use ($fromUtc, $toUtc) {
                     $d->whereNotNull('datetime')
-                        ->whereDate('datetime', '>=', $fromDay)
-                        ->whereDate('datetime', '<=', $toDay);
-                })->orWhere(function ($c) use ($fromDay, $toDay) {
+                        ->where('datetime', '>=', $fromUtc)
+                        ->where('datetime', '<=', $toUtc);
+                })->orWhere(function ($c) use ($fromUtc, $toUtc) {
                     $c->whereNull('datetime')
-                        ->whereDate('created_at', '>=', $fromDay)
-                        ->whereDate('created_at', '<=', $toDay);
+                        ->where('created_at', '>=', $fromUtc)
+                        ->where('created_at', '<=', $toUtc);
                 });
             })
             ->orderByDesc('datetime')
@@ -649,6 +682,7 @@ class DispatchOrderAuditService
             ->get();
 
         $entries = collect();
+        $seenKeys = [];
         foreach ($histories as $history) {
             $order = $history->order;
             if (! $order) {
@@ -663,18 +697,35 @@ class DispatchOrderAuditService
             $at = $history->datetime ?? $history->created_at;
 
             if ($type === self::TYPE_DELI_AMOUNT) {
+                if ($this->isInitialDeliAmountSeed($data)) {
+                    continue;
+                }
+                $dedupeKey = $this->deliAmountDedupeKey((int) $order->id, $data, $at);
+                if ($dedupeKey !== null && isset($seenKeys[$dedupeKey])) {
+                    continue;
+                }
                 $presented = $this->presentHistory($history, $order);
                 if ($presented) {
                     $presented['order_id'] = (int) $order->id;
                     $presented['sort_at'] = Carbon::parse($at)->timestamp;
                     $entries->push($presented);
+                    if ($dedupeKey !== null) {
+                        $seenKeys[$dedupeKey] = true;
+                    }
                 }
                 continue;
             }
 
             $legacy = $this->legacyDeliAmountEntry($order, $data, $at);
             if ($legacy) {
+                $dedupeKey = $this->deliAmountDedupeKey((int) $order->id, $data, $at);
+                if ($dedupeKey !== null && isset($seenKeys[$dedupeKey])) {
+                    continue;
+                }
                 $entries->push($legacy);
+                if ($dedupeKey !== null) {
+                    $seenKeys[$dedupeKey] = true;
+                }
             }
         }
 
@@ -686,6 +737,39 @@ class DispatchOrderAuditService
 
                 return $e;
             });
+    }
+
+    /**
+     * First create/seed (blank → value) must not appear in DeliAmount Audit Log.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function isInitialDeliAmountSeed(array $data): bool
+    {
+        $from = round((float) ($data['old_value'] ?? $data['before']['deli_amount'] ?? 0), 2);
+
+        return $from <= 0;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    protected function deliAmountDedupeKey(int $orderId, array $data, $at): ?string
+    {
+        $itemId = (int) ($data['item_id'] ?? 0);
+        $from = round((float) ($data['old_value'] ?? $data['before']['deli_amount'] ?? 0), 2);
+        $to = round((float) ($data['new_value'] ?? $data['after']['deli_amount'] ?? 0), 2);
+        if ($itemId <= 0 && abs($from) < 0.001 && abs($to) < 0.001) {
+            return null;
+        }
+
+        try {
+            $stamp = Carbon::parse($at)->utc()->format('Y-m-d H:i');
+        } catch (\Throwable $e) {
+            $stamp = (string) $at;
+        }
+
+        return $orderId.'|'.$itemId.'|'.$from.'|'.$to.'|'.$stamp;
     }
 
     /**
@@ -702,6 +786,11 @@ class DispatchOrderAuditService
         $from = round((float) ($before['deli_amount'] ?? 0), 2);
         $to = round((float) ($after['deli_amount'] ?? 0), 2);
         if (abs($from - $to) < 0.001) {
+            return null;
+        }
+
+        // Hide first-time create/seed (0 → value) from DeliAmount Audit Log.
+        if ($from <= 0) {
             return null;
         }
 

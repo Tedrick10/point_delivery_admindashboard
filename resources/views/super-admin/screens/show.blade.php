@@ -554,9 +554,10 @@
                     <thead>
                         <tr>
                             <th>{{ __('message.kyo_shin_branch') }}</th>
-                            <th>{{ __('message.kyo_shin_total') }}</th>
-                            <th>{{ __('message.kyo_shin_advanced_paid') }}</th>
-                            <th>{{ __('message.kyo_shin_remain') }}</th>
+                            <th>{{ __('message.kyo_shin_sa_amount') }}</th>
+                            <th>{{ __('message.kyo_shin_cash_held') }}</th>
+                            <th>{{ __('message.kyo_shin_returned_today') }}</th>
+                            <th>{{ __('message.kyo_shin_os_receivable') }}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -583,12 +584,16 @@
                                     <small style="display:block;margin-top:6px;color:#94a3b8">{{ number_format($row['thein_total'], 2) }} {{ __('message.kyo_shin_thein') }}</small>
                                 </td>
                                 <td>
-                                    {{ number_format($row['advanced_paid']) }} Ks
-                                    <small style="display:block;color:#94a3b8">{{ number_format($row['thein_advanced'], 2) }} {{ __('message.kyo_shin_thein') }}</small>
+                                    {{ number_format($row['cash_on_hand']) }} Ks
+                                    <small style="display:block;color:#94a3b8">{{ number_format($row['thein_cash_on_hand'], 2) }} {{ __('message.kyo_shin_thein') }}</small>
                                 </td>
                                 <td>
-                                    {{ number_format($row['remain']) }} Ks
-                                    <small style="display:block;color:#94a3b8">{{ number_format($row['thein_remain'], 2) }} {{ __('message.kyo_shin_thein') }}</small>
+                                    {{ number_format($row['returned_today']) }} Ks
+                                    <small style="display:block;color:#94a3b8">{{ number_format($row['thein_returned_today'], 2) }} {{ __('message.kyo_shin_thein') }}</small>
+                                </td>
+                                <td>
+                                    {{ number_format($row['os_receivable']) }} Ks
+                                    <small style="display:block;color:#94a3b8">{{ number_format($row['thein_os_receivable'], 2) }} {{ __('message.kyo_shin_thein') }}</small>
                                 </td>
                                 <td>
                                     <a href="{{ route('order.kyo-shin', ['scope' => $row['key']]) }}" class="sa-module-links__item" target="_blank" rel="noopener">
@@ -605,6 +610,10 @@
                 </table>
             </div>
         </section>
+    @endif
+
+    @if(($screenKey ?? '') === 'expense-summary' && !empty($expenseSummary))
+        @include('super-admin.screens.partials.expense-summary-board')
     @endif
 
     @if(($screenKey ?? '') === 'network' && !empty($networkControl))

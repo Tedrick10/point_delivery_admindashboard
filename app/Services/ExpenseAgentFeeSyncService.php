@@ -195,7 +195,7 @@ class ExpenseAgentFeeSyncService
     /**
      * Delivered proof photos for intercity Agent ရငွေ on an expense day.
      *
-     * @return list<array{item_id:int,order_id:int,code:?string,point_amount:float,agent_amount:float,photo_url:string}>
+     * @return list<array{item_id:int,order_id:int,code:?string,point_amount:float,agent_amount:float,rider_name:string,photo_url:string}>
      */
     public function deliveredProofsForExpenseDay(string $expenseDay, ?int $branchId = null): array
     {
@@ -212,7 +212,7 @@ class ExpenseAgentFeeSyncService
             ->when($branchId && $branchId > 0, function ($q) use ($branchId) {
                 $this->applyAgentBranchFilter($q, $branchId);
             })
-            ->with('deliveredPhotoMedia')
+            ->with(['deliveredPhotoMedia', 'deliveryMan:id,name'])
             ->orderBy('id')
             ->get();
 
@@ -227,11 +227,21 @@ class ExpenseAgentFeeSyncService
                 continue;
             }
 
+            $riderName = trim((string) ($item->deliveryMan?->name ?? ''));
+            if ($riderName === '') {
+                $riderName = '#'.(int) ($item->delivery_man_id ?? 0);
+            }
+
             $photoKey = (int) ($item->delivered_photo_id ?? 0) . '|' . $url;
             if (isset($seen[$photoKey])) {
                 $idx = $seen[$photoKey];
                 $rows[$idx]['point_amount'] = round($rows[$idx]['point_amount'] + (float) ($item->point_amount ?? 0), 2);
                 $rows[$idx]['agent_amount'] = round($rows[$idx]['agent_amount'] + (float) ($item->agent_amount ?? 0), 2);
+                $names = array_filter(array_map('trim', explode(' · ', (string) $rows[$idx]['rider_name'])));
+                if (! in_array($riderName, $names, true)) {
+                    $names[] = $riderName;
+                    $rows[$idx]['rider_name'] = implode(' · ', $names);
+                }
                 continue;
             }
 
@@ -242,6 +252,7 @@ class ExpenseAgentFeeSyncService
                 'code' => $item->code ?: null,
                 'point_amount' => round((float) ($item->point_amount ?? 0), 2),
                 'agent_amount' => round((float) ($item->agent_amount ?? 0), 2),
+                'rider_name' => $riderName,
                 'photo_url' => $url,
             ];
         }

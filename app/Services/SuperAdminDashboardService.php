@@ -219,13 +219,17 @@ class SuperAdminDashboardService
             'kyo-shin' => (static function () {
                 $rows = app(\App\Services\KyoShinService::class)->summaries();
                 $total = collect($rows)->sum('total');
-                $paid = collect($rows)->sum('advanced_paid');
+                $cashOnHand = collect($rows)->sum('cash_on_hand');
+                $returned = collect($rows)->sum('returned_today');
+                $receivable = collect($rows)->sum('os_receivable');
+                $balance = collect($rows)->sum('balance');
 
                 return [
-                    ['label' => __('message.kyo_shin_total'), 'value' => $total, 'money' => true],
-                    ['label' => __('message.kyo_shin_advanced_paid'), 'value' => $paid, 'money' => true],
-                    ['label' => __('message.kyo_shin_remain'), 'value' => $total - $paid, 'money' => true],
-                    ['label' => __('message.kyo_shin_branches'), 'value' => count($rows), 'money' => false],
+                    ['label' => __('message.kyo_shin_sa_amount'), 'value' => $total, 'money' => true],
+                    ['label' => __('message.kyo_shin_books_balance'), 'value' => $balance, 'money' => true],
+                    ['label' => __('message.kyo_shin_cash_held'), 'value' => $cashOnHand, 'money' => true],
+                    ['label' => __('message.kyo_shin_returned_today'), 'value' => $returned, 'money' => true],
+                    ['label' => __('message.kyo_shin_os_receivable'), 'value' => $receivable, 'money' => true],
                 ];
             })(),
             default => [],
@@ -357,6 +361,21 @@ class SuperAdminDashboardService
             ->sum(DB::raw('COALESCE(cust_get, 0)'));
 
         $deliMonth = (float) $monthItemsQuery()
+            ->where(function ($q) {
+                $q->where('status', 'completed')
+                    ->orWhere(function ($r) {
+                        $r->where('status', 'return')
+                            ->where(function ($fee) {
+                                $fee->where(function ($delivery) {
+                                    $delivery->where('return_type', 'delivery')
+                                        ->where('deli_amount', '>', 0);
+                                })->orWhere(function ($legacy) {
+                                    $legacy->whereNull('return_type')
+                                        ->where('deli_amount', '>', 0);
+                                });
+                            });
+                    });
+            })
             ->sum(DB::raw('COALESCE(deli_amount, 0)'));
 
         $itemValueMonth = (float) $monthItemsQuery()

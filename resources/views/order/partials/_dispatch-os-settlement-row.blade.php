@@ -1,14 +1,16 @@
 @php
     $initial = mb_strtoupper(mb_substr(trim($row->name) ?: 'O', 0, 1));
-    $section = $section ?? 'pay'; // pay | receive
+    $section = $section ?? 'pay'; // pay | receive | kyo_shin
     $showKpayCols = $section === 'pay';
+    $isKyoShin = $section === 'kyo_shin';
     $slipLabel = $section === 'receive' ? __('message.os_settlement_qr') : __('message.kpay_slip');
     $slipUploadLabel = $section === 'receive' ? __('message.upload_os_settlement_qr') : __('message.upload_kpay_slip');
+    $canFinish = $isKyoShin || ! empty($row->has_kpay_slip);
 @endphp
 <tr
     class="pds-os-settlement-row"
     data-os-id="{{ $row->id }}"
-    data-has-kpay="{{ $row->has_kpay_slip ? '1' : '0' }}"
+    data-has-kpay="{{ $canFinish ? '1' : '0' }}"
     data-is-finished="0"
     data-payment-method="{{ $showKpayCols ? 'kpay' : 'cash' }}"
     data-section="{{ $section }}"
@@ -22,7 +24,19 @@
                 @if($row->phone && $row->phone !== '-')
                     <div class="pds-dispatch-rider-list-phone">{{ $row->phone }}</div>
                 @endif
-                <span class="pds-os-settlement-badge">{{ $row->item_count }} {{ __('message.items') }}</span>
+                @if($isKyoShin)
+                    <button
+                        type="button"
+                        class="pds-os-settlement-badge pds-os-settlement-badge--link pds-os-slip-preview-btn"
+                        data-os-id="{{ $row->id }}"
+                        data-section="kyo_shin"
+                        title="{{ __('message.show_slip_completed') }}"
+                    >
+                        {{ $row->item_count }} {{ __('message.items') }}
+                    </button>
+                @else
+                    <span class="pds-os-settlement-badge">{{ $row->item_count }} {{ __('message.items') }}</span>
+                @endif
             </div>
         </div>
     </td>
@@ -47,55 +61,57 @@
             @endif
         </td>
     @endif
-    <td class="pds-os-settlement-col-slip pds-os-kpay-upload-cell">
-        <label class="pds-os-kpay-upload-card {{ $section === 'receive' ? 'pds-os-kpay-upload-card--qr' : '' }}" title="{{ $slipUploadLabel }}">
-            @if($row->kpay_slip_url)
-                <a href="{{ $row->kpay_slip_url }}" target="_blank" rel="noopener" class="pds-os-kpay-preview" onclick="event.preventDefault(); event.stopPropagation(); window.open(this.href, '_blank', 'noopener');">
-                    <img src="{{ $row->kpay_slip_url }}" alt="{{ $slipLabel }}" class="pds-os-kpay-thumb">
-                </a>
-            @else
-                <span class="pds-os-kpay-placeholder">
-                    <i class="fas {{ $section === 'receive' ? 'fa-qrcode' : 'fa-image' }}" aria-hidden="true"></i>
-                    <span>{{ $slipUploadLabel }}</span>
+    @if(! $isKyoShin)
+        <td class="pds-os-settlement-col-slip pds-os-kpay-upload-cell">
+            <label class="pds-os-kpay-upload-card {{ $section === 'receive' ? 'pds-os-kpay-upload-card--qr' : '' }}" title="{{ $slipUploadLabel }}">
+                @if($row->kpay_slip_url)
+                    <a href="{{ $row->kpay_slip_url }}" target="_blank" rel="noopener" class="pds-os-kpay-preview" onclick="event.preventDefault(); event.stopPropagation(); window.open(this.href, '_blank', 'noopener');">
+                        <img src="{{ $row->kpay_slip_url }}" alt="{{ $slipLabel }}" class="pds-os-kpay-thumb">
+                    </a>
+                @else
+                    <span class="pds-os-kpay-placeholder">
+                        <i class="fas {{ $section === 'receive' ? 'fa-qrcode' : 'fa-image' }}" aria-hidden="true"></i>
+                        <span>{{ $slipUploadLabel }}</span>
+                    </span>
+                @endif
+                <span class="pds-os-kpay-upload-btn" aria-hidden="true">
+                    <i class="fas fa-cloud-upload-alt"></i>
                 </span>
-            @endif
-            <span class="pds-os-kpay-upload-btn" aria-hidden="true">
-                <i class="fas fa-cloud-upload-alt"></i>
-            </span>
-            <input
-                type="file"
-                class="pds-os-kpay-file-input"
-                accept="image/*"
+                <input
+                    type="file"
+                    class="pds-os-kpay-file-input"
+                    accept="image/*"
+                    data-os-id="{{ $row->id }}"
+                >
+            </label>
+        </td>
+        @if($showKpayCols)
+            <td class="pds-os-settlement-col-method">
+                <div class="pds-os-pay-method js-os-row-pay-method" data-method="kpay">
+                    <button type="button" class="pds-os-pay-method__btn is-active" data-method="kpay">Kpay</button>
+                    <button type="button" class="pds-os-pay-method__btn" data-method="cash">{{ __('message.cash') }}</button>
+                </div>
+            </td>
+        @endif
+        <td class="pds-os-settlement-col-preview">
+            <button
+                type="button"
+                class="pds-os-slip-preview-btn"
                 data-os-id="{{ $row->id }}"
+                title="{{ __('message.show_slip_completed') }}"
             >
-        </label>
-    </td>
-    @if($showKpayCols)
-        <td class="pds-os-settlement-col-method">
-            <div class="pds-os-pay-method js-os-row-pay-method" data-method="kpay">
-                <button type="button" class="pds-os-pay-method__btn is-active" data-method="kpay">Kpay</button>
-                <button type="button" class="pds-os-pay-method__btn" data-method="cash">{{ __('message.cash') }}</button>
-            </div>
+                <i class="fas fa-eye" aria-hidden="true"></i>
+                <span>{{ __('message.show_slip_completed') }}</span>
+            </button>
         </td>
     @endif
-    <td class="pds-os-settlement-col-preview">
-        <button
-            type="button"
-            class="pds-os-slip-preview-btn"
-            data-os-id="{{ $row->id }}"
-            title="{{ __('message.show_slip_completed') }}"
-        >
-            <i class="fas fa-eye" aria-hidden="true"></i>
-            <span>{{ __('message.show_slip_completed') }}</span>
-        </button>
-    </td>
     <td class="pds-os-settlement-col-action">
         <button
             type="button"
-            class="pds-os-finish-btn {{ $row->has_kpay_slip ? '' : 'is-disabled' }}"
+            class="pds-os-finish-btn {{ $canFinish ? '' : 'is-disabled' }}"
             data-os-id="{{ $row->id }}"
-            data-has-kpay="{{ $row->has_kpay_slip ? '1' : '0' }}"
-            @disabled(! $row->has_kpay_slip)
+            data-has-kpay="{{ $canFinish ? '1' : '0' }}"
+            @disabled(! $canFinish)
         >
             <i class="fas fa-check" aria-hidden="true"></i>
             <span>{{ __('message.finished') }}</span>

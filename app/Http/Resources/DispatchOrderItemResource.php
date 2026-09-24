@@ -39,6 +39,10 @@ class DispatchOrderItemResource extends JsonResource
             'delivered_photo_url' => $this->resolveDeliveredPhotoUrl(),
             'delivered_type' => $this->delivered_type,
             'gate_amount' => (float) ($this->gate_amount ?? 0),
+            'is_kyo_shin' => $this->resolveKyoShinItem() !== null,
+            'kyo_shin_status' => $this->resolveKyoShinStatus(),
+            'kyo_shin_due_date' => $this->resolveKyoShinDueDate(),
+            'kyo_shin_paid_at' => $this->resolveKyoShinPaidAt(),
             'advance_paid' => (float) ($this->advance_paid ?? 0),
             'os_paid' => (float) ($this->os_paid ?? 0),
             'os_to_pay' => $this->resource instanceof DispatchOrderItem
@@ -50,8 +54,37 @@ class DispatchOrderItemResource extends JsonResource
                 ?: ((float) ($this->os_paid ?? 0) > 0
                     ? 'pay_done'
                     : ((($this->credit_to ?? 'customer') === 'os') ? 'os_pay' : 'customer_pay')),
+            'admin_finished_at' => $this->admin_finished_at
+                ? \Carbon\Carbon::parse($this->admin_finished_at)->toIso8601String()
+                : null,
             'status' => $this->status,
+            'return_type' => $this->resource instanceof DispatchOrderItem
+                ? $this->resource->returnType()
+                : ($this->return_type ?? null),
+            'has_return_deli_fee' => $this->resource instanceof DispatchOrderItem
+                ? $this->resource->hasReturnDeliFee()
+                : false,
+            'os_name' => $this->resolveOsContactField('name'),
+            'os_phone' => $this->resolveOsContactField('phone'),
+            'os_address' => $this->resolveOsContactField('address'),
+            'track_kind' => in_array((string) $this->status, [
+                'assigned',
+                'courier_assigned',
+                'courier_departed',
+                'pending',
+                'completed',
+                'return',
+                'os_returned',
+            ], true)
+                ? 'order'
+                : 'pickup',
             'delivery_locked' => (bool) ($this->delivery_locked ?? false),
+            'return_reassigned' => $this->resource instanceof DispatchOrderItem
+                ? $this->resource->isReturnReassigned()
+                : false,
+            'assigned_from_return' => $this->resource instanceof DispatchOrderItem
+                ? $this->resource->isAssignedFromReturn()
+                : false,
             'assigned_name' => optional($this->deliveryMan)->name,
             'assigned_phone' => optional($this->deliveryMan)->riderAssignedPhone(),
             'delivery_man_id' => $this->delivery_man_id ? (int) $this->delivery_man_id : null,
@@ -215,5 +248,67 @@ class DispatchOrderItemResource extends JsonResource
             'rating' => (float) $rating->rating,
             'comment' => $rating->comment,
         ];
+    }
+
+    protected function resolveKyoShinItem(): ?\App\Models\KyoShinItem
+    {
+        if (! $this->resource instanceof DispatchOrderItem) {
+            return null;
+        }
+        if (! \Illuminate\Support\Facades\Schema::hasTable('kyo_shin_items')) {
+            return null;
+        }
+
+        return $this->relationLoaded('kyoShinItem')
+            ? $this->kyoShinItem
+            : $this->kyoShinItem()->first();
+    }
+
+    protected function resolveKyoShinStatus(): ?string
+    {
+        $row = $this->resolveKyoShinItem();
+
+        return $row?->status;
+    }
+
+    protected function resolveKyoShinDueDate(): ?string
+    {
+        $row = $this->resolveKyoShinItem();
+        if (! $row?->due_finished_at) {
+            return null;
+        }
+
+        return \Carbon\Carbon::parse($row->due_finished_at, 'Asia/Yangon')->format('d-m-Y');
+    }
+
+    protected function resolveKyoShinPaidAt(): ?string
+    {
+        $row = $this->resolveKyoShinItem();
+        if (! $row?->advanced_paid_at) {
+            return null;
+        }
+
+        return $row->advanced_paid_at->copy()->timezone('Asia/Yangon')->format('d-m-Y');
+    }
+
+    protected function resolveOsContactField(string $field): ?string
+    {
+        $order = $this->relationLoaded('order') ? $this->order : null;
+        if (! $order) {
+            return null;
+        }
+
+        $value = match ($field) {
+            'name' => resolveDispatchOsName($order),
+            'phone' => resolveDispatchOsPhone($order),
+            'address' => resolveDispatchOsAddress($order),
+            default => null,
+        };
+
+        if ($value === null || $value === '-' || trim((string) $value) === '') {
+            return null;
+        }
+
+        return (string) $value;
     }
 }

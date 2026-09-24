@@ -42,7 +42,7 @@ class ClientController extends Controller
         $auth_user = authSession();
         $assets = ['datatable'];
         $approvalTab = request('status');
-        if (! in_array($approvalTab, ['pending', 'approved', 'rejected'], true)) {
+        if (! in_array($approvalTab, ['pending', 'approved', 'rejected', 'kyo_shin'], true)) {
             return redirect()->route('users.index', array_merge(request()->query(), ['status' => 'pending']));
         }
         $params = null;
@@ -69,6 +69,7 @@ class ClientController extends Controller
             'pending' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_PENDING)->count(),
             'approved' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_APPROVED)->count(),
             'rejected' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_REJECTED)->count(),
+            'kyo_shin' => (clone $osCountQuery)->where('is_kyo_shin', true)->count(),
         ];
         $branchTabCounts = User::query()
             ->where('user_type', 'client')
@@ -85,6 +86,8 @@ class ClientController extends Controller
             $pageTitle = __('message.active_list_form_title', ['form' => __('message.online_shop')]);
         } elseif ($approvalTab === 'rejected') {
             $pageTitle = __('message.inactive_list_form_title', ['form' => __('message.online_shop')]);
+        } elseif ($approvalTab === 'kyo_shin') {
+            $pageTitle = __('message.kyo_shin_os_list_title');
         } else {
             $pageTitle = __('message.pending_list_form_title', ['form' => __('message.online_shop')]);
         }
@@ -559,6 +562,39 @@ class ClientController extends Controller
             ]),
             'approval_status' => $user->approval_status,
             'label' => __('message.'.$user->approval_status),
+        ]);
+    }
+
+    public function updateKyoShinFlag(Request $request, $id)
+    {
+        if (! auth()->user()->can('users-edit')) {
+            return response()->json([
+                'status' => false,
+                'message' => __('message.demo_permission_denied'),
+            ], 403);
+        }
+
+        $request->validate([
+            'is_kyo_shin' => 'required|boolean',
+        ]);
+
+        $user = User::where('id', $id)->where('user_type', 'client')->first();
+        if (! $user) {
+            return response()->json([
+                'status' => false,
+                'message' => __('message.not_found_entry', ['name' => __('message.online_shop')]),
+            ], 404);
+        }
+
+        $user->is_kyo_shin = (bool) $request->boolean('is_kyo_shin');
+        $user->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => $user->is_kyo_shin
+                ? __('message.kyo_shin_os_flag_enabled')
+                : __('message.kyo_shin_os_flag_disabled'),
+            'is_kyo_shin' => (bool) $user->is_kyo_shin,
         ]);
     }
 

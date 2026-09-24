@@ -872,8 +872,7 @@ class HomeController extends Controller
                     if ($branchId > 0) {
                         $items->where('branch_id', $branchId);
                     }
-                    $yangonId = $hubService->yangonBranchId();
-                    if ($yangonId && $branchId === (int) $yangonId) {
+                    if ($hubService->isYangonBranch($branchId)) {
                         $items->where('is_dispatch_hub', 1);
                     } else {
                         $items->where(function ($query) {

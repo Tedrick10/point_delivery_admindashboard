@@ -25,10 +25,11 @@ class CashPayoutController extends Controller
         $selectedBranchId = $branchId;
 
         $baseQuery = OsCashPayout::query()
-            ->with(['osUser.city', 'deliveryMan', 'settlementBatch', 'moneyTransfer'])
+            ->with(['osUser.city', 'deliveryMan', 'settlementBatch', 'moneyTransfer', 'kyoShinBatch'])
             ->when($branchId, function ($q) use ($branchId) {
                 $q->where(function ($inner) use ($branchId) {
-                    $inner->whereHas('moneyTransfer', fn ($mt) => $mt->where('branch_id', $branchId))
+                    $inner->where('branch_id', $branchId)
+                        ->orWhereHas('moneyTransfer', fn ($mt) => $mt->where('branch_id', $branchId))
                         ->orWhereHas('deliveryMan', fn ($dm) => $dm->where('branch_id', $branchId));
                 });
             });
@@ -59,7 +60,7 @@ class CashPayoutController extends Controller
         $branchTabCounts = OsCashPayout::query()
             ->leftJoin('os_money_transfers', 'os_cash_payouts.money_transfer_id', '=', 'os_money_transfers.id')
             ->leftJoin('users as payout_riders', 'os_cash_payouts.delivery_man_id', '=', 'payout_riders.id')
-            ->selectRaw('COALESCE(NULLIF(os_money_transfers.branch_id, 0), NULLIF(payout_riders.branch_id, 0)) as branch_key, COUNT(os_cash_payouts.id) as total')
+            ->selectRaw('COALESCE(NULLIF(os_cash_payouts.branch_id, 0), NULLIF(os_money_transfers.branch_id, 0), NULLIF(payout_riders.branch_id, 0)) as branch_key, COUNT(os_cash_payouts.id) as total')
             ->groupBy('branch_key')
             ->pluck('total', 'branch_key');
         $allBranchCount = OsCashPayout::query()->count();

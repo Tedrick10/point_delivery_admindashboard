@@ -25,6 +25,9 @@ class DispatchOrderItem extends Model
         'code',
         'status',
         'delivery_locked',
+        'return_reassigned',
+        'assigned_from_return',
+        'return_type',
         'delivery_man_id',
         'hub_user_id',
         'hub_inbox_at',
@@ -73,6 +76,8 @@ class DispatchOrderItem extends Model
         'delivery_man_id' => 'integer',
         'hub_user_id' => 'integer',
         'delivery_locked' => 'boolean',
+        'return_reassigned' => 'boolean',
+        'assigned_from_return' => 'boolean',
         'assigned_at' => 'datetime',
         'hub_inbox_at' => 'datetime',
         'hub_accepted_at' => 'datetime',
@@ -141,6 +146,11 @@ class DispatchOrderItem extends Model
     public function deliveryMan()
     {
         return $this->belongsTo(User::class, 'delivery_man_id', 'id');
+    }
+
+    public function kyoShinItem()
+    {
+        return $this->hasOne(KyoShinItem::class, 'dispatch_order_item_id');
     }
 
     public function hubUser()
@@ -331,7 +341,147 @@ class DispatchOrderItem extends Model
      */
     public function displayOsToPay(): float
     {
+        if ((string) ($this->status ?? '') === 'return') {
+            $amount = 0.0;
+            if ($this->relationLoaded('kyoShinItem') && $this->kyoShinItem) {
+                $amount = (float) ($this->kyoShinItem->amount ?? 0);
+            }
+            if ($amount <= 0) {
+                $amount = (float) ($this->item_value ?? 0);
+            }
+
+            return round(abs($amount), 2);
+        }
+
         return round($this->baseDisplayOsToPay() + $this->netGateCharge(), 2);
+    }
+
+    public function isKyoShinGiven(): bool
+    {
+        if ($this->relationLoaded('kyoShinItem')) {
+            return $this->kyoShinItem !== null;
+        }
+
+        return $this->kyoShinItem()->exists();
+    }
+
+    /**
+     * Parcel was sent back out after Return. Assigned can only go back to Return.
+     */
+    public function isReturnReassigned(): bool
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasColumn($this->getTable(), 'return_reassigned')) {
+            return false;
+        }
+
+        return (bool) ($this->return_reassigned ?? false);
+    }
+
+    /**
+     * This Assigned parcel came from Return, so the Returned checkbox stays available.
+     */
+    public function isAssignedFromReturn(): bool
+    {
+        if (\Illuminate\Support\Facades\Schema::hasColumn($this->getTable(), 'assigned_from_return')) {
+            return (bool) ($this->assigned_from_return ?? false) || $this->isReturnReassigned();
+        }
+
+        return $this->isReturnReassigned();
+    }
+
+    public const RETURN_TYPE_NORMAL = 'normal';
+
+    public const RETURN_TYPE_DELIVERY = 'delivery';
+
+    public function returnType(): ?string
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasColumn($this->getTable(), 'return_type')) {
+            return null;
+        }
+
+        $type = trim((string) ($this->return_type ?? ''));
+
+        return in_array($type, [self::RETURN_TYPE_NORMAL, self::RETURN_TYPE_DELIVERY], true) ? $type : null;
+    }
+
+    public function isNormalReturn(): bool
+    {
+        return $this->returnType() === self::RETURN_TYPE_NORMAL;
+    }
+
+    public function isDeliveryReturn(): bool
+    {
+        return $this->returnType() === self::RETURN_TYPE_DELIVERY;
+    }
+
+    /**
+     * Return parcel that still collects delivery fee (counts as a paid way).
+     */
+    public function hasReturnDeliFee(): bool
+    {
+        if ($this->isNormalReturn()) {
+            return false;
+        }
+
+        if (! $this->isDeliveryReturn()) {
+            return false;
+        }
+
+        return (float) ($this->deli_amount ?? 0) > 0;
+    }
+
+    /**
+     * No-fee Return cycle after Assign: Assigned → Pending → Os Returned only.
+     */
+    public function isNoFeeOsReturnCycle(): bool
+    {
+        if (! $this->isAssignedFromReturn() || ! $this->isNormalReturn()) {
+            return false;
+        }
+
+        return in_array((string) ($this->status ?? ''), ['assigned', 'courier_assigned', 'pending', 'os_returned'], true);
+    }
+
+    /**
+     * Fee Return after Assign behaves like a normal delivery parcel.
+     */
+    public function isFeeReturnDeliveryCycle(): bool
+    {
+        return $this->isDeliveryReturn() && $this->hasReturnDeliFee();
+    }
+
+    /**
+     * Completed ကြိုရှင်း parcels belong on ကြိုရှင်းသမား ပေးရန်, not Os ဆီသို့ လွှဲရန်.
+     * Return + ကြိုရှင်း still counts as receivable from OS.
+     */
+    public function excludeFromSettlementAmount(): bool
+    {
+        return (string) ($this->status ?? '') === 'completed' && $this->isKyoShinGiven();
+    }
+
+    /**
+     * Amount Point already advanced / still owes the ကြိုရှင်း person.
+     */
+    public function kyoShinPayAmount(): float
+    {
+        $amount = 0.0;
+        if ($this->kyoShinItem) {
+            $amount = (float) ($this->kyoShinItem->amount ?? 0);
+        }
+        if ($amount <= 0) {
+            $amount = (float) ($this->item_value ?? 0);
+        }
+
+        return round(abs($amount), 2);
+    }
+
+    public function settlementOsToPay(): float
+    {
+        if ($this->excludeFromSettlementAmount()) {
+            return 0.0;
+        }
+
+        return $this->displayOsToPay();
     }
 
     public static function generateCode(): string

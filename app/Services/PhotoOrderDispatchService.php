@@ -32,6 +32,9 @@ class PhotoOrderDispatchService
             $deliAmount = $collectMoney ? (float) ($payment['deli_amount'] ?? 0) : 0;
             $osPaid = $collectMoney && $creditTo === 'os' ? (float) ($payment['os_paid'] ?? 0) : 0;
             $amounts = DispatchOrderItem::computeAmounts($itemValue, $deliAmount, 0, $osPaid, $creditTo);
+            $defaultBranchId = resolveDefaultDispatchBranchId(
+                config('dispatch_item_cities.default_to_branch', 'မန္တလေး')
+            ) ?: resolveDefaultDispatchBranchId();
 
             $item = DispatchOrderItem::firstOrCreate(
                 [
@@ -47,6 +50,8 @@ class PhotoOrderDispatchService
                     'customer_phone' => '',
                     'customer_address' => '',
                     'remark' => $remark,
+                    'from_branch_id' => $defaultBranchId,
+                    'to_branch_id' => $defaultBranchId,
                     'delivery_city' => defaultDeliveryRouteForBranch()['city']
                         ?: config('dispatch_item_cities.default_delivery_city', 'Mandalay'),
                     'township' => defaultDeliveryRouteForBranch()['township']
@@ -65,6 +70,12 @@ class PhotoOrderDispatchService
             // existing parcels — rider/admin may already have updated amounts.
             if ($item->wasRecentlyCreated === false) {
                 $patch = [];
+                if (empty($item->from_branch_id) && $defaultBranchId) {
+                    $patch['from_branch_id'] = $defaultBranchId;
+                }
+                if (empty($item->to_branch_id) && $defaultBranchId) {
+                    $patch['to_branch_id'] = $defaultBranchId;
+                }
                 if (trim((string) ($item->remark ?? '')) === '' && $remark !== '') {
                     $patch['remark'] = $remark;
                 }

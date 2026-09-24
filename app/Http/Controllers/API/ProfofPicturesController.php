@@ -121,6 +121,14 @@ class ProfofPicturesController extends Controller
                     app(\App\Services\TextOrderDispatchService::class)->sync($order->fresh());
                 }
 
+                // Shop / Gate parcel photos — attach without converting to photo order.
+                if ($order && $request->type === 'parcel_photo') {
+                    $mediaIds = $profpicture->getMedia('prof_file')->pluck('id')->all();
+                    $textService = app(\App\Services\TextOrderDispatchService::class);
+                    $textService->ensurePickUpState($order->fresh());
+                    $textService->attachParcelPhotos($order->fresh(), $mediaIds);
+                }
+
                 $type = (string) ($request->type ?? '');
                 if ($order && preg_match('/^recipient_(\d+)$/', $type, $matches)) {
                     $mediaIds = $profpicture->getMedia('prof_file')->pluck('id')->all();
@@ -156,7 +164,7 @@ class ProfofPicturesController extends Controller
                         }
 
                         $item = \App\Models\DispatchOrderItem::query()
-                            ->with(['fromBranch', 'toBranch', 'photoMedia'])
+                            ->with(['fromBranch', 'toBranch', 'photoMedia', 'kyoShinItem'])
                             ->find($dispatchItemId);
 
                         if ($item) {

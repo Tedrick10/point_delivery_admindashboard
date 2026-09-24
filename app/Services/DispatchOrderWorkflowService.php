@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Models\DispatchOrderItem;
+use App\Models\KyoShinItem;
 use App\Models\Order;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 class DispatchOrderWorkflowService
 {
@@ -265,34 +268,19 @@ class DispatchOrderWorkflowService
         }
 
         // Both Admin Done and Rider Pick Up Completed are required.
-        if (!$this->hasPhysicalPickupCompleted($order)) {
+        // Do not treat "already assigned" pool rows as proof of Admin Done —
+        // that made premature Assign 100 sticky on server.
+        if (! $this->hasPhysicalPickupCompleted($order)) {
             return false;
         }
 
-        $progress = $this->adminProgress($order);
-
-        if ($progress['is_complete']) {
-            return true;
-        }
-
-        if ($progress['total'] === 0) {
-            $targetCount = max(1, $order->dispatchItems()->where('status', 'collected')->count());
-            if ($targetCount <= 1) {
-                $targetCount = max(1, (int) $order->total_parcel);
-            }
-            $advancedCount = $order->dispatchItems()
-                ->whereIn('status', ['assigned', 'courier_assigned', 'courier_departed', 'pending', 'completed'])
-                ->count();
-
-            return $advancedCount >= $targetCount;
-        }
-
-        return false;
+        return $this->isAdminDone($order);
     }
 
     /**
      * Admin may fill Item Count info only after a Pickup Rider is assigned.
-     * Once an item is Delivered (completed), its info is locked.
+     * Delivered items stay locked. ကြိုရှင်း parcels stay editable (including Return)
+     * so Return Type / OS contact can be set; Item Value / DeliAmount lock separately.
      */
     public function canAdminEditDispatchItemInfo(Order $order, $item = null): bool
     {
@@ -312,6 +300,89 @@ class DispatchOrderWorkflowService
         }
 
         return true;
+    }
+
+    /**
+     * ကြိုရှင်း given — Item Value + DeliAmount both locked for Admin.
+     * SuperAdmin may still edit. On Return, both unlock for Return Type edits.
+     * Fee Return Delivery also keeps DeliAmount editable after Assign.
+     */
+    public function isKyoShinAmountLocked($item): bool
+    {
+        return $this->isKyoShinItemValueLocked($item)
+            && $this->isKyoShinDeliAmountLocked($item);
+    }
+
+    /**
+     * ကြိုရှင်း Item Value locked until Return.
+     * On Return, Item Value is editable again for Return Type / settlement edits.
+     */
+    public function isKyoShinItemValueLocked($item): bool
+    {
+        if (! $this->isKyoShinLocked($item)) {
+            return false;
+        }
+
+        if (isSuperAdmin()) {
+            return false;
+        }
+
+        $itemStatus = is_object($item) ? (string) ($item->status ?? '') : '';
+
+        return $itemStatus !== 'return';
+    }
+
+    /**
+     * ကြိုရှင်း DeliAmount locked except on Return tab, or Fee Return Delivery
+     * (admin must be able to set / keep return deli after Assign).
+     */
+    public function isKyoShinDeliAmountLocked($item): bool
+    {
+        if (! $this->isKyoShinLocked($item)) {
+            return false;
+        }
+
+        if (isSuperAdmin()) {
+            return false;
+        }
+
+        $itemStatus = is_object($item) ? (string) ($item->status ?? '') : '';
+        if ($itemStatus === 'return') {
+            return false;
+        }
+
+        if (is_object($item) && method_exists($item, 'isDeliveryReturn') && $item->isDeliveryReturn()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function isKyoShinLocked($item): bool
+    {
+        if ($item === null) {
+            return false;
+        }
+
+        if (is_object($item)) {
+            if ($item->relationLoaded('kyoShinItem')) {
+                return $item->kyoShinItem !== null;
+            }
+            $itemId = (int) ($item->id ?? 0);
+        } else {
+            $itemId = (int) $item;
+        }
+
+        if ($itemId <= 0 || ! Schema::hasTable('kyo_shin_items')) {
+            return false;
+        }
+
+        return KyoShinItem::query()->where('dispatch_order_item_id', $itemId)->exists();
+    }
+
+    public function dispatchItemEditDeniedMessage(Order $order, $item = null): string
+    {
+        return __('message.dispatch_item_edit_requires_pickup_rider');
     }
 
     /**
@@ -417,13 +488,28 @@ class DispatchOrderWorkflowService
                         $item->where('status', 'collected');
                     });
                 }),
+            'kyo_shin' => $query->where(function ($q) {
+                // Already given ကြိုရှင်း, or flagged shop after Rider Done + Admin Done (Assign 100+).
+                $q->whereHas('dispatchItems.kyoShinItem')
+                    ->orWhere(function ($ready) {
+                        $ready->whereHas('client', function ($client) {
+                            $client->where('is_kyo_shin', true);
+                        })->whereHas('dispatchItems', function ($item) {
+                            $item->whereIn('status', $this->advancedAdminItemStatuses());
+                        })->whereDoesntHave('dispatchItems', function ($item) {
+                            $item->where('status', 'collected')->whereNull('admin_updated_at');
+                        });
+                    });
+            }),
             default => null,
         };
     }
 
-    public function applyOrderListQuery($query)
+    public function applyOrderListQuery($query, ?string $listTab = null)
     {
-        $query->where(function ($outer) {
+        $includeAssign100 = in_array($listTab, ['all', 'kyo_shin'], true);
+
+        $query->where(function ($outer) use ($includeAssign100) {
             // Existing workflow: orders that already have dispatch items.
             $outer->where(function ($withItems) {
                 $withItems->whereHas('dispatchItems')
@@ -486,6 +572,16 @@ class DispatchOrderWorkflowService
                     ])
                     ->whereDoesntHave('dispatchItems');
             });
+
+            // All tab keeps orders after Rider Done + Admin Done move them to Assign 100.
+            if ($includeAssign100) {
+                $outer->orWhere(function ($assign100) {
+                    $assign100->whereNotIn('status', ['pickup_error', 'cancelled', 'draft'])
+                        ->whereHas('dispatchItems', function ($item) {
+                            $item->whereIn('status', $this->advancedAdminItemStatuses());
+                        });
+                });
+            }
         });
 
         // After 11:30 creates stay in Pre Order until next Yangon day 00:00.
@@ -510,6 +606,7 @@ class DispatchOrderWorkflowService
             'rider_pick_up_assigned',
             'rider_pick_up_done',
             'admin_completed',
+            'kyo_shin',
         ];
 
         // Keep counts in sync with the table (Admin Done may reclaim premature Assign 100 rows).
@@ -530,7 +627,7 @@ class DispatchOrderWorkflowService
         $counts = [];
         foreach ($tabs as $tab) {
             $query = Order::query()->whereNull('deleted_at');
-            $this->applyOrderListQuery($query);
+            $this->applyOrderListQuery($query, $tab);
             if ($tab !== 'all') {
                 $this->applyDispatchStatusFilter($query, $tab);
             }
@@ -708,32 +805,35 @@ class DispatchOrderWorkflowService
     {
         $order->loadMissing('dispatchItems');
 
-        // Admin Done alone must not land in Assign 100 — reclaim if rider
-        // has not pressed Pick Up Completed yet.
+        // Pull back Assign 100 rows unless BOTH Rider Done + Admin Done.
         $this->reclaimPrematureAssign100ItemsForOrder($order);
 
-        if (!$this->isReadyForAssign100($order)) {
+        if (! $this->isReadyForAssign100($order)) {
             return;
         }
 
-        $movedQuery = DispatchOrderItem::query()
+        $items = DispatchOrderItem::query()
             ->where('order_id', $order->id)
-            ->where('status', 'collected');
+            ->where('status', 'collected')
+            ->get();
 
-        $items = (clone $movedQuery)->get();
         $moved = 0;
-
         $hubService = app(\App\Services\DispatchHubService::class);
         foreach ($items as $item) {
             $item->status = 'assigned';
             $item->assigned_at = now();
             $item->received_date = Carbon::now('Asia/Yangon')->toDateString();
+            // Admin Item Info stamp — required so reclaim does not bounce these back.
+            if ($item->admin_updated_at === null) {
+                $item->admin_updated_at = now();
+            }
             $hubService->claimLocalOriginItem($item, $order, auth()->user());
             $item->save();
             $moved++;
         }
 
         // Admin Done + Rider Pick Up Done → notify client once when items enter Assign 100.
+        // ကြိုရှင်း is given manually (Kpay/Cash popup) from Order Detail — not auto.
         if ($moved > 0) {
             try {
                 app(AppPushService::class)->notifyClientPickupReady($order->fresh());
@@ -743,6 +843,52 @@ class DispatchOrderWorkflowService
                     'error' => $e->getMessage(),
                 ]);
             }
+        }
+    }
+
+    /**
+     * Online Shop marked ကြိုရှင်း → auto advance after Rider Done + Admin Done.
+     * (Kept for optional callers; syncOrderWorkflow no longer auto-gives.)
+     */
+    protected function autoGiveKyoShinForFlaggedShop(Order $order): void
+    {
+        $order->loadMissing(['client', 'dispatchItems']);
+        $client = $order->client;
+        if (! $client || ! (bool) ($client->is_kyo_shin ?? false)) {
+            return;
+        }
+
+        $items = $order->dispatchItems
+            ->filter(fn ($item) => in_array((string) ($item->status ?? ''), $this->advancedAdminItemStatuses(), true))
+            ->values();
+
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $actor = auth()->user();
+        if (! $actor) {
+            $actor = User::query()
+                ->whereIn('user_type', ['admin', 'demo_admin'])
+                ->orderBy('id')
+                ->first();
+        }
+        if (! $actor) {
+            return;
+        }
+
+        try {
+            $dueDay = Carbon::now('Asia/Yangon')->addDays(7)->toDateString();
+            app(KyoShinService::class)->giveAdvance($items, $dueDay, $actor, [
+                'payment_method' => 'cash',
+                'order_id' => (int) $order->id,
+            ]);
+        } catch (\Throwable $e) {
+            \Log::warning('auto kyo shin failed after Assign 100', [
+                'order_id' => $order->id,
+                'client_id' => $client->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
@@ -767,44 +913,77 @@ class DispatchOrderWorkflowService
     }
 
     /**
-     * Move Assign 100 "assigned" items back to collected when the rider
-     * has not completed physical pick-up yet (Admin Done alone is not enough).
+     * Move Assign 100 pool rows back to collected unless BOTH Rider Done
+     * and Admin Done are true. Clears hub claim stamps so MDY reclaim works.
      */
     public function reclaimPrematureAssign100ItemsForOrder(Order $order): int
     {
-        if ($this->hasPhysicalPickupCompleted($order)) {
+        if ($this->isReadyForAssign100($order)) {
             return 0;
+        }
+
+        $payload = [
+            'status' => 'collected',
+            'assigned_at' => null,
+        ];
+        if (Schema::hasColumn('dispatch_order_items', 'hub_user_id')) {
+            $payload['hub_user_id'] = null;
+        }
+        if (Schema::hasColumn('dispatch_order_items', 'hub_inbox_at')) {
+            $payload['hub_inbox_at'] = null;
+        }
+        if (Schema::hasColumn('dispatch_order_items', 'hub_accepted_at')) {
+            $payload['hub_accepted_at'] = null;
         }
 
         return DispatchOrderItem::query()
             ->where('order_id', $order->id)
             ->where('status', 'assigned')
-            ->when(\Illuminate\Support\Facades\Schema::hasColumn('dispatch_order_items', 'hub_user_id'), function ($query) {
-                $query->whereNull('hub_user_id');
-            })
-            ->update([
-                'status' => 'collected',
-                'assigned_at' => null,
-            ]);
+            ->whereNull('delivery_man_id')
+            ->update($payload);
     }
 
     /**
-     * Bulk reclaim for Assign 100 page / sidebar counts.
+     * Bulk reclaim for Assign 100 page / sidebar counts / Order List.
+     * Reclaims pool items when Admin Done is missing OR Rider pick-up is missing.
      */
     public function reclaimPrematureAssign100Items(): int
     {
-        return DispatchOrderItem::query()
+        $payload = [
+            'status' => 'collected',
+            'assigned_at' => null,
+        ];
+        if (Schema::hasColumn('dispatch_order_items', 'hub_user_id')) {
+            $payload['hub_user_id'] = null;
+        }
+        if (Schema::hasColumn('dispatch_order_items', 'hub_inbox_at')) {
+            $payload['hub_inbox_at'] = null;
+        }
+        if (Schema::hasColumn('dispatch_order_items', 'hub_accepted_at')) {
+            $payload['hub_accepted_at'] = null;
+        }
+
+        // Rider not done yet — always premature.
+        $reclaimed = DispatchOrderItem::query()
             ->where('status', 'assigned')
-            ->when(\Illuminate\Support\Facades\Schema::hasColumn('dispatch_order_items', 'hub_user_id'), function ($query) {
-                $query->whereNull('hub_user_id');
-            })
+            ->whereNull('delivery_man_id')
             ->whereHas('order', function ($q) {
                 $q->whereNotIn('status', ['courier_picked_up', 'courier_departed', 'completed']);
             })
-            ->update([
-                'status' => 'collected',
-                'assigned_at' => null,
-            ]);
+            ->update($payload);
+
+        // Rider done but Admin never stamped Item Info — also premature.
+        // (Old shortcut treated "status=assigned" as Admin Done and left these stuck.)
+        $reclaimed += DispatchOrderItem::query()
+            ->where('status', 'assigned')
+            ->whereNull('delivery_man_id')
+            ->whereNull('admin_updated_at')
+            ->whereHas('order', function ($q) {
+                $q->whereIn('status', ['courier_picked_up', 'courier_departed', 'completed']);
+            })
+            ->update($payload);
+
+        return $reclaimed;
     }
 
     /**
@@ -845,13 +1024,23 @@ class DispatchOrderWorkflowService
     {
         $progress = $this->adminProgress($order);
 
-        if ($progress['total'] === 0) {
-            return $order->dispatchItems()
-                ->whereIn('status', ['assigned', 'courier_assigned', 'courier_departed', 'pending', 'completed'])
-                ->exists();
+        if ($progress['total'] > 0) {
+            return $progress['is_complete'];
         }
 
-        return $progress['is_complete'];
+        // No collected rows left — Admin Done only if every advanced parcel
+        // was actually stamped by Admin Item Info (not merely moved to assigned).
+        $advancedStatuses = $this->advancedAdminItemStatuses();
+        $advancedQuery = $order->dispatchItems()->whereIn('status', $advancedStatuses);
+
+        if (! $advancedQuery->exists()) {
+            return false;
+        }
+
+        return ! $order->dispatchItems()
+            ->whereIn('status', $advancedStatuses)
+            ->whereNull('admin_updated_at')
+            ->exists();
     }
 
     protected function isUserAppDispatchOrder(Order $order): bool
@@ -864,7 +1053,7 @@ class DispatchOrderWorkflowService
 
     public function isRiderDone(Order $order): bool
     {
-        return !empty($order->delivery_man_id);
+        return $this->hasPhysicalPickupCompleted($order);
     }
 
     /**
@@ -873,7 +1062,19 @@ class DispatchOrderWorkflowService
      */
     public function clientVisibleItemStatuses(): array
     {
-        return ['collected', 'assigned', 'courier_assigned', 'courier_departed', 'pending', 'completed'];
+        return ['collected', 'assigned', 'courier_assigned', 'courier_departed', 'pending', 'completed', 'return', 'os_returned'];
+    }
+
+    /**
+     * All → Item Count: show ကြိုရှင်း after Rider Done + Admin Done (Assign 100).
+     */
+    public function canGiveKyoShinFromOrderDetail(Order $order): bool
+    {
+        if ($this->hasPhysicalPickupCompleted($order) && $this->isAdminDone($order)) {
+            return true;
+        }
+
+        return $this->hasAdvancedAdminItems($order);
     }
 
     /**
@@ -881,7 +1082,7 @@ class DispatchOrderWorkflowService
      */
     public function deliveryItemStatuses(): array
     {
-        return ['courier_assigned', 'courier_departed', 'pending', 'completed'];
+        return ['courier_assigned', 'courier_departed', 'pending', 'completed', 'return', 'os_returned'];
     }
 
     /**
@@ -889,25 +1090,43 @@ class DispatchOrderWorkflowService
      */
     public function clientDeliveryItemStatuses(): array
     {
-        return ['assigned', 'courier_assigned', 'courier_departed', 'pending', 'completed'];
+        return ['assigned', 'courier_assigned', 'courier_departed', 'pending', 'completed', 'return', 'os_returned'];
     }
 
     /**
      * Allowed next statuses for Rider Delivery text buttons.
      * Assigned → On Way; On Way → Delivered / Pending(+remark);
      * Pending → Delivered only; any path to Delivered is final (no further changes).
+     * No-fee Return cycle: Assigned → Pending / Os Returned; Pending → Os Returned.
      */
     public function allowedDeliveryStatusActions(DispatchOrderItem $item): array
     {
         $status = (string) ($item->status ?? '');
 
-        // Delivered is final. Stale delivery_locked on non-delivered items must not block.
-        if ($status === 'completed') {
+        // Delivered / Os Returned are final. Stale delivery_locked on non-delivered items must not block.
+        if (in_array($status, ['completed', 'os_returned'], true)) {
             return [];
         }
 
+        // No-fee Return → Assign: only Pending / Os Returned (no On Way / Delivered).
+        if ($item->isNoFeeOsReturnCycle()) {
+            return match ($status) {
+                'assigned', 'courier_assigned' => ['pending', 'os_returned'],
+                'pending' => ['os_returned'],
+                default => [],
+            };
+        }
+
+        // Legacy Return checkbox on: Assigned can only go back to Return.
+        if ($item->isReturnReassigned() && in_array($status, ['assigned', 'courier_assigned'], true)) {
+            return ['return'];
+        }
+
         return match ($status) {
-            'courier_assigned' => ['courier_departed'],
+            // Hub inbox (Assign 100 → Other Branch) sits on status=assigned.
+            'assigned' => ! empty($item->hub_user_id) ? ['courier_departed', 'pending', 'completed'] : [],
+            // Assigned may jump to On Way, Pending, or Delivered (no On Way required first).
+            'courier_assigned' => ['courier_departed', 'pending', 'completed'],
             'courier_departed' => ['completed', 'pending'],
             'pending' => ['completed'],
             default => [],
@@ -953,11 +1172,17 @@ class DispatchOrderWorkflowService
             return __('message.follow_up_status_delivered');
         }
 
+        if ($status === 'return' && ! empty($item->admin_finished_at)) {
+            return __('message.follow_up_status_finished');
+        }
+
         return match ($status) {
             'collected' => __('message.follow_up_status_pick_up'),
             'assigned', 'courier_assigned' => __('message.follow_up_status_assigned'),
             'courier_departed' => __('message.follow_up_status_on_way'),
             'pending' => __('message.follow_up_status_pending'),
+            'return' => __('message.follow_up_status_return'),
+            'os_returned' => __('message.follow_up_status_os_returned'),
             default => strtoupper(str_replace('_', ' ', (string) ($item->status ?: 'collected'))),
         };
     }
@@ -1003,6 +1228,15 @@ class DispatchOrderWorkflowService
 
         if ($item->status === 'pending') {
             return 'pending';
+        }
+
+        // Settlement Finished keeps DB status=return; surface as Finished in lists.
+        if ($item->status === 'return') {
+            return ! empty($item->admin_finished_at) ? 'finished' : 'return';
+        }
+
+        if ($item->status === 'os_returned') {
+            return 'os_returned';
         }
 
         if ($item->status === 'courier_departed') {

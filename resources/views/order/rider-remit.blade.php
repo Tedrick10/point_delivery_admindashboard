@@ -143,6 +143,37 @@
                                         <span class="pds-rider-remit-read js-rr-due-total">{{ number_format($summary->due_total) }}</span>
                                     </td>
                                 </tr>
+                                <tr class="pds-rider-remit-row is-kyo-os-return">
+                                    <th class="pds-rider-remit-label">
+                                        <span>{{ __('message.rider_remit_kyo_shin_os_return') }}</span>
+                                    </th>
+                                    @foreach($riders as $rider)
+                                        @php
+                                            $kyoOsParcels = $rider->kyo_shin_os_return_parcels ?? [];
+                                            $kyoOsCount = (int) ($rider->kyo_shin_os_return_count ?? 0);
+                                            $kyoOsAmount = (float) ($rider->kyo_shin_os_return_amount ?? 0);
+                                        @endphp
+                                        <td data-rider="{{ $rider->delivery_man_id }}" data-rr-kyo-os-return="{{ $kyoOsAmount }}">
+                                            <span class="pds-rider-remit-return-cell">
+                                                <span class="pds-rider-remit-read js-rr-kyo-os-return">{{ number_format($kyoOsAmount) }}</span>
+                                                @if($kyoOsCount > 0)
+                                                    <button
+                                                        type="button"
+                                                        class="pds-rider-remit-info-btn js-rr-return-info"
+                                                        data-title="{{ __('message.rider_remit_kyo_shin_os_return') }}"
+                                                        data-parcels='@json($kyoOsParcels)'
+                                                        title="{{ __('message.rider_remit_return_info_title') }}"
+                                                    >
+                                                        <i class="fas fa-info-circle" aria-hidden="true"></i>
+                                                    </button>
+                                                @endif
+                                            </span>
+                                        </td>
+                                    @endforeach
+                                    <td class="pds-rider-remit-total-cell">
+                                        <span class="pds-rider-remit-read js-rr-kyo-os-return-total">{{ number_format($summary->kyo_shin_os_return_total ?? 0) }}</span>
+                                    </td>
+                                </tr>
                                 @if(empty($isOtherBranchRemit))
                                 <tr class="pds-rider-remit-row is-fuel">
                                     <th class="pds-rider-remit-label">{{ __('message.rider_remit_fuel') }}</th>
@@ -233,6 +264,17 @@
                                         <span class="pds-rider-remit-read js-rr-combined-total">{{ number_format(($summary->cash_total ?? 0) + ($summary->kpay_total ?? 0)) }}</span>
                                     </td>
                                 </tr>
+                                <tr class="pds-rider-remit-row is-input is-kyo-shin-incharge">
+                                    <th class="pds-rider-remit-label">{{ __('message.rider_remit_kyo_shin_incharge') }}</th>
+                                    @foreach($riders as $rider)
+                                        <td data-rider="{{ $rider->delivery_man_id }}">
+                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="kyo_shin_incharge_amount" type="number" min="0" step="1" value="{{ ($rider->kyo_shin_incharge_amount ?? 0) ?: '' }}" placeholder="0" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
+                                        </td>
+                                    @endforeach
+                                    <td class="pds-rider-remit-total-cell">
+                                        <span class="pds-rider-remit-read js-rr-kyo-shin-incharge-total">{{ number_format($summary->kyo_shin_incharge_total ?? 0) }}</span>
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -259,6 +301,22 @@
             <div class="pds-rider-remit-audit__body" id="rrAuditBody">
                 <p class="pds-rider-remit-audit__empty">{{ __('message.rider_remit_audit_empty') }}</p>
             </div>
+        </div>
+    </div>
+
+    <div class="pds-rider-remit-audit" id="rrReturnInfoModal" hidden>
+        <div class="pds-rider-remit-audit__backdrop" data-rr-return-close></div>
+        <div class="pds-rider-remit-audit__panel" role="dialog" aria-modal="true" aria-labelledby="rrReturnInfoTitle">
+            <div class="pds-rider-remit-audit__head">
+                <div>
+                    <h5 id="rrReturnInfoTitle">{{ __('message.rider_remit_return_info_title') }}</h5>
+                    <p>{{ $filterDate }}</p>
+                </div>
+                <button type="button" class="pds-rider-remit-audit__close" data-rr-return-close aria-label="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="pds-rider-remit-audit__body" id="rrReturnInfoBody"></div>
         </div>
     </div>
 
@@ -375,6 +433,9 @@
                 function dueOf(riderId) {
                     return num(col(riderId).filter('[data-rr-due]').attr('data-rr-due'));
                 }
+                function kyoOsReturnOf(riderId) {
+                    return num(col(riderId).filter('[data-rr-kyo-os-return]').attr('data-rr-kyo-os-return'));
+                }
                 function compute(riderId) {
                     if (!canEditRider(riderId)) {
                         $grid.find('tr.is-total td[data-rider="' + riderId + '"]')
@@ -382,17 +443,19 @@
                             .addClass('is-ok')
                             .find('.js-rr-match').text('0');
                         $grid.find('thead .pds-rider-remit-col[data-rider="' + riderId + '"]').removeClass('is-balanced');
-                        return { prepaid: 0, fuel: 0, fee: 0, kpay: 0, remaining: dueOf(riderId), cash: 0, combined: 0, ok: true };
+                        return { prepaid: 0, fuel: 0, fee: 0, kpay: 0, kyoShinIncharge: 0, remaining: dueOf(riderId) + kyoOsReturnOf(riderId), cash: 0, combined: 0, ok: true };
                     }
                     var prepaid = num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="prepaid_amount"]').val());
                     var fuel = fuelOf(riderId);
                     var fee = feeOf(riderId);
                     var kpay = num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="kpay_amount"]').val());
+                    var kyoShinIncharge = num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="kyo_shin_incharge_amount"]').val());
                     var cash = 0;
                     denoms.forEach(function (note) {
                         cash += note * num($grid.find('.js-rr-denom[data-rider="' + riderId + '"][data-note="' + note + '"]').val());
                     });
-                    var remaining = dueOf(riderId) - prepaid - fuel - fee;
+                    // ကြိုရှင်း Os Returned is additive; ကြိုရှင်းတာဝန်ခံ is a manual deduction.
+                    var remaining = dueOf(riderId) + kyoOsReturnOf(riderId) - prepaid - fuel - fee - kyoShinIncharge;
                     var combined = cash + kpay;
                     var diff = combined - remaining;
                     var ok = Math.abs(diff) < 0.51;
@@ -404,7 +467,7 @@
                         .removeClass('is-ok is-off is-short is-over is-off-rider')
                         .addClass(ok ? 'is-ok' : (diff > 0 ? 'is-over' : 'is-off'))
                         .find('.js-rr-match').text(matchLabel);
-                    return { prepaid: prepaid, fuel: fuel, fee: fee, kpay: kpay, remaining: remaining, cash: cash, combined: combined, ok: ok };
+                    return { prepaid: prepaid, fuel: fuel, fee: fee, kpay: kpay, kyoShinIncharge: kyoShinIncharge, remaining: remaining, cash: cash, combined: combined, ok: ok };
                 }
                 function payload(riderId) {
                     var dens = {};
@@ -418,6 +481,7 @@
                         delivery_man_id: riderId,
                         prepaid_amount: num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="prepaid_amount"]').val()),
                         kpay_amount: num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="kpay_amount"]').val()),
+                        kyo_shin_incharge_amount: num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="kyo_shin_incharge_amount"]').val()),
                         denominations: dens
                     };
                 }
@@ -445,7 +509,7 @@
                     });
                 }
                 function refreshSummary() {
-                    var due = 0, cash = 0, kpay = 0, combined = 0, prepaid = 0, fuel = 0, fee = 0, remaining = 0, ok = 0, count = 0;
+                    var due = 0, cash = 0, kpay = 0, combined = 0, prepaid = 0, fuel = 0, fee = 0, remaining = 0, kyoShinIncharge = 0, ok = 0, count = 0;
                     $grid.find('thead .pds-rider-remit-col').each(function () {
                         var id = $(this).data('rider');
                         var c = compute(id);
@@ -456,6 +520,7 @@
                         prepaid += c.prepaid;
                         fuel += c.fuel;
                         fee += c.fee;
+                        kyoShinIncharge += c.kyoShinIncharge || 0;
                         remaining += c.remaining;
                         if (c.ok) ok += 1;
                         count += 1;
@@ -468,6 +533,7 @@
                     $grid.find('.js-rr-remaining-total').text(fmt(remaining));
                     $grid.find('.js-rr-money-total').text(fmt(cash));
                     $grid.find('.js-rr-kpay-total').text(fmt(kpay));
+                    $grid.find('.js-rr-kyo-shin-incharge-total').text(fmt(kyoShinIncharge));
                     $grid.find('.js-rr-combined-total').text(fmt(combined));
                     $('[data-rr-summary="due_total"]').text(fmt(due));
                     $('[data-rr-summary="cash_total"]').text(fmt(cash));
@@ -526,6 +592,54 @@
                         var sel = window.getSelection();
                         if (sel && sel.removeAllRanges) sel.removeAllRanges();
                     }
+                });
+
+                var labelCollected = @json(__('message.rider_remit_return_collected_deli'));
+                var labelNoDeli = @json(__('message.rider_remit_return_no_deli'));
+                var labelItemValue = @json(__('message.item_value'));
+                var $returnModal = $('#rrReturnInfoModal');
+                var $returnBody = $('#rrReturnInfoBody');
+                var $returnTitle = $('#rrReturnInfoTitle');
+
+                function closeReturnInfo() {
+                    $returnModal.attr('hidden', true);
+                }
+
+                $(document).on('click', '[data-rr-return-close]', closeReturnInfo);
+
+                $grid.on('click', '.js-rr-return-info', function () {
+                    var $btn = $(this);
+                    var parcels = $btn.data('parcels');
+                    if (typeof parcels === 'string') {
+                        try {
+                            parcels = JSON.parse(parcels);
+                        } catch (e) {
+                            parcels = [];
+                        }
+                    }
+                    if (!Array.isArray(parcels)) {
+                        parcels = [];
+                    }
+                    $returnTitle.text($btn.attr('data-title') || @json(__('message.rider_remit_return_info_title')));
+                    if (!parcels.length) {
+                        $returnBody.html('<p class="pds-rider-remit-audit__empty">' + @json(__('message.no_record_found')) + '</p>');
+                    } else {
+                        var html = '<ul class="pds-rider-remit-return-list">';
+                        parcels.forEach(function (row) {
+                            var code = row.code || ('#' + (row.id || ''));
+                            var name = row.customer_name || '-';
+                            var amount = Number(row.item_value != null ? row.item_value : (row.deli_amount || 0)).toLocaleString('en-US');
+                            var badge = row.item_value != null ? labelItemValue : (row.collected_deli ? labelCollected : labelNoDeli);
+                            var badgeClass = row.item_value != null ? 'is-collected' : (row.collected_deli ? 'is-collected' : 'is-none');
+                            html += '<li><strong>' + $('<div>').text(code).html() + '</strong>';
+                            html += '<span>' + $('<div>').text(name).html() + '</span>';
+                            html += '<span>' + amount + '</span>';
+                            html += '<em class="' + badgeClass + '">' + $('<div>').text(badge).html() + '</em></li>';
+                        });
+                        html += '</ul>';
+                        $returnBody.html(html);
+                    }
+                    $returnModal.removeAttr('hidden');
                 });
 
                 refreshSummary();

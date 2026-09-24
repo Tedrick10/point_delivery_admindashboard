@@ -39,10 +39,11 @@
                         'pending' => ['label' => __('message.pending'), 'icon' => 'fas fa-clock'],
                         'approved' => ['label' => __('message.approved'), 'icon' => 'fas fa-check-circle'],
                         'rejected' => ['label' => __('message.rejected'), 'icon' => 'fas fa-times-circle'],
+                        'kyo_shin' => ['label' => __('message.kyo_shin_title'), 'icon' => 'fas fa-hand-holding-usd'],
                     ] as $tabKey => $tabMeta)
                         <a
                             href="{{ route('users.index', array_merge($tabQuery, ['status' => $tabKey])) }}"
-                            class="pds-os-list-tab {{ $approvalTab === $tabKey ? 'is-active' : '' }}"
+                            class="pds-os-list-tab {{ $approvalTab === $tabKey ? 'is-active' : '' }}{{ $tabKey === 'kyo_shin' ? ' is-kyo-shin' : '' }}"
                             data-tab="{{ $tabKey }}"
                             role="tab"
                             aria-selected="{{ $approvalTab === $tabKey ? 'true' : 'false' }}"
@@ -95,6 +96,45 @@
                        $('.dataTable').DataTable().ajax.reload(null, false);
                    }
                }).fail(function (xhr) {
+                   var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Update failed';
+                   if (typeof SnackBar === 'function') {
+                       SnackBar({ message: msg, status: 'error' });
+                   } else if (window.toastr) {
+                       toastr.error(msg);
+                   } else {
+                       alert(msg);
+                   }
+               }).always(function () {
+                   $el.prop('disabled', false);
+               });
+           });
+
+           $(document).on('change', '.js-os-kyo-shin-flag', function () {
+               var $el = $(this);
+               var $wrap = $el.closest('.pds-os-kyo-shin-switch');
+               var url = $el.data('url');
+               var enabled = $el.is(':checked') ? 1 : 0;
+               $wrap.toggleClass('is-on', !!enabled);
+               $el.prop('disabled', true);
+               $.ajax({
+                   url: url,
+                   method: 'POST',
+                   data: {
+                       _token: '{{ csrf_token() }}',
+                       is_kyo_shin: enabled
+                   }
+               }).done(function (res) {
+                   if (typeof SnackBar === 'function') {
+                       SnackBar({ message: res.message || 'Updated', status: 'success' });
+                   } else if (window.toastr) {
+                       toastr.success(res.message || 'Updated');
+                   }
+                   if ($.fn.DataTable && $.fn.DataTable.isDataTable('.dataTable')) {
+                       $('.dataTable').DataTable().ajax.reload(null, false);
+                   }
+               }).fail(function (xhr) {
+                   $el.prop('checked', !enabled);
+                   $wrap.toggleClass('is-on', !enabled);
                    var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Update failed';
                    if (typeof SnackBar === 'function') {
                        SnackBar({ message: msg, status: 'error' });

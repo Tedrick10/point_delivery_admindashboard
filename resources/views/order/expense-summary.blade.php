@@ -30,6 +30,36 @@
                 ],
             ])
 
+            <div class="pds-expense-summary-split">
+                @include('order.partials._expense-summary-calendar', [
+                    'calendarDayUrl' => function ($ymd) use ($selectedBranchId) {
+                        $day = \Carbon\Carbon::parse($ymd, 'Asia/Yangon');
+                        $label = $day->format('d-m-Y');
+
+                        return route('order.expense-summary', array_filter([
+                            'month' => $day->format('Y-m'),
+                            'branch_id' => $selectedBranchId ?? null,
+                            'from_date' => $label,
+                            'to_date' => $label,
+                        ]));
+                    },
+                    'calendarMonthUrl' => function ($ym) use ($selectedBranchId) {
+                        try {
+                            $m = \Carbon\Carbon::createFromFormat('Y-m', $ym, 'Asia/Yangon')->startOfMonth();
+                        } catch (\Throwable $e) {
+                            $m = now('Asia/Yangon')->startOfMonth();
+                        }
+
+                        return route('order.expense-summary', array_filter([
+                            'month' => $m->format('Y-m'),
+                            'branch_id' => $selectedBranchId ?? null,
+                            'from_date' => $m->copy()->startOfMonth()->format('d-m-Y'),
+                            'to_date' => $m->copy()->endOfMonth()->format('d-m-Y'),
+                        ]));
+                    },
+                ])
+
+                <div class="pds-expense-summary-split__main">
             <div class="pds-expenses-toolbar">
                 <div class="pds-expenses-toolbar__month">
                     <div class="pds-expenses-month-nav">
@@ -37,9 +67,15 @@
                             <i class="fas fa-chevron-left"></i>
                         </a>
                         <span class="pds-expenses-month-nav__label">{{ $monthLabel }}</span>
-                        <a href="{{ route('order.expense-summary', array_filter(['month' => $nextMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Next">
-                            <i class="fas fa-chevron-right"></i>
-                        </a>
+                        @if(! empty($calendarNextDisabled))
+                            <span class="pds-expenses-month-nav__btn is-disabled" aria-disabled="true" title="Next">
+                                <i class="fas fa-chevron-right"></i>
+                            </span>
+                        @else
+                            <a href="{{ route('order.expense-summary', array_filter(['month' => $nextMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Next">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        @endif
                     </div>
                 </div>
                 <form method="GET" action="{{ route('order.expense-summary') }}" class="pds-expenses-filter" id="expenseSummaryFilterForm">
@@ -143,6 +179,8 @@
                     @endif
                 </table>
             </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -190,8 +228,15 @@
 
     <script>
         (function bootSummaryFilters() {
-            if (typeof flatpickr !== 'undefined') {
-                flatpickr('#summary_from, #summary_to', { dateFormat: 'd-m-Y', allowInput: true });
+            if (typeof window.pdsBindDmyDatepickers === 'function') {
+                window.pdsBindDmyDatepickers('#summary_from, #summary_to');
+            } else if (typeof flatpickr !== 'undefined') {
+                flatpickr('#summary_from, #summary_to', {
+                    dateFormat: 'd-m-Y',
+                    allowInput: true,
+                    disableMobile: true,
+                    maxDate: window.pdsTodayYangon || @json(now('Asia/Yangon')->format('d-m-Y')),
+                });
             } else {
                 setTimeout(bootSummaryFilters, 40);
             }
@@ -361,4 +406,5 @@
             });
         })();
     </script>
+    @include('order.partials._expense-summary-triple-check-js')
 </x-master-layout>

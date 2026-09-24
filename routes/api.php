@@ -42,6 +42,7 @@ Route::get('appsetting', [API\DashboardController::class, 'appsetting']);
 Route::get('server-config', [API\DashboardController::class, 'serverConfig']);
 Route::get('language-table-list', [API\LanguageTableController::class, 'getList']);
 Route::get('branch-list', [API\BranchController::class, 'getList']);
+Route::get('dispatch-public-item-track', [API\DispatchOrderItemController::class, 'searchPublicTrackItems']);
 
 Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function () {
     Route::get('dashboard-detail', [API\UserController::class, 'dashboard']);
@@ -104,6 +105,9 @@ Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function ()
 
     Route::get('os-settlement/{id}', [API\OsSettlementController::class, 'show']);
     Route::get('os-settlement/{id}/download/{format}', [API\OsSettlementController::class, 'download']);
+    Route::get('os-kyo-shin', [API\OsKyoShinController::class, 'index']);
+    Route::get('os-kyo-shin/{id}', [API\OsKyoShinController::class, 'show']);
+    Route::get('os-kyo-shin/{id}/download/{format}', [API\OsKyoShinController::class, 'download']);
     Route::get('os-receive/unsettled-summary', [API\OsReceiveSettlementController::class, 'unsettledSummary']);
     Route::get('os-receive/{id}', [API\OsReceiveSettlementController::class, 'show']);
     Route::post('os-receive/{id}/upload-payslip', [API\OsReceiveSettlementController::class, 'uploadPayslip']);
@@ -269,6 +273,7 @@ Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function ()
     Route::post('dispatch-order-item-add/{orderId}', [API\DispatchOrderItemController::class, 'addPickupItem']);
     Route::get('dispatch-order-item-list/{orderId}', [API\DispatchOrderItemController::class, 'listClientItems']);
     Route::get('dispatch-client-delivery-item-list', [API\DispatchOrderItemController::class, 'listClientDeliveryItems']);
+    Route::get('dispatch-client-item-track', [API\DispatchOrderItemController::class, 'searchClientTrackItems']);
     Route::get('dispatch-client-assign100-today', [API\DispatchOrderItemController::class, 'listClientAssign100Today']);
     Route::get('dispatch-client-delivery-item/{itemId}', [API\DispatchOrderItemController::class, 'showClientDeliveryItem']);
     Route::post('dispatch-order-item-client-add/{orderId}', [API\DispatchOrderItemController::class, 'addClientItem']);
@@ -278,6 +283,7 @@ Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function ()
     Route::get('dispatch-delivery-item/{itemId}', [API\DispatchOrderItemController::class, 'showDeliveryItem']);
     Route::get('dispatch-delivery-item-search', [API\DispatchOrderItemController::class, 'searchAssignableDeliveryItems']);
     Route::post('dispatch-delivery-item-assign/{itemId}', [API\DispatchOrderItemController::class, 'assignDeliveryItemToMe']);
+    Route::post('dispatch-delivery-item-assign-scan', [API\DispatchOrderItemController::class, 'assignDeliveryItemByScan']);
     Route::post('dispatch-delivery-item-status/{itemId}', [API\DispatchOrderItemController::class, 'updateDeliveryItemStatus']);
     Route::get('cash-payout-list', [API\CashPayoutController::class, 'list']);
     Route::post('cash-payout-status/{id}', [API\CashPayoutController::class, 'updateStatus']);

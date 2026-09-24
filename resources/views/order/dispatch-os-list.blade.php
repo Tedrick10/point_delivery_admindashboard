@@ -11,7 +11,7 @@
                     <p class="pds-rider-hero__subtitle">{{ __('message.os_list_settlement_subtitle') }}</p>
                 </div>
                 <div class="pds-rider-hero__stat">
-                    <span class="pds-rider-hero__stat-value">{{ ($payToOsRows->count() ?? 0) + ($receiveFromOsRows->count() ?? 0) }}</span>
+                    <span class="pds-rider-hero__stat-value">{{ ($payToOsRows->count() ?? 0) + ($receiveFromOsRows->count() ?? 0) + ($kyoShinPayRows->count() ?? 0) }}</span>
                     <span class="pds-rider-hero__stat-label">{{ __('message.online_shopping') }}</span>
                 </div>
             </div>
@@ -69,11 +69,17 @@
             @php
                 $payToOsRows = $payToOsRows ?? collect();
                 $receiveFromOsRows = $receiveFromOsRows ?? collect();
-                $defaultTab = request('tab') === 'receive'
-                    ? 'receive'
-                    : (request('tab') === 'pay'
-                        ? 'pay'
-                        : ($payToOsRows->isNotEmpty() || $receiveFromOsRows->isEmpty() ? 'pay' : 'receive'));
+                $kyoShinPayRows = $kyoShinPayRows ?? collect();
+                $requestedTab = request('tab');
+                if (in_array($requestedTab, ['pay', 'receive', 'kyo_shin'], true)) {
+                    $defaultTab = $requestedTab;
+                } elseif ($payToOsRows->isNotEmpty()) {
+                    $defaultTab = 'pay';
+                } elseif ($kyoShinPayRows->isNotEmpty()) {
+                    $defaultTab = 'kyo_shin';
+                } else {
+                    $defaultTab = 'receive';
+                }
             @endphp
 
             <div class="pds-rider-body">
@@ -99,6 +105,17 @@
                             <i class="fas fa-hand-holding-usd" aria-hidden="true"></i>
                             <span>{{ __('message.os_settlement_receive_from_os') }}</span>
                             <em class="js-os-tab-count" data-tab-count="receive">{{ $receiveFromOsRows->count() }}</em>
+                        </button>
+                        <button
+                            type="button"
+                            class="pds-os-settlement-tab {{ $defaultTab === 'kyo_shin' ? 'is-active' : '' }}"
+                            data-tab="kyo_shin"
+                            role="tab"
+                            aria-selected="{{ $defaultTab === 'kyo_shin' ? 'true' : 'false' }}"
+                        >
+                            <i class="fas fa-wallet" aria-hidden="true"></i>
+                            <span>{{ __('message.os_settlement_kyo_shin_pay') }}</span>
+                            <em class="js-os-tab-count" data-tab-count="kyo_shin">{{ $kyoShinPayRows->count() }}</em>
                         </button>
                     </div>
 
@@ -216,6 +233,52 @@
                             @endif
                         </div>
                     </div>
+
+                    <div
+                        class="pds-os-settlement-panel pds-os-settlement-section {{ $defaultTab === 'kyo_shin' ? 'is-active' : '' }}"
+                        data-panel="kyo_shin"
+                        data-section="kyo_shin"
+                        role="tabpanel"
+                    >
+                        <div class="pds-os-settlement-bulk-bar" data-section="kyo_shin" @if($kyoShinPayRows->isEmpty()) style="display:none" @endif>
+                            <div class="pds-os-settlement-bulk-bar__hint">
+                                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                                <span>{{ __('message.os_settlement_kyo_shin_bulk_hint') }}</span>
+                            </div>
+                            <div class="pds-os-settlement-bulk-bar__actions">
+                                <button type="button" class="pds-os-finish-all-btn" id="osSettlementFinishAllKyoShin" @disabled($kyoShinPayRows->isEmpty())>
+                                    <i class="fas fa-check-double" aria-hidden="true"></i>
+                                    <span>{{ __('message.finished_all') }}</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell pds-no-freeze">
+                            @if($kyoShinPayRows->isEmpty())
+                                <div class="pds-os-settlement-section__empty pds-os-settlement-section__empty--kyo-shin">
+                                    <p>{{ __('message.os_settlement_kyo_shin_empty') }}</p>
+                                </div>
+                            @else
+                                <table class="table pds-rider-list-table pds-os-settlement-table" id="osSettlementKyoShinTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="pds-rider-col-no">{{ __('message.no') }}</th>
+                                            <th class="pds-os-settlement-col-os">{{ __('message.os_name') }}</th>
+                                            <th class="pds-os-settlement-col-amount text-right">{{ __('message.kyo_shin_total_advanced_paid') }}</th>
+                                            <th class="text-right">{{ __('message.kyo_shin_remain') }}</th>
+                                            <th class="text-right">{{ __('message.kyo_shin_advanced_paid') }}</th>
+                                            <th class="text-center">{{ __('message.kyo_shin_total_parcels') }}</th>
+                                            <th class="pds-os-settlement-col-action">{{ __('message.action') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($kyoShinPayRows as $index => $row)
+                                            @include('order.partials._dispatch-os-kyo-shin-settlement-row', ['row' => $row, 'index' => $index])
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            @endif
+                        </div>
+                    </div>
             </div>
         </div>
     </div>
@@ -275,8 +338,12 @@
                 $('#osListPrevDay').on('click', function () { shiftDay(-1); });
                 $('#osListNextDay').on('click', function () { shiftDay(1); });
 
+                function normalizeSettlementSide(value) {
+                    return value === 'receive' || value === 'kyo_shin' ? value : 'pay';
+                }
+
                 function switchOsSettlementTab(tab) {
-                    tab = tab === 'receive' ? 'receive' : 'pay';
+                    tab = normalizeSettlementSide(tab);
                     $('.pds-os-settlement-tab').each(function () {
                         var isActive = $(this).attr('data-tab') === tab;
                         $(this).toggleClass('is-active', isActive).attr('aria-selected', isActive ? 'true' : 'false');
@@ -313,11 +380,12 @@
 
                 function syncRowFinishState($row) {
                     if (String($row.attr('data-is-finished')) === '1') return;
+                    var section = $row.attr('data-section');
                     var method = $row.attr('data-payment-method') === 'cash' ? 'cash' : 'kpay';
                     var hasKpay = String($row.attr('data-has-kpay')) === '1';
                     var $btn = $row.find('.pds-os-finish-btn');
-                    // Both Kpay and Cash require an uploaded proof image.
-                    var canFinish = hasKpay;
+                    // ကြိုရှင်းသမား ပေးရန်: Finished only. Other tabs still need a proof image.
+                    var canFinish = section === 'kyo_shin' || hasKpay;
                     $row.toggleClass('is-cash-method', method === 'cash');
                     $btn.toggleClass('is-disabled', !canFinish).prop('disabled', !canFinish);
                 }
@@ -327,6 +395,9 @@
                         if (! $rows.length) return false;
                         var ok = true;
                         $rows.each(function () {
+                            if (String($(this).attr('data-section')) === 'kyo_shin') {
+                                return;
+                            }
                             if (String($(this).attr('data-has-kpay')) !== '1') {
                                 ok = false;
                                 return false;
@@ -341,6 +412,10 @@
                     $('#osSettlementFinishAllReceive').prop(
                         'disabled',
                         !canFinishRows($('#osSettlementReceiveTable tbody tr.pds-os-settlement-row[data-is-finished="0"]'))
+                    );
+                    $('#osSettlementFinishAllKyoShin').prop(
+                        'disabled',
+                        $('#osSettlementKyoShinTable tbody tr.pds-os-settlement-row[data-is-finished="0"]').length === 0
                     );
                 }
 
@@ -400,9 +475,11 @@
                 function syncTabCounts() {
                     var payCount = $('#osSettlementPayTable tbody tr.pds-os-settlement-row').length;
                     var receiveCount = $('#osSettlementReceiveTable tbody tr.pds-os-settlement-row').length;
+                    var kyoShinCount = $('#osSettlementKyoShinTable tbody tr.pds-os-settlement-row').length;
                     $('.js-os-tab-count[data-tab-count="pay"]').text(payCount);
                     $('.js-os-tab-count[data-tab-count="receive"]').text(receiveCount);
-                    $('.pds-rider-hero__stat-value').text(payCount + receiveCount);
+                    $('.js-os-tab-count[data-tab-count="kyo_shin"]').text(kyoShinCount);
+                    $('.pds-rider-hero__stat-value').text(payCount + receiveCount + kyoShinCount);
                 }
 
                 function renumberOsSettlementRows($table) {
@@ -419,12 +496,19 @@
                         if (sectionKey === 'receive') {
                             $section.find('#osReceiveBulkUpload, .pds-os-settlement-bulk-bar[data-section="receive"]').hide();
                         }
+                        if (sectionKey === 'kyo_shin') {
+                            $section.find('.pds-os-settlement-bulk-bar[data-section="kyo_shin"]').hide();
+                        }
                         var emptyMsg = sectionKey === 'receive'
                             ? @json(__('message.os_settlement_receive_empty'))
-                            : @json(__('message.os_settlement_pay_empty'));
+                            : (sectionKey === 'kyo_shin'
+                                ? @json(__('message.os_settlement_kyo_shin_empty'))
+                                : @json(__('message.os_settlement_pay_empty')));
                         var emptyClass = sectionKey === 'receive'
                             ? 'pds-os-settlement-section__empty pds-os-settlement-section__empty--receive'
-                            : 'pds-os-settlement-section__empty';
+                            : (sectionKey === 'kyo_shin'
+                                ? 'pds-os-settlement-section__empty pds-os-settlement-section__empty--kyo-shin'
+                                : 'pds-os-settlement-section__empty');
                         var $shell = $table.closest('.pds-os-settlement-shell');
                         if ($shell.length) {
                             $shell.html('<div class="' + emptyClass + '"><p>' + emptyMsg + '</p></div>');
@@ -441,10 +525,23 @@
                     }
                 }
 
+                function refreshKyoShinTotal() {
+                    var total = 0;
+                    $('#osSettlementKyoShinTable tbody tr.pds-os-settlement-row').each(function () {
+                        total += parseFloat($(this).attr('data-amount')) || 0;
+                    });
+                    $('#osSettlementKyoShinTable tfoot .pds-os-amount-pill').text(
+                        total.toLocaleString('en-US', { maximumFractionDigits: 0 })
+                    );
+                }
+
                 function markRowFinished($row) {
                     var $table = $row.closest('table');
                     $row.fadeOut(180, function () {
                         $(this).remove();
+                        if ($table.is('#osSettlementKyoShinTable')) {
+                            refreshKyoShinTotal();
+                        }
                         renumberOsSettlementRows($table);
                         updateFinishAllState();
                     });
@@ -531,19 +628,20 @@
                 });
 
                 function finishOneOs(osId, $row, $btn, paymentMethod) {
-                    var settlementSide = $row.attr('data-section') === 'receive' ? 'receive' : 'pay';
+                    var settlementSide = normalizeSettlementSide($row.attr('data-section'));
                     $btn.prop('disabled', true);
+                    var payload = {
+                        _token: csrf,
+                        from_date: filterFrom,
+                        to_date: filterTo,
+                        delivery_format: 'table',
+                        payment_method: settlementSide === 'kyo_shin' ? 'cash' : (paymentMethod || 'kpay'),
+                        settlement_side: settlementSide,
+                    };
                     $.ajax({
                         url: finishUrlTemplate.replace('__OS__', osId),
                         type: 'POST',
-                        data: {
-                            _token: csrf,
-                            from_date: filterFrom,
-                            to_date: filterTo,
-                            delivery_format: 'table',
-                            payment_method: paymentMethod || 'kpay',
-                            settlement_side: settlementSide,
-                        },
+                        data: payload,
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
                         success: function (res) {
                             markRowFinished($row);
@@ -578,7 +676,9 @@
                             var finishedIds = (res.finished_os_ids || []).map(function (id) { return String(id); });
                             var selector = section === 'receive'
                                 ? '#osSettlementReceiveTable tbody tr.pds-os-settlement-row[data-is-finished="0"]'
-                                : '#osSettlementPayTable tbody tr.pds-os-settlement-row[data-is-finished="0"]';
+                                : (section === 'kyo_shin'
+                                    ? '#osSettlementKyoShinTable tbody tr.pds-os-settlement-row[data-is-finished="0"]'
+                                    : '#osSettlementPayTable tbody tr.pds-os-settlement-row[data-is-finished="0"]');
                             $(selector).each(function () {
                                 var $row = $(this);
                                 if (!finishedIds.length || finishedIds.indexOf(String($row.data('os-id'))) !== -1) {
@@ -638,12 +738,29 @@
                     finishAllOs(items, $(this), 'receive');
                 });
 
+                $(document).on('click', '#osSettlementFinishAllKyoShin', function () {
+                    if ($(this).prop('disabled')) return;
+                    var items = [];
+                    $('#osSettlementKyoShinTable tbody tr.pds-os-settlement-row[data-is-finished="0"]').each(function () {
+                        var $row = $(this);
+                        items.push({
+                            os_id: parseInt($row.data('os-id'), 10),
+                            payment_method: 'cash',
+                            settlement_side: 'kyo_shin',
+                        });
+                    });
+                    if (!items.length) return;
+                    finishAllOs(items, $(this), 'kyo_shin');
+                });
+
                 $(document).on('click', '.pds-os-slip-preview-btn', function () {
                     if ($(this).prop('disabled')) {
                         return;
                     }
                     var osId = $(this).data('os-id');
-                    var settlementSide = $(this).closest('tr').attr('data-section') === 'receive' ? 'receive' : 'pay';
+                    var settlementSide = normalizeSettlementSide(
+                        $(this).attr('data-section') || $(this).closest('tr').attr('data-section')
+                    );
                     $.ajax({
                         url: slipPreviewUrlTemplate.replace('__OS__', osId),
                         type: 'GET',

@@ -19,6 +19,7 @@ class RiderRemit extends Model
         'fee_amount',
         'denominations',
         'kpay_amount',
+        'kyo_shin_incharge_amount',
         'is_off',
         'submitted_at',
         'updated_by',
@@ -36,6 +37,7 @@ class RiderRemit extends Model
             'fee_amount' => 'double',
             'denominations' => 'array',
             'kpay_amount' => 'double',
+            'kyo_shin_incharge_amount' => 'double',
             'is_off' => 'boolean',
             'submitted_at' => 'datetime',
             'updated_by' => 'integer',
@@ -70,7 +72,8 @@ class RiderRemit extends Model
             (float) $this->due_amount
             - (float) $this->prepaid_amount
             - (float) $this->fuel_amount
-            - (float) $this->fee_amount,
+            - (float) $this->fee_amount
+            - (float) ($this->kyo_shin_incharge_amount ?? 0),
             2
         );
     }

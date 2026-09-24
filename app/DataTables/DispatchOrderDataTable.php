@@ -2,6 +2,7 @@
 
 namespace App\DataTables;
 
+use App\Models\DispatchOrderItem;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\DispatchOrderWorkflowService;
@@ -52,6 +53,9 @@ class DispatchOrderDataTable extends OrderDataTable
 
         return datatables()
             ->eloquent($query)
+            ->withQuery('list_totals', function ($filteredQuery) {
+                return $this->computeListTotals($filteredQuery);
+            })
             ->addIndexColumn()
             ->addColumn('received_date', function ($row) {
                 $date = $row->pickup_datetime ?? $row->created_at;
@@ -105,7 +109,9 @@ class DispatchOrderDataTable extends OrderDataTable
             })
             ->editColumn('item_count', function ($row) use ($workflow) {
                 $this->ensureDispatchItemsSynced($row);
-                $count = (int) ($row->dispatch_items_count ?? $row->dispatchItems()->where('status', 'collected')->count());
+                $count = (int) ($row->dispatch_items_count ?? $row->dispatchItems()
+                    ->whereIn('status', $workflow->clientVisibleItemStatuses())
+                    ->count());
 
                 $progress = $workflow->adminProgress($row);
                 if ($progress['total'] > 0 && !$progress['is_complete']) {
@@ -121,14 +127,17 @@ class DispatchOrderDataTable extends OrderDataTable
                     return '<span class="pds-dispatch-item-count">' . e($label) . '</span>';
                 }
 
-                $url = route('order.dispatch.items', $row->id);
+                $url = route('order.dispatch.items', array_filter([
+                    'id' => $row->id,
+                    'dispatch_status' => request('dispatch_status') ?: null,
+                ]));
 
                 return '<a href="' . e($url) . '" class="pds-dispatch-item-count is-link" title="' . e(__('message.order_detail_list')) . '">' . e($label) . '</a>';
             })
-            ->editColumn('deli_amount', function ($row) {
-                // Show sum of item deli amounts — not order pricing total_amount.
+            ->editColumn('deli_amount', function ($row) use ($workflow) {
+                // Sum item DeliAmount across visible statuses (not only collected).
                 $amount = (float) $row->dispatchItems()
-                    ->where('status', 'collected')
+                    ->whereIn('status', $workflow->clientVisibleItemStatuses())
                     ->sum('deli_amount');
 
                 return number_format($amount);
@@ -233,10 +242,42 @@ class DispatchOrderDataTable extends OrderDataTable
             ->rawColumns(['action', 'admin_status', 'rider_status', 'pickup_rider', 'address_code', 'item_count', 'id', 'order_type', 'remark']);
     }
 
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $query
+     * @return array{order_count:int,item_count:int,deli_amount:float}
+     */
+    protected function computeListTotals($query): array
+    {
+        $workflow = app(DispatchOrderWorkflowService::class);
+        $clone = $query instanceof \Illuminate\Database\Eloquent\Builder
+            ? $query->toBase()
+            : clone $query;
+        $clone->limit = null;
+        $clone->offset = null;
+        $clone->orders = null;
+
+        $orderCount = (int) (clone $clone)->sum('orders.total_parcel');
+        $idsQuery = (clone $clone)->select('orders.id');
+        $itemCount = (int) DispatchOrderItem::query()
+            ->whereIn('order_id', $idsQuery)
+            ->whereIn('status', $workflow->clientVisibleItemStatuses())
+            ->count();
+        $deliAmount = (float) DispatchOrderItem::query()
+            ->whereIn('order_id', $idsQuery)
+            ->whereIn('status', $workflow->clientVisibleItemStatuses())
+            ->sum('deli_amount');
+
+        return [
+            'order_count' => $orderCount,
+            'item_count' => $itemCount,
+            'deli_amount' => $deliAmount,
+        ];
+    }
+
     protected function getColumns()
     {
         $columns = [
-            ['data' => 'DT_RowIndex', 'name' => 'DT_RowIndex', 'title' => __('message.no'), 'orderable' => false, 'searchable' => false, 'width' => 40],
+            ['data' => 'DT_RowIndex', 'name' => 'DT_RowIndex', 'title' => __('message.no'), 'orderable' => false, 'searchable' => false, 'width' => 40, 'footer' => __('message.total')],
             ['data' => 'id', 'name' => 'id', 'title' => __('message.order_id')],
             ['data' => 'order_type', 'name' => 'order_type', 'title' => __('message.order_type'), 'orderable' => false, 'searchable' => false, 'width' => 120],
             ['data' => 'received_date', 'name' => 'pickup_datetime', 'title' => __('message.received_date')],
@@ -270,7 +311,7 @@ class DispatchOrderDataTable extends OrderDataTable
             $tail[] = ['data' => 'item_count', 'name' => 'item_count', 'title' => __('message.item_count'), 'orderable' => false];
         }
 
-        return array_merge($columns, $tail, [
+        $columns = array_merge($columns, $tail, [
             ['data' => 'deli_amount', 'name' => 'total_amount', 'title' => __('message.deli_amount')],
             ['data' => 'remark', 'name' => 'description', 'title' => __('message.remark')],
             ['data' => 'order_date', 'name' => 'created_at', 'title' => __('message.date')],
@@ -279,8 +320,20 @@ class DispatchOrderDataTable extends OrderDataTable
                 ->exportable(false)
                 ->printable(false)
                 ->width(80)
-                ->addClass('text-center'),
+                ->addClass('text-center')
+                ->footer(''),
         ]);
+
+        return array_map(function ($column) {
+            if ($column instanceof Column) {
+                return $column;
+            }
+            if (! array_key_exists('footer', $column)) {
+                $column['footer'] = '';
+            }
+
+            return $column;
+        }, $columns);
     }
 
     public function getBuilderParameters(): array
@@ -289,9 +342,34 @@ class DispatchOrderDataTable extends OrderDataTable
         // scrollX clones a separate header table; combined with pds-frozen-table it
         // shifts body cells under the wrong headers on Order List.
         $params['scrollX'] = false;
-        $params['dom'] = '<"pds-dispatch-dt-top" f>rt<"d-flex" <"flex-grow-1" l><"p-2" i><"mt-4" p>><"clear">';
+        $params['paging'] = false;
+        $params['pageLength'] = -1;
+        $params['lengthChange'] = false;
+        $params['info'] = false;
+        $params['dom'] = '<"pds-dispatch-dt-top" f>rt<"clear">';
         $params['searching'] = false;
         $params['order'] = [[1, 'desc']];
+        $params['footerCallback'] = 'function () {
+            var api = this.api();
+            var json = api.ajax.json() || {};
+            var totals = json.list_totals || {};
+            function fmt(n) {
+                return Number(n || 0).toLocaleString("en-US");
+            }
+            function setByName(name, html) {
+                try {
+                    var col = api.column(name + ":name");
+                    if (col && col.index() >= 0 && col.footer()) {
+                        $(col.footer()).html(html);
+                    }
+                } catch (e) {}
+            }
+            $(api.table().footer()).find("tr").addClass("pds-dispatch-total-row");
+            setByName("DT_RowIndex", '.json_encode(__('message.total')).');
+            setByName("total_parcel", fmt(totals.order_count));
+            setByName("item_count", fmt(totals.item_count));
+            setByName("total_amount", fmt(totals.deli_amount));
+        }';
 
         return $params;
     }
@@ -342,8 +420,8 @@ class DispatchOrderDataTable extends OrderDataTable
 
         $query = parent::query($model)
             ->with(['delivery_man', 'client'])
-            ->withCount(['dispatchItems as dispatch_items_count' => function ($query) {
-                $query->where('status', 'collected');
+            ->withCount(['dispatchItems as dispatch_items_count' => function ($query) use ($workflow) {
+                $query->whereIn('status', $workflow->clientVisibleItemStatuses());
             }]);
 
         request()->merge([
@@ -358,7 +436,8 @@ class DispatchOrderDataTable extends OrderDataTable
             // Pull back Admin-Done-only items that landed in Assign 100 too early.
             $workflow->reclaimPrematureAssign100Items();
             $workflow->healUtcRolloverReceivedDates();
-            $workflow->applyOrderListQuery($query);
+            $listTab = $this->resolveOrderListDispatchStatus($dispatchStatus) ?: 'all';
+            $workflow->applyOrderListQuery($query, $listTab);
         }
 
         if ($dateBounds) {
@@ -397,8 +476,10 @@ class DispatchOrderDataTable extends OrderDataTable
             return;
         }
 
+        $visibleStatuses = app(DispatchOrderWorkflowService::class)->clientVisibleItemStatuses();
+
         // Re-check live count in case another column already synced this row.
-        $liveCount = $row->dispatchItems()->where('status', 'collected')->count();
+        $liveCount = $row->dispatchItems()->whereIn('status', $visibleStatuses)->count();
         if ($liveCount > 0) {
             $row->setAttribute('dispatch_items_count', $liveCount);
 
@@ -420,7 +501,7 @@ class DispatchOrderDataTable extends OrderDataTable
 
         $row->setAttribute(
             'dispatch_items_count',
-            $row->dispatchItems()->where('status', 'collected')->count()
+            $row->dispatchItems()->whereIn('status', $visibleStatuses)->count()
         );
     }
 
@@ -439,6 +520,7 @@ class DispatchOrderDataTable extends OrderDataTable
             'rider_pick_up_assigned',
             'rider_pick_up_done',
             'admin_completed',
+            'kyo_shin',
         ];
 
         if ($status && in_array($status, $tabs, true)) {

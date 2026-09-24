@@ -104,6 +104,7 @@ class RiderRemitAuditService
             'fuel_amount' => __('message.rider_remit_fuel'),
             'fee_amount' => __('message.rider_remit_fee'),
             'kpay_amount' => 'Kpay',
+            'kyo_shin_incharge_amount' => __('message.rider_remit_kyo_shin_incharge'),
         ];
 
         foreach ($moneyFields as $field => $label) {
@@ -161,6 +162,7 @@ class RiderRemitAuditService
             'fuel_amount' => __('message.rider_remit_fuel'),
             'fee_amount' => __('message.rider_remit_fee'),
             'kpay_amount' => 'Kpay',
+            'kyo_shin_incharge_amount' => __('message.rider_remit_kyo_shin_incharge'),
             default => $field && str_starts_with($field, 'denom_')
                 ? number_format((int) substr($field, 6))
                 : $field,

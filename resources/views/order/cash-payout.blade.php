@@ -1,4 +1,12 @@
 <x-master-layout :assets="$assets ?? []">
+    <style>
+        .pds-kyo-shin-row-badge {
+            display: inline-flex; align-items: center; margin-left: 6px;
+            padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
+            background: #ffedd5; color: #c2410c;
+        }
+        .pds-cash-payout-page .pds-cash-payout-photo-stack { max-width: 220px; }
+    </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-cash-payout-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
             <div class="pds-rider-hero">
@@ -68,7 +76,7 @@
                                     @php
                                         $os = $item->osUser;
                                         $osName = $os->name ?? ('OS #'.$item->os_user_id);
-                                        $slipPhoto = $item->slipPhotoUrl();
+                                        $slipPhotos = $item->slipPhotoUrls();
                                         $pendingPhoto = $item->pendingPhotoUrl();
                                         $donePhoto = $item->donePhotoUrl();
                                         $statusClass = match ($item->status) {
@@ -87,17 +95,26 @@
                                     <tr data-id="{{ $item->id }}" data-status="{{ $item->status }}">
                                         <td class="pds-cash-payout-no">{{ $index + 1 }}</td>
                                         <td>
-                                            <div class="pds-cash-payout-os__name">{{ $osName }}</div>
+                                            <div class="pds-cash-payout-os__name">
+                                                {{ $osName }}
+                                                @if(!empty($item->kyo_shin_batch_id))
+                                                    <span class="pds-kyo-shin-row-badge">{{ __('message.kyo_shin_title') }}</span>
+                                                @endif
+                                            </div>
                                         </td>
                                         <td class="text-right pds-cash-payout-due">
                                             {{ number_format((float) $item->amount) }}
                                         </td>
                                         <td class="pds-cash-payout-photo-cell">
                                             <div class="pds-cash-payout-photo-stack">
-                                                @if($slipPhoto)
-                                                    <a href="{{ $slipPhoto }}" target="_blank" rel="noopener" class="pds-cash-payout-photo" title="{{ __('message.finish_image') }}">
-                                                        <img src="{{ $slipPhoto }}" alt="{{ __('message.finish_image') }}">
-                                                    </a>
+                                                @if($slipPhotos !== [])
+                                                    <div class="pds-cash-payout-photos">
+                                                        @foreach($slipPhotos as $slipPhoto)
+                                                            <a href="{{ $slipPhoto }}" target="_blank" rel="noopener" class="pds-cash-payout-photo" title="{{ __('message.finish_image') }} {{ $loop->iteration }}">
+                                                                <img src="{{ $slipPhoto }}" alt="{{ __('message.finish_image') }} {{ $loop->iteration }}">
+                                                            </a>
+                                                        @endforeach
+                                                    </div>
                                                 @else
                                                     <span class="pds-cash-payout-photo-empty" aria-hidden="true"><i class="far fa-image"></i></span>
                                                 @endif

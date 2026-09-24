@@ -72,12 +72,39 @@
     $isPhotoItem = $photoMedia !== null;
     $photoUrl = $isPhotoItem ? $photoMedia->getUrl() : '';
     $photoName = $isPhotoItem ? ($photoMedia->file_name ?? __('message.photo_order')) : '';
+    $workflow = app(\App\Services\DispatchOrderWorkflowService::class);
+    // Prefer live query/DB return_type over flashed old() so a prior Normal save
+    // cannot force Delivery edit forms to show locked Deli 0.
+    $requestReturnType = request('return_type');
+    $returnType = old('return_type');
+    if ($requestReturnType !== null && $requestReturnType !== '') {
+        $returnType = $requestReturnType;
+    } elseif ($returnType === null || $returnType === '') {
+        $returnType = $isEdit ? ($item->returnType() ?: null) : null;
+    }
+    $returnType = in_array($returnType, ['normal', 'delivery'], true) ? $returnType : null;
+    $isReturnContext = $isEdit && (
+        (string) ($item->status ?? '') === 'return'
+        || $returnType !== null
+        || (string) request('return_type', '') !== ''
+    );
+    if ($isReturnContext && $returnType === null && $isEdit) {
+        $returnType = $item->returnType();
+    }
+    $kyoShinAmountLocked = $isEdit && $workflow->isKyoShinAmountLocked($item);
+    $kyoShinItemValueLocked = $isEdit && $workflow->isKyoShinItemValueLocked($item);
+    $kyoShinDeliAmountLocked = $isEdit && $workflow->isKyoShinDeliAmountLocked($item);
+    // Admin Return: keep / show Customer information (not OS contact overwrite).
+    if ($isReturnContext && $returnType === 'normal') {
+        $deliAmount = old('deli_amount', 0);
+    }
 @endphp
 
 <div class="modal-dialog modal-xl pds-dispatch-item-modal-wrap @if($isPhotoItem) is-photo-item-modal @endif" role="document">
     <div class="modal-content pds-dispatch-item-modal @if($isPhotoItem) is-photo-item-modal @endif">
         <form id="dispatch_item_form" method="POST" novalidate data-dispatch-item-form="1"
               data-default-township="{{ $defaultTownship }}"
+              data-saved-township="{{ $township }}"
               data-default-delivery-city="{{ $defaultDeliveryCity }}"
               data-apply-default-township="0"
               data-disable-os-credit="{{ $disableOsCredit ? '1' : '0' }}"
@@ -135,7 +162,15 @@
                         <div class="pds-dispatch-item-col pds-dispatch-item-col--details">
                             @include('order.partials._dispatch-item-delivery-route')
 
-                            @include('order.partials._dispatch-item-payment', ['showRemark' => true, 'disableOsCredit' => $disableOsCredit])
+                            @include('order.partials._dispatch-item-payment', [
+                                'showRemark' => true,
+                                'disableOsCredit' => $disableOsCredit,
+                                'isReturnContext' => $isReturnContext,
+                                'returnType' => $returnType,
+                                'kyoShinAmountLocked' => $kyoShinAmountLocked,
+                                'kyoShinItemValueLocked' => $kyoShinItemValueLocked,
+                                'kyoShinDeliAmountLocked' => $kyoShinDeliAmountLocked,
+                            ])
                         </div>
                     @else
                         <div class="pds-dispatch-item-col">
@@ -162,7 +197,15 @@
                         </div>
 
                         <div class="pds-dispatch-item-col">
-                            @include('order.partials._dispatch-item-payment', ['showRemark' => false, 'disableOsCredit' => $disableOsCredit])
+                            @include('order.partials._dispatch-item-payment', [
+                                'showRemark' => false,
+                                'disableOsCredit' => $disableOsCredit,
+                                'isReturnContext' => $isReturnContext,
+                                'returnType' => $returnType,
+                                'kyoShinAmountLocked' => $kyoShinAmountLocked,
+                                'kyoShinItemValueLocked' => $kyoShinItemValueLocked,
+                                'kyoShinDeliAmountLocked' => $kyoShinDeliAmountLocked,
+                            ])
                         </div>
                     @endif
                 </div>
@@ -200,9 +243,10 @@
             citiesStoreUrl: "{{ route('delivery-route-locations.cities.store') }}",
             townshipsStoreUrl: "{{ route('delivery-route-locations.townships.store') }}",
             branchesStoreUrl: "{{ route('delivery-route-locations.branches.store') }}",
-            modalParent: '#remoteModelData'
+            modalParent: '#remoteModelData',
+            savedTownship: @json($township)
         };
-        var src = "{{ asset('js/dispatch-item-form.js') }}?v=28";
+        var src = "{{ asset('js/dispatch-item-form.js') }}?v=29";
 
         function bootForm() {
             if (typeof window.initDispatchItemForm === 'function') {

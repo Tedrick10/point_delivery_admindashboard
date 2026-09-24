@@ -21,6 +21,8 @@ class NotificationController extends Controller
                 'item_delivered',
                 'pickup_ready',
                 'os_settlement',
+                'kyo_shin',
+                'kyo_shin_overdue',
                 'os_receive_pay',
                 'os_receive_approved',
                 'os_receive_rejected',

@@ -15,6 +15,14 @@ class DispatchHubService
         'rider.ygn2@demo.local',
     ];
 
+    public const YANGON_BRANCH_NAMES = [
+        'ရန်ကုန်',
+        'Yangon',
+        'Yangon Branch',
+        'Yangon Ngwe Latt Saung',
+        'Yangon M2M',
+    ];
+
     public const HUB_PERMISSIONS = [
         'order-list',
         'order-show',
@@ -90,21 +98,47 @@ class DispatchHubService
             ->first();
     }
 
-    public function yangonBranchId(): ?int
+    /**
+     * @return list<int>
+     */
+    public function yangonBranchIds(): array
     {
-        static $id = false;
-        if ($id !== false) {
-            return $id;
+        static $ids = null;
+        if ($ids !== null) {
+            return $ids;
         }
 
-        $found = (int) (\App\Models\Branch::query()
+        $ids = \App\Models\Branch::query()
             ->where('status', 1)
-            ->where('name', 'ရန်ကုန်')
-            ->value('id') ?? 0);
+            ->where(function ($query) {
+                $query->whereIn('name', self::YANGON_BRANCH_NAMES)
+                    ->orWhereIn('city_name', ['Yangon', 'ရန်ကုန်'])
+                    ->orWhere('code', 'like', 'YGN%');
+            })
+            ->orderByRaw("FIELD(name, 'Yangon Ngwe Latt Saung','Yangon M2M','ရန်ကုန်','Yangon','Yangon Branch')")
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
 
-        $id = $found > 0 ? $found : null;
+        return $ids;
+    }
 
-        return $id;
+    public function yangonBranchId(): ?int
+    {
+        $ids = $this->yangonBranchIds();
+
+        return $ids[0] ?? null;
+    }
+
+    public function isYangonBranch(?int $branchId): bool
+    {
+        $branchId = (int) $branchId;
+
+        return $branchId > 0 && in_array($branchId, $this->yangonBranchIds(), true);
     }
 
     public function ensureAccess(User $user): void
@@ -251,10 +285,10 @@ class DispatchHubService
         }
 
         if ($actor && $this->isHub($actor)) {
-            $yangonId = $this->yangonBranchId();
             $clientBranch = (int) ($order->client->branch_id ?? 0);
             $fromBranch = (int) ($pickup['from_branch_id'] ?? 0);
-            if (($yangonId && ($clientBranch === (int) $yangonId || $fromBranch === (int) $yangonId))
+            if ($this->isYangonBranch($clientBranch)
+                || $this->isYangonBranch($fromBranch)
                 || $clientBranch === (int) $actor->branch_id
             ) {
                 return (int) $actor->id;
@@ -276,9 +310,10 @@ class DispatchHubService
             $pickup = json_decode((string) $pickup, true) ?: [];
         }
         $pickup['hub_user_id'] = $hubId;
-        $yangonId = $this->yangonBranchId();
-        if ($yangonId && empty($pickup['from_branch_id'])) {
-            $pickup['from_branch_id'] = $yangonId;
+        $hub = $this->findHub($hubId);
+        $fromBranchId = (int) ($hub?->branch_id ?? 0) ?: (int) ($this->yangonBranchId() ?? 0);
+        if ($fromBranchId > 0 && empty($pickup['from_branch_id'])) {
+            $pickup['from_branch_id'] = $fromBranchId;
         }
         $order->pickup_point = $pickup;
         $order->save();
@@ -300,9 +335,9 @@ class DispatchHubService
         $item->hub_inbox_at = $item->hub_inbox_at ?? now();
         $item->hub_accepted_at = $item->hub_accepted_at ?? now();
 
-        $yangonId = $this->yangonBranchId();
-        if ($yangonId && (int) ($item->from_branch_id ?? 0) <= 0) {
-            $item->from_branch_id = $yangonId;
+        $fromBranchId = (int) ($actor?->branch_id ?? 0) ?: (int) ($this->yangonBranchId() ?? 0);
+        if ($fromBranchId > 0 && (int) ($item->from_branch_id ?? 0) <= 0) {
+            $item->from_branch_id = $fromBranchId;
         }
 
         return true;

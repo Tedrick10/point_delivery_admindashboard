@@ -314,6 +314,7 @@ function riderHasAdminCompletedOnDay(int $riderId, string $dayYmd): bool
 
     return \App\Models\DispatchOrderItem::query()
         ->where('delivery_man_id', $riderId)
+        ->where('status', 'completed')
         ->whereNotNull('admin_completed_at')
         ->where('admin_completed_at', '>=', $start)
         ->where('admin_completed_at', '<', $end)
@@ -381,8 +382,12 @@ function dailyCheckListDate(?Carbon $at = null, ?int $riderId = null, ?int $excl
  */
 function dailyCheckListDateForItem($item, ?Carbon $at = null): Carbon
 {
-    $stamp = $at
-        ?? (! empty($item?->admin_completed_at) ? Carbon::parse($item->admin_completed_at) : null);
+    $stamp = $at;
+    if (! $stamp && ! empty($item?->admin_completed_at)) {
+        $stamp = Carbon::parse($item->admin_completed_at);
+    } elseif (! $stamp && (string) ($item?->status ?? '') === 'return' && ! empty($item?->admin_updated_at)) {
+        $stamp = Carbon::parse($item->admin_updated_at);
+    }
 
     return dailyCheckListDate(
         $stamp,
@@ -399,6 +404,33 @@ function dailyCheckListItemInPeriod($item, string $fromDay, string $toDay): bool
 }
 
 /**
+ * ငွေရှင်းတမ်း invoice day (Asia/Yangon).
+ * Every Completed (and ကြိုရှင်း Return) on Yangon day C lands on C − 1,
+ * so the whole rider Completed batch appears on one sheet.
+ */
+function osSettlementListDateForItem($item, ?Carbon $at = null): Carbon
+{
+    $tz = 'Asia/Yangon';
+    $stamp = $at;
+    if (! $stamp && ! empty($item?->admin_completed_at)) {
+        $stamp = Carbon::parse($item->admin_completed_at);
+    } elseif (! $stamp && (string) ($item?->status ?? '') === 'return' && ! empty($item?->admin_updated_at)) {
+        $stamp = Carbon::parse($item->admin_updated_at);
+    }
+
+    $stamp = ($stamp ?? Carbon::now($tz))->copy()->timezone($tz);
+
+    return $stamp->copy()->subDay()->startOfDay();
+}
+
+function osSettlementItemInPeriod($item, string $fromDay, string $toDay): bool
+{
+    $day = osSettlementListDateForItem($item)->toDateString();
+
+    return $day >= $fromDay && $day <= $toDay;
+}
+
+/**
  * True when this rider already has another admin Completed earlier on the same Yangon day.
  */
 function riderHadAdminCompletedBefore(int $riderId, Carbon $at, ?int $excludeItemId = null): bool
@@ -410,6 +442,7 @@ function riderHadAdminCompletedBefore(int $riderId, Carbon $at, ?int $excludeIte
 
     return \App\Models\DispatchOrderItem::query()
         ->where('delivery_man_id', $riderId)
+        ->where('status', 'completed')
         ->whereNotNull('admin_completed_at')
         ->where('admin_completed_at', '>=', $dayStart)
         ->where('admin_completed_at', '<', $before)
@@ -1671,7 +1704,7 @@ function forcedBranchId(?User $user = null): ?int
  */
 function destinationBranchNamesInTabOrder(?User $user = null): array
 {
-    $canonical = ['မန္တလေး', 'ရန်ကုန်', 'လားရှိုး', 'တောင်ကြီး', 'ပြင်ဦးလွင်', 'Food(မန္တလေး)'];
+    $canonical = ['မန္တလေး', 'Yangon Ngwe Latt Saung', 'Yangon M2M', 'လားရှိုး', 'တောင်ကြီး', 'ပြင်ဦးလွင်', 'Food(မန္တလေး)'];
     $user = $user ?? auth()->user();
     $firstId = $user ? (forcedBranchId($user) ?: (int) ($user->branch_id ?? 0)) : 0;
     if ($firstId <= 0) {
@@ -1724,6 +1757,8 @@ function defaultDeliveryRouteForBranch(?int $branchId = null): array
 
     $byBranchName = [
         'ရန်ကုန်' => ['city' => 'Yangon', 'township' => 'အလုံ'],
+        'Yangon Ngwe Latt Saung' => ['city' => 'Yangon', 'township' => 'အလုံ'],
+        'Yangon M2M' => ['city' => 'Yangon', 'township' => 'အလုံ'],
         'မန္တလေး' => ['city' => 'Mandalay', 'township' => 'ချမ်းမြသာစည်'],
         'လားရှိုး' => ['city' => 'Lashio', 'township' => ''],
         'တောင်ကြီး' => ['city' => 'Taunggyi', 'township' => ''],
@@ -1832,6 +1867,16 @@ function applyClientBranchScope($query, ?User $user = null, ?int $branchId = nul
     return $query;
 }
 
+function yangonBranchIds(): array
+{
+    return app(\App\Services\DispatchHubService::class)->yangonBranchIds();
+}
+
+function isYangonBranch(?int $branchId): bool
+{
+    return app(\App\Services\DispatchHubService::class)->isYangonBranch($branchId);
+}
+
 function mandalayBranchId(): ?int
 {
     static $id = false;
@@ -1861,12 +1906,11 @@ function isOtherDestinationBranch(?int $branchId): bool
     }
 
     $mdyId = mandalayBranchId();
-    $ygnId = app(\App\Services\DispatchHubService::class)->yangonBranchId();
 
     if ($mdyId && $branchId === (int) $mdyId) {
         return false;
     }
-    if ($ygnId && $branchId === (int) $ygnId) {
+    if (isYangonBranch($branchId)) {
         return false;
     }
 
@@ -1892,7 +1936,8 @@ function usesIntercityDeliveredFlow(?int $riderBranchId, ?User $user = null): bo
     $panelBranchId = (int) (forcedBranchId($user) ?: 0);
     if ($panelBranchId <= 0) {
         if (function_exists('isDispatchHub') && isDispatchHub($user)) {
-            $panelBranchId = (int) (app(\App\Services\DispatchHubService::class)->yangonBranchId() ?? 0);
+            $panelBranchId = (int) ($user->branch_id ?? 0)
+                ?: (int) (app(\App\Services\DispatchHubService::class)->yangonBranchId() ?? 0);
         } else {
             $panelBranchId = (int) (defaultDestinationBranchId(null, $user) ?: 0);
         }
@@ -1947,15 +1992,14 @@ function usesHalfDeliOnRiderRemit(?int $branchId, ?User $user = null): bool
 
     $user = $user ?? auth()->user();
     $mdyId = (int) (mandalayBranchId() ?? 0);
-    $ygnId = (int) (app(\App\Services\DispatchHubService::class)->yangonBranchId() ?? 0);
 
     // Yangon hub panel → MDY riders tab: Half Deli only.
     if ($mdyId > 0 && $branchId === $mdyId && isDispatchHub($user)) {
         return true;
     }
 
-    // MDY / non-hub admin → Yangon hubs tab: Half Deli only.
-    if ($ygnId > 0 && $branchId === $ygnId && ! isDispatchHub($user)) {
+    // MDY / non-hub admin → Yangon hub tabs: Half Deli only.
+    if (isYangonBranch($branchId) && ! isDispatchHub($user)) {
         return true;
     }
 
@@ -5724,6 +5768,59 @@ function normalizeDispatchItemSize($value, ?int $default = null): int
     }
 
     return max(1, min(10, $size));
+}
+
+/**
+ * Township base DeliAmount for a dispatch item (Size 1 baseline).
+ * Returns 0 when township is missing or has no configured fee.
+ */
+function resolveDispatchItemTownshipDeliAmount($item): float
+{
+    $township = trim((string) (is_array($item)
+        ? ($item['township'] ?? '')
+        : ($item->township ?? '')));
+    if ($township === '') {
+        return 0.0;
+    }
+
+    if (! \Illuminate\Support\Facades\Schema::hasTable('delivery_townships')) {
+        return 0.0;
+    }
+
+    $normalized = mb_strtolower($township);
+    $row = \App\Models\DeliveryTownship::query()
+        ->active()
+        ->where(function ($q) use ($township, $normalized) {
+            $q->whereRaw('LOWER(name) = ?', [$normalized])
+                ->orWhereRaw('LOWER(name_mm) = ?', [$normalized])
+                ->orWhere('name', $township)
+                ->orWhere('name_mm', $township);
+        })
+        ->orderByDesc('deli_amount')
+        ->first();
+
+    return $row ? max(0.0, (float) ($row->deli_amount ?? 0)) : 0.0;
+}
+
+/**
+ * Suggested Return Delivery fee: township base + Size(2+) steps of 500.
+ */
+function resolveDispatchItemSuggestedDeliAmount($item): float
+{
+    $base = resolveDispatchItemTownshipDeliAmount($item);
+    if ($base <= 0) {
+        return 0.0;
+    }
+
+    $size = normalizeDispatchItemSize(
+        is_array($item) ? ($item['weight'] ?? 0) : ($item->weight ?? 0),
+        0
+    );
+    if ($size > 1) {
+        return (float) round($base + (($size - 1) * 500));
+    }
+
+    return (float) round($base);
 }
 
 /**

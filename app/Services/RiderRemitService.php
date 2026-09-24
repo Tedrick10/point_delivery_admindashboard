@@ -131,8 +131,8 @@ class RiderRemitService
     public function fuelControlRiderGroups(): array
     {
         $mdyId = function_exists('mandalayBranchId') ? (int) (mandalayBranchId() ?? 0) : 0;
-        $ygnId = (int) (app(\App\Services\DispatchHubService::class)->yangonBranchId() ?? 0);
-        $allowed = array_values(array_filter([$mdyId, $ygnId]));
+        $ygnIds = app(\App\Services\DispatchHubService::class)->yangonBranchIds();
+        $allowed = array_values(array_filter(array_merge([$mdyId], $ygnIds)));
         $groups = [];
 
         if ($allowed === []) {
@@ -180,9 +180,9 @@ class RiderRemitService
             ];
         }
 
-        if ($ygnId > 0) {
+        if ($ygnIds !== []) {
             $hubs = $users
-                ->filter(fn (User $u) => (int) ($u->branch_id ?? 0) === $ygnId
+                ->filter(fn (User $u) => in_array((int) ($u->branch_id ?? 0), $ygnIds, true)
                     && (int) ($u->is_dispatch_hub ?? 0) === 1)
                 ->sortBy('name')
                 ->values();
@@ -207,7 +207,7 @@ class RiderRemitService
 
             // Orphan Yangon last-mile riders (no hub parent) — keep visible if any.
             $orphan = $users
-                ->filter(fn (User $u) => (int) ($u->branch_id ?? 0) === $ygnId
+                ->filter(fn (User $u) => in_array((int) ($u->branch_id ?? 0), $ygnIds, true)
                     && (int) ($u->is_dispatch_hub ?? 0) !== 1
                     && (int) ($u->hub_parent_id ?? 0) <= 0)
                 ->map($toRow)
@@ -256,12 +256,17 @@ class RiderRemitService
             return 0.0;
         }
 
+        // No paid delivery ways (e.g. only no-fee ကြိုရှင်း Os Returned) → no ဆီဖိုး.
+        if ($itemCount < 1) {
+            return 0.0;
+        }
+
         $saved = round((float) ($savedFuel ?? 0), 2);
         if ($saved > 0) {
             return $saved;
         }
 
-        return $itemCount >= 1 ? $this->riderFuelAmount($riderId) : 0.0;
+        return $this->riderFuelAmount($riderId);
     }
 
     /**
@@ -377,6 +382,7 @@ class RiderRemitService
         foreach ($dues as $dueRow) {
             $riderId = (int) ($dueRow->delivery_man_id ?? 0);
             $itemCount = (int) ($dueRow->item_count ?? 0);
+            $fuelWayCount = (int) ($dueRow->fuel_way_count ?? 0);
             if ($riderId < 1 || $itemCount < 1) {
                 continue;
             }
@@ -393,7 +399,7 @@ class RiderRemitService
             $savedFee = $open?->fee_amount;
             $savedDue = (float) ($open?->due_amount ?? 0);
 
-            $fuel = $this->resolveFuelAmount($riderId, $savedFuel, $itemCount, $isOtherBranch);
+            $fuel = $this->resolveFuelAmount($riderId, $savedFuel, $fuelWayCount, $isOtherBranch);
             $fee = $this->resolveFeeAmount(
                 $isOtherBranch ? null : $savedFee,
                 $isOtherBranch ? $agent : $gate,
@@ -474,16 +480,23 @@ class RiderRemitService
 
         $submitted = $this->latestSubmittedByRider($branchId, $day);
         $isOtherBranch = $this->isOtherBranchRemit($branchId);
+        $kyoOsReturnStats = $this->kyoOsReturnStatsByRider($branchId, $day);
 
-        $riders = $riderIds->map(function ($riderId) use ($dues, $saved, $submitted, $users, $day, $branchId, $isOtherBranch) {
+        $riders = $riderIds->map(function ($riderId) use ($dues, $saved, $submitted, $users, $day, $branchId, $isOtherBranch, $kyoOsReturnStats) {
             $user = $users->get($riderId);
             $remit = $saved->get($riderId);
             $openItemCount = (int) ($dues->get($riderId)?->item_count ?? 0);
             $done = $submitted->get($riderId);
             $isSubmitted = $openItemCount < 1 && $remit === null && $done !== null;
+            $kyoOs = $kyoOsReturnStats->get($riderId) ?? $this->emptyKyoOsReturnStats();
 
             if ($isSubmitted) {
-                return $this->zeroedSheetRider($riderId, $user, $day, $branchId, $done, false);
+                $row = $this->zeroedSheetRider($riderId, $user, $day, $branchId, $done, false);
+                $row->kyo_shin_os_return_count = $kyoOs->count;
+                $row->kyo_shin_os_return_amount = $kyoOs->amount;
+                $row->kyo_shin_os_return_parcels = $kyoOs->parcels;
+
+                return $row;
             }
 
             if ($remit?->submitted_at !== null && $openItemCount >= 1) {
@@ -494,20 +507,25 @@ class RiderRemitService
             $gate = (float) ($dues->get($riderId)?->gate ?? 0);
             $agent = (float) ($dues->get($riderId)?->agent ?? 0);
             $itemCount = (int) ($dues->get($riderId)?->item_count ?? 0);
+            $fuelWayCount = (int) ($dues->get($riderId)?->fuel_way_count ?? 0);
             $denoms = $this->normalizeDenoms($remit?->denominations);
 
             $prepaid = (float) ($remit?->prepaid_amount ?? 0);
             // Other branches: no ဆီဖိုး. Half Deli = Agent ရငွေ (auto).
             $savedFuel = (float) ($remit?->fuel_amount ?? 0);
-            $fuel = $this->resolveFuelAmount($riderId, $savedFuel, $itemCount, $isOtherBranch);
+            $fuel = $this->resolveFuelAmount($riderId, $savedFuel, $fuelWayCount, $isOtherBranch);
             $fee = $this->resolveFeeAmount(
                 $isOtherBranch ? null : $remit?->fee_amount,
                 $isOtherBranch ? $agent : $gate,
                 $isOtherBranch
             );
             $kpay = (float) ($remit?->kpay_amount ?? 0);
+            $kyoShinIncharge = (float) ($remit?->kyo_shin_incharge_amount ?? 0);
             $cash = $this->cashFromDenoms($denoms);
-            $remaining = round($due - $prepaid - $fuel - $fee, 2);
+            // ကြိုရှင်း Os Returned adds to money to remit (not a deduction like ဆီဖိုး / တန်ဆာခ).
+            $kyoOsAmount = (float) ($kyoOs->amount ?? 0);
+            // ကြိုရှင်းတာဝန်ခံ is a manual deduction from what still must be remitted.
+            $remaining = round($due + $kyoOsAmount - $prepaid - $fuel - $fee - $kyoShinIncharge, 2);
             $combined = round($cash + $kpay, 2);
             $match = $this->matchStatus($combined, $remaining);
             $canEdit = $itemCount >= 1;
@@ -528,6 +546,7 @@ class RiderRemitService
                 'denoms' => $denoms,
                 'cash_total' => $cash,
                 'kpay_amount' => $kpay,
+                'kyo_shin_incharge_amount' => $kyoShinIncharge,
                 'combined' => $combined,
                 'is_off' => false,
                 'is_submitted' => false,
@@ -540,6 +559,9 @@ class RiderRemitService
                 'remit_id' => $remit?->id,
                 'remit_date' => $day,
                 'branch_id' => $branchId && $branchId > 0 ? $branchId : 0,
+                'kyo_shin_os_return_count' => $kyoOs->count,
+                'kyo_shin_os_return_amount' => $kyoOs->amount,
+                'kyo_shin_os_return_parcels' => $kyoOs->parcels,
             ];
         })->filter()->sortBy(fn ($row) => mb_strtolower($row->name), SORT_NATURAL)->values();
 
@@ -554,6 +576,8 @@ class RiderRemitService
                 'remaining_total' => round($riders->sum('remaining'), 2),
                 'cash_total' => round($riders->sum('cash_total'), 2),
                 'kpay_total' => round($riders->sum('kpay_amount'), 2),
+                'kyo_shin_incharge_total' => round($riders->sum('kyo_shin_incharge_amount'), 2),
+                'kyo_shin_os_return_total' => round($riders->sum('kyo_shin_os_return_amount'), 2),
                 'balanced_count' => $riders->filter(fn ($r) => $r->balanced)->count(),
                 'off_count' => 0,
                 'submitted_count' => $riders->filter(fn ($r) => $r->is_submitted ?? false)->count(),
@@ -583,6 +607,7 @@ class RiderRemitService
         $clone->fuel_amount = 0;
         $clone->fee_amount = 0;
         $clone->kpay_amount = 0;
+        $clone->kyo_shin_incharge_amount = 0;
         $clone->denominations = $this->normalizeDenoms([]);
         $clone->is_off = false;
 
@@ -603,6 +628,7 @@ class RiderRemitService
                 'fuel_amount' => 0,
                 'fee_amount' => 0,
                 'kpay_amount' => 0,
+                'kyo_shin_incharge_amount' => 0,
                 'denominations' => $this->normalizeDenoms([]),
                 'is_off' => $markOff,
                 'submitted_at' => now(),
@@ -633,6 +659,7 @@ class RiderRemitService
                 'fuel_amount' => 0,
                 'fee_amount' => 0,
                 'kpay_amount' => 0,
+                'kyo_shin_incharge_amount' => 0,
                 'denominations' => $this->normalizeDenoms([]),
                 'is_off' => $markOff,
                 'submitted_at' => now(),
@@ -715,6 +742,7 @@ class RiderRemitService
             'denoms' => $this->normalizeDenoms([]),
             'cash_total' => 0,
             'kpay_amount' => 0,
+            'kyo_shin_incharge_amount' => 0,
             'combined' => 0,
             'is_off' => false,
             'is_submitted' => true,
@@ -727,14 +755,69 @@ class RiderRemitService
             'remit_id' => $remit->id,
             'remit_date' => $day,
             'branch_id' => $branchId && $branchId > 0 ? $branchId : 0,
+            'kyo_shin_os_return_count' => 0,
+            'kyo_shin_os_return_amount' => 0.0,
+            'kyo_shin_os_return_parcels' => [],
         ];
+    }
+
+    protected function emptyKyoOsReturnStats(): object
+    {
+        return (object) [
+            'count' => 0,
+            'amount' => 0.0,
+            'parcels' => [],
+        ];
+    }
+
+    /**
+     * ကြိုရှင်း Os Return parcels for the remit sheet day (item values to hand in).
+     * Non-kyo Os Returned parcels are excluded (no money path).
+     *
+     * @return Collection<int, object>
+     */
+    protected function kyoOsReturnStatsByRider(?int $branchId, string $day): Collection
+    {
+        $items = $this->kyoOsRemittableItemsQuery($branchId, $day)
+            ->with(['kyoShinItem', 'order'])
+            ->get();
+
+        return $items
+            ->groupBy(fn (DispatchOrderItem $item) => (int) $item->delivery_man_id)
+            ->map(function (Collection $group) {
+                $parcels = $group->map(static function (DispatchOrderItem $item) {
+                    $amount = $item->kyoShinPayAmount();
+
+                    return [
+                        'id' => (int) $item->id,
+                        'code' => (string) ($item->code ?? ''),
+                        'customer_name' => (string) ($item->customer_name ?? ''),
+                        'item_value' => $amount,
+                        'deli_amount' => 0.0,
+                        'collected_deli' => false,
+                        'return_type' => $item->returnType(),
+                    ];
+                })->values()->all();
+
+                return (object) [
+                    'count' => $group->count(),
+                    'amount' => round($group->sum(fn (DispatchOrderItem $i) => $i->kyoShinPayAmount()), 2),
+                    'parcels' => $parcels,
+                ];
+            });
     }
 
     protected function markRiderItemsRemitted(?int $branchId, int $riderId, string $day): int
     {
-        return $this->remittableItemsQuery($branchId, $day)
+        $completed = $this->remittableItemsQuery($branchId, $day)
             ->where('delivery_man_id', $riderId)
             ->update(['rider_remit_at' => now()]);
+
+        $kyoOs = $this->kyoOsRemittableItemsQuery($branchId, $day)
+            ->where('delivery_man_id', $riderId)
+            ->update(['rider_remit_at' => now()]);
+
+        return $completed + $kyoOs;
     }
 
     /**
@@ -778,6 +861,46 @@ class RiderRemitService
             });
     }
 
+    /**
+     * ကြိုရှင်း Os Returned parcels still open on the remit sheet day.
+     */
+    protected function kyoOsRemittableItemsQuery(?int $branchId, string $day)
+    {
+        $bounds = riderRemitBusinessDayBounds($day);
+
+        return DispatchOrderItem::query()
+            ->where('status', 'os_returned')
+            ->whereNotNull('delivery_man_id')
+            ->whereHas('kyoShinItem')
+            ->where(function ($q) {
+                $q->whereNull('rider_remit_at')
+                    ->orWhereColumn('rider_remit_at', '<', 'created_at');
+            })
+            ->where(function ($q) use ($day, $bounds) {
+                $q->whereDate('rider_remit_date', $day)
+                    ->orWhere(function ($legacy) use ($bounds) {
+                        $legacy->whereNull('rider_remit_date')
+                            ->where(function ($inner) use ($bounds) {
+                                $inner->where(function ($a) use ($bounds) {
+                                    $a->whereNotNull('admin_updated_at')
+                                        ->where('admin_updated_at', '>=', $bounds['start'])
+                                        ->where('admin_updated_at', '<', $bounds['end']);
+                                })->orWhere(function ($b) use ($bounds) {
+                                    $b->whereNull('admin_updated_at')
+                                        ->where('updated_at', '>=', $bounds['start'])
+                                        ->where('updated_at', '<', $bounds['end']);
+                                });
+                            });
+                    });
+            })
+            ->when($branchId && $branchId > 0, function ($q) use ($branchId) {
+                $q->where(function ($inner) use ($branchId) {
+                    $inner->where('from_branch_id', $branchId)
+                        ->orWhere('to_branch_id', $branchId);
+                });
+            });
+    }
+
     public function save(array $data, int $userId, bool $audit = true): RiderRemit
     {
         $branchId = (int) ($data['branch_id'] ?? 0);
@@ -796,12 +919,14 @@ class RiderRemitService
         $before = $open;
 
         $itemCount = (int) ($dues->get($riderId)?->item_count ?? 0);
+        $fuelWayCount = (int) ($dues->get($riderId)?->fuel_way_count ?? 0);
         $isOtherBranch = $this->isOtherBranchRemit($branchId);
         // ဆီဖိုး / တန်ဆာခ|Half Deli are system-controlled — never overwrite from sheet posts.
+        // No-fee ကြိုရှင်း Os Returned does not count toward ဆီဖိုး ways.
         $fuel = $this->resolveFuelAmount(
             $riderId,
             $open !== null ? (float) $open->fuel_amount : null,
-            $itemCount,
+            $fuelWayCount,
             $isOtherBranch
         );
         $fee = $this->resolveFeeAmount(
@@ -823,6 +948,7 @@ class RiderRemitService
                 'fee_amount' => $fee,
                 'denominations' => $denoms,
                 'kpay_amount' => round((float) ($data['kpay_amount'] ?? 0), 2),
+                'kyo_shin_incharge_amount' => round((float) ($data['kyo_shin_incharge_amount'] ?? 0), 2),
                 'is_off' => false,
                 'submitted_at' => null,
                 'updated_by' => $userId,
@@ -891,12 +1017,14 @@ class RiderRemitService
             }
 
             $due = (float) ($riderRow?->due_amount ?? 0);
+            $kyoOs = (float) ($riderRow?->kyo_shin_os_return_amount ?? 0);
             $prepaid = round((float) ($rowData['prepaid_amount'] ?? 0), 2);
             $fuel = round((float) ($riderRow?->fuel_amount ?? 0), 2);
             $fee = round((float) ($riderRow?->fee_amount ?? 0), 2);
             $kpay = round((float) ($rowData['kpay_amount'] ?? 0), 2);
+            $kyoShinIncharge = round((float) ($rowData['kyo_shin_incharge_amount'] ?? $riderRow?->kyo_shin_incharge_amount ?? 0), 2);
             $denoms = $this->normalizeDenoms($rowData['denominations'] ?? []);
-            $remaining = round($due - $prepaid - $fuel - $fee, 2);
+            $remaining = round($due + $kyoOs - $prepaid - $fuel - $fee - $kyoShinIncharge, 2);
             $combined = round($this->cashFromDenoms($denoms) + $kpay, 2);
 
             if (! $this->matchStatus($combined, $remaining)->ok) {
@@ -937,6 +1065,7 @@ class RiderRemitService
                         'fuel_amount' => $rowData['fuel_amount'] ?? 0,
                         'fee_amount' => $rowData['fee_amount'] ?? 0,
                         'kpay_amount' => $rowData['kpay_amount'] ?? 0,
+                        'kyo_shin_incharge_amount' => $rowData['kyo_shin_incharge_amount'] ?? 0,
                         'denominations' => $rowData['denominations'] ?? [],
                     ], $userId, false);
 
@@ -968,24 +1097,41 @@ class RiderRemitService
      * Delivered parcels (status=completed) for Rider ငွေအပ် sheet day.
      * Bucketed by rider_remit_date (Completed lock: before → yesterday, after → today). Does not wait for Finished.
      *
-     * @return Collection<int, object{delivery_man_id:int, due:float, gate:float, agent:float, item_count:int}>
+     * @return Collection<int, object{delivery_man_id:int, due:float, gate:float, agent:float, item_count:int, fuel_way_count:int}>
      */
     protected function dueByRider(?int $branchId, string $day): Collection
     {
-        $items = $this->remittableItemsQuery($branchId, $day)
+        $completed = $this->remittableItemsQuery($branchId, $day)
             ->get(['id', 'delivery_man_id', 'cust_get', 'gate_amount', 'agent_amount']);
 
-        return $items
-            ->groupBy(fn (DispatchOrderItem $item) => (int) $item->delivery_man_id)
-            ->map(function (Collection $group, $riderId) {
-                return (object) [
+        $kyoOs = $this->kyoOsRemittableItemsQuery($branchId, $day)
+            ->with('kyoShinItem')
+            ->get();
+
+        $riderIds = $completed->pluck('delivery_man_id')
+            ->merge($kyoOs->pluck('delivery_man_id'))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        return $riderIds->mapWithKeys(function ($riderId) use ($completed, $kyoOs) {
+            $doneGroup = $completed->where('delivery_man_id', $riderId);
+            $kyoGroup = $kyoOs->where('delivery_man_id', $riderId);
+            // အပ်ရမည့်ငွေ = Delivered cust_get only. ကြိုရှင်း Os Returned is a separate additive row.
+            // ဆီဖိုး ways = completed Delivered only (no-fee Os Returned does not earn fuel).
+
+            return [
+                (int) $riderId => (object) [
                     'delivery_man_id' => (int) $riderId,
-                    'due' => round($group->sum(fn (DispatchOrderItem $i) => (float) ($i->cust_get ?? 0)), 2),
-                    'gate' => round($group->sum(fn (DispatchOrderItem $i) => (float) ($i->gate_amount ?? 0)), 2),
-                    'agent' => round($group->sum(fn (DispatchOrderItem $i) => (float) ($i->agent_amount ?? 0)), 2),
-                    'item_count' => $group->count(),
-                ];
-            });
+                    'due' => round($doneGroup->sum(fn (DispatchOrderItem $i) => (float) ($i->cust_get ?? 0)), 2),
+                    'gate' => round($doneGroup->sum(fn (DispatchOrderItem $i) => (float) ($i->gate_amount ?? 0)), 2),
+                    'agent' => round($doneGroup->sum(fn (DispatchOrderItem $i) => (float) ($i->agent_amount ?? 0)), 2),
+                    'item_count' => $doneGroup->count() + $kyoGroup->count(),
+                    'fuel_way_count' => $doneGroup->count(),
+                ],
+            ];
+        });
     }
 
     /**
@@ -1041,8 +1187,9 @@ class RiderRemitService
         $fuel = (float) $row->fuel_amount;
         $fee = (float) $row->fee_amount;
         $kpay = (float) $row->kpay_amount;
+        $kyoShinIncharge = (float) ($row->kyo_shin_incharge_amount ?? 0);
         $cash = $this->cashFromDenoms($denoms);
-        $remaining = round($liveDue - $prepaid - $fuel - $fee, 2);
+        $remaining = round($liveDue - $prepaid - $fuel - $fee - $kyoShinIncharge, 2);
         $combined = round($cash + $kpay, 2);
         $match = $this->matchStatus($combined, $remaining);
 
@@ -1056,6 +1203,7 @@ class RiderRemitService
             'denoms' => $denoms,
             'cash_total' => $cash,
             'kpay_amount' => $kpay,
+            'kyo_shin_incharge_amount' => $kyoShinIncharge,
             'combined' => $combined,
             'balanced' => $match->ok,
             'match_class' => $match->class,

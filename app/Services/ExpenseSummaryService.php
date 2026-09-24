@@ -143,7 +143,7 @@ class ExpenseSummaryService
     }
 
     /**
-     * Summary rows for the period, including expense cards that were not Generated yet.
+     * Generated Summary rows only (Expense Generate နှိပ်ပြီးသား).
      *
      * @return \Illuminate\Support\Collection<int, ExpenseSummary>
      */
@@ -159,28 +159,7 @@ class ExpenseSummaryService
 
         $this->syncIncomeOnRows($summaries, $user);
 
-        $linkedCardIds = $summaries
-            ->pluck('expense_card_id')
-            ->filter()
-            ->map(fn ($id) => (int) $id)
-            ->all();
-
-        $cards = ExpenseCard::query()
-            ->with('items')
-            ->whereBetween('expense_date', [$from, $to])
-            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->when($linkedCardIds !== [], fn ($q) => $q->whereNotIn('id', $linkedCardIds))
-            ->orderBy('expense_date')
-            ->orderBy('id')
-            ->get();
-
-        foreach ($cards as $card) {
-            $summaries->push($this->virtualRowFromCard($card, $user));
-        }
-
-        return $summaries
-            ->sortBy(fn (ExpenseSummary $row) => ($row->summary_date?->toDateString() ?? '').'|'.(int) ($row->id ?? 0))
-            ->values();
+        return $summaries->values();
     }
 
     /**
@@ -188,58 +167,14 @@ class ExpenseSummaryService
      */
     public function branchRowCounts(string $from, string $to): array
     {
-        $counts = [];
-
-        $cardCounts = ExpenseCard::query()
-            ->whereBetween('expense_date', [$from, $to])
-            ->whereNotNull('branch_id')
-            ->where('branch_id', '>', 0)
-            ->selectRaw('branch_id, COUNT(*) as total')
-            ->groupBy('branch_id')
-            ->pluck('total', 'branch_id');
-
-        foreach ($cardCounts as $branchId => $total) {
-            $counts[(int) $branchId] = (int) $total;
-        }
-
-        $orphanSummaries = ExpenseSummary::query()
+        return ExpenseSummary::query()
             ->whereBetween('summary_date', [$from, $to])
             ->whereNotNull('branch_id')
             ->where('branch_id', '>', 0)
-            ->where(function ($q) {
-                $q->whereNull('expense_card_id')
-                    ->orWhere('expense_card_id', 0)
-                    ->orWhereDoesntHave('expenseCard');
-            })
             ->selectRaw('branch_id, COUNT(*) as total')
             ->groupBy('branch_id')
-            ->pluck('total', 'branch_id');
-
-        foreach ($orphanSummaries as $branchId => $total) {
-            $bid = (int) $branchId;
-            $counts[$bid] = ($counts[$bid] ?? 0) + (int) $total;
-        }
-
-        return $counts;
-    }
-
-    protected function virtualRowFromCard(ExpenseCard $card, $user = null): ExpenseSummary
-    {
-        $day = $card->expense_date?->toDateString() ?? now('Asia/Yangon')->toDateString();
-        $cardBranchId = (int) ($card->branch_id ?? 0) ?: null;
-        $income = $this->incomeForDate($day, $user, $cardBranchId);
-        $expense = round((float) ($card->items->sum('amount') ?: $card->total_amount), 2);
-
-        $row = new ExpenseSummary([
-            'summary_date' => $day,
-            'branch_id' => $cardBranchId,
-            'expense_card_id' => $card->id,
-            'income' => $income,
-            'expense' => $expense,
-            'ako_given' => round($income - $expense, 2),
-        ]);
-        $row->setRelation('expenseCard', $card);
-
-        return $row;
+            ->pluck('total', 'branch_id')
+            ->mapWithKeys(fn ($total, $branchId) => [(int) $branchId => (int) $total])
+            ->all();
     }
 }

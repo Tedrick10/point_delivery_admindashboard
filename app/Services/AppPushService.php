@@ -25,6 +25,8 @@ class AppPushService
     public const TYPE_PICKUP_READY = 'pickup_ready';
     public const TYPE_PICKUP_ASSIGNED = 'pickup_assigned';
     public const TYPE_DELIVERY_ASSIGNED = 'delivery_assigned';
+    public const TYPE_KYO_SHIN_OVERDUE = 'kyo_shin_overdue';
+    public const TYPE_KYO_SHIN_GIVEN = 'kyo_shin';
 
     public function notifyUser(User $user, string $type, string $subject, string $message, array $extra = [], bool $persistDatabase = true): void
     {
@@ -289,6 +291,8 @@ class AppPushService
             foreach ($data as $key => $value) {
                 if (is_scalar($value) || $value === null) {
                     $stringData[(string) $key] = (string) ($value ?? '');
+                } elseif (is_array($value)) {
+                    $stringData[(string) $key] = json_encode($value) ?: '';
                 }
             }
 

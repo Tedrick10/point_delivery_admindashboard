@@ -83,7 +83,12 @@
                             <td>{{ $item->received_date ? $item->received_date->format('d-m-Y') : '-' }}</td>
                             <td class="pds-check-detail-status">{{ $statusService->itemStatusLabel($item) }}</td>
                             <td>{{ $osName }}</td>
-                            <td>{{ $item->customer_name ?: '-' }}</td>
+                            <td>
+                                {{ $item->customer_name ?: '-' }}
+                                @if($item->isKyoShinGiven())
+                                    <span class="pds-kyo-shin-row-badge">{{ __('message.kyo_shin_title') }}</span>
+                                @endif
+                            </td>
                             <td>{{ $item->customer_phone ?: '-' }}</td>
                             <td class="pds-check-detail-address" title="{{ $item->customer_address }}">{{ $item->customer_address ?: '-' }}</td>
                             <td class="text-right">{{ number_format((float) $item->advance_paid) }}</td>

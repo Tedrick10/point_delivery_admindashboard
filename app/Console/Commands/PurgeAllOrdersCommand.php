@@ -72,6 +72,11 @@ class PurgeAllOrdersCommand extends Command
             }
 
             $derivedTables = [
+                'dispatch_item_pending_remarks',
+                'kyo_shin_items',
+                'kyo_shin_batches',
+                'kyo_shin_daily_ledgers',
+                'os_receive_settlements',
                 'dispatch_order_items',
                 'os_cash_payouts',
                 'os_money_transfers',

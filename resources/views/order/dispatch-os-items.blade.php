@@ -236,7 +236,7 @@
 
     @section('bottom_script')
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-        <script src="{{ asset('js/dispatch-item-form.js') }}?v=28"></script>
+        <script src="{{ asset('js/dispatch-item-form.js') }}?v=29"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(document).ready(function () {

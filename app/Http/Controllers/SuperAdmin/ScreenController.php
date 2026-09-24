@@ -45,6 +45,7 @@ class ScreenController extends Controller
         $deliveryRoute = null;
         $networkControl = null;
         $kyoShinControl = null;
+        $expenseSummary = null;
         if ($screen === 'late-fine') {
             $payroll = app(HrPayrollService::class);
             $lateFineDefaults = [
@@ -84,6 +85,8 @@ class ScreenController extends Controller
             $networkControl = app(NetworkControlService::class)->payload();
         } elseif ($screen === 'kyo-shin') {
             $kyoShinControl = app(KyoShinService::class)->summaries();
+        } elseif ($screen === 'expense-summary') {
+            $expenseSummary = \App\Http\Controllers\ExpenseSummaryController::screenPayload($request);
         }
 
         return view('super-admin.screens.show', [
@@ -108,6 +111,7 @@ class ScreenController extends Controller
             'deliveryRoute' => $deliveryRoute,
             'networkControl' => $networkControl,
             'kyoShinControl' => $kyoShinControl,
+            'expenseSummary' => $expenseSummary,
         ]);
     }
 }

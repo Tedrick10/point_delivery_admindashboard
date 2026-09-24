@@ -518,6 +518,10 @@ class MoneyTransferService
      */
     public function recordFromSettlementBatch(OsSettlementBatch $batch): OsMoneyTransfer
     {
+        if ((string) ($batch->settlement_side ?? '') === 'kyo_shin') {
+            throw new \RuntimeException('kyo_shin settlements are not recorded on Money Transfer.');
+        }
+
         $method = in_array((string) $batch->payment_method, ['kpay', 'cash'], true)
             ? (string) $batch->payment_method
             : 'kpay';
@@ -883,6 +887,10 @@ class MoneyTransferService
             ->with('osUser')
             ->where(function ($q) use ($fromDay, $toDay) {
                 $this->applyBatchPeriod($q, $fromDay, $toDay);
+            })
+            ->where(function ($q) {
+                $q->whereNull('settlement_side')
+                    ->orWhere('settlement_side', '!=', 'kyo_shin');
             })
             ->when($osId !== null, fn ($q) => $q->where('os_user_id', $osId))
             ->when($paymentMethod, fn ($q) => $q->where('payment_method', $paymentMethod))

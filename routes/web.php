@@ -232,6 +232,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('users/os-account/create', [ClientController::class, 'createOsAccount'])->name('users.os-account.create');
     Route::post('users/os-account/store', [ClientController::class, 'storeOsAccount'])->name('users.os-account.store');
     Route::post('users/{id}/approval-status', [ClientController::class, 'updateApprovalStatus'])->name('users.approval-status');
+    Route::post('users/{id}/kyo-shin-flag', [ClientController::class, 'updateKyoShinFlag'])->name('users.kyo-shin-flag');
     Route::resource('users', ClientController::class);
     Route::get('users-view/{id?}', [ClientController::class, 'show'])->name('users-view.show');
     Route::get('users-edit/{id?}', [ClientController::class, 'edit'])->name('users-edit.edit');
@@ -264,6 +265,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('dispatch-to-assign', [OrderController::class, 'dispatchToAssign'])->name('order.dispatch.to-assign');
     Route::post('dispatch-to-assign/move', [OrderController::class, 'dispatchMoveToAssign100'])->name('order.dispatch.move-to-assign-100');
     Route::get('dispatch-assign-100', [OrderController::class, 'dispatchAssign100'])->name('order.dispatch.assign-100');
+    Route::get('dispatch-assign-100/labels', [OrderController::class, 'dispatchAssign100Labels'])->name('order.dispatch.assign-100-labels');
     Route::get('dispatch-from-mdy-to-ygn', [OrderController::class, 'dispatchFromMdyToYgn'])->name('order.dispatch.from-mdy-to-ygn');
     Route::get('dispatch-from-mdy/{hub}', [OrderController::class, 'dispatchFromMdyHub'])->name('order.dispatch.from-mdy-hub');
     Route::post('dispatch-from-mdy/accept', [OrderController::class, 'dispatchFromMdyAccept'])->name('order.dispatch.from-mdy-accept');
@@ -272,11 +274,14 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('dispatch-from-hub-to-mdy/accept', [OrderController::class, 'dispatchFromHubToMdyAccept'])->name('order.dispatch.from-hub-to-mdy-accept');
     Route::post('dispatch-assign-100/send-to-mdy', [OrderController::class, 'dispatchSendToMdy'])->name('order.dispatch.send-to-mdy');
     Route::post('dispatch-assign-100/assign-rider', [OrderController::class, 'dispatchAssignRider'])->name('order.dispatch.assign-rider');
+    Route::post('dispatch-assign-100/give-kyo-shin', [OrderController::class, 'dispatchGiveKyoShin'])->name('order.dispatch.give-kyo-shin');
     Route::get('dispatch-assigned-items', [OrderController::class, 'dispatchAssignedItems'])->name('order.dispatch.assigned-items');
     Route::get('dispatch-rider-list', [OrderController::class, 'dispatchRiderList'])->name('order.dispatch.rider-list');
     Route::get('dispatch-rider-list/{riderId}/items', [OrderController::class, 'dispatchRiderItems'])->name('order.dispatch.rider-items');
     Route::post('dispatch-rider-list/{riderId}/items/bulk-update', [OrderController::class, 'dispatchRiderItemsBulkUpdate'])->name('order.dispatch.rider-items.bulk-update');
     Route::post('dispatch-rider-list/{riderId}/items/reassign', [OrderController::class, 'dispatchRiderItemsReassign'])->name('order.dispatch.rider-items.reassign');
+    Route::post('dispatch-rider-list/{riderId}/items/return-type', [OrderController::class, 'dispatchRiderItemsSetReturnType'])->name('order.dispatch.rider-items.return-type');
+    Route::post('dispatch-rider-list/{riderId}/items/{itemId}/toggle-return', [OrderController::class, 'dispatchRiderItemsToggleReturnRetry'])->name('order.dispatch.rider-items.toggle-return');
     Route::post('dispatch-rider-list/{riderId}/items/mark-completed', [OrderController::class, 'dispatchRiderItemsMarkCompleted'])->name('order.dispatch.rider-items.mark-completed');
     Route::get('dispatch-os-list', [OrderController::class, 'dispatchOsList'])->name('order.dispatch.os-list');
     Route::get('dailychecklist', [DailyCheckListController::class, 'index'])->name('order.daily-checklist');
@@ -301,9 +306,14 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('os-receive/{id}/approve', [OsReceiveSettlementController::class, 'approve'])->name('order.os-receive.approve');
     Route::post('os-receive/{id}/reject', [OsReceiveSettlementController::class, 'reject'])->name('order.os-receive.reject');
     Route::get('kyo-shin', [KyoShinController::class, 'index'])->name('order.kyo-shin');
+    Route::post('kyo-shin/check', [KyoShinController::class, 'markChecked'])->name('order.kyo-shin.check');
+    Route::post('kyo-shin/item/{itemId}/due-date', [KyoShinController::class, 'updateItemDueDate'])->name('order.kyo-shin.item-due-date');
     Route::get('kyo-shin/{osId}/items', [KyoShinController::class, 'items'])->name('order.kyo-shin.items');
+    Route::post('kyo-shin/{osId}/due-date', [KyoShinController::class, 'updateOsDueDate'])->name('order.kyo-shin.due-date');
     Route::post('kyo-shin/{osId}/mark-paid', [KyoShinController::class, 'markAdvancedPaid'])->name('order.kyo-shin.mark-paid');
     Route::post('kyo-shin/{osId}/finish', [KyoShinController::class, 'markFinished'])->name('order.kyo-shin.finish');
+    Route::post('kyo-shin/{osId}/send-to-os', [KyoShinController::class, 'sendToOs'])->name('order.kyo-shin.send-to-os');
+    Route::post('kyo-shin/{osId}/received', [KyoShinController::class, 'markReceived'])->name('order.kyo-shin.received');
     Route::get('expenses', [ExpenseController::class, 'index'])->name('order.expenses');
     Route::get('expenses/rider-fuel-total', [ExpenseController::class, 'riderFuelTotal'])->name('order.expenses.rider-fuel-total');
     Route::get('expenses/agent-fee-total', [ExpenseController::class, 'agentFeeTotal'])->name('order.expenses.agent-fee-total');
@@ -313,6 +323,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('expenses/{id}/generate', [ExpenseController::class, 'generate'])->name('order.expenses.generate');
     Route::delete('expenses/{id}', [ExpenseController::class, 'destroy'])->name('order.expenses.destroy');
     Route::get('expense-summary', [ExpenseSummaryController::class, 'index'])->name('order.expense-summary');
+    Route::post('expense-summary/confirm', [ExpenseSummaryController::class, 'confirm'])->name('order.expense-summary.confirm');
     Route::get('delivery-route-locations', [DeliveryRouteLocationController::class, 'index'])->name('delivery-route-locations.index');
     Route::get('delivery-route-locations/townships', [DeliveryRouteLocationController::class, 'townships'])->name('delivery-route-locations.townships');
     Route::post('delivery-route-locations/branches', [DeliveryRouteLocationController::class, 'storeBranch'])->name('delivery-route-locations.branches.store');
@@ -348,6 +359,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('rider-remit/default-fuel', [RiderRemitController::class, 'saveDefaultFuel'])->name('order.rider-remit.default-fuel');
     Route::post('rider-remit/submit', [RiderRemitController::class, 'submit'])->name('order.rider-remit.submit');
     Route::get('rider-remit/logs', [RiderRemitController::class, 'logs'])->name('order.rider-remit.logs');
+    Route::get('dispatch-os-list/{osId}/kyo-shin-items', [OrderController::class, 'dispatchOsKyoShinItems'])->name('order.dispatch.os-kyo-shin-items');
     Route::get('dispatch-os-list/{osId}/slip-preview', [OrderController::class, 'dispatchOsSettlementSlipPreview'])->name('order.dispatch.os-slip-preview');
     Route::post('dispatch-os-list/{osId}/upload-kpay-slip', [OrderController::class, 'dispatchOsSettlementUploadKpay'])->name('order.dispatch.os-upload-kpay');
     Route::post('dispatch-os-list/{osId}/finish', [OrderController::class, 'dispatchOsSettlementFinish'])->name('order.dispatch.os-finish');
@@ -675,6 +687,7 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
         Route::post('kyo-shin/total', [SuperAdminKyoShinSettingsController::class, 'saveTotal'])
             ->name('kyo-shin.total');
         Route::resource('branch-admins', SuperAdminBranchAdminController::class)->except(['show']);
+        Route::post('expense-summary/confirm', [ExpenseSummaryController::class, 'confirm'])->name('expense-summary.confirm');
     });
 });
 

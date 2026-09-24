@@ -1,4 +1,20 @@
 <x-master-layout :assets="$assets ?? []">
+    <style>
+        .pds-kyo-shin-row-badge {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 6px;
+            padding: 2px 7px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 800;
+            background: #ffedd5;
+            color: #c2410c;
+            letter-spacing: .02em;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+    </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-daily-check-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
             <div class="pds-rider-hero">
@@ -158,7 +174,9 @@
                                     <tr data-invoice-id="{{ $row->id }}" data-party-type="{{ $row->party_type }}">
                                         <td>{{ $index + 1 }}</td>
                                         <td>{{ $row->received_date }}</td>
-                                        <td>{{ $row->name }}</td>
+                                        <td>
+                                            {{ $row->name }}
+                                        </td>
                                         <td><span class="pds-daily-check-invoice-no">{{ $row->invoice_no }}</span></td>
                                         <td>
                                             <button type="button"

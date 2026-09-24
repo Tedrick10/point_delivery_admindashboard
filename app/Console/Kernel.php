@@ -22,6 +22,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('order:autocancel')->everyFiveMinutes();
         $schedule->command('users:anonymize-inactive')->dailyAt('00:00');
         $schedule->command('riders:reset-work-status')->dailyAt('00:01')->timezone('Asia/Yangon');
+        $schedule->command('kyo-shin:notify-overdue')->dailyAt('08:00')->timezone('Asia/Yangon');
+        $schedule->command('kyo-shin:record-daily-ledger')->dailyAt('23:50')->timezone('Asia/Yangon');
         $schedule->command('payout:generate-delivery-man-reports')->weeklyOn(0, '02:00'); // Wednesday at 2 AM
 
         $interval = AppSetting::select('backup_type')->first();

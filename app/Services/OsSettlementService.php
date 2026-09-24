@@ -24,19 +24,17 @@ class OsSettlementService
     /**
      * Unfinished Completed items for ငွေရှင်းတမ်း within a date range.
      * Delivered-only (no admin_completed_at) never appears — Completed first.
-     * List day uses the same rule as Daily Check / Rider ငွေအပ်:
-     * first Completed on day C → C−1; later Completed that day → C.
+     * List day: every Completed on Yangon day C → C−1 (one sheet for the rider batch).
      * Pass null for $osId to include all Online Shops.
      */
     public function completedItemsQuery(?int $osId, string $fromDay, string $toDay, ?int $branchId = null)
     {
-        $fromDay = Carbon::parse($fromDay)->toDateString();
-        $toDay = Carbon::parse($toDay)->toDateString();
-        $boundsStart = dailyCheckListDayBounds($fromDay)['start'];
-        $boundsEnd = dailyCheckListDayBounds($toDay)['end'];
+        $query = DispatchOrderItem::query()
+            ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch', 'kyoShinItem']);
 
-        return DispatchOrderItem::query()
-            ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch'])
+        $this->applyUnfinishedSettlementConstraints($query, $fromDay, $toDay);
+
+        return $query
             ->when($osId !== null, function ($query) use ($osId) {
                 $query->whereHas('order', function ($q) use ($osId) {
                     if ($osId > 0) {
@@ -54,29 +52,112 @@ class OsSettlementService
             ->when(true, function ($query) {
                 applyForcedItemOwnership($query);
             })
-            ->where('status', 'completed')
-            ->whereNotNull('admin_completed_at')
-            ->whereNull('admin_finished_at')
-            // Candidate window: Completed on D or D+1 (itemDay then maps to the sheet).
-            ->where('admin_completed_at', '>=', $boundsStart)
-            ->where('admin_completed_at', '<', $boundsEnd)
             ->orderByDesc('id');
     }
 
     /**
-     * Unfinished Completed items whose Daily Check list day falls in [from, to].
+     * Unfinished ငွေရှင်းတမ်း rows: Completed items only.
+     * ကြိုရှင်း Return parcels stay on ကြိုရှင်း ပို့မရသော ပါဆယ် — not Os ဆီမှ ရရန်.
+     */
+    public function applyUnfinishedSettlementConstraints($query, string $fromDay, string $toDay)
+    {
+        $fromDay = Carbon::parse($fromDay)->toDateString();
+        $toDay = Carbon::parse($toDay)->toDateString();
+        $boundsStart = dailyCheckListDayBounds($fromDay)['start'];
+        $boundsEnd = dailyCheckListDayBounds($toDay)['end'];
+
+        $query->whereNull('admin_finished_at')
+            ->where('status', 'completed')
+            ->whereNotNull('admin_completed_at')
+            ->where('admin_completed_at', '>=', $boundsStart)
+            ->where('admin_completed_at', '<', $boundsEnd);
+    }
+
+    /**
+     * Unfinished Completed items whose ငွေရှင်းတမ်း list day falls in [from, to].
      */
     public function completedItemsForPeriod(?int $osId, string $fromDay, string $toDay, ?int $branchId = null)
     {
         return $this->completedItemsQuery($osId, $fromDay, $toDay, $branchId)
             ->get()
-            ->filter(fn ($item) => dailyCheckListItemInPeriod($item, $fromDay, $toDay))
+            ->filter(fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
+            ->values();
+    }
+
+    /**
+     * Unfinished ကြိုရှင်း parcels for ကြိုရှင်းသမား ပေးရန် (Finish only, no proof).
+     * Completed ကြိုရှင်း only (fee Return Delivery that completed like a normal parcel).
+     */
+    public function finishedKyoShinItemsForPeriod(string $fromDay, string $toDay, ?int $branchId = null)
+    {
+        $fromDay = Carbon::parse($fromDay)->toDateString();
+        $toDay = Carbon::parse($toDay)->toDateString();
+        $boundsStart = dailyCheckListDayBounds($fromDay)['start'];
+        $boundsEnd = dailyCheckListDayBounds($toDay)['end'];
+
+        $query = DispatchOrderItem::query()
+            ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch', 'kyoShinItem.batch'])
+            ->whereNull('admin_finished_at')
+            ->where('status', 'completed')
+            ->whereHas('kyoShinItem')
+            ->whereNotNull('admin_completed_at')
+            ->where('admin_completed_at', '>=', $boundsStart)
+            ->where('admin_completed_at', '<', $boundsEnd);
+
+        applyForcedItemOwnership($query);
+        if ($branchId !== null && $branchId > 0) {
+            applyDestinationBranchFilter($query, $branchId);
+        }
+
+        return $query
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
+            ->values();
+    }
+
+    /**
+     * Unfinished + finished ကြိုရှင်း parcels for OS drill-down / slip preview.
+     */
+    public function kyoShinDetailItemsForPeriod(int $osId, string $fromDay, string $toDay, ?int $branchId = null)
+    {
+        $fromDay = Carbon::parse($fromDay)->toDateString();
+        $toDay = Carbon::parse($toDay)->toDateString();
+        $boundsStart = dailyCheckListDayBounds($fromDay)['start'];
+        $boundsEnd = dailyCheckListDayBounds($toDay)['end'];
+
+        $query = DispatchOrderItem::query()
+            ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch', 'kyoShinItem.batch'])
+            ->where('status', 'completed')
+            ->whereHas('kyoShinItem')
+            ->whereNotNull('admin_completed_at')
+            ->where('admin_completed_at', '>=', $boundsStart)
+            ->where('admin_completed_at', '<', $boundsEnd)
+            ->whereHas('order', function ($q) use ($osId) {
+                if ($osId > 0) {
+                    $q->where('client_id', $osId);
+                } else {
+                    $q->where(function ($inner) {
+                        $inner->whereNull('client_id')->orWhere('client_id', 0);
+                    });
+                }
+            });
+
+        applyForcedItemOwnership($query);
+        if ($branchId !== null && $branchId > 0) {
+            applyDestinationBranchFilter($query, $branchId);
+        }
+
+        return $query
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
             ->values();
     }
 
     /**
      * Settlement / Money Transfer period from each item's list day
-     * (Completed Yangon calendar day − 1), matching ငွေရှင်းတမ်း / Daily Check.
+     * (Completed Yangon calendar day − 1).
      *
      * @param  \Illuminate\Support\Collection<int, DispatchOrderItem>  $items
      * @return array{0: string, 1: string}
@@ -85,11 +166,13 @@ class OsSettlementService
     {
         $days = $items
             ->map(function ($item) {
-                if (empty($item->admin_completed_at)) {
+                if (empty($item->admin_completed_at)
+                    && ! ((string) ($item->status ?? '') === 'return' && ! empty($item->admin_updated_at))
+                ) {
                     return null;
                 }
 
-                return dailyCheckListDateForItem($item)->toDateString();
+                return osSettlementListDateForItem($item)->toDateString();
             })
             ->filter()
             ->unique()
@@ -106,7 +189,7 @@ class OsSettlementService
         return [$days->first(), $days->last()];
     }
 
-    public function buildSlipRows($items, string $invoiceDate): array
+    public function buildSlipRows($items, string $invoiceDate, bool $excludeKyoShinAmounts = false, bool $kyoShinPayAmounts = false): array
     {
         $rows = [];
         $totals = [
@@ -121,7 +204,10 @@ class OsSettlementService
             $osPaid = (float) ($slipItem->os_paid ?? 0);
             $itemValue = (float) ($slipItem->item_value ?? 0);
             $deliAmount = (float) ($slipItem->deli_amount ?? 0);
-            $osToPay = $slipItem->displayOsToPay();
+            $excludeAmount = ! $kyoShinPayAmounts && $excludeKyoShinAmounts && $slipItem->excludeFromSettlementAmount();
+            $osToPay = $kyoShinPayAmounts
+                ? -1 * $slipItem->kyoShinPayAmount()
+                : ($excludeAmount ? 0.0 : $slipItem->displayOsToPay());
             $osToPaySlip = formatDispatchOsToPaySlip($osToPay);
             $date = $slipItem->received_date
                 ? Carbon::parse($slipItem->received_date)->format('d-m-Y')
@@ -143,7 +229,13 @@ class OsSettlementService
                 'os_to_pay' => $osToPaySlip['value'],
                 'os_to_pay_display' => $osToPaySlip['formatted'],
                 'os_to_pay_is_receive' => $osToPaySlip['is_receive'],
+                'is_kyo_shin' => $slipItem->isKyoShinGiven() || (string) ($slipItem->status ?? '') === 'return',
+                'exclude_from_settlement_amount' => $excludeAmount,
             ];
+
+            if ($excludeAmount) {
+                continue;
+            }
 
             $totals['os_paid'] += $osPaid;
             $totals['item_value'] += $itemValue;
@@ -233,21 +325,75 @@ class OsSettlementService
 
     public function filterItemsBySettlementSide($items, ?string $settlementSide)
     {
-        $side = in_array($settlementSide, ['pay', 'receive'], true) ? $settlementSide : null;
+        $side = $this->normalizeSettlementSide($settlementSide);
         if ($side === null) {
             return $items;
         }
 
+        if ($side === 'kyo_shin') {
+            return $items
+                ->filter(static function ($item) {
+                    if (! $item->isKyoShinGiven() || ! empty($item->admin_finished_at)) {
+                        return false;
+                    }
+
+                    return (string) ($item->status ?? '') === 'completed';
+                })
+                ->values();
+        }
+
+        // Net by Online Shop (not per-item sign):
+        // - net < 0 → Os ဆီသို့လွှဲရန် (all nettable items for that OS)
+        // - net > 0 → Os ဆီမှရရန် only when there is nothing to transfer
+        // - net == 0 → finish on pay side (nothing to move either way)
         return $items
-            ->filter(static function ($item) use ($side) {
-                $amount = (float) $item->displayOsToPay();
-                if ($side === 'pay') {
-                    return $amount < 0;
+            ->groupBy(static fn ($item) => (int) ($item->order?->client_id ?? 0))
+            ->flatMap(function ($osItems) use ($side) {
+                $nettable = $this->nettableSettlementItems($osItems);
+                if ($nettable->isEmpty()) {
+                    return collect();
                 }
 
-                return $amount > 0;
+                $net = $this->netSettlementOsToPay($nettable);
+                if ($side === 'pay') {
+                    return $net <= 0 ? $nettable : collect();
+                }
+
+                return $net > 0 ? $nettable : collect();
             })
             ->values();
+    }
+
+    /**
+     * Items that participate in Os ဆီသို့လွှဲရန် / Os ဆီမှရရန် netting.
+     * ကြိုရှင်း pay-outs and Returns are excluded.
+     */
+    public function nettableSettlementItems($items)
+    {
+        return collect($items)
+            ->filter(static function ($item) {
+                if ($item->excludeFromSettlementAmount()) {
+                    return false;
+                }
+
+                return (string) ($item->status ?? '') !== 'return';
+            })
+            ->values();
+    }
+
+    public function netSettlementOsToPay($items): float
+    {
+        return round(
+            (float) $this->nettableSettlementItems($items)->sum(
+                static fn ($item) => $item->settlementOsToPay()
+            ),
+            2
+        );
+    }
+
+    public function normalizeSettlementSide(?string $settlementSide): ?string
+    {
+        return in_array($settlementSide, ['pay', 'receive', 'kyo_shin'], true) ? $settlementSide : null;
     }
 
     public function finishOs(
@@ -260,27 +406,63 @@ class OsSettlementService
         User $osClient,
         string $deliveryFormat = 'table',
         string $paymentMethod = 'kpay',
-        ?string $settlementSide = null
+        ?string $settlementSide = null,
+        ?array $itemIds = null
     ): OsSettlementBatch {
-        $items = $this->completedItemsForPeriod($osId, $fromDay, $toDay);
-        $items = $this->filterItemsBySettlementSide($items, $settlementSide);
+        $settlementSide = $this->normalizeSettlementSide($settlementSide);
+        $isKyoShinSide = $settlementSide === 'kyo_shin';
+        $wantedIds = array_values(array_unique(array_filter(array_map('intval', $itemIds ?? []))));
+
+        if ($isKyoShinSide) {
+            if ($wantedIds !== []) {
+                $kyoShinQuery = DispatchOrderItem::query()
+                    ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch', 'kyoShinItem'])
+                    ->whereIn('id', $wantedIds)
+                    ->whereNull('admin_finished_at')
+                    ->where('status', 'completed')
+                    ->whereHas('kyoShinItem');
+                applyForcedItemOwnership($kyoShinQuery);
+                $items = $kyoShinQuery
+                    ->get()
+                    ->filter(static fn ($item) => (int) ($item->order?->client_id ?? 0) === $osId)
+                    ->values();
+            } else {
+                $items = $this->finishedKyoShinItemsForPeriod($fromDay, $toDay)
+                    ->filter(static fn ($item) => (int) ($item->order?->client_id ?? 0) === $osId)
+                    ->values();
+            }
+        } else {
+            $items = $this->completedItemsForPeriod($osId, $fromDay, $toDay);
+            $items = $this->filterItemsBySettlementSide($items, $settlementSide);
+            if ($wantedIds !== []) {
+                $items = $items
+                    ->filter(static fn ($item) => in_array((int) $item->id, $wantedIds, true))
+                    ->values();
+            }
+        }
+
         if ($items->isEmpty()) {
             throw new \RuntimeException(__('message.os_settlement_no_completed_items'));
         }
 
-        $paymentMethod = in_array($paymentMethod, ['kpay', 'cash'], true) ? $paymentMethod : 'kpay';
+        $paymentMethod = in_array($paymentMethod, ['kpay', 'cash'], true) ? $paymentMethod : ($isKyoShinSide ? 'cash' : 'kpay');
         $kpayPath = $this->getDraftKpayPath($osId, $fromDay, $toDay);
-
-        // Both Kpay and Cash require an uploaded proof image before Finish.
-        if (! $kpayPath || ! Storage::disk('public')->exists($kpayPath)) {
-            throw new \RuntimeException(__('message.os_settlement_kpay_slip_required'));
+        if ($kpayPath && ! Storage::disk('public')->exists($kpayPath)) {
+            $kpayPath = null;
         }
 
         $toDateRaw = Carbon::parse($toDay)->format('d-m-Y');
-        $slipData = $this->buildSlipRows($items, $toDateRaw);
+        $slipData = $this->buildSlipRows($items, $toDateRaw, ! $isKyoShinSide, $isKyoShinSide);
         $slipSender = $this->resolveSlipSender($osClient, $items, $osName);
-        $amount = (float) $slipData['totals']['os_to_pay'];
+        $amount = $isKyoShinSide
+            ? -1 * (float) $items->sum(static fn ($item) => $item->kyoShinPayAmount())
+            : (float) $slipData['totals']['os_to_pay'];
         $itemIds = $items->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+
+        // Pay / receive need proof when money moves. Net-zero or ကြိုရှင်း is Finish-only.
+        if (! $isKyoShinSide && abs((float) $amount) > 0.00001 && ! $kpayPath) {
+            throw new \RuntimeException(__('message.os_settlement_kpay_slip_required'));
+        }
 
         // Money Transfer / batch period = items' list day (Completed → yesterday),
         // not the filter day when unfinished rows were carried into "today".
@@ -294,11 +476,11 @@ class OsSettlementService
             'to_date' => $batchToDay,
             'amount' => $amount,
             'payment_method' => $paymentMethod,
-            'settlement_side' => in_array($settlementSide, ['pay', 'receive'], true) ? $settlementSide : null,
+            'settlement_side' => $settlementSide,
             'delivery_format' => $this->normalizeDeliveryFormat($deliveryFormat),
             'kpay_name' => $this->kpayNameFromUser($osClient),
             'kpay_no' => $this->kpayNoFromUser($osClient),
-            'kpay_slip_path' => $kpayPath,
+            'kpay_slip_path' => $isKyoShinSide ? null : $kpayPath,
             'item_ids' => $itemIds,
             'finished_by' => $finishedBy,
             'finished_at' => now(),
@@ -311,6 +493,8 @@ class OsSettlementService
                 'admin_updated_at' => now(),
                 'updated_at' => now(),
             ]);
+
+        app(\App\Services\KyoShinService::class)->syncFinishedForItemIds($itemIds, $finishedBy);
 
         // Keep draft if the other settlement side still has unfinished items for this OS.
         if (! $this->hasUnfinishedCompletedItems($osId, $fromDay, $toDay)) {
@@ -335,7 +519,7 @@ class OsSettlementService
                     'error' => $e->getMessage(),
                 ]);
             }
-        } else {
+        } elseif (! $isKyoShinSide) {
             try {
                 app(MoneyTransferService::class)->recordFromSettlementBatch($batch);
             } catch (\Throwable $e) {
@@ -354,6 +538,7 @@ class OsSettlementService
             $batchId,
             $osClientId,
             $isReceiveSide,
+            $isKyoShinSide,
             $receiveId,
             $slipCompany,
             $slipSender,
@@ -397,7 +582,7 @@ class OsSettlementService
                         ]);
                     }
                 }
-            } elseif ($osClientId > 0) {
+            } elseif ($osClientId > 0 && ! $isKyoShinSide) {
                 try {
                     $osUser = User::query()->find($osClientId);
                     if ($osUser) {
@@ -709,7 +894,7 @@ class OsSettlementService
         }
 
         $items = DispatchOrderItem::query()
-            ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch'])
+            ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch', 'kyoShinItem'])
             ->whereIn('id', $itemIds)
             ->get()
             ->sortBy(fn ($item) => array_search((int) $item->id, $itemIds, true))
@@ -719,7 +904,7 @@ class OsSettlementService
             ? Carbon::parse($batch->to_date)->format('d-m-Y')
             : yangonTodayDate();
 
-        return $this->buildSlipRows($items, $invoiceDate);
+        return $this->buildSlipRows($items, $invoiceDate, true);
     }
 
     public function urlForPath(?string $path): ?string

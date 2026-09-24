@@ -23,6 +23,15 @@ return [
             ['route' => 'order.daily-checklist', 'label_key' => 'sa_link_daily_check_list'],
         ],
     ],
+    'kyo-shin' => [
+        'title_key' => 'sa_screen_kyo_shin',
+        'subtitle_key' => 'sa_screen_kyo_shin_sub',
+        'icon' => 'fa-coins',
+        'workspace' => 'order.kyo-shin',
+        'links' => [
+            ['route' => 'order.kyo-shin', 'label_key' => 'sa_link_kyo_shin'],
+        ],
+    ],
     'money-transfer' => [
         'title_key' => 'sa_screen_money_transfer',
         'subtitle_key' => 'sa_screen_money_transfer_sub',
@@ -79,15 +88,6 @@ return [
             ['route' => 'order.os-receive', 'label_key' => 'sa_link_os_receive_pay'],
         ],
     ],
-    'kyo-shin' => [
-        'title_key' => 'sa_screen_kyo_shin',
-        'subtitle_key' => 'sa_screen_kyo_shin_sub',
-        'icon' => 'fa-coins',
-        'workspace' => 'order.kyo-shin',
-        'links' => [
-            ['route' => 'order.kyo-shin', 'label_key' => 'sa_link_kyo_shin'],
-        ],
-    ],
     'expenses' => [
         'title_key' => 'sa_screen_expenses',
         'subtitle_key' => 'sa_screen_expenses_sub',
@@ -101,10 +101,8 @@ return [
         'title_key' => 'sa_screen_expense_summary',
         'subtitle_key' => 'sa_screen_expense_summary_sub',
         'icon' => 'fa-file-invoice-dollar',
-        'workspace' => 'order.expense-summary',
-        'links' => [
-            ['route' => 'order.expense-summary', 'label_key' => 'sa_link_summary_table'],
-        ],
+        'workspace' => null,
+        'links' => [],
     ],
     'late-fine' => [
         'title_key' => 'sa_screen_late_fine',

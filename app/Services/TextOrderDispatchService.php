@@ -434,6 +434,39 @@ class TextOrderDispatchService
     }
 
     /**
+     * Attach parcel photos 1:1 onto collected Shop/Gate (or text) items.
+     * Does not flip is_photo_order — keeps Shop/Gate workflow intact.
+     */
+    public function attachParcelPhotos(Order $order, array $mediaIds): int
+    {
+        $mediaIds = array_values(array_filter(array_map('intval', $mediaIds), fn ($id) => $id > 0));
+        if ($mediaIds === []) {
+            return 0;
+        }
+
+        $this->sync($order->fresh(), count($mediaIds));
+        $order = $order->fresh();
+
+        $items = DispatchOrderItem::query()
+            ->where('order_id', $order->id)
+            ->where('status', 'collected')
+            ->orderBy('id')
+            ->get();
+
+        $mapped = 0;
+        foreach ($items as $index => $item) {
+            if (! isset($mediaIds[$index])) {
+                break;
+            }
+
+            $item->forceFill(['photo_id' => $mediaIds[$index]])->save();
+            $mapped++;
+        }
+
+        return $mapped;
+    }
+
+    /**
      * Attach uploaded recipient photos to dispatch items for one delivery address.
      * Photos are mapped 1:1 onto that recipient's parcel slots (by order id).
      */
@@ -527,6 +560,13 @@ class TextOrderDispatchService
                 $customerPhone = '';
                 $customerAddress = '';
             }
+
+            // Shop/Gate photo orders used to seed Burmese placeholders into Customer — strip them.
+            if ($this->looksLikePhotoCustomerPlaceholder($customerName, $customerPhone, $customerAddress)) {
+                $customerName = '';
+                $customerPhone = '';
+                $customerAddress = '';
+            }
         }
 
         // Instruction only — never auto tip / order.description pollution.
@@ -576,6 +616,34 @@ class TextOrderDispatchService
         $addrSame = $pAddr !== '' && $dAddr !== '' && mb_strtolower($pAddr) === mb_strtolower($dAddr);
 
         return ($nameSame && $addrSame) || ($nameSame && $phoneSame) || ($addrSame && $phoneSame);
+    }
+
+    /**
+     * Legacy Shop/Gate photo placeholders that must not appear as Customer fields.
+     */
+    private function looksLikePhotoCustomerPlaceholder(string $name, string $phone, string $address): bool
+    {
+        $nameNorm = mb_strtolower(trim($name));
+        $addrNorm = mb_strtolower(trim($address));
+        $phoneDigits = preg_replace('/\D+/', '', $phone) ?? '';
+
+        $placeholderNames = ['ဓာတ်ပုံဖြင့်', 'ဓာတ်ပုံဖြင့်', 'photo', 'by photo'];
+        $placeholderAddresses = ['ဓာတ်ပုံထဲမှ လိပ်စာ', 'ဓာတ်ပုံထဲမွ လိပ်စာ', 'address from photo'];
+
+        $nameIsPlaceholder = $nameNorm !== '' && in_array($nameNorm, array_map('mb_strtolower', $placeholderNames), true);
+        $addrIsPlaceholder = $addrNorm !== '' && in_array($addrNorm, array_map('mb_strtolower', $placeholderAddresses), true);
+        $phoneIsPlaceholder = $phoneDigits === ''
+            || $phoneDigits === '0'
+            || $phoneDigits === '95'
+            || $phoneDigits === '950'
+            || preg_match('/^95?0+$/', $phoneDigits) === 1;
+
+        if ($nameIsPlaceholder || $addrIsPlaceholder) {
+            return true;
+        }
+
+        // Name empty + junk phone only (e.g. +95950 from local "0")
+        return $nameNorm === '' && $addrNorm === '' && $phoneIsPlaceholder && $phone !== '';
     }
 
     /**
@@ -689,10 +757,18 @@ class TextOrderDispatchService
             }
             $parcelCount = max(1, (int) ($recipient['parcel_count'] ?? 1));
             for ($p = 0; $p < $parcelCount; $p++) {
+                $name = trim((string) ($recipient['name'] ?? ''));
+                $phone = normalizeContactNumber(trim((string) ($recipient['contact_number'] ?? '')));
+                $address = trim((string) ($recipient['address'] ?? ''));
+                if ($this->looksLikePhotoCustomerPlaceholder($name, $phone, $address)) {
+                    $name = '';
+                    $phone = '';
+                    $address = '';
+                }
                 $flat[] = [
-                    'customer_name' => trim((string) ($recipient['name'] ?? '')),
-                    'customer_phone' => normalizeContactNumber(trim((string) ($recipient['contact_number'] ?? ''))),
-                    'customer_address' => trim((string) ($recipient['address'] ?? '')),
+                    'customer_name' => $name,
+                    'customer_phone' => $phone,
+                    'customer_address' => $address,
                 ];
             }
         }

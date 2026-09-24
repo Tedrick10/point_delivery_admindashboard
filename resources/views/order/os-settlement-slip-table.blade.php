@@ -69,6 +69,9 @@
     <div class="top">
         <div>
             <div class="company">{{ $slipCompany['name'] ?? 'Point Delivery' }}</div>
+            @if(!empty($slipIsKyoShin))
+                <div class="meta" style="color:#c2410c;font-weight:700;">{{ __('message.kyo_shin_title') }}</div>
+            @endif
             <div class="meta">{{ $slipCompany['address'] ?? '' }}</div>
             <div class="meta">{{ $slipCompany['phone'] ?? '' }}</div>
             <div class="meta">{{ $slipCompany['email'] ?? '' }}</div>
@@ -109,13 +112,22 @@
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td>{{ $row['date'] }}</td>
-                    <td>{{ $row['customer'] }}</td>
+                    <td>
+                        {{ $row['customer'] }}
+                        @include('order.partials._slip-kyo-shin-badge', ['row' => $row, 'slipIsKyoShin' => $slipIsKyoShin ?? false])
+                    </td>
                     <td>{{ $row['phone'] }}</td>
                     <td>{{ stringLong($row['address'], 'title', 28) ?: '-' }}</td>
                     <td class="text-right">{{ number_format($row['item_value']) }}</td>
                     <td class="text-right">{!! formatDeliAmountDisplayHtml($row['deli_amount_display'] ?? null, $row['deli_amount'] ?? 0) !!}</td>
                     <td class="text-right">{{ $row['gate'] ?? number_format((float) ($row['gate_amount'] ?? 0)) }}</td>
-                    <td class="text-right {{ $row['os_to_pay_is_receive'] ? 'is-negative' : '' }}">{{ $row['os_to_pay_display'] }}</td>
+                    <td class="text-right {{ !empty($row['exclude_from_settlement_amount']) ? '' : ($row['os_to_pay_is_receive'] ? 'is-negative' : '') }}">
+                        @if(!empty($row['exclude_from_settlement_amount']))
+                            <span class="pds-slip-kyo-shin-badge" style="display:inline-block;padding:1px 7px;border-radius:999px;background:#ffedd5;color:#c2410c;font-size:10px;font-weight:800;">{{ __('message.kyo_shin_title') }}</span>
+                        @else
+                            {{ $row['os_to_pay_display'] }}
+                        @endif
+                    </td>
                 </tr>
             @empty
                 <tr>
@@ -136,12 +148,18 @@
         @endif
     </table>
 
-    @if(!empty($kpayImageUrl))
+    @php
+        $kpayImageUrls = $kpayImageUrls ?? (! empty($kpayImageUrl) ? [$kpayImageUrl] : []);
+        $kpayImageUrls = array_values(array_filter($kpayImageUrls));
+    @endphp
+    @if($kpayImageUrls !== [])
         <div class="kpay-block">
             <strong>{{ __('message.kpay_slip') }}</strong>
-            <div style="margin-top:8px;">
-                <img src="{{ $kpayImageUrl }}" alt="KBZ Pay Slip">
-            </div>
+            @foreach($kpayImageUrls as $imageUrl)
+                <div style="margin-top:8px;">
+                    <img src="{{ $imageUrl }}" alt="KBZ Pay Slip">
+                </div>
+            @endforeach
         </div>
     @endif
 </div>

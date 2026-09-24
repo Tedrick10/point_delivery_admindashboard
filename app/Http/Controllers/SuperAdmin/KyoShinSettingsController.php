@@ -11,9 +11,13 @@ class KyoShinSettingsController extends Controller
     public function saveTotal(Request $request, KyoShinService $service)
     {
         $data = $request->validate([
-            'scope_key' => 'required|string|in:mdy,ygn_nls,ygn_m2m',
+            'scope_key' => 'required|string|max:64',
             'total_amount' => 'required|numeric|min:0|max:100000000000',
         ]);
+
+        if (! $service->scopeByKey($data['scope_key'])) {
+            abort(404);
+        }
 
         $service->setTotal($data['scope_key'], (float) $data['total_amount'], $request->user());
 

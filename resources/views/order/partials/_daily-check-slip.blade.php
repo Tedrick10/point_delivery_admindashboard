@@ -62,7 +62,12 @@
                                     <tr>
                                         <td>{{ $index + 1 }}</td>
                                         <td>{{ $row['date'] }}</td>
-                                        <td>{{ $row['name'] }}</td>
+                                        <td>
+                                            {{ $row['name'] }}
+                                            @if(! empty($row['is_kyo_shin']))
+                                                <span class="pds-kyo-shin-row-badge">{{ __('message.kyo_shin_title') }}</span>
+                                            @endif
+                                        </td>
                                         <td>{{ $row['phone'] }}</td>
                                         <td>{{ $row['township'] }}</td>
                                         <td class="text-right">{{ number_format($row['os_paid']) }}</td>

@@ -44,7 +44,8 @@ class DailyCheckListService
         foreach ($modes as $partyType) {
             $items = $this->baseItemsQuery($fromDay, $toDay, $branchId)
                 ->when($partyType === DailyCheckInvoice::PARTY_OS, function ($q) use ($osId) {
-                    // OS only after ငွေရှင်းတမ်း Finish (admin_finished_at).
+                    // OS only after Finish (admin_finished_at). No-fee Os Return stays off Daily Check.
+                    $q->where('status', 'completed');
                     $q->whereNotNull('admin_finished_at');
                     $q->whereHas('order');
                     if ($osId !== null) {
@@ -61,12 +62,14 @@ class DailyCheckListService
                 })
                 ->when($partyType === DailyCheckInvoice::PARTY_RIDER, function ($q) use ($riderId) {
                     // Completed stays on Rider even after Finish; OS is additive.
+                    // No-fee Os Return / Return tab parcels do not roll into Daily Check.
+                    $q->where('status', 'completed');
                     $q->whereNotNull('delivery_man_id');
                     if ($riderId !== null && $riderId > 0) {
                         $q->where('delivery_man_id', $riderId);
                     }
                 })
-                ->with(['order.client.city', 'order.client', 'toBranch', 'fromBranch', 'deliveryMan.city'])
+                ->with(['order.client.city', 'order.client', 'toBranch', 'fromBranch', 'deliveryMan.city', 'kyoShinItem'])
                 ->get();
 
             $grouped = $items->groupBy(function (DispatchOrderItem $item) use ($partyType) {
@@ -172,9 +175,12 @@ class DailyCheckListService
         }
 
         $items = DispatchOrderItem::query()
-            ->with(['order.client.city', 'toBranch', 'fromBranch', 'deliveryMan', 'photoMedia', 'custPhotoMedia', 'custSignMedia'])
+            ->with(['order.client.city', 'toBranch', 'fromBranch', 'deliveryMan', 'photoMedia', 'custPhotoMedia', 'custSignMedia', 'kyoShinItem'])
             ->whereIn('id', $ids)
-            ->when($invoice->isOs(), fn ($q) => $q->whereNotNull('admin_finished_at'))
+            ->when($invoice->isOs(), function ($q) {
+                $q->whereIn('status', ['completed', 'return']);
+                $q->whereNotNull('admin_finished_at');
+            })
             ->get()
             ->sortBy(fn ($item) => array_search((int) $item->id, array_map('intval', $ids), true) ?: 9999)
             ->values();
@@ -334,6 +340,7 @@ class DailyCheckListService
     {
         // Completed onwards. Invoice day matches Rider ငွေအပ်:
         // first Completed on C → C−1; later Completed that day → C.
+        // No-fee Os Return / Return tab parcels are excluded from Daily Check & Summary.
         $boundsStart = dailyCheckListDayBounds($fromDay)['start'];
         $boundsEnd = dailyCheckListDayBounds($toDay)['end'];
 
@@ -356,6 +363,7 @@ class DailyCheckListService
 
         $items = $this->baseItemsQuery($day, $day, null)
             ->when($invoice->isOs(), function ($q) use ($invoice) {
+                $q->where('status', 'completed');
                 $q->whereNotNull('admin_finished_at');
                 $partyId = (int) $invoice->party_user_id;
                 if ($partyId > 0) {
@@ -371,7 +379,7 @@ class DailyCheckListService
             ->when($invoice->isRider(), function ($q) use ($invoice) {
                 $q->where('delivery_man_id', (int) $invoice->party_user_id);
             })
-            ->with(['order.client.city', 'toBranch', 'fromBranch', 'deliveryMan', 'photoMedia', 'custPhotoMedia', 'custSignMedia'])
+            ->with(['order.client.city', 'toBranch', 'fromBranch', 'deliveryMan', 'photoMedia', 'custPhotoMedia', 'custSignMedia', 'kyoShinItem'])
             ->get()
             ->filter(fn (DispatchOrderItem $item) => $this->itemDay($item) === $day)
             ->values();
@@ -394,6 +402,7 @@ class DailyCheckListService
         $itemValue = 0.0;
         $custGet = 0.0;
         $gate = 0.0;
+        $deli = 0.0;
         $modifiedAt = null;
 
         foreach ($items as $item) {
@@ -403,15 +412,15 @@ class DailyCheckListService
             $custGet += (float) ($item->cust_get ?? 0);
             $gate += (float) ($item->gate_amount ?? 0);
             $osToPay += $item->displayOsToPay();
+            $deli += (float) ($item->deli_amount ?? 0);
             $ts = $item->admin_finished_at ?: $item->admin_completed_at ?: $item->updated_at;
             if ($ts && ($modifiedAt === null || $ts->gt($modifiedAt))) {
                 $modifiedAt = $ts;
             }
         }
 
-        // Deli fee = collected Total − amount paid to OS − gate.
-        // os_to_pay is signed (negative = Point pays OS).
-        $deli = round($custGet + $osToPay - $gate, 2);
+        // DeliAmount column = sum of item DeliAmount (Return ရိုးရိုး stays 0).
+        $deli = round($deli, 2);
 
         // Rider Amount = collected Cust Get. OS Amount also uses rider-collected Cust Get
         // (KBZ Pay / Cash Pay from settlement). OsToPay stays the remittance figure.
@@ -426,6 +435,7 @@ class DailyCheckListService
         $userName = $invoice->remittedByUser?->name
             ?: $invoice->createdByUser?->name
             ?: (auth()->user()?->name ?? '-');
+        $kyoShinCount = $items->filter(fn (DispatchOrderItem $item) => $item->isKyoShinGiven())->count();
 
         return (object) [
             'id' => $invoice->id,
@@ -436,6 +446,8 @@ class DailyCheckListService
             'received_date' => $invoice->received_date?->format('d-m-Y') ?? '-',
             'received_date_raw' => $invoice->received_date?->toDateString() ?? '',
             'item_count' => $items->count(),
+            'kyo_shin_count' => $kyoShinCount,
+            'has_kyo_shin' => $kyoShinCount > 0,
             'advance_paid' => $advance,
             'os_paid' => $osPaid,
             'deli_amount' => $deli,
@@ -688,6 +700,7 @@ class DailyCheckListService
                 'amount' => $amount,
                 'cust_paid' => $custPaid,
                 'balance' => $balance,
+                'is_kyo_shin' => $item->isKyoShinGiven(),
             ];
 
             $totals['os_paid'] += $osPaid;
@@ -703,7 +716,10 @@ class DailyCheckListService
 
     protected function itemDay(DispatchOrderItem $item): string
     {
-        $at = $item->admin_completed_at ?: $item->admin_finished_at ?: $item->updated_at;
+        $at = $item->admin_completed_at
+            ?: $item->admin_finished_at
+            ?: $item->admin_updated_at
+            ?: $item->updated_at;
 
         return dailyCheckListDateForItem($item, $at ? Carbon::parse($at) : null)->toDateString();
     }

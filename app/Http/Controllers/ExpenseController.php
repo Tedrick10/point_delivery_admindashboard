@@ -22,30 +22,47 @@ class ExpenseController extends Controller
             return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
         }
 
-        $monthParam = trim((string) $request->get('month', ''));
-        try {
-            $month = $monthParam !== ''
-                ? Carbon::createFromFormat('Y-m', $monthParam, 'Asia/Yangon')->startOfMonth()
-                : now('Asia/Yangon')->startOfMonth();
-        } catch (\Throwable $e) {
-            $month = now('Asia/Yangon')->startOfMonth();
-        }
+        $today = now('Asia/Yangon')->toDateString();
+        $yesterday = now('Asia/Yangon')->subDay()->toDateString();
 
+        $monthParam = trim((string) $request->get('month', ''));
         $fromInput = trim((string) $request->get('from_date', ''));
         $toInput = trim((string) $request->get('to_date', ''));
         $subject = trim((string) $request->get('subject', ''));
 
-        $from = $month->copy()->startOfMonth()->toDateString();
-        $to = $month->copy()->endOfMonth()->toDateString();
+        try {
+            $month = $monthParam !== ''
+                ? Carbon::createFromFormat('Y-m', $monthParam, 'Asia/Yangon')->startOfMonth()
+                : Carbon::parse($yesterday, 'Asia/Yangon')->startOfMonth();
+        } catch (\Throwable $e) {
+            $month = Carbon::parse($yesterday, 'Asia/Yangon')->startOfMonth();
+        }
 
-        if ($fromInput !== '') {
-            $from = $this->parseExpenseFilterDate($fromInput) ?? $from;
-        }
-        if ($toInput !== '') {
-            $to = $this->parseExpenseFilterDate($toInput) ?? $to;
-        }
-        if ($to < $from) {
-            $to = $from;
+        // Default: one business day behind (today 15th → 14th–14th).
+        if ($fromInput === '' && $toInput === '') {
+            if ($monthParam !== '') {
+                $from = $month->copy()->startOfMonth()->toDateString();
+                $to = $month->copy()->endOfMonth()->toDateString();
+                if ($to > $yesterday) {
+                    $to = $yesterday;
+                }
+                if ($from > $to) {
+                    $from = $to;
+                }
+            } else {
+                $from = $yesterday;
+                $to = $yesterday;
+                $month = Carbon::parse($yesterday, 'Asia/Yangon')->startOfMonth();
+            }
+        } else {
+            $from = $this->parseExpenseFilterDate($fromInput) ?? $yesterday;
+            $to = $this->parseExpenseFilterDate($toInput) ?? $from;
+            if ($to < $from) {
+                $to = $from;
+            }
+            if ($monthParam === '') {
+                $month = Carbon::parse($from, 'Asia/Yangon')->startOfMonth();
+            }
         }
 
         [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request);
@@ -127,7 +144,7 @@ class ExpenseController extends Controller
         $nextMonth = $month->copy()->addMonth()->format('Y-m');
         $monthLabel = $month->format('M Y');
         $monthValue = $month->format('Y-m');
-        $today = now('Asia/Yangon')->toDateString();
+        $defaultExpenseDay = $yesterday;
         $filterFrom = Carbon::parse($from)->format('d-m-Y');
         $filterTo = Carbon::parse($to)->format('d-m-Y');
         $filterSubject = $subject;
@@ -143,6 +160,7 @@ class ExpenseController extends Controller
             'monthLabel',
             'monthValue',
             'today',
+            'defaultExpenseDay',
             'filterFrom',
             'filterTo',
             'filterSubject',
@@ -415,7 +433,8 @@ class ExpenseController extends Controller
                 'ako_given' => (float) $summary->ako_given,
             ],
             'summary_url' => route('order.expense-summary', array_filter([
-                'month' => $summary->summary_date?->format('Y-m'),
+                'from_date' => $summary->summary_date?->format('d-m-Y'),
+                'to_date' => $summary->summary_date?->format('d-m-Y'),
                 'branch_id' => $card->branch_id,
             ])),
         ]);

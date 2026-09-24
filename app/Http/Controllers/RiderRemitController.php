@@ -140,6 +140,7 @@ class RiderRemitController extends Controller
             'fuel_amount' => 'nullable|numeric|min:0',
             'fee_amount' => 'nullable|numeric|min:0',
             'kpay_amount' => 'nullable|numeric|min:0',
+            'kyo_shin_incharge_amount' => 'nullable|numeric|min:0',
             'denominations' => 'nullable|array',
         ]);
 
@@ -187,6 +188,7 @@ class RiderRemitController extends Controller
             'riders.*.fuel_amount' => 'nullable|numeric|min:0',
             'riders.*.fee_amount' => 'nullable|numeric|min:0',
             'riders.*.kpay_amount' => 'nullable|numeric|min:0',
+            'riders.*.kyo_shin_incharge_amount' => 'nullable|numeric|min:0',
             'riders.*.denominations' => 'nullable|array',
         ]);
 

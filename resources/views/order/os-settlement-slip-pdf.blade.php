@@ -44,13 +44,13 @@
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td>{{ $row['date'] }}</td>
-                    <td>{{ $row['customer'] }}</td>
+                    <td>{{ $row['customer'] }}@if(!empty($row['is_kyo_shin']) || !empty($slipIsKyoShin)) ({{ __('message.kyo_shin_title') }})@endif</td>
                     <td>{{ $row['phone'] }}</td>
                     <td>{{ stringLong($row['address'], 'title', 20) ?: '-' }}</td>
                     <td class="text-right">{{ number_format($row['item_value']) }}</td>
                     <td class="text-right">{{ formatDeliAmountDisplayPlain($row['deli_amount_display'] ?? null, $row['deli_amount'] ?? 0) }}</td>
                     <td class="text-right">{{ $row['gate'] ?? number_format((float) ($row['gate_amount'] ?? 0)) }}</td>
-                    <td class="text-right {{ !empty($row['os_to_pay_is_receive']) ? 'is-negative' : '' }}">{{ $row['os_to_pay_display'] }}</td>
+                    <td class="text-right {{ !empty($row['exclude_from_settlement_amount']) ? '' : (!empty($row['os_to_pay_is_receive']) ? 'is-negative' : '') }}">{{ !empty($row['exclude_from_settlement_amount']) ? __('message.kyo_shin_title') : $row['os_to_pay_display'] }}</td>
                 </tr>
             @endforeach
         </tbody>

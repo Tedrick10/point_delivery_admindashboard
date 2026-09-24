@@ -33,6 +33,7 @@
                                 'rider_pick_up_assigned' => __('message.dispatch_tab_pick_up_rider'),
                                 'rider_pick_up_done' => __('message.dispatch_tab_rider_done'),
                                 'admin_completed' => __('message.dispatch_tab_admin_done'),
+                                'kyo_shin' => __('message.dispatch_tab_kyo_shin'),
                             ];
                             $activePickupTab = request('dispatch_status', 'all');
                             if (!$isDedicatedPickupList && !array_key_exists($activePickupTab, $pickupListTabs)) {
@@ -160,7 +161,7 @@
                         @endif
 
                         <div class="pds-table-shell pds-dispatch-table-shell pds-no-freeze">
-                            {{ $dataTable->table(['class' => 'table w-100 pds-datatable pds-dispatch-datatable'], false) }}
+                            {{ $dataTable->table(['class' => 'table w-100 pds-datatable pds-dispatch-datatable'], true) }}
                         </div>
                     </div>
                 </div>

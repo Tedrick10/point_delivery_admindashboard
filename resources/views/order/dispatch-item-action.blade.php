@@ -18,6 +18,14 @@
     );
 @endphp
 <div class="pds-dispatch-row-actions">
+    @if(!empty($showAssign100Print))
+        <a href="{{ route('order.dispatch.assign-100-labels', ['ids' => [$item->id]]) }}"
+           class="pds-dispatch-action-print"
+           target="_blank"
+           title="{{ __('message.assign_100_print_labels') }}">
+            <i class="fas fa-qrcode"></i>
+        </a>
+    @endif
     @if(auth()->user()->can('order-edit'))
         <a href="javascript:void(0)"
            class="pds-dispatch-action-message js-dispatch-item-message"

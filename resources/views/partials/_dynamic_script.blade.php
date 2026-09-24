@@ -3,6 +3,64 @@
     'use strict';
 
     $(document).ready(function(){
+        window.pdsParseDmy = function (value) {
+            if (!value) return null;
+            var parts = String(value).trim().split(/[-/]/);
+            if (parts.length !== 3) return null;
+            var day, month, year;
+            if (parts[0].length === 4) {
+                year = parseInt(parts[0], 10);
+                month = parseInt(parts[1], 10);
+                day = parseInt(parts[2], 10);
+            } else {
+                day = parseInt(parts[0], 10);
+                month = parseInt(parts[1], 10);
+                year = parseInt(parts[2], 10);
+            }
+            if (!year || !month || !day) return null;
+            var date = new Date(year, month - 1, day);
+            if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+                return null;
+            }
+            return date;
+        };
+        window.pdsTodayYangon = window.pdsParseDmy(@json(now('Asia/Yangon')->format('d-m-Y')));
+        window.pdsBindDmyDatepickers = function (selector, extra) {
+            if (typeof flatpickr === 'undefined') return;
+            extra = extra || {};
+            document.querySelectorAll(selector).forEach(function (el) {
+                if (el._flatpickr) return;
+                var parsed = window.pdsParseDmy(el.value);
+                flatpickr(el, Object.assign({
+                    dateFormat: 'd-m-Y',
+                    allowInput: true,
+                    disableMobile: true,
+                    defaultDate: parsed || undefined,
+                    maxDate: extra.maxDate !== undefined ? extra.maxDate : window.pdsTodayYangon,
+                    locale: {
+                        firstDayOfWeek: 1,
+                        weekdays: {
+                            shorthand: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+                            longhand: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+                        },
+                        months: {
+                            shorthand: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                            longhand: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+                        },
+                    },
+                    parseDate: function (dateStr) {
+                        return window.pdsParseDmy(dateStr);
+                    },
+                    formatDate: function (date, format) {
+                        if (format !== 'd-m-Y') return flatpickr.formatDate(date, format);
+                        var d = String(date.getDate()).padStart(2, '0');
+                        var m = String(date.getMonth() + 1).padStart(2, '0');
+                        return d + '-' + m + '-' + date.getFullYear();
+                    },
+                }, extra));
+            });
+        };
+
         $('.select2js').select2();
         $.ajaxSetup({
             headers: {

@@ -18,7 +18,7 @@ class CashPayoutController extends Controller
 
         $status = trim((string) $request->get('status', 'assigned'));
         $query = OsCashPayout::query()
-            ->with(['osUser:id,name,contact_number,address,city_id', 'osUser.city:id,name', 'settlementBatch'])
+            ->with(['osUser:id,name,contact_number,address,city_id', 'osUser.city:id,name', 'settlementBatch', 'kyoShinBatch'])
             ->where('delivery_man_id', $user->id);
 
         if ($status !== 'all') {
@@ -100,6 +100,7 @@ class CashPayoutController extends Controller
                 'osUser:id,name,contact_number,address,city_id',
                 'osUser.city:id,name',
                 'settlementBatch',
+                'kyoShinBatch',
             ])),
         ]);
     }
@@ -119,6 +120,7 @@ class CashPayoutController extends Controller
             'period_from' => optional($p->period_from)->format('d-m-Y'),
             'period_to' => optional($p->period_to)->format('d-m-Y'),
             'slip_photo_url' => $p->slipPhotoUrl(),
+            'slip_photo_urls' => $p->slipPhotoUrls(),
             'pending_note' => $p->pending_note,
             'pending_photo_url' => $p->pendingPhotoUrl(),
             'done_note' => $p->done_note,

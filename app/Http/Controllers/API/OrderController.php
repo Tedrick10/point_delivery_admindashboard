@@ -212,7 +212,7 @@ class OrderController extends Controller
             'dispatchItems' => function ($query) {
                 $statuses = app(\App\Services\DispatchOrderWorkflowService::class)->clientVisibleItemStatuses();
                 $query->whereIn('status', $statuses)
-                    ->with(['fromBranch', 'toBranch', 'photoMedia'])
+                    ->with(['fromBranch', 'toBranch', 'photoMedia', 'kyoShinItem'])
                     ->orderBy('id');
             },
         ]);
@@ -239,7 +239,7 @@ class OrderController extends Controller
             'dispatchItems' => function ($query) {
                 $statuses = app(\App\Services\DispatchOrderWorkflowService::class)->clientVisibleItemStatuses();
                 $query->whereIn('status', $statuses)
-                    ->with(['fromBranch', 'toBranch', 'photoMedia'])
+                    ->with(['fromBranch', 'toBranch', 'photoMedia', 'kyoShinItem'])
                     ->orderBy('id');
             },
         ])->first();
@@ -256,7 +256,7 @@ class OrderController extends Controller
                 'dispatchItems' => function ($query) {
                     $statuses = app(\App\Services\DispatchOrderWorkflowService::class)->clientVisibleItemStatuses();
                     $query->whereIn('status', $statuses)
-                        ->with(['fromBranch', 'toBranch', 'photoMedia'])
+                        ->with(['fromBranch', 'toBranch', 'photoMedia', 'kyoShinItem'])
                         ->orderBy('id');
                 },
             ]);

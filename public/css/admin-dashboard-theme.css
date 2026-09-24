@@ -7073,6 +7073,7 @@ body.pds-admin .pds-dispatch-row-actions a {
 }
 
 body.pds-admin .pds-dispatch-action-edit { color: #16a34a; }
+body.pds-admin .pds-dispatch-action-print { color: #c2410c; }
 body.pds-admin .pds-dispatch-action-gate { color: #111827; }
 body.pds-admin .pds-gate-modal__header {
     background: #f97316;
@@ -10912,6 +10913,24 @@ body.pds-admin .pds-dispatch-datatable tbody td a:hover {
     text-decoration: underline;
 }
 
+body.pds-admin .pds-dispatch-datatable tfoot th,
+body.pds-admin .pds-dispatch-datatable tfoot td,
+body.pds-admin .pds-dispatch-datatable tfoot .pds-dispatch-total-row th,
+body.pds-admin .pds-dispatch-datatable tfoot .pds-dispatch-total-row td {
+    background: #cfe8f3 !important;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    border-top: 2px solid #93c5d8 !important;
+    padding-top: 0.7rem !important;
+    padding-bottom: 0.7rem !important;
+    color: #0f172a;
+}
+
+body.pds-admin .pds-dispatch-datatable tfoot th:first-child,
+body.pds-admin .pds-dispatch-datatable tfoot .pds-dispatch-total-row th:first-child {
+    text-align: right;
+}
+
 body.pds-admin .pds-dispatch-list-page .pds-dispatch-filter-bar {
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 28px rgba(15, 23, 42, 0.04);
 }
@@ -12298,6 +12317,16 @@ body.pds-admin .pds-rider-status-chip--pending {
     color: #c2410c;
 }
 
+body.pds-admin .pds-rider-status-chip--return {
+    background: #fff1f2;
+    color: #be123c;
+}
+
+body.pds-admin .pds-rider-status-chip--os-return {
+    background: #fdf4ff;
+    color: #a21caf;
+}
+
 body.pds-admin .pds-rider-count {
     display: inline-flex;
     align-items: center;
@@ -12351,6 +12380,18 @@ body.pds-admin .pds-rider-count--pending.is-link {
     background: #fff7ed;
     border-color: #fdba74;
     color: #c2410c;
+}
+
+body.pds-admin .pds-rider-count--return.is-link {
+    background: #fff1f2;
+    border-color: #fda4af;
+    color: #be123c;
+}
+
+body.pds-admin .pds-rider-count--os-return.is-link {
+    background: #fdf4ff;
+    border-color: #e879f9;
+    color: #a21caf;
 }
 
 body.pds-admin .pds-rider-count--finished.is-link {
@@ -12472,6 +12513,12 @@ body.pds-admin .pds-os-cell .pds-rider-count--pending {
     background: #fff7ed;
     border: 2px solid #fdba74;
     color: #c2410c;
+}
+
+body.pds-admin .pds-os-cell .pds-rider-count--return {
+    background: #fff1f2;
+    border: 2px solid #fda4af;
+    color: #be123c;
 }
 
 body.pds-admin .pds-os-cell .pds-rider-count--finished,
@@ -13033,6 +13080,10 @@ body.pds-admin .pds-os-settlement-tab[data-tab="receive"] i {
     color: #059669;
 }
 
+body.pds-admin .pds-os-settlement-tab[data-tab="kyo_shin"] i {
+    color: #7c3aed;
+}
+
 body.pds-admin .pds-os-settlement-tab:hover {
     border-color: #fdba74;
     color: #9a3412;
@@ -13061,7 +13112,8 @@ body.pds-admin .pds-os-settlement-tab.is-active {
 }
 
 body.pds-admin .pds-os-settlement-tab.is-active i,
-body.pds-admin .pds-os-settlement-tab[data-tab="receive"].is-active i {
+body.pds-admin .pds-os-settlement-tab[data-tab="receive"].is-active i,
+body.pds-admin .pds-os-settlement-tab[data-tab="kyo_shin"].is-active i {
     color: #fff;
 }
 
@@ -13074,6 +13126,18 @@ body.pds-admin .pds-os-settlement-tab[data-tab="receive"].is-active {
     background: #059669;
     border-color: #059669;
     box-shadow: 0 8px 18px rgba(5, 150, 105, 0.28);
+}
+
+body.pds-admin .pds-os-settlement-tab[data-tab="kyo_shin"].is-active {
+    background: #7c3aed;
+    border-color: #7c3aed;
+    color: #fff;
+    box-shadow: 0 8px 18px rgba(124, 58, 237, 0.28);
+}
+
+body.pds-admin .pds-os-settlement-tab[data-tab="kyo_shin"].is-active span,
+body.pds-admin .pds-os-settlement-tab[data-tab="kyo_shin"].is-active em {
+    color: #fff;
 }
 
 body.pds-admin .pds-os-settlement-panel {
@@ -13409,6 +13473,133 @@ body.pds-admin .pds-os-settlement-badge {
     letter-spacing: 0.02em;
 }
 
+body.pds-admin .pds-os-settlement-badge--link {
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    background: #ecfeff;
+    color: #0e7490;
+}
+
+body.pds-admin .pds-os-settlement-badge--link:hover {
+    background: #cffafe;
+}
+
+body.pds-admin .pds-dispatch-rider-list-city {
+    margin-top: 0.1rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+}
+
+body.pds-admin .pds-rider-count--kyo-shin,
+body.pds-admin .pds-rider-count--kyo-shin.is-link {
+    border-color: #fdba74;
+    color: #ea580c;
+    background: #fff7ed;
+}
+
+body.pds-admin button.pds-rider-count--kyo-shin {
+    cursor: pointer;
+    font: inherit;
+}
+
+body.pds-admin .pds-return-type-radios {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-left: 0.5rem;
+    flex-wrap: wrap;
+}
+
+body.pds-admin .pds-return-type-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0.35rem 0.7rem;
+    border: 1px solid #fdba74;
+    border-radius: 999px;
+    background: #fff7ed;
+    color: #9a3412;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+body.pds-admin .pds-return-type-radio input {
+    margin: 0;
+}
+
+body.pds-admin .pds-return-deli-hint {
+    margin: 0 0 0.35rem;
+    color: #b91c1c !important;
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+    display: block;
+    line-height: 1.2;
+}
+
+body.pds-admin .pds-rider-remit-return-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+body.pds-admin .pds-rider-remit-return-count {
+    font-style: normal;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #64748b;
+}
+
+body.pds-admin .pds-rider-remit-info-btn {
+    border: 0;
+    background: transparent;
+    color: #0ea5e9;
+    padding: 0;
+    cursor: pointer;
+    line-height: 1;
+}
+
+body.pds-admin .pds-rider-remit-return-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.55rem;
+}
+
+body.pds-admin .pds-rider-remit-return-list li {
+    display: grid;
+    grid-template-columns: minmax(70px, auto) 1fr auto auto;
+    gap: 0.55rem;
+    align-items: center;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
+}
+
+body.pds-admin .pds-rider-remit-return-list em {
+    font-style: normal;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+}
+
+body.pds-admin .pds-rider-remit-return-list em.is-collected {
+    background: #ecfdf5;
+    color: #047857;
+}
+
+body.pds-admin .pds-rider-remit-return-list em.is-none {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
 body.pds-admin .pds-os-amount-pill {
     display: inline-flex;
     align-items: center;
@@ -13680,6 +13871,35 @@ body.pds-admin .pds-os-finish-btn.is-done {
     background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
     color: #fff;
     box-shadow: 0 4px 14px rgba(22, 163, 74, 0.28);
+}
+
+body.pds-admin .pds-os-kyo-shin-item-table tfoot td {
+    border-top: 1px solid #e2e8f0;
+    font-weight: 700;
+    color: #0f172a;
+    padding-top: 0.85rem;
+    padding-bottom: 0.85rem;
+}
+
+body.pds-admin .pds-kyo-shin-send-os-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.8rem;
+    border: none;
+    border-radius: 999px;
+    background: #7c3aed;
+    color: #fff !important;
+    font-size: 0.74rem;
+    font-weight: 800;
+    white-space: nowrap;
+    box-shadow: 0 6px 14px rgba(124, 58, 237, 0.22);
+}
+
+body.pds-admin .pds-kyo-shin-send-os-btn:hover {
+    background: #6d28d9;
+    color: #fff !important;
 }
 
 body.pds-admin .pds-os-settlement-bulk-bar {
@@ -15691,20 +15911,36 @@ body.pds-admin .pds-rider-remit-row.is-kpay .pds-rider-remit-label {
 }
 
 body.pds-admin .pds-rider-remit-row.is-fuel td,
-body.pds-admin .pds-rider-remit-row.is-fee td {
-    background: #f8fafc;
+body.pds-admin .pds-rider-remit-row.is-fee td,
+body.pds-admin .pds-rider-remit-row.is-half-deli td {
+    background: #fecaca;
 }
 
 body.pds-admin .pds-rider-remit-row.is-fuel .pds-rider-remit-label,
-body.pds-admin .pds-rider-remit-row.is-fee .pds-rider-remit-label {
-    background: #f1f5f9 !important;
-    color: #475569;
+body.pds-admin .pds-rider-remit-row.is-fee .pds-rider-remit-label,
+body.pds-admin .pds-rider-remit-row.is-half-deli .pds-rider-remit-label {
+    background: #f87171 !important;
+    color: #7f1d1d;
+    font-weight: 700;
 }
 
 body.pds-admin .pds-rider-remit-row.is-fuel .pds-rider-remit-read,
-body.pds-admin .pds-rider-remit-row.is-fee .pds-rider-remit-read {
+body.pds-admin .pds-rider-remit-row.is-fee .pds-rider-remit-read,
+body.pds-admin .pds-rider-remit-row.is-half-deli .pds-rider-remit-read {
     font-weight: 700;
-    color: #0f172a;
+    color: #7f1d1d;
+}
+
+body.pds-admin .pds-rider-remit-row.is-fuel .pds-rider-remit-total-cell,
+body.pds-admin .pds-rider-remit-row.is-fee .pds-rider-remit-total-cell,
+body.pds-admin .pds-rider-remit-row.is-half-deli .pds-rider-remit-total-cell {
+    background: #f87171 !important;
+}
+
+body.pds-admin .pds-rider-remit-row.is-fuel .pds-rider-remit-total-cell .pds-rider-remit-read,
+body.pds-admin .pds-rider-remit-row.is-fee .pds-rider-remit-total-cell .pds-rider-remit-read,
+body.pds-admin .pds-rider-remit-row.is-half-deli .pds-rider-remit-total-cell .pds-rider-remit-read {
+    color: #7f1d1d;
 }
 
 body.pds-admin .pds-rider-remit-row.is-due td {
@@ -16571,6 +16807,12 @@ body.pds-admin .pds-expenses-month-nav__btn:hover {
     color: #fff;
 }
 
+body.pds-admin .pds-expenses-month-nav__btn.is-disabled {
+    opacity: 0.35;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
 body.pds-admin .pds-expenses-month-nav__label {
     min-width: 88px;
     text-align: center;
@@ -17079,6 +17321,374 @@ body.pds-admin .pds-expense-summary-view:hover {
 body.pds-admin .pds-expense-summary-view:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+body.pds-admin .pds-expense-summary-split {
+    display: grid;
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+    margin: 0 0 28px;
+}
+
+@media (max-width: 980px) {
+    body.pds-admin .pds-expense-summary-split {
+        grid-template-columns: 1fr;
+    }
+}
+
+.pds-summary-cal {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 16px 16px 18px;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+}
+
+.pds-summary-cal__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.pds-summary-cal__eyebrow {
+    margin: 0 0 2px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #f97316;
+}
+
+.pds-summary-cal__title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.pds-summary-cal__nav {
+    display: inline-flex;
+    gap: 6px;
+}
+
+.pds-summary-cal__nav-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #334155;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.pds-summary-cal__nav-btn:hover {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #c2410c;
+}
+
+.pds-summary-cal__nav-btn.is-disabled {
+    opacity: 0.35;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.pds-summary-cal__weekdays,
+.pds-summary-cal__grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.pds-summary-cal__weekdays {
+    margin-bottom: 6px;
+}
+
+.pds-summary-cal__weekdays span {
+    text-align: center;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+
+.pds-summary-cal__day {
+    position: relative;
+    min-height: 58px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    background: #f8fafc;
+    color: #0f172a;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 6px 2px 5px;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pds-summary-cal__day:hover {
+    border-color: #fdba74;
+    background: #fff7ed;
+}
+
+.pds-summary-cal__day.is-out {
+    opacity: 0.38;
+}
+
+.pds-summary-cal__day.is-disabled {
+    opacity: 0.34;
+    pointer-events: none;
+    cursor: not-allowed;
+    background: #f1f5f9;
+    color: #94a3b8;
+    filter: grayscale(0.35);
+}
+
+.pds-summary-cal__day.is-disabled:hover {
+    border-color: transparent;
+    background: #f1f5f9;
+}
+
+.pds-summary-cal__day.is-selected {
+    background: #fff7ed;
+    border-color: #fb923c;
+    box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.18);
+}
+
+.pds-summary-cal__day.is-today .pds-summary-cal__num {
+    background: #0f172a;
+    color: #fff;
+}
+
+.pds-summary-cal__day.is-checked {
+    background: #ecfdf5;
+    border-color: #6ee7b7;
+}
+
+.pds-summary-cal__day.is-checked .pds-summary-cal__num,
+.pds-summary-cal__day.is-checked.is-today .pds-summary-cal__num {
+    background: #059669;
+    color: #fff;
+}
+
+.pds-summary-cal__day.is-checked.is-selected {
+    box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2);
+}
+
+.pds-summary-cal__num {
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.pds-summary-cal__done {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: #059669;
+    color: #fff;
+    font-size: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pds-summary-cal__dots {
+    display: flex;
+    gap: 4px;
+    margin-top: auto;
+    padding-top: 4px;
+}
+
+.pds-summary-cal__dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    border: 2px solid currentColor;
+    background: transparent;
+    display: inline-block;
+}
+
+.pds-summary-cal__dot.is-super_admin { color: #f59e0b; }
+.pds-summary-cal__dot.is-ma_noe_noe { color: #dc2626; }
+.pds-summary-cal__dot.is-ma_phyu_sin { color: #7c3aed; }
+.pds-summary-cal__dot.is-on {
+    background: currentColor;
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
+}
+
+.pds-summary-cal__legend {
+    list-style: none;
+    margin: 14px 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+}
+
+.pds-summary-cal__legend li {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #475569;
+}
+
+.pds-summary-cal__done-mark {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: #059669;
+}
+
+.pds-summary-cal__confirm {
+    width: 100%;
+    margin-top: 14px;
+    border: 0;
+    border-radius: 12px;
+    min-height: 42px;
+    background: #f97316;
+    color: #fff;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.pds-summary-cal__confirm:hover {
+    background: #ea580c;
+}
+
+.pds-summary-cal__confirm:disabled {
+    background: #d1fae5;
+    color: #065f46;
+    cursor: default;
+}
+
+body.pds-summary-pop-open { overflow: hidden; }
+
+.pds-summary-pop {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.pds-summary-pop[hidden] { display: none !important; }
+
+.pds-summary-pop__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(28, 25, 23, 0.42);
+    backdrop-filter: blur(6px);
+}
+
+.pds-summary-pop__card {
+    position: relative;
+    width: min(420px, 100%);
+    padding: 28px 24px 20px;
+    border-radius: 22px;
+    background: #fff;
+    box-shadow: 0 24px 60px rgba(28, 25, 23, 0.22);
+    text-align: center;
+}
+
+.pds-summary-pop__icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 14px;
+    border-radius: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff7ed;
+    color: #ea580c;
+    font-size: 22px;
+}
+
+.pds-summary-pop.is-success .pds-summary-pop__icon {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.pds-summary-pop.is-error .pds-summary-pop__icon {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.pds-summary-pop__title {
+    margin: 0 0 6px;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #1c1917;
+}
+
+.pds-summary-pop__text {
+    margin: 0 0 20px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.5;
+    color: #78716c;
+}
+
+.pds-summary-pop__actions {
+    display: flex;
+    gap: 10px;
+}
+
+.pds-summary-pop__btn {
+    flex: 1;
+    min-height: 44px;
+    border: 0;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.pds-summary-pop__btn.is-ghost {
+    background: #f5f5f4;
+    color: #44403c;
+}
+
+.pds-summary-pop__btn.is-ghost:hover { background: #e7e5e4; }
+
+.pds-summary-pop__btn.is-primary {
+    background: #f97316;
+    color: #fff;
+}
+
+.pds-summary-pop__btn.is-primary:hover { background: #ea580c; }
+
+.pds-summary-pop.is-error .pds-summary-pop__btn.is-primary {
+    background: #dc2626;
+}
+
+.pds-summary-pop.is-error .pds-summary-pop__btn.is-primary:hover {
+    background: #b91c1c;
 }
 
 body.pds-admin .pds-expense-card__total {
@@ -17980,6 +18590,24 @@ body.pds-admin .pds-delivered-modal__gate-input input {
     min-width: 0;
     padding: 0.45rem 0;
 }
+body.pds-admin .pds-delivered-modal__gate.is-readonly label,
+body.pds-admin .pds-delivered-modal__gate.is-rider-name label {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.92rem;
+    font-weight: 800;
+    color: #1e293b;
+}
+body.pds-admin .pds-delivered-modal__gate-input.is-readonly {
+    background: #fffbeb;
+    pointer-events: none;
+}
+body.pds-admin .pds-delivered-modal__gate-input.is-readonly strong {
+    flex: 1;
+    font-size: 1rem;
+    font-weight: 800;
+    color: #0f172a;
+}
 body.pds-admin .pds-delivered-upload {
     display: flex;
     flex-direction: column;
@@ -18178,8 +18806,10 @@ body.pds-admin .pds-os-list-bulk {
 body.pds-admin .pds-os-list-table-shell {
     border: 1px solid #e8edf3;
     border-radius: 16px;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
     background: #fff;
+    -webkit-overflow-scrolling: touch;
 }
 
 body.pds-admin .pds-os-list-filters {
@@ -18247,19 +18877,102 @@ body.pds-admin .pds-os-list-tab[data-tab="rejected"].is-active {
     color: #b91c1c;
 }
 
+body.pds-admin .pds-os-list-tab[data-tab="kyo_shin"].is-active,
+body.pds-admin .pds-os-list-tab.is-kyo-shin.is-active {
+    background: #7c3aed;
+    border-color: #7c3aed;
+    color: #fff;
+}
+
+body.pds-admin .pds-os-list-tab[data-tab="kyo_shin"].is-active i,
+body.pds-admin .pds-os-list-tab[data-tab="kyo_shin"].is-active span,
+body.pds-admin .pds-os-list-tab[data-tab="kyo_shin"].is-active em {
+    color: #fff;
+}
+
+body.pds-admin .pds-os-kyo-shin-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    cursor: pointer;
+    user-select: none;
+    vertical-align: middle;
+}
+
+body.pds-admin .pds-os-kyo-shin-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+body.pds-admin .pds-os-kyo-shin-switch__track {
+    position: relative;
+    display: block;
+    width: 2.75rem;
+    height: 1.45rem;
+    border-radius: 999px;
+    background: #d1d5db;
+    border: none;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
+    transition: background 0.18s ease;
+    flex: 0 0 auto;
+}
+
+body.pds-admin .pds-os-kyo-shin-switch__knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+    transition: transform 0.18s ease;
+}
+
+body.pds-admin .pds-os-kyo-shin-switch.is-on .pds-os-kyo-shin-switch__track,
+body.pds-admin .pds-os-kyo-shin-switch input:checked + .pds-os-kyo-shin-switch__track {
+    background: #22c55e;
+}
+
+body.pds-admin .pds-os-kyo-shin-switch.is-on .pds-os-kyo-shin-switch__knob,
+body.pds-admin .pds-os-kyo-shin-switch input:checked + .pds-os-kyo-shin-switch__track .pds-os-kyo-shin-switch__knob {
+    transform: translateX(1.3rem);
+}
+
+body.pds-admin .pds-os-kyo-shin-switch:has(input:disabled) {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 body.pds-admin .pds-os-list-tab.is-active em {
     background: rgba(255, 255, 255, 0.75);
     color: inherit;
 }
 
-body.pds-admin .pds-os-list-page .pds-os-list-table-shell .dataTables_wrapper,
-body.pds-admin .pds-os-list-page .pds-os-list-table-shell .dataTables_scroll,
-body.pds-admin .pds-os-list-page .pds-os-list-table-shell .dataTables_scrollHead,
-body.pds-admin .pds-os-list-page .pds-os-list-table-shell .dataTables_scrollHeadInner,
-body.pds-admin .pds-os-list-page .pds-os-list-table-shell .dataTables_scrollBody,
-body.pds-admin .pds-os-list-page .pds-os-list-table-shell table.dataTable {
+body.pds-admin .pds-os-list-page .pds-os-list-table-shell .dataTables_wrapper {
     width: 100% !important;
     max-width: 100% !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+body.pds-admin .pds-os-list-page .pds-os-list-table-shell .dataTables_scroll,
+body.pds-admin .pds-os-list-page .pds-os-list-table-shell .dataTables_scrollHead,
+body.pds-admin .pds-os-list-page .pds-os-list-table-shell .dataTables_scrollBody {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+body.pds-admin .pds-os-list-page .pds-os-list-table-shell .dataTables_scrollHeadInner,
+body.pds-admin .pds-os-list-page .pds-os-list-table-shell table.dataTable {
+    width: max-content !important;
+    min-width: 100% !important;
+    max-width: none !important;
 }
 
 body.pds-admin .pds-os-list-page .pds-os-list-table-shell .dataTables_scrollHeadInner {
@@ -18270,6 +18983,7 @@ body.pds-admin .pds-os-list-page .pds-os-list-table thead th,
 body.pds-admin .pds-os-list-page .pds-os-list-table tbody td {
     padding: 0.7rem 0.75rem;
     vertical-align: middle;
+    white-space: nowrap;
 }
 
 body.pds-admin .pds-os-list-page .pds-table-user {
@@ -19235,4 +19949,19 @@ body.pds-admin .pds-pending-history-card__photo img {
         min-width: 0;
         flex: none;
     }
+}
+
+/* Latin-safe date picker — Noto/Pyidaungsu mangles month names and years (Junee, 20266). */
+.flatpickr-calendar,
+.flatpickr-calendar * {
+    font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+    letter-spacing: 0 !important;
+}
+.flatpickr-months .flatpickr-month,
+.flatpickr-current-month,
+.flatpickr-current-month input.cur-year,
+.flatpickr-monthDropdown-months,
+.flatpickr-weekday,
+.flatpickr-day {
+    font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif !important;
 }

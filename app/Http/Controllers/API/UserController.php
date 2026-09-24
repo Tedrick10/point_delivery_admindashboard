@@ -88,11 +88,12 @@ class UserController extends Controller
         $decryptedPlayerId = $this->decryptData($request->input('player_id'));
         $decryptedfcmToken = $this->decryptData($request->input('fcm_token'));
         $decryptedUsername = $request->has('username') ? $this->decryptData($request->input('username')) : '';
+        $decryptedUserType = $request->has('user_type') ? trim((string) $this->decryptData($request->input('user_type'))) : '';
 
         $loginValue = trim($decryptedUsername !== '' ? $decryptedUsername : $decryptedEmail);
         $normalizedPhone = $loginValue !== '' ? normalizeContactNumber($loginValue) : '';
 
-        $user = User::where(function ($query) use ($loginValue, $normalizedPhone) {
+        $userQuery = User::where(function ($query) use ($loginValue, $normalizedPhone) {
             $query->where('username', $loginValue)
                 ->orWhere('email', $loginValue)
                 ->orWhere('contact_number', $loginValue);
@@ -100,7 +101,19 @@ class UserController extends Controller
                 $query->orWhere('username', $normalizedPhone)
                     ->orWhere('contact_number', $normalizedPhone);
             }
-        })->first();
+        });
+        if (in_array($decryptedUserType, ['client', 'delivery_man'], true)) {
+            $userQuery->where('user_type', $decryptedUserType);
+        }
+        $user = $userQuery->first();
+
+        // OS app: zinminoo was renamed to zinminoo_os when the rider took zinminoo.
+        if (! $user && $decryptedUserType === 'client' && $loginValue !== '') {
+            $user = User::query()
+                ->where('user_type', 'client')
+                ->where('username', $loginValue.'_os')
+                ->first();
+        }
 
         if ($user && \Hash::check($decryptedPassword, $user->password)) {
             if ($user->user_type === 'client' && ! $user->isClientApprovalApproved()) {

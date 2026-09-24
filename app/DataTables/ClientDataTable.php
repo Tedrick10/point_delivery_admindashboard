@@ -86,11 +86,26 @@ class ClientDataTable extends DataTable
                     return view('users.action', compact('data', 'action_type', 'deleted_at'))->render();
                 }
             })
+            ->addColumn('is_kyo_shin', function ($row) {
+                $canEdit = auth()->user()?->can('users-edit');
+                $isKyo = (bool) ($row->is_kyo_shin ?? false);
+                $url = e(route('users.kyo-shin-flag', $row->id));
+                $checked = $isKyo ? ' checked' : '';
+                $disabled = $canEdit ? '' : ' disabled';
+
+                return '<label class="pds-os-kyo-shin-switch'.($isKyo ? ' is-on' : '').'" title="'.e(__('message.kyo_shin_title')).'">'
+                    .'<input type="checkbox" class="js-os-kyo-shin-flag" data-url="'.$url.'" data-id="'.$row->id.'"'.$checked.$disabled.'>'
+                    .'<span class="pds-os-kyo-shin-switch__track" aria-hidden="true">'
+                    .'<span class="pds-os-kyo-shin-switch__knob"></span>'
+                    .'</span>'
+                    .'</label>';
+            })
             ->addColumn('action', function ($row) {
                 $id = $row->id;
+                $data = $row;
                 $action_type = 'action';
                 $deleted_at = $row->deleted_at;
-                return view('users.action', compact('id', 'deleted_at', 'action_type'))->render();
+                return view('users.action', compact('id', 'data', 'deleted_at', 'action_type'))->render();
             })
             ->addIndexColumn()
             ->editColumn('is_autoverified_email', function ($data) {
@@ -124,7 +139,7 @@ class ClientDataTable extends DataTable
                     return view('users.action', compact('data', 'action_type', 'deleted_at'))->render();
                 }
             })
-            ->rawColumns(['checkbox', 'action', 'approval_status','name','otp_verify_at','is_autoverified_mobile','is_autoverified_email']);
+            ->rawColumns(['checkbox', 'action', 'approval_status', 'is_kyo_shin', 'name', 'otp_verify_at', 'is_autoverified_mobile', 'is_autoverified_email']);
     }
 
     /**
@@ -149,6 +164,9 @@ class ClientDataTable extends DataTable
             case 'inactive':
             case 'rejected':
                 $model = $model->where('approval_status', User::APPROVAL_REJECTED);
+                break;
+            case 'kyo_shin':
+                $model = $model->where('is_kyo_shin', true);
                 break;
             case 'pending':
                 $model = $model->where('approval_status', User::APPROVAL_PENDING);
@@ -207,6 +225,13 @@ class ClientDataTable extends DataTable
                 ->title(__('message.status'))
                 ->visible(true)
                 ->orderable(false),
+            Column::computed('is_kyo_shin')
+                ->exportable(false)
+                ->printable(false)
+                ->title(__('message.kyo_shin_title'))
+                ->orderable(false)
+                ->searchable(false)
+                ->addClass('text-center hide-search'),
             Column::computed('action')
                 ->exportable(false)
                 ->printable(false)
@@ -221,8 +246,8 @@ class ClientDataTable extends DataTable
     public function getBuilderParameters(): array
     {
         $params = parent::getBuilderParameters();
-        $params['scrollX'] = false;
-        $params['autoWidth'] = false;
+        $params['scrollX'] = true;
+        $params['autoWidth'] = true;
 
         return $params;
     }

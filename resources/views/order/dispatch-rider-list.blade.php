@@ -127,6 +127,12 @@
                                         <span class="pds-rider-status-chip pds-rider-status-chip--pending">{{ __('message.follow_up_status_pending') }}</span>
                                     </th>
                                     <th class="pds-rider-col-count">
+                                        <span class="pds-rider-status-chip pds-rider-status-chip--return">{{ __('message.follow_up_status_return') }}</span>
+                                    </th>
+                                    <th class="pds-rider-col-count">
+                                        <span class="pds-rider-status-chip pds-rider-status-chip--os-return">{{ __('message.follow_up_status_os_returned') }}</span>
+                                    </th>
+                                    <th class="pds-rider-col-count">
                                         <span class="pds-rider-status-chip pds-rider-status-chip--completed">{{ __('message.follow_up_status_completed') }}</span>
                                     </th>
                                     <th class="pds-rider-col-count">
@@ -202,6 +208,8 @@
                                             'courier_departed' => ['label' => __('message.follow_up_status_on_way'), 'tone' => 'onway', 'status' => 'courier_departed'],
                                             'delivered' => ['label' => __('message.follow_up_status_delivered'), 'tone' => 'delivered', 'status' => 'delivered'],
                                             'pending' => ['label' => __('message.follow_up_status_pending'), 'tone' => 'pending', 'status' => 'pending'],
+                                            'return' => ['label' => __('message.follow_up_status_return'), 'tone' => 'return', 'status' => 'return'],
+                                            'os_returned' => ['label' => __('message.follow_up_status_os_returned'), 'tone' => 'os-return', 'status' => 'os_returned'],
                                             'completed' => ['label' => __('message.follow_up_status_completed'), 'tone' => 'completed', 'status' => 'completed'],
                                             'finished' => ['label' => __('message.follow_up_status_finished'), 'tone' => 'finished', 'status' => 'finished'],
                                         ] as $meta)

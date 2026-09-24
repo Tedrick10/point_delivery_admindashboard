@@ -436,8 +436,15 @@ class HrPayrollService
         $endDate = $month->copy()->timezone($tz)->endOfMonth()->toDateString();
 
         return DispatchOrderItem::query()
-            ->where('status', 'completed')
             ->whereNotNull('delivery_man_id')
+            ->where(function ($q) {
+                $q->where('status', 'completed')
+                    ->orWhere(function ($r) {
+                        $r->where('status', 'return')
+                            ->where('return_type', 'delivery')
+                            ->where('deli_amount', '>', 0);
+                    });
+            })
             ->where(function ($q) use ($startUtc, $endUtc, $startDate, $endDate) {
                 $q->where(function ($d) use ($startUtc, $endUtc) {
                     $d->whereNotNull('delivered_at')

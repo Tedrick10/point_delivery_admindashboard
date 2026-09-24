@@ -1,4 +1,18 @@
 <x-master-layout :assets="$assets ?? []">
+    <style>
+        .pds-kyo-shin-row-badge {
+            display: inline-flex; align-items: center; margin-left: 6px;
+            padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
+            background: #ffedd5; color: #c2410c; letter-spacing: .02em; white-space: nowrap;
+            vertical-align: middle;
+        }
+        .pds-return-retry-check {
+            display: inline-flex; align-items: center; gap: 6px;
+            margin: 0; font-size: 11px; font-weight: 800; color: #c2410c;
+            white-space: nowrap; cursor: pointer; user-select: none;
+        }
+        .pds-return-retry-check input { width: 16px; height: 16px; accent-color: #ea580c; cursor: pointer; }
+    </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-rider-items-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
             <div class="pds-rider-hero pds-rider-hero--details">
@@ -54,7 +68,7 @@
                 </div>
             </form>
 
-            @if($canBulkUpdate)
+            @if(! empty($canSelectItems))
                 <div class="pds-rider-toolbar pds-rider-toolbar--bulk" id="riderItemsBulkBar">
                     <div class="pds-rider-toolbar__fields">
                         <div class="pds-dispatch-rider-items-total-wrap">
@@ -64,21 +78,23 @@
                     </div>
                     <div class="pds-rider-toolbar__aside">
                         <div class="pds-rider-bulk-actions">
-                            <div class="pds-dispatch-field pds-dispatch-field-sm">
-                                <label for="riderItemsBulkAction">{{ __('message.update_to') }}</label>
-                                <select id="riderItemsBulkAction" class="pds-dispatch-input pds-dispatch-select">
-                                    @if(count($bulkActions) !== 1)
-                                        <option value="">—</option>
-                                    @endif
-                                    @foreach($bulkActions as $actionKey => $actionLabel)
-                                        <option value="{{ $actionKey }}" @selected(count($bulkActions) === 1)>{{ $actionLabel }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <button type="button" class="pds-rider-check-btn" id="riderItemsBulkUpdate">
-                                <i class="fas fa-sync-alt" aria-hidden="true"></i>
-                                <span>{{ __('message.update') }}</span>
-                            </button>
+                            @if($canBulkUpdate && ($bulkActions ?? []) !== [])
+                                <div class="pds-dispatch-field pds-dispatch-field-sm">
+                                    <label for="riderItemsBulkAction">{{ __('message.update_to') }}</label>
+                                    <select id="riderItemsBulkAction" class="pds-dispatch-input pds-dispatch-select">
+                                        @if(count($bulkActions) !== 1)
+                                            <option value="">—</option>
+                                        @endif
+                                        @foreach($bulkActions as $actionKey => $actionLabel)
+                                            <option value="{{ $actionKey }}" @selected(count($bulkActions) === 1)>{{ $actionLabel }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <button type="button" class="pds-rider-check-btn" id="riderItemsBulkUpdate">
+                                    <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                                    <span>{{ __('message.update') }}</span>
+                                </button>
+                            @endif
                             @if(! empty($canReassignRider))
                                 <button type="button" class="pds-assign-action-btn pds-assign-action-btn--rider" id="riderItemsAssignRider" disabled>
                                     <span class="pds-assign-action-btn__icon" aria-hidden="true">
@@ -86,6 +102,18 @@
                                     </span>
                                     <span class="pds-assign-action-btn__label">{{ __('message.assigned_rider') }}</span>
                                 </button>
+                            @endif
+                            @if(($status ?? '') === 'return')
+                                <div class="pds-return-type-radios" role="radiogroup" aria-label="{{ __('message.return_type') }}">
+                                    <label class="pds-return-type-radio">
+                                        <input type="radio" name="rider_return_type" value="normal" id="riderReturnTypeNormal">
+                                        <span>{{ __('message.return_type_normal') }}</span>
+                                    </label>
+                                    <label class="pds-return-type-radio">
+                                        <input type="radio" name="rider_return_type" value="delivery" id="riderReturnTypeDelivery">
+                                        <span>{{ __('message.return_type_delivery') }}</span>
+                                    </label>
+                                </div>
                             @endif
                         </div>
                     </div>
@@ -114,10 +142,13 @@
                             <thead>
                                 <tr>
                                     <th class="pds-rider-sticky-col pds-rider-sticky-col--no">{{ __('message.no') }}</th>
-                                    @if($canBulkUpdate)
+                                    @if(! empty($canSelectItems))
                                     <th class="pds-rider-sticky-col pds-rider-sticky-col--check">
                                         <input type="checkbox" id="riderItemsSelectAll" title="{{ __('message.select_all') }}">
                                     </th>
+                                    @endif
+                                    @if(! empty($showReturnRetryColumn))
+                                    <th>{{ __('message.follow_up_status_return') }}</th>
                                     @endif
                                     <th>{{ __('message.id') }}</th>
                                     <th>{{ __('message.order') }}</th>
@@ -177,21 +208,46 @@
                                         $totalGateAmount += $gateAmount;
                                         $totalOsToPay += $osToPayDisplay;
                                     @endphp
-                                    <tr data-cust-paid="{{ $custPaid }}" data-deli-amount="{{ $deliAmount }}">
+                                    <tr data-cust-paid="{{ $custPaid }}" data-deli-amount="{{ $deliAmount }}" data-item-id="{{ $item->id }}" data-order-id="{{ $order?->id }}" data-return-type="{{ $item->returnType() ?? '' }}" data-edit-url="{{ $order ? route('order.dispatch.item.edit', [$order->id, $item->id]) : '' }}">
                                         <td class="pds-rider-sticky-col pds-rider-sticky-col--no">{{ $index + 1 }}</td>
-                                        @if($canBulkUpdate)
+                                        @if(! empty($canSelectItems))
                                         <td class="pds-rider-sticky-col pds-rider-sticky-col--check">
-                                            <input type="checkbox" class="pds-rider-item-check" value="{{ $item->id }}">
+                                            <input type="checkbox" class="pds-rider-item-check" value="{{ $item->id }}" data-return-type="{{ $item->returnType() ?? '' }}">
+                                        </td>
+                                        @endif
+                                        @if(! empty($showReturnRetryColumn))
+                                        <td>
+                                            @if($item->isAssignedFromReturn())
+                                                <label class="pds-return-retry-check">
+                                                    <input
+                                                        type="checkbox"
+                                                        class="js-return-retry-check"
+                                                        data-item-id="{{ $item->id }}"
+                                                        @checked($item->isReturnReassigned())
+                                                    >
+                                                    <span>{{ __('message.follow_up_status_return') }}</span>
+                                                </label>
+                                            @endif
                                         </td>
                                         @endif
                                         <td>{{ $item->id }}</td>
                                         <td>{{ $orderDate }}</td>
                                         <td>{{ $receivedDate }}</td>
-                                        <td><span class="pds-rider-code">{{ $item->code ?? '-' }}</span></td>
+                                        <td>
+                                            <span class="pds-rider-code">{{ $item->code ?? '-' }}</span>
+                                            @if($item->kyoShinItem)
+                                                <span class="pds-kyo-shin-row-badge">{{ __('message.kyo_shin_title') }}</span>
+                                            @endif
+                                        </td>
                                         <td>{{ $osName }}</td>
                                         <td>{{ $osPhone !== '-' ? $osPhone : '' }}</td>
                                         <td title="{{ $osAddress }}">{{ stringLong($osAddress, 'title', 18) ?: '' }}</td>
-                                        <td>{{ $item->customer_name ?: '-' }}</td>
+                                        <td>
+                                            {{ $item->customer_name ?: '-' }}
+                                            @if($item->kyoShinItem)
+                                                <span class="pds-kyo-shin-row-badge">{{ __('message.kyo_shin_title') }}</span>
+                                            @endif
+                                        </td>
                                         <td>{{ $item->customer_phone ?: '-' }}</td>
                                         <td>{{ $township }}</td>
                                         <td title="{{ $item->customer_address }}">{{ stringLong($item->customer_address ?? '', 'title', 18) ?: '-' }}</td>
@@ -219,7 +275,7 @@
                             </tbody>
                             <tfoot>
                                 <tr class="pds-rider-items-total-row">
-                                    <td colspan="{{ $canBulkUpdate ? 13 : 12 }}" class="pds-rider-items-total-label-cell">
+                                    <td colspan="{{ (! empty($canSelectItems) ? 13 : 12) + (! empty($showReturnRetryColumn) ? 1 : 0) }}" class="pds-rider-items-total-label-cell">
                                         {{ __('message.total_amount') }}
                                     </td>
                                     <td class="text-right pds-rider-money">{{ $totalOsPaid == 0.0 ? '0' : number_format($totalOsPaid) }}</td>
@@ -305,9 +361,17 @@
                 <div class="pds-delivered-modal__body">
                     @if(!empty($isIntercityDelivered))
                         <input type="hidden" name="rider_delivered_type" value="intercity" id="riderDeliveredTypeIntercity">
-                        @if(($deliverySettlementMode ?? '') !== \App\Models\Branch::SETTLEMENT_HALF_DELI)
-                            <div class="pds-delivered-modal__gate" id="riderDeliveredAgentAmountWrap">
-                                <label for="riderDeliveredAgentAmount">{{ __('message.agent_income') }}</label>
+                        @if(($deliverySettlementMode ?? '') === \App\Models\Branch::SETTLEMENT_HALF_DELI)
+                            <div class="pds-delivered-modal__gate is-readonly" id="riderDeliveredHalfDeliWrap">
+                                <label>{{ $rider->name }}</label>
+                                <div class="pds-delivered-modal__gate-input is-readonly" aria-live="polite">
+                                    <span>Ks</span>
+                                    <strong id="riderDeliveredHalfDeliAmount">0</strong>
+                                </div>
+                            </div>
+                        @else
+                            <div class="pds-delivered-modal__gate is-rider-name" id="riderDeliveredAgentAmountWrap">
+                                <label for="riderDeliveredAgentAmount">{{ $rider->name }}</label>
                                 <div class="pds-delivered-modal__gate-input">
                                     <span>Ks</span>
                                     <input type="number" min="0" step="1" id="riderDeliveredAgentAmount" value="" inputmode="numeric" required>
@@ -376,7 +440,7 @@
     @endif
 
     @section('bottom_script')
-        <script src="{{ asset('js/dispatch-item-form.js') }}?v=28"></script>
+        <script src="{{ asset('js/dispatch-item-form.js') }}?v=29"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(document).ready(function () {
@@ -394,6 +458,46 @@
 
                 $(document).on('click', '.pds-dispatch-action-edit.loadRemoteModel', function (e) {
                     e.preventDefault();
+                });
+
+                $(document).on('change', '.js-return-retry-check', function () {
+                    var box = this;
+                    var itemId = parseInt(box.getAttribute('data-item-id') || '0', 10);
+                    var returned = !!box.checked;
+                    if (itemId <= 0) {
+                        box.checked = !returned;
+                        return;
+                    }
+                    box.disabled = true;
+                    $.ajax({
+                        url: toggleReturnUrl.replace(/\/0\/toggle-return$/, '/' + itemId + '/toggle-return'),
+                        type: 'POST',
+                        data: {
+                            _token: $('meta[name="csrf-token"]').attr('content'),
+                            returned: returned ? 1 : 0,
+                        },
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json',
+                        },
+                        success: function (res) {
+                            var fallback = returned
+                                ? @json(__('message.return_retry_restored'))
+                                : @json(__('message.return_retry_cleared'));
+                            var msg = (res && res.message) ? res.message : fallback;
+                            notify(msg, 'success', function () {
+                                window.location.reload();
+                            });
+                        },
+                        error: function (xhr) {
+                            box.disabled = false;
+                            box.checked = !returned;
+                            var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                                ? xhr.responseJSON.message
+                                : @json(__('message.something_went_wrong'));
+                            notify(msg, 'error');
+                        },
+                    });
                 });
 
                 $(document).on('click', '[data-dispatch-item-delete]', function (e) {
@@ -444,6 +548,8 @@
 
                 var canBulkUpdate = @json($canBulkUpdate);
                 var canReassignRider = @json(! empty($canReassignRider));
+                var includeCurrentRider = false;
+                var reassignFromStatus = @json($status ?? 'pending');
                 var currentRiderId = @json((int) $rider->id);
                 var riderBranchId = @json((int) ($rider->branch_id ?? 0));
                 var bulkUpdateUrl = @json(route('order.dispatch.rider-items.bulk-update', ['riderId' => $rider->id]));
@@ -451,8 +557,17 @@
                 var deliverySettlementMode = @json($deliverySettlementMode ?? \App\Models\Branch::SETTLEMENT_MANUAL);
                 var riderBranchName = @json($riderBranchName ?? '');
                 var reassignUrl = @json(route('order.dispatch.rider-items.reassign', ['riderId' => $rider->id]));
+                var setReturnTypeUrl = @json(route('order.dispatch.rider-items.return-type', ['riderId' => $rider->id]));
+                var toggleReturnUrl = @json(route('order.dispatch.rider-items.toggle-return', ['riderId' => $rider->id, 'itemId' => 0]));
+                var isReturnTab = @json(($status ?? '') === 'return');
+                var csrfToken = @json(csrf_token());
                 var riderSearchUrl = @json(route('ajax-list', ['type' => 'dispatch_deliveryman_search']));
                 var riderCache = [];
+                var msgSelectItems = @json(__('message.select_items_to_assign'));
+                var msgReturnTypeRequired = @json(__('message.return_type_required_before_assign'));
+                var msgSelectForReturnType = @json(__('message.return_type_select_items'));
+                var returnTypeReqSeq = 0;
+                var returnTypeXhr = null;
 
                 function formatAmount(value) {
                     return Number(value || 0).toLocaleString('en-US', {
@@ -500,9 +615,6 @@
                 }
 
                 function updateSelectedTotal() {
-                    if (!canBulkUpdate) {
-                        return;
-                    }
                     var total = 0;
                     $('#riderItemsTable tbody .pds-rider-item-check:checked').each(function () {
                         total += parseFloat($(this).closest('tr').data('cust-paid')) || 0;
@@ -682,6 +794,8 @@
                             $('input[name="rider_delivered_type"][value="other"]').prop('checked', true);
                             $('#riderDeliveredGateAmount').val('0');
                             syncDeliveredGateAmountVisibility();
+                        } else if (deliverySettlementMode === 'half_deli') {
+                            $('#riderDeliveredHalfDeliAmount').text(formatAmount(selectedHalfDeliTotal()));
                         } else if (deliverySettlementMode !== 'half_deli') {
                             var halfTotal = selectedHalfDeliTotal();
                             $('#riderDeliveredAgentAmount').val(
@@ -809,7 +923,7 @@
                     }
                     $.get(riderSearchUrl, params, function (res) {
                         riderCache = (res.results || []).filter(function (row) {
-                            return parseInt(row.id, 10) !== currentRiderId;
+                            return includeCurrentRider || parseInt(row.id, 10) !== currentRiderId;
                         });
                         if (typeof callback === 'function') {
                             callback(riderCache);
@@ -827,6 +941,7 @@
                             _token: $('meta[name="csrf-token"]').attr('content'),
                             item_ids: itemIds,
                             delivery_man_id: riderId,
+                            from_status: reassignFromStatus,
                         },
                         headers: {
                             'X-Requested-With': 'XMLHttpRequest',
@@ -856,8 +971,21 @@
                     $('#riderItemsAssignRider').on('click', function () {
                         var ids = selectedItemIds();
                         if (!ids.length) {
-                            notify(@json(__('message.select_items_to_assign')), 'error');
+                            notify(msgSelectItems, 'error');
                             return;
+                        }
+                        if (isReturnTab) {
+                            var missing = [];
+                            $('#riderItemsTable tbody .pds-rider-item-check:checked').each(function () {
+                                var type = String($(this).attr('data-return-type') || $(this).closest('tr').attr('data-return-type') || '').trim();
+                                if (type !== 'normal' && type !== 'delivery') {
+                                    missing.push($(this).val());
+                                }
+                            });
+                            if (missing.length) {
+                                notify(msgReturnTypeRequired, 'error');
+                                return;
+                            }
                         }
                         $('#rider_modal_search').val('');
                         loadReassignRiders(function (rows) {
@@ -877,6 +1005,89 @@
                             return;
                         }
                         submitReassignRider(ids, rider.id);
+                    });
+                }
+
+                if (isReturnTab) {
+                    $('input[name="rider_return_type"]').on('change', function () {
+                        var returnType = String($(this).val() || '');
+                        var ids = selectedItemIds();
+                        if (!ids.length) {
+                            $(this).prop('checked', false);
+                            notify(msgSelectForReturnType, 'error');
+                            return;
+                        }
+
+                        // Abort in-flight request so a late "Normal" response cannot
+                        // wipe Deli Amount after "Delivery" was chosen (or vice versa).
+                        if (returnTypeXhr && typeof returnTypeXhr.abort === 'function') {
+                            try { returnTypeXhr.abort(); } catch (e) {}
+                        }
+                        var reqSeq = ++returnTypeReqSeq;
+                        $('input[name="rider_return_type"]').prop('disabled', true);
+
+                        returnTypeXhr = $.ajax({
+                            url: setReturnTypeUrl,
+                            type: 'POST',
+                            data: {
+                                _token: csrfToken,
+                                item_ids: ids,
+                                return_type: returnType,
+                            },
+                            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                            success: function (res) {
+                                if (reqSeq !== returnTypeReqSeq) {
+                                    return;
+                                }
+                                var items = res.items || [];
+                                items.forEach(function (row) {
+                                    var $tr = $('#riderItemsTable tbody tr[data-item-id="' + row.id + '"]');
+                                    $tr.attr('data-return-type', row.return_type || '');
+                                    $tr.find('.pds-rider-item-check').attr('data-return-type', row.return_type || '');
+                                    if (row.edit_url) {
+                                        $tr.attr('data-edit-url', row.edit_url);
+                                    }
+                                });
+                                var first = items[0];
+                                var editUrl = first && first.edit_url
+                                    ? first.edit_url
+                                    : ($('#riderItemsTable tbody .pds-rider-item-check:checked').first().closest('tr').attr('data-edit-url') || '');
+                                if (editUrl) {
+                                    // Open Add Or Update Item (same remote modal as pen edit).
+                                    var $link = $('<a>', {
+                                        href: editUrl,
+                                        class: 'loadRemoteModel',
+                                        css: { display: 'none' },
+                                    }).appendTo(document.body);
+                                    $link.trigger('click');
+                                    setTimeout(function () { $link.remove(); }, 500);
+                                } else {
+                                    var msg = (res && res.message)
+                                        ? res.message
+                                        : @json(__('message.return_type_saved'));
+                                    notify(msg, 'success');
+                                }
+                            },
+                            error: function (xhr) {
+                                if (reqSeq !== returnTypeReqSeq) {
+                                    return;
+                                }
+                                if (xhr && xhr.statusText === 'abort') {
+                                    return;
+                                }
+                                $('input[name="rider_return_type"]').prop('checked', false);
+                                var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                                    ? xhr.responseJSON.message
+                                    : @json(__('message.something_went_wrong'));
+                                notify(msg, 'error');
+                            },
+                            complete: function () {
+                                if (reqSeq === returnTypeReqSeq) {
+                                    $('input[name="rider_return_type"]').prop('disabled', false);
+                                    returnTypeXhr = null;
+                                }
+                            },
+                        });
                     });
                 }
             });

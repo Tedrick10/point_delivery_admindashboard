@@ -209,7 +209,7 @@
                     <h5 id="expense-form-title">{{ __('message.expenses_add_card') }}</h5>
                     <div class="pds-expense-modal__date">
                         <label for="expense-date-input">{{ __('message.date') }}</label>
-                        <input type="date" id="expense-date-input" class="form-control" value="{{ $today }}">
+                        <input type="date" id="expense-date-input" class="form-control" value="{{ $defaultExpenseDay ?? $today }}">
                     </div>
                 </header>
                 <div class="pds-expense-modal__cols">
@@ -311,7 +311,11 @@
     <script>
         (function bootExpenseFilters() {
             if (typeof flatpickr !== 'undefined') {
-                flatpickr('#expenses_from, #expenses_to', { dateFormat: 'd-m-Y', allowInput: true });
+                if (typeof window.pdsBindDmyDatepickers === 'function') {
+                    window.pdsBindDmyDatepickers('#expenses_from, #expenses_to');
+                } else {
+                    flatpickr('#expenses_from, #expenses_to', { dateFormat: 'd-m-Y', allowInput: true, disableMobile: true });
+                }
             } else {
                 setTimeout(bootExpenseFilters, 40);
             }
@@ -348,6 +352,7 @@
                 agentFeeViewPhotos: @json(__('message.expenses_agent_fee_view_photos')),
                 pointIncome: @json(__('message.point_income')),
                 agentIncome: @json(__('message.agent_income')),
+                deliveryMan: @json(__('message.delivery_man')),
                 generateLabel: @json(__('message.expense_summary_generate')),
                 generatedLabel: @json(__('message.expense_summary_generated_btn')),
                 generateOk: @json(__('message.expense_summary_generated')),
@@ -472,7 +477,7 @@
                         </button>
                         <div class="pds-expense-agent-photos__meta">
                             ${p.order_id ? `<span>Order #${escapeAttr(p.order_id)}</span>` : ''}
-                            <strong>${escapeAttr(i18n.agentIncome)}: ${fmt(p.agent_amount)}</strong>
+                            <strong>${escapeAttr(p.rider_name || i18n.deliveryMan)}: ${fmt(p.agent_amount)}</strong>
                         </div>
                     </article>
                 `).join('');
@@ -608,7 +613,7 @@
                 setFormViewMode(mode === 'view');
                 editingId = (mode === 'edit' || mode === 'view') && card ? Number(card.dataset.id) : null;
                 titleEl.textContent = viewingOnly ? i18n.viewTitle : (editingId ? i18n.editTitle : i18n.addTitle);
-                dateInput.value = card?.dataset.date || @json($today);
+                dateInput.value = card?.dataset.date || @json($defaultExpenseDay ?? $today);
                 rowsEl.innerHTML = '';
                 let items = [];
                 if (card?.dataset.items) {

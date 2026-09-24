@@ -90,13 +90,22 @@
                                     <tr>
                                         <td class="text-center">{{ $index + 1 }}</td>
                                         <td>{{ $row['date'] }}</td>
-                                        <td>{{ $row['customer'] }}</td>
+                                        <td>
+                                            {{ $row['customer'] }}
+                                            @include('order.partials._slip-kyo-shin-badge', ['row' => $row])
+                                        </td>
                                         <td>{{ $row['phone'] }}</td>
                                         <td title="{{ $row['address'] }}">{{ stringLong($row['address'], 'title', 36) ?: '-' }}</td>
                                         <td class="text-right">{{ number_format($row['item_value']) }}</td>
                                         <td class="text-right pds-os-slip__col-deli">{!! formatDeliAmountDisplayHtml($row['deli_amount_display'] ?? null, $row['deli_amount'] ?? 0) !!}</td>
                                         <td class="text-right">{{ $row['gate'] ?? number_format((float) ($row['gate_amount'] ?? 0)) }}</td>
-                                        <td class="text-right {{ $row['os_to_pay_is_receive'] ? 'is-negative' : '' }}">{{ $row['os_to_pay_display'] }}</td>
+                                        <td class="text-right {{ !empty($row['exclude_from_settlement_amount']) ? '' : ($row['os_to_pay_is_receive'] ? 'is-negative' : '') }}">
+                                            @if(!empty($row['exclude_from_settlement_amount']))
+                                                <span class="pds-slip-kyo-shin-badge" style="display:inline-block;padding:1px 7px;border-radius:999px;background:#ffedd5;color:#c2410c;font-size:10px;font-weight:800;">{{ __('message.kyo_shin_title') }}</span>
+                                            @else
+                                                {{ $row['os_to_pay_display'] }}
+                                            @endif
+                                        </td>
                                     </tr>
                                 @empty
                                     <tr>

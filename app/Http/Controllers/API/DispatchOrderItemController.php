@@ -97,6 +97,7 @@ class DispatchOrderItemController extends Controller
             ->whereIn('status', ['collected', 'assigned'])
             ->firstOrFail();
 
+        $workflow = app(DispatchOrderWorkflowService::class);
         $audit = app(DispatchOrderAuditService::class);
         $before = $audit->itemSnapshot($item);
 
@@ -108,12 +109,19 @@ class DispatchOrderItemController extends Controller
 
         if ($request->filled('pay_mode') || $request->exists('deli_amount') || $request->exists('item_value')) {
             $payMode = (string) ($request->input('pay_mode') ?: $this->inferPickupPayMode($item));
-            $deliAmount = $request->exists('deli_amount')
-                ? (float) $request->input('deli_amount')
-                : (float) ($item->deli_amount ?? 0);
-            $itemValue = $request->exists('item_value')
-                ? (float) $request->input('item_value')
-                : (float) ($item->item_value ?? 0);
+            $amountLocked = $workflow->isKyoShinAmountLocked($item);
+            $itemValueLocked = $workflow->isKyoShinItemValueLocked($item);
+            $deliLocked = $workflow->isKyoShinDeliAmountLocked($item);
+            $deliAmount = $deliLocked
+                ? (float) ($item->deli_amount ?? 0)
+                : ($request->exists('deli_amount')
+                    ? (float) $request->input('deli_amount')
+                    : (float) ($item->deli_amount ?? 0));
+            $itemValue = ($amountLocked || $itemValueLocked)
+                ? (float) ($item->item_value ?? 0)
+                : ($request->exists('item_value')
+                    ? (float) $request->input('item_value')
+                    : (float) ($item->item_value ?? 0));
 
             if ($payMode === 'pay_done') {
                 $creditTo = 'os';
@@ -522,6 +530,7 @@ class DispatchOrderItemController extends Controller
             })
             ->firstOrFail();
 
+        $workflow = app(DispatchOrderWorkflowService::class);
         $audit = app(DispatchOrderAuditService::class);
         $before = $audit->itemSnapshot($item);
 
@@ -541,10 +550,17 @@ class DispatchOrderItemController extends Controller
         $creditToRaw = $data['credit_to'] ?? 'customer';
         $creditTo = in_array($creditToRaw, ['os', 'customer'], true) ? $creditToRaw : 'customer';
 
-        $itemValue = array_key_exists('item_value', $data)
-            ? (float) ($data['item_value'] ?? 0)
-            : (float) ($data['customer_pay'] ?? 0);
-        $deliAmount = (float) ($data['deli_amount'] ?? 0);
+        $amountLocked = $workflow->isKyoShinAmountLocked($item);
+        $itemValueLocked = $workflow->isKyoShinItemValueLocked($item);
+        $deliLocked = $workflow->isKyoShinDeliAmountLocked($item);
+        $itemValue = ($amountLocked || $itemValueLocked)
+            ? (float) ($item->item_value ?? 0)
+            : (array_key_exists('item_value', $data)
+                ? (float) ($data['item_value'] ?? 0)
+                : (float) ($data['customer_pay'] ?? 0));
+        $deliAmount = $deliLocked
+            ? (float) ($item->deli_amount ?? 0)
+            : (float) ($data['deli_amount'] ?? 0);
         $osPaid = $creditTo === 'os'
             ? (float) ($data['os_paid'] ?? $data['os_pay'] ?? 0)
             : 0;
@@ -708,9 +724,11 @@ class DispatchOrderItemController extends Controller
 
         $riderScope = fn ($q) => $q->where('delivery_man_id', $user->id);
 
+        // Hide Admin-Completed (and later Finished) parcels from Rider Delivery.
         $baseQuery = DispatchOrderItem::query()
             ->where($riderScope)
-            ->whereIn('status', $statuses);
+            ->whereIn('status', $statuses)
+            ->whereNull('admin_completed_at');
         $this->applyDeliveryListDayFilter($baseQuery, $fromDay, $toDay);
 
         $counts = [
@@ -718,13 +736,22 @@ class DispatchOrderItemController extends Controller
             'courier_assigned' => (clone $baseQuery)->where('status', 'courier_assigned')->count(),
             'courier_departed' => (clone $baseQuery)->where('status', 'courier_departed')->count(),
             'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
-            'completed' => (clone $baseQuery)->where('status', 'completed')->count(),
+            'return' => (clone $baseQuery)->where('status', 'return')->whereNull('admin_finished_at')->count(),
+            'os_returned' => (clone $baseQuery)->where('status', 'os_returned')->count(),
+            // Delivered only — not Admin Completed / Finished.
+            'completed' => (clone $baseQuery)->where(function ($q) {
+                $q->where('status', 'completed')
+                    ->orWhere(function ($ret) {
+                        $ret->where('status', 'return')->whereNotNull('admin_finished_at');
+                    });
+            })->count(),
         ];
 
         $query = DispatchOrderItem::query()
             ->where($riderScope)
             ->whereIn('status', $statuses)
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city'])
+            ->whereNull('admin_completed_at')
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
         $this->applyDeliveryListDayFilter($query, $fromDay, $toDay);
@@ -732,6 +759,15 @@ class DispatchOrderItemController extends Controller
         if ($statusFilter !== '' && $statusFilter !== 'all') {
             if ($statusFilter === 'courier_assigned') {
                 $query->where('status', 'courier_assigned');
+            } elseif ($statusFilter === 'completed') {
+                $query->where(function ($q) {
+                    $q->where('status', 'completed')
+                        ->orWhere(function ($ret) {
+                            $ret->where('status', 'return')->whereNotNull('admin_finished_at');
+                        });
+                });
+            } elseif ($statusFilter === 'return') {
+                $query->where('status', 'return')->whereNull('admin_finished_at');
             } elseif (! in_array($statusFilter, $statuses, true)) {
                 return json_custom_response([
                     'status' => false,
@@ -801,10 +837,11 @@ class DispatchOrderItemController extends Controller
             'courier_assigned' => (clone $baseQuery)->where('status', 'courier_assigned')->count(),
             'courier_departed' => (clone $baseQuery)->where('status', 'courier_departed')->count(),
             'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
+            'return' => (clone $baseQuery)->where('status', 'return')->whereNull('admin_finished_at')->count(),
             'completed' => (clone $baseQuery)->where('status', 'completed')->whereNull('admin_completed_at')->count(),
             'delivered' => (clone $baseQuery)->where('status', 'completed')->whereNull('admin_completed_at')->count(),
             'admin_completed' => (clone $baseQuery)->where('status', 'completed')->whereNotNull('admin_completed_at')->whereNull('admin_finished_at')->count(),
-            'finished' => (clone $baseQuery)->where('status', 'completed')->whereNotNull('admin_finished_at')->count(),
+            'finished' => (clone $baseQuery)->whereNotNull('admin_finished_at')->whereIn('status', ['completed', 'return'])->count(),
             'undelivered' => (clone $baseQuery)->whereIn('status', ['assigned', 'courier_assigned', 'courier_departed', 'pending'])->count(),
         ];
 
@@ -813,7 +850,7 @@ class DispatchOrderItemController extends Controller
             ->whereHas('order', function ($q) use ($user) {
                 $q->where('client_id', $user->id);
             })
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
         $this->applyDeliveryListDayFilter($query, $fromDay, $toDay);
@@ -831,7 +868,9 @@ class DispatchOrderItemController extends Controller
                 ->whereNotNull('admin_completed_at')
                 ->whereNull('admin_finished_at');
         } elseif ($statusFilter === 'finished') {
-            $query->where('status', 'completed')->whereNotNull('admin_finished_at');
+            $query->whereIn('status', ['completed', 'return'])->whereNotNull('admin_finished_at');
+        } elseif ($statusFilter === 'return') {
+            $query->where('status', 'return')->whereNull('admin_finished_at');
         } elseif ($statusFilter !== '' && $statusFilter !== 'all') {
             if (! in_array($statusFilter, $statuses, true)) {
                 return json_custom_response([
@@ -899,7 +938,7 @@ class DispatchOrderItemController extends Controller
         }
 
         $items = $query
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id')
             ->get();
@@ -936,7 +975,7 @@ class DispatchOrderItemController extends Controller
         $workflow = app(DispatchOrderWorkflowService::class);
         // Include Assign 100 pool (`assigned`) plus later delivery stages.
         $visibleStatuses = array_values(array_unique(array_merge(
-            ['assigned'],
+            ['assigned', 'return'],
             $workflow->deliveryItemStatuses()
         )));
         $item = DispatchOrderItem::query()
@@ -945,7 +984,7 @@ class DispatchOrderItemController extends Controller
             ->whereHas('order', function ($q) use ($user) {
                 $q->where('client_id', $user->id);
             })
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
             ->first();
 
         if (! $item) {
@@ -980,7 +1019,7 @@ class DispatchOrderItemController extends Controller
             ->where('id', $itemId)
             ->where('delivery_man_id', $user->id)
             ->whereIn('status', $statuses)
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
             ->first();
 
         if (! $item) {
@@ -1061,7 +1100,7 @@ class DispatchOrderItemController extends Controller
 
         $toStatus = (string) $request->input('status', '');
         $rules = [
-            'status' => 'required|string|in:courier_departed,pending,completed',
+            'status' => 'required|string|in:courier_departed,pending,completed,return,os_returned',
             'remark' => 'nullable|string|max:1000',
             'pending_photo' => 'nullable|image|max:10240',
             'delivered_photo' => 'nullable|image|max:10240',
@@ -1138,6 +1177,18 @@ class DispatchOrderItemController extends Controller
             }
         }
 
+        if ($toStatus === 'return') {
+            $fill['delivery_locked'] = true;
+        }
+
+        if ($toStatus === 'os_returned') {
+            $fill['delivery_locked'] = true;
+            if ($item->isKyoShinGiven()) {
+                $fill['rider_remit_at'] = null;
+                $fill['rider_remit_date'] = resolveRiderRemitDate((int) ($item->delivery_man_id ?? 0));
+            }
+        }
+
         if ($toStatus === 'pending') {
             if (! $request->hasFile('pending_photo')) {
                 return json_custom_response([
@@ -1164,6 +1215,20 @@ class DispatchOrderItemController extends Controller
                 (int) $user->id,
                 (int) $user->id
             );
+        }
+        if (in_array($toStatus, ['return', 'os_returned'], true) && $item->isKyoShinGiven()) {
+            try {
+                app(\App\Services\KyoShinService::class)->markReturnMoneyReceivedForItemIds(
+                    [(int) $item->id],
+                    (int) $user->id
+                );
+            } catch (\Throwable $e) {
+                \Log::warning('kyo shin return money receive failed after rider status', [
+                    'item_id' => $item->id,
+                    'to_status' => $toStatus,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
         $item = $item->fresh(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city']);
 
@@ -1229,6 +1294,155 @@ class DispatchOrderItemController extends Controller
     }
 
     /**
+     * Client (User App) tracking search — Pick Up + Order items by name / phone / code.
+     * No date filter: search the authenticated client's visible items.
+     */
+    public function searchClientTrackItems(Request $request)
+    {
+        $user = auth()->user();
+        if (! $user || $user->user_type !== 'client') {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.demo_permission_denied'),
+            ], 403);
+        }
+
+        $q = trim((string) $request->get('q', ''));
+        if (mb_strlen($q) < 2) {
+            return json_custom_response([
+                'status' => false,
+                'message' => 'Please enter at least 2 characters to search.',
+            ], 422);
+        }
+
+        $workflow = app(DispatchOrderWorkflowService::class);
+        $statuses = $workflow->clientVisibleItemStatuses();
+        $orderStatuses = $workflow->clientDeliveryItemStatuses();
+        $kind = trim((string) $request->get('kind', 'all'));
+
+        $like = '%'.$q.'%';
+        $query = DispatchOrderItem::query()
+            ->whereIn('status', $statuses)
+            ->whereHas('order', function ($orderQ) use ($user) {
+                $orderQ->where('client_id', $user->id);
+            })
+            ->where(function ($builder) use ($like, $q) {
+                $builder->where('customer_name', 'like', $like)
+                    ->orWhere('customer_phone', 'like', $like)
+                    ->orWhere('code', 'like', $like);
+
+                $digits = preg_replace('/\D+/', '', $q);
+                if ($digits !== null && $digits !== '' && strlen($digits) >= 2) {
+                    $builder->orWhereRaw(
+                        "REPLACE(REPLACE(REPLACE(COALESCE(customer_phone,''), ' ', ''), '-', ''), '+', '') LIKE ?",
+                        ['%'.$digits.'%']
+                    );
+                }
+            });
+
+        if ($kind === 'pickup') {
+            $query->where('status', 'collected');
+        } elseif ($kind === 'order') {
+            $query->whereIn('status', $orderStatuses);
+        }
+
+        $query->with([
+            'fromBranch',
+            'toBranch',
+            'photoMedia',
+            'pendingPhotoMedia',
+            'deliveredPhotoMedia',
+            'pendingRemarks.photoMedia',
+            'deliveryMan',
+            'order.city',
+        ])
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id');
+
+        $perPage = config('constant.PER_PAGE_LIMIT', 20);
+        if ($request->filled('per_page') && is_numeric($request->per_page)) {
+            $perPage = max(1, min(50, (int) $request->per_page));
+        }
+
+        $page = $query->paginate($perPage);
+        $items = DispatchOrderItemResource::collection($page);
+
+        return json_custom_response([
+            'pagination' => json_pagination_response($items),
+            'data' => $items,
+        ]);
+    }
+
+    /**
+     * Public (guest) tracking search — Login screen / no auth.
+     * Match by customer name / phone / voucher code across client-visible items.
+     */
+    public function searchPublicTrackItems(Request $request)
+    {
+        $q = trim((string) $request->get('q', ''));
+        if (mb_strlen($q) < 2) {
+            return json_custom_response([
+                'status' => false,
+                'message' => 'Please enter at least 2 characters to search.',
+            ], 422);
+        }
+
+        $workflow = app(DispatchOrderWorkflowService::class);
+        $statuses = $workflow->clientVisibleItemStatuses();
+        $orderStatuses = $workflow->clientDeliveryItemStatuses();
+        $kind = trim((string) $request->get('kind', 'all'));
+
+        $like = '%'.$q.'%';
+        $query = DispatchOrderItem::query()
+            ->whereIn('status', $statuses)
+            ->where(function ($builder) use ($like, $q) {
+                $builder->where('customer_name', 'like', $like)
+                    ->orWhere('customer_phone', 'like', $like)
+                    ->orWhere('code', 'like', $like);
+
+                $digits = preg_replace('/\D+/', '', $q);
+                if ($digits !== null && $digits !== '' && strlen($digits) >= 2) {
+                    $builder->orWhereRaw(
+                        "REPLACE(REPLACE(REPLACE(COALESCE(customer_phone,''), ' ', ''), '-', ''), '+', '') LIKE ?",
+                        ['%'.$digits.'%']
+                    );
+                }
+            });
+
+        if ($kind === 'pickup') {
+            $query->where('status', 'collected');
+        } elseif ($kind === 'order') {
+            $query->whereIn('status', $orderStatuses);
+        }
+
+        $query->with([
+            'fromBranch',
+            'toBranch',
+            'photoMedia',
+            'pendingPhotoMedia',
+            'deliveredPhotoMedia',
+            'pendingRemarks.photoMedia',
+            'deliveryMan',
+            'order.city',
+        ])
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id');
+
+        $perPage = config('constant.PER_PAGE_LIMIT', 20);
+        if ($request->filled('per_page') && is_numeric($request->per_page)) {
+            $perPage = max(1, min(50, (int) $request->per_page));
+        }
+
+        $page = $query->paginate($perPage);
+        $items = DispatchOrderItemResource::collection($page);
+
+        return json_custom_response([
+            'pagination' => json_pagination_response($items),
+            'data' => $items,
+        ]);
+    }
+
+    /**
      * Rider search — Assign 100 pool (status=assigned, no delivery rider yet).
      * Match Customer Name / Phone / Voucher Code (item.code).
      */
@@ -1277,7 +1491,7 @@ class DispatchOrderItemController extends Controller
                         ->orWhere('to_branch_id', $riderBranchId);
                 });
             })
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'deliveryMan', 'order.city'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
 
@@ -1300,6 +1514,28 @@ class DispatchOrderItemController extends Controller
      * Removes it from Admin Assign 100 automatically (status leaves `assigned`).
      */
     public function assignDeliveryItemToMe(Request $request, $itemId)
+    {
+        return $this->assignAssign100ItemToCurrentRider((int) $itemId, null);
+    }
+
+    /**
+     * Rider scans the Assign 100 airway-bill QR and auto-assigns that parcel.
+     */
+    public function assignDeliveryItemByScan(Request $request)
+    {
+        $raw = trim((string) $request->input('payload', $request->input('code', '')));
+        $parsed = \App\Services\Assign100LabelService::parse($raw);
+        if (! $parsed) {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.assign_100_qr_invalid'),
+            ], 422);
+        }
+
+        return $this->assignAssign100ItemToCurrentRider($parsed['item_id'], $parsed['code']);
+    }
+
+    protected function assignAssign100ItemToCurrentRider(?int $itemId, ?string $code)
     {
         $user = auth()->user();
         if (! $user || $user->user_type !== 'delivery_man') {
@@ -1325,17 +1561,43 @@ class DispatchOrderItemController extends Controller
 
         app(DispatchOrderWorkflowService::class)->reclaimPrematureAssign100Items();
 
-        $item = DispatchOrderItem::query()
-            ->where('id', $itemId)
-            ->where('status', 'assigned')
-            ->whereNull('delivery_man_id')
-            ->first();
+        $query = DispatchOrderItem::query();
+        if ($itemId) {
+            $query->where('id', $itemId);
+        }
+        if ($code) {
+            $query->where('code', $code);
+        }
+        if (! $itemId && ! $code) {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.assign_100_qr_invalid'),
+            ], 422);
+        }
 
+        $item = $query->first();
         if (! $item) {
             return json_custom_response([
                 'status' => false,
                 'message' => __('message.not_found_entry', ['name' => __('message.item_name')]),
             ], 404);
+        }
+
+        if ((int) ($item->delivery_man_id ?? 0) === (int) $user->id
+            && in_array((string) $item->status, ['courier_assigned', 'courier_departed', 'pending', 'completed'], true)) {
+            return json_custom_response([
+                'status' => true,
+                'already_assigned' => true,
+                'message' => __('message.assign_100_already_yours'),
+                'data' => new DispatchOrderItemResource($item->fresh(['fromBranch', 'toBranch', 'photoMedia', 'deliveryMan', 'order.city'])),
+            ]);
+        }
+
+        if ($item->status !== 'assigned' || $item->delivery_man_id) {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.assign_100_already_assigned'),
+            ], 422);
         }
 
         $riderBranchId = (int) ($user->branch_id ?? 0);

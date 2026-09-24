@@ -38,7 +38,7 @@ class User extends Authenticatable implements HasMedia
         ,'app_version', 'last_location_update_at', 'app_source','last_actived_at','document_verified_at' ,'is_autoverified_document',
         'is_autoverified_email','is_autoverified_mobile','vehicle_id','referral_code','partner_referral_code','flag','apple_user_identifier',
         'is_vip', 'welcome_orders_used', 'is_temp_password', 'created_by_admin', 'is_dispatch_hub', 'is_mdy_return',
-        'hub_parent_id', 'os_profile',
+        'hub_parent_id', 'os_profile', 'is_kyo_shin',
         'approval_status',
     ];
 
@@ -72,6 +72,7 @@ class User extends Authenticatable implements HasMedia
         'os_profile' => 'array',
         'is_dispatch_hub' => 'boolean',
         'is_mdy_return' => 'boolean',
+        'is_kyo_shin' => 'boolean',
         'hub_parent_id' => 'integer',
     ];
 

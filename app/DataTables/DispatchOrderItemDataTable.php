@@ -13,14 +13,21 @@ class DispatchOrderItemDataTable extends DataTable
 
     protected $orderId;
 
+    protected $toBranchId;
+
     public function with(array|string $key, mixed $value = null): static
     {
         if (is_array($key)) {
             if (isset($key['order_id'])) {
                 $this->orderId = $key['order_id'];
             }
+            if (array_key_exists('to_branch_id', $key)) {
+                $this->toBranchId = (int) $key['to_branch_id'];
+            }
         } elseif ($key === 'order_id') {
             $this->orderId = $value;
+        } elseif ($key === 'to_branch_id') {
+            $this->toBranchId = (int) $value;
         }
 
         return parent::with($key, $value);
@@ -32,13 +39,30 @@ class DispatchOrderItemDataTable extends DataTable
             ->eloquent($query)
             ->addIndexColumn()
             ->addColumn('checkbox', function ($row) {
-                return '<input type="checkbox" class="pds-dispatch-item-check" value="' . $row->id . '">';
+                $alreadyGiven = $row->relationLoaded('kyoShinItem')
+                    ? $row->kyoShinItem !== null
+                    : $row->kyoShinItem()->exists();
+                $disabled = $alreadyGiven ? ' disabled' : '';
+                $title = $alreadyGiven ? ' title="'.e(__('message.kyo_shin_already_given')).'"' : '';
+
+                return '<input type="checkbox" class="pds-dispatch-item-check" value="'.$row->id.'"'
+                    .' data-item-value="'.e((float) ($row->item_value ?? 0)).'"'
+                    .' data-item-code="'.e((string) ($row->code ?? '')).'"'
+                    .$disabled.$title.'>';
             })
             ->editColumn('received_date', function ($row) {
                 return formatDispatchYangonDate($row->received_date);
             })
             ->editColumn('updated_at', function ($row) {
                 return formatDispatchYangonDate($row->updated_at);
+            })
+            ->editColumn('code', function ($row) {
+                $code = e($row->code ?? '-');
+                if ($row->kyoShinItem) {
+                    return $code . ' <span class="pds-kyo-shin-row-badge">' . e(__('message.kyo_shin_title')) . '</span>';
+                }
+
+                return $code;
             })
             ->editColumn('status', function ($row) {
                 $label = strtoupper($row->status ?? 'collected');
@@ -140,25 +164,38 @@ class DispatchOrderItemDataTable extends DataTable
                     'hideGate' => true,
                 ])->render();
             })
-            ->rawColumns(['checkbox', 'status', 'customer_address', 'photo_id', 'deli_amount', 'action']);
+            ->rawColumns(['checkbox', 'code', 'status', 'customer_address', 'photo_id', 'deli_amount', 'action']);
     }
 
     public function query(DispatchOrderItem $model)
     {
         $orderId = $this->orderId ?? request()->route('id');
 
+        $statuses = app(\App\Services\DispatchOrderWorkflowService::class)->clientVisibleItemStatuses();
+
+        $toBranchId = (int) ($this->toBranchId ?? request()->input('to_branch_id', 0));
+
         return $model->newQuery()
             ->where('order_id', $orderId)
-            ->where('status', 'collected')
-            ->with(['toBranch', 'photoMedia', 'order']);
+            ->whereIn('status', $statuses)
+            ->when($toBranchId > 0, fn ($q) => $q->where('to_branch_id', $toBranchId))
+            ->with(['toBranch', 'photoMedia', 'order', 'kyoShinItem']);
     }
 
     protected function getColumns()
     {
         return [
+            [
+                'data' => 'checkbox',
+                'name' => 'checkbox',
+                'title' => '<input type="checkbox" id="dispatchItemsSelectAll" class="pds-dispatch-item-check-all" title="' . e(__('message.select_all')) . '">',
+                'orderable' => false,
+                'searchable' => false,
+                'width' => 36,
+                'className' => 'text-center',
+            ],
             ['data' => 'DT_RowIndex', 'name' => 'DT_RowIndex', 'title' => __('message.no'), 'orderable' => false, 'searchable' => false, 'width' => 40],
             ['data' => 'photo_id', 'name' => 'photo_id', 'title' => __('message.photo_order_images'), 'orderable' => false, 'searchable' => false, 'width' => 70],
-            ['data' => 'checkbox', 'name' => 'checkbox', 'title' => '', 'orderable' => false, 'searchable' => false, 'width' => 30],
             ['data' => 'id', 'name' => 'id', 'title' => __('message.item_id')],
             ['data' => 'received_date', 'name' => 'received_date', 'title' => __('message.received_date')],
             ['data' => 'updated_at', 'name' => 'updated_at', 'title' => __('message.modified_date')],

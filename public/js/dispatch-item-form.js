@@ -20,14 +20,43 @@
         return a.indexOf(b) >= 0 || b.indexOf(a) >= 0;
     }
 
-    function getCreditTo() {
+    function isMandalayName(value) {
+        var n = normalizeName(value);
+        return n === normalizeName('Mandalay')
+            || n === normalizeName('မန္တလေး')
+            || n === 'mdy';
+    }
+
+    function samePlaceName(a, b) {
+        var left = normalizeName(a);
+        var right = normalizeName(b);
+        if (!left || !right) {
+            return false;
+        }
+        if (left === right) {
+            return true;
+        }
+        return isMandalayName(a) && isMandalayName(b);
+    }
+
+    function getCreditMode() {
         return $('input[name="credit_to"]:checked').val() || 'customer';
+    }
+
+    /** Backend credit_to is only os|customer. UI "os_paid" maps to os. */
+    function getCreditTo() {
+        var mode = getCreditMode();
+        return mode === 'os_paid' ? 'os' : mode;
+    }
+
+    function isOsPaidMode() {
+        return getCreditMode() === 'os_paid';
     }
 
     function updateSummary() {
         var itemValue = parseFloat($('#item_value').val()) || 0;
         var deliAmount = parseFloat($('#deli_amount').val()) || 0;
-        var osPaid = parseFloat($('#os_paid').val()) || 0;
+        var osPaid = isOsPaidMode() ? (parseFloat($('#os_paid').val()) || 0) : 0;
         var creditTo = getCreditTo();
         var custGet;
         var osToPay;
@@ -54,16 +83,53 @@
     }
 
     function toggleOsPaidField() {
-        var creditTo = getCreditTo();
         var $wrap = $('#os_paid_field_wrap');
 
-        if (creditTo === 'customer') {
+        if (isOsPaidMode()) {
+            $wrap.show();
+            // Default Os Paid amount to current Deli when empty.
+            var osPaid = parseFloat($('#os_paid').val()) || 0;
+            if (osPaid <= 0) {
+                syncOsPaidWithDeliAmount(true);
+            }
+        } else {
             $wrap.hide();
             $('#os_paid').val(0);
-        } else {
-            $wrap.show();
         }
 
+        updateSummary();
+    }
+
+    /**
+     * When "Os Paid" credit mode is on, keep OsPaid in sync with Deli Amount.
+     */
+    function syncOsPaidWithDeliAmount(force) {
+        if (!isOsPaidMode()) {
+            return;
+        }
+
+        var $osPaid = $('#os_paid');
+        if (!$osPaid.length) {
+            return;
+        }
+
+        if (!force) {
+            // Still sync whenever Deli changes while Os Paid mode is active.
+        }
+
+        var deliAmount = parseFloat($('#deli_amount').val()) || 0;
+        var next = Math.max(0, Math.round(deliAmount));
+        var current = Math.round(parseFloat($osPaid.val()) || 0);
+        if (current === next) {
+            return;
+        }
+
+        $osPaid.val(next);
+    }
+
+    function onDeliAmountChanged() {
+        syncOsPaidWithDeliAmount(false);
+        syncDispatchItemSizeAvailability();
         updateSummary();
     }
 
@@ -136,7 +202,7 @@
             });
 
         $(document).off('input.dispatchItemSizeGate change.dispatchItemSizeGate', '#deli_amount')
-            .on('input.dispatchItemSizeGate change.dispatchItemSizeGate', '#deli_amount', syncDispatchItemSizeAvailability);
+            .on('input.dispatchItemSizeGate change.dispatchItemSizeGate', '#deli_amount', onDeliAmountChanged);
 
         syncDispatchItemSizeAvailability();
     }
@@ -156,12 +222,15 @@
         }
 
         var $osRadio = $('input[name="credit_to"][value="os"]');
+        var $osPaidRadio = $('input[name="credit_to"][value="os_paid"]');
         var $customerRadio = $('input[name="credit_to"][value="customer"]');
 
         $osRadio.prop('disabled', true);
         $osRadio.closest('.pds-dispatch-item-credit-pill').addClass('is-disabled');
+        $osPaidRadio.prop('disabled', true);
+        $osPaidRadio.closest('.pds-dispatch-item-credit-pill').addClass('is-disabled');
 
-        if ($osRadio.is(':checked')) {
+        if ($osRadio.is(':checked') || $osPaidRadio.is(':checked')) {
             $customerRadio.prop('checked', true);
         }
 
@@ -213,8 +282,13 @@
     }
 
     function townshipMatchesSelection(town, selected) {
-        var label = town.name_mm || town.name_en;
-        return selected === label || selected === town.name_en || selected === town.name_mm;
+        var sel = normalizeName(selected);
+        if (!sel) {
+            return false;
+        }
+        return sel === normalizeName(town.name_mm)
+            || sel === normalizeName(town.name_en)
+            || sel === normalizeName(town.label);
     }
 
     function csrfHeaders() {
@@ -233,9 +307,10 @@
         if (!selected) {
             return false;
         }
-        return selected === town.label
-            || selected === town.name
-            || selected === town.name_mm;
+        var sel = normalizeName(selected);
+        return sel === normalizeName(town.label)
+            || sel === normalizeName(town.name)
+            || sel === normalizeName(town.name_mm);
     }
 
     function finishTownshipSelect($township) {
@@ -248,26 +323,34 @@
 
     function renderManagedTownships($township, towns, selected, preserveInvalidSelected, cityName) {
         var resolvedSelected = selected || '';
+        var matchedValue = '';
         var selectedIsValid = !!(resolvedSelected && towns.some(function (town) {
             return townshipMatchesManaged(town, resolvedSelected);
         }));
 
-        if (!selectedIsValid) {
-            resolvedSelected = '';
-        }
-
         towns.forEach(function (town) {
             var label = town.label || town.name_mm || town.name;
             var value = town.name_mm || town.name || label;
-            appendTownshipOption($township, label, value, resolvedSelected ? townshipMatchesManaged(town, resolvedSelected) : false, town.deli_amount);
+            var isSelected = selectedIsValid && townshipMatchesManaged(town, resolvedSelected);
+            if (isSelected) {
+                matchedValue = value;
+            }
+            appendTownshipOption($township, label, value, isSelected, town.deli_amount);
         });
 
         if (preserveInvalidSelected && selected && !selectedIsValid) {
             appendTownshipOption($township, selected, selected, true);
+            matchedValue = selected;
+        }
+
+        if (matchedValue) {
+            $township.val(matchedValue);
         }
 
         finishTownshipSelect($township);
     }
+
+    var townshipLoadSeq = 0;
 
     function loadManagedTownships(cityName, cityId, selected, townshipsUrl, preserveInvalidSelected, fallback) {
         var params = {};
@@ -277,13 +360,20 @@
             params.city = cityName;
         }
 
+        var seq = ++townshipLoadSeq;
         $.getJSON(townshipsUrl, params).done(function (payload) {
+            if (seq !== townshipLoadSeq) {
+                return;
+            }
             if (!payload || !payload.city) {
                 fallback();
                 return;
             }
             renderManagedTownships($('#item_township'), payload.townships || [], selected, preserveInvalidSelected, cityName);
         }).fail(function () {
+            if (seq !== townshipLoadSeq) {
+                return;
+            }
             fallback();
         });
     }
@@ -680,7 +770,17 @@
                 formData.set('item_name', String($form.find('#item_name').val() || '').trim());
                 formData.set('remark', String($form.find('#item_remark').val() || '').trim());
                 formData.set('customer_phone', String($form.find('#customer_phone').val() || '').trim());
-                if (getCreditTo() === 'customer') {
+
+                // UI modes: os | customer | os_paid → backend credit_to is only os|customer.
+                if (isOsPaidMode()) {
+                    formData.set('credit_to', 'os');
+                    syncOsPaidWithDeliAmount(true);
+                    formData.set('os_paid', String(Math.round(parseFloat($('#os_paid').val()) || 0)));
+                } else if (getCreditMode() === 'os') {
+                    formData.set('credit_to', 'os');
+                    formData.set('os_paid', '0');
+                } else {
+                    formData.set('credit_to', 'customer');
                     formData.set('os_paid', '0');
                 }
 
@@ -722,6 +822,17 @@
                             }, 600);
                             return;
                         }
+                        if (res && res.to_branch_id) {
+                            var nextBranch = String(res.to_branch_id);
+                            var branchNode = document.querySelector('[data-active-to-branch]');
+                            var currentBranch = branchNode ? String(branchNode.getAttribute('data-active-to-branch') || '') : '';
+                            if (nextBranch && currentBranch && nextBranch !== currentBranch) {
+                                var nextUrl = new URL(window.location.href);
+                                nextUrl.searchParams.set('to_branch_id', nextBranch);
+                                window.location.href = nextUrl.toString();
+                                return;
+                            }
+                        }
                         window.reloadDispatchItemsTable();
                     },
                     error: function (xhr) {
@@ -747,6 +858,14 @@
 
         var $modal = $(options.modalParent || '#remoteModelData');
         var dropdownParent = $modal.length ? $modal : $(document.body);
+        var savedTownship = String(
+            options.savedTownship
+            || $form.data('savedTownship')
+            || $form.attr('data-saved-township')
+            || $('#item_township').val()
+            || ''
+        ).trim();
+        var isInitializing = true;
 
         $('#item_township').data('placeholder', $('#item_township option:first').text());
 
@@ -781,6 +900,7 @@
             .off('change.dispatchItemTownshipDeli select2:select.dispatchItemTownshipDeli')
             .on('select2:select.dispatchItemTownshipDeli', function () {
                 preserveSavedDeli = false;
+                savedTownship = String($(this).val() || '').trim();
                 applyTownshipDeliAmount();
             })
             .on('change.dispatchItemTownshipDeli', function () {
@@ -797,7 +917,13 @@
                 return;
             }
 
-            var selected = resetTownship ? '' : $('#item_township').val();
+            if (resetTownship) {
+                savedTownship = '';
+            }
+
+            var selected = resetTownship
+                ? ''
+                : (String($('#item_township').val() || '').trim() || savedTownship);
             loadTownships(cityMeta.name, cityMeta.nrcState, selected, options.nrcDataUrl, !resetTownship, {
                 townshipsUrl: options.townshipsUrl,
                 cityId: cityMeta.id
@@ -805,20 +931,25 @@
         }
 
         $('#item_delivery_city').off('change.dispatchItemCity').on('change.dispatchItemCity', function () {
+            if (isInitializing) {
+                return;
+            }
             preserveSavedDeli = false;
             refreshTownships(true);
         });
 
         var toCityName = String($('#to_branch_id option:selected').data('city-name') || '').trim();
         var currentCity = String($('#item_delivery_city').val() || '').trim();
-        var cityLooksMdyDefault = !currentCity
-            || normalizeName(currentCity) === normalizeName('Mandalay')
-            || normalizeName(currentCity) === normalizeName('မန္တလေး');
-        if (toCityName && cityLooksMdyDefault && normalizeName(toCityName) !== normalizeName('Mandalay')) {
-            syncCityFromToBranch(true);
+        var cityLooksMdyDefault = !currentCity || isMandalayName(currentCity);
+        var toIsDifferentCity = toCityName
+            && !samePlaceName(toCityName, currentCity || 'Mandalay')
+            && !(cityLooksMdyDefault && isMandalayName(toCityName));
+        if (toIsDifferentCity && cityLooksMdyDefault) {
+            syncCityFromToBranch(false);
         } else {
             refreshTownships(false);
         }
+        isInitializing = false;
 
         function syncCityFromToBranch(resetTownship) {
             var $opt = $('#to_branch_id option:selected');
@@ -827,6 +958,7 @@
                 return;
             }
             var $city = $('#item_delivery_city');
+            var previousCity = String($city.val() || '').trim();
             var $matched = findOptionByText($city, cityName);
             if ($matched) {
                 $city.val($matched.val());
@@ -837,21 +969,32 @@
                     'data-nrc-state': cityName
                 });
             }
+            var nextCity = String($city.val() || '').trim();
+            var cityChanged = !samePlaceName(previousCity, nextCity);
             if ($city.hasClass('select2-hidden-accessible')) {
                 $city.trigger('change.select2');
             } else {
                 $city.trigger('change');
             }
-            refreshTownships(!!resetTownship);
+            refreshTownships(!!resetTownship && cityChanged);
         }
 
         $('#to_branch_id').off('change.dispatchItemTo').on('change.dispatchItemTo', function () {
+            if (isInitializing) {
+                return;
+            }
             preserveSavedDeli = false;
             syncCityFromToBranch(true);
         });
 
         $(document).off('input.dispatchItemAmount', '.pds-dispatch-item-amount')
-            .on('input.dispatchItemAmount', '.pds-dispatch-item-amount', updateSummary);
+            .on('input.dispatchItemAmount', '.pds-dispatch-item-amount', function () {
+                // Size-gate handler already syncs OsPaid + summary for #deli_amount.
+                if (this.id === 'deli_amount') {
+                    return;
+                }
+                updateSummary();
+            });
 
         $('input[name="credit_to"]').off('change.dispatchItemCredit')
             .on('change.dispatchItemCredit', toggleOsPaidField);
