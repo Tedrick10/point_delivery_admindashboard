@@ -926,11 +926,135 @@ function mediaPublicUrl($media, string $conversionName = ''): ?string
         $relative = '';
     }
 
+    $diskName = (string) ($media->disk ?: 'public');
+    try {
+        $disk = \Illuminate\Support\Facades\Storage::disk($diskName);
+        $fileName = ltrim((string) ($media->file_name ?? ''), '/');
+        $mediaKey = (string) $media->getKey();
+        $uuid = trim((string) ($media->uuid ?? ''));
+
+        $candidates = [];
+        if ($relative !== '') {
+            $candidates[] = $relative;
+        }
+        if ($fileName !== '') {
+            $candidates[] = trim($mediaKey.'/'.$fileName, '/');
+            if ($uuid !== '') {
+                $candidates[] = trim($uuid.'/'.$fileName, '/');
+            }
+        }
+
+        $resolved = null;
+        foreach (array_unique($candidates) as $candidate) {
+            if ($candidate !== '' && $disk->exists($candidate)) {
+                $resolved = $candidate;
+                break;
+            }
+        }
+
+        // DB file_name can drift from disk after restores — use any image in the media folder.
+        if ($resolved === null) {
+            foreach (array_filter([$mediaKey, $uuid]) as $dir) {
+                try {
+                    $files = $disk->files($dir);
+                } catch (\Throwable $e) {
+                    $files = [];
+                }
+                foreach ($files as $path) {
+                    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                    if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'], true)) {
+                        $resolved = ltrim(str_replace('\\', '/', $path), '/');
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        if ($resolved !== null) {
+            $relative = $resolved;
+        } elseif ($relative === '' && $fileName !== '') {
+            $relative = trim($mediaKey.'/'.$fileName, '/');
+        }
+    } catch (\Throwable $e) {
+        // Keep Spatie relative path when disk checks are unavailable.
+    }
+
     if ($relative === '') {
         return null;
     }
 
-    return '/storage/' . $relative;
+    // Encode each path segment (brackets/parentheses in filenames break some browsers).
+    $encoded = implode('/', array_map('rawurlencode', explode('/', $relative)));
+
+    return '/storage/'.$encoded;
+}
+
+/**
+ * Absolute filesystem path for a media file, tolerating DB/disk filename drift.
+ */
+function mediaAbsoluteDiskPath($media, string $conversionName = ''): ?string
+{
+    if (! $media) {
+        return null;
+    }
+
+    $diskName = (string) ($media->disk ?: 'public');
+    try {
+        $disk = \Illuminate\Support\Facades\Storage::disk($diskName);
+    } catch (\Throwable $e) {
+        return null;
+    }
+
+    $fileName = ltrim((string) ($media->file_name ?? ''), '/');
+    $mediaKey = (string) $media->getKey();
+    $uuid = trim((string) ($media->uuid ?? ''));
+
+    $candidates = [];
+    try {
+        $relative = ltrim((string) $media->getPathRelativeToRoot($conversionName), '/');
+        if ($relative !== '') {
+            $candidates[] = $relative;
+        }
+    } catch (\Throwable $e) {
+        // ignore
+    }
+    if ($fileName !== '') {
+        $candidates[] = trim($mediaKey.'/'.$fileName, '/');
+        if ($uuid !== '') {
+            $candidates[] = trim($uuid.'/'.$fileName, '/');
+        }
+    }
+
+    foreach (array_unique(array_filter($candidates)) as $candidate) {
+        if ($disk->exists($candidate)) {
+            return $disk->path($candidate);
+        }
+    }
+
+    foreach (array_filter([$mediaKey, $uuid]) as $dir) {
+        try {
+            $files = $disk->files($dir);
+        } catch (\Throwable $e) {
+            $files = [];
+        }
+        foreach ($files as $path) {
+            $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true)) {
+                return $disk->path(ltrim(str_replace('\\', '/', $path), '/'));
+            }
+        }
+    }
+
+    try {
+        $fallback = $media->getPath($conversionName);
+        if (is_string($fallback) && $fallback !== '' && is_file($fallback)) {
+            return $fallback;
+        }
+    } catch (\Throwable $e) {
+        // ignore
+    }
+
+    return null;
 }
 
 function mediaAbsoluteUrl($media, string $conversionName = ''): ?string

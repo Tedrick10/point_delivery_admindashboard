@@ -15,6 +15,7 @@
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
+
 --
 -- Table structure for table `admin_login_devices`
 --
@@ -117,8 +118,8 @@ CREATE TABLE `app_settings` (
   `instagram_url` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `support_number` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `support_email` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `notification_settings` json DEFAULT NULL,
-  `language_option` json DEFAULT NULL,
+  `notification_settings` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `language_option` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `color` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT '#5e3c9e',
   `prefix` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `auto_assign` tinyint DEFAULT '0',
@@ -136,7 +137,9 @@ CREATE TABLE `app_settings` (
   `updated_at` timestamp NULL DEFAULT NULL,
   `backup_type` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `backup_email` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  CONSTRAINT `app_settings_chk_1` CHECK (json_valid(`notification_settings`)),
+  CONSTRAINT `app_settings_chk_2` CHECK (json_valid(`language_option`))
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -155,12 +158,13 @@ CREATE TABLE `branches` (
   `address` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `phone` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `status` tinyint(1) NOT NULL DEFAULT '1',
+  `delivery_settlement_mode` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'manual',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   `deleted_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `branches_name_unique` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -188,7 +192,7 @@ CREATE TABLE `cities` (
   `commission_type` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'fixed, percentage',
   `admin_commission` double DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -336,7 +340,7 @@ CREATE TABLE `daily_check_invoices` (
   `remitted_date` date DEFAULT NULL,
   `remitted_photo_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `remitted_by` bigint unsigned DEFAULT NULL,
-  `item_ids` json DEFAULT NULL,
+  `item_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `created_by` bigint unsigned DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -349,8 +353,9 @@ CREATE TABLE `daily_check_invoices` (
   KEY `daily_check_invoices_received_date_party_type_index` (`received_date`,`party_type`),
   CONSTRAINT `daily_check_invoices_branch_id_foreign` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`) ON DELETE SET NULL,
   CONSTRAINT `daily_check_invoices_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `daily_check_invoices_remitted_by_foreign` FOREIGN KEY (`remitted_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  CONSTRAINT `daily_check_invoices_remitted_by_foreign` FOREIGN KEY (`remitted_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `daily_check_invoices_chk_1` CHECK (json_valid(`item_ids`))
+) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -370,6 +375,26 @@ CREATE TABLE `default_keywords` (
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=644 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `delivery_cities`
+--
+
+DROP TABLE IF EXISTS `delivery_cities`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `delivery_cities` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name_mm` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sort_order` int unsigned NOT NULL DEFAULT '0',
+  `status` tinyint unsigned NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `delivery_cities_name_unique` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -465,6 +490,29 @@ CREATE TABLE `delivery_man_sections` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `delivery_townships`
+--
+
+DROP TABLE IF EXISTS `delivery_townships`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `delivery_townships` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `delivery_city_id` bigint unsigned NOT NULL,
+  `name` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name_mm` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `deli_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `sort_order` int unsigned NOT NULL DEFAULT '0',
+  `status` tinyint unsigned NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `delivery_townships_delivery_city_id_name_unique` (`delivery_city_id`,`name`),
+  KEY `delivery_townships_delivery_city_id_index` (`delivery_city_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=99 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `deliveryman_vehicle_histories`
 --
 
@@ -474,13 +522,14 @@ DROP TABLE IF EXISTS `deliveryman_vehicle_histories`;
 CREATE TABLE `deliveryman_vehicle_histories` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `delivery_man_id` bigint unsigned DEFAULT NULL,
-  `vehicle_info` json DEFAULT NULL,
+  `vehicle_info` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `start_datetime` datetime DEFAULT NULL,
   `end_datetime` datetime DEFAULT NULL,
   `is_active` tinyint DEFAULT '0',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  CONSTRAINT `deliveryman_vehicle_histories_chk_1` CHECK (json_valid(`vehicle_info`))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -509,7 +558,31 @@ CREATE TABLE `dispatch_item_messages` (
   KEY `dispatch_item_messages_client_id_index` (`client_id`),
   KEY `dispatch_item_messages_sender_id_index` (`sender_id`),
   CONSTRAINT `dispatch_item_messages_dispatch_order_item_id_foreign` FOREIGN KEY (`dispatch_order_item_id`) REFERENCES `dispatch_order_items` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `dispatch_item_pending_remarks`
+--
+
+DROP TABLE IF EXISTS `dispatch_item_pending_remarks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `dispatch_item_pending_remarks` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `dispatch_order_item_id` bigint unsigned NOT NULL,
+  `delivery_man_id` bigint unsigned DEFAULT NULL,
+  `remark` text COLLATE utf8mb4_unicode_ci,
+  `photo_id` bigint unsigned NOT NULL DEFAULT '0',
+  `pending_at` timestamp NULL DEFAULT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `dispatch_item_pending_remarks_dispatch_order_item_id_index` (`dispatch_order_item_id`),
+  KEY `dispatch_item_pending_remarks_delivery_man_id_index` (`delivery_man_id`),
+  KEY `dispatch_item_pending_remarks_pending_at_index` (`pending_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -533,7 +606,15 @@ CREATE TABLE `dispatch_order_items` (
   `code` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `status` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'collected',
   `delivery_locked` tinyint(1) NOT NULL DEFAULT '0',
+  `return_reassigned` tinyint(1) NOT NULL DEFAULT '0',
+  `assigned_from_return` tinyint(1) NOT NULL DEFAULT '0',
+  `return_type` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `delivery_man_id` bigint unsigned DEFAULT NULL,
+  `hub_user_id` bigint unsigned DEFAULT NULL,
+  `hub_inbox_at` timestamp NULL DEFAULT NULL,
+  `hub_accepted_at` timestamp NULL DEFAULT NULL,
+  `mdy_inbox_at` timestamp NULL DEFAULT NULL,
+  `mdy_accepted_at` timestamp NULL DEFAULT NULL,
   `assigned_at` timestamp NULL DEFAULT NULL,
   `admin_updated_at` timestamp NULL DEFAULT NULL,
   `admin_completed_at` timestamp NULL DEFAULT NULL,
@@ -562,6 +643,9 @@ CREATE TABLE `dispatch_order_items` (
   `os_to_pay` decimal(12,2) NOT NULL DEFAULT '0.00',
   `gate_amount` double NOT NULL DEFAULT '0',
   `gate_os_paid` double NOT NULL DEFAULT '0',
+  `point_amount` double NOT NULL DEFAULT '0',
+  `agent_amount` double NOT NULL DEFAULT '0',
+  `agent_expense_branch_id` bigint unsigned DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   `deleted_at` timestamp NULL DEFAULT NULL,
@@ -571,7 +655,7 @@ CREATE TABLE `dispatch_order_items` (
   KEY `dispatch_order_items_delivered_at_index` (`delivered_at`),
   KEY `dispatch_order_items_rider_remit_date_idx` (`rider_remit_date`),
   CONSTRAINT `dispatch_order_items_order_id_foreign` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=143 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=253 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -643,19 +727,21 @@ DROP TABLE IF EXISTS `expense_cards`;
 CREATE TABLE `expense_cards` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `expense_date` date NOT NULL,
+  `branch_id` bigint unsigned DEFAULT NULL,
   `total_amount` decimal(14,2) NOT NULL DEFAULT '0.00',
   `created_by` bigint unsigned DEFAULT NULL,
   `updated_by` bigint unsigned DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `expense_cards_expense_date_unique` (`expense_date`),
+  UNIQUE KEY `expense_cards_date_branch_unique` (`expense_date`,`branch_id`),
   KEY `expense_cards_expense_date_index` (`expense_date`),
   KEY `expense_cards_created_by_foreign` (`created_by`),
   KEY `expense_cards_updated_by_foreign` (`updated_by`),
+  KEY `expense_cards_branch_id_index` (`branch_id`),
   CONSTRAINT `expense_cards_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `expense_cards_updated_by_foreign` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=46 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -680,7 +766,7 @@ CREATE TABLE `expense_items` (
   KEY `expense_items_expense_card_id_sort_order_index` (`expense_card_id`,`sort_order`),
   KEY `expense_items_expense_card_id_source_index` (`expense_card_id`,`source`),
   CONSTRAINT `expense_items_expense_card_id_foreign` FOREIGN KEY (`expense_card_id`) REFERENCES `expense_cards` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -693,6 +779,7 @@ DROP TABLE IF EXISTS `expense_summaries`;
 CREATE TABLE `expense_summaries` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `summary_date` date NOT NULL,
+  `branch_id` bigint unsigned DEFAULT NULL,
   `expense_card_id` bigint unsigned DEFAULT NULL,
   `income` decimal(14,2) NOT NULL DEFAULT '0.00',
   `expense` decimal(14,2) NOT NULL DEFAULT '0.00',
@@ -701,13 +788,35 @@ CREATE TABLE `expense_summaries` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `expense_summaries_summary_date_unique` (`summary_date`),
+  UNIQUE KEY `expense_summaries_date_branch_unique` (`summary_date`,`branch_id`),
   KEY `expense_summaries_expense_card_id_foreign` (`expense_card_id`),
   KEY `expense_summaries_generated_by_foreign` (`generated_by`),
   KEY `expense_summaries_summary_date_index` (`summary_date`),
+  KEY `expense_summaries_branch_id_index` (`branch_id`),
   CONSTRAINT `expense_summaries_expense_card_id_foreign` FOREIGN KEY (`expense_card_id`) REFERENCES `expense_cards` (`id`) ON DELETE SET NULL,
   CONSTRAINT `expense_summaries_generated_by_foreign` FOREIGN KEY (`generated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `expense_summary_triple_checks`
+--
+
+DROP TABLE IF EXISTS `expense_summary_triple_checks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `expense_summary_triple_checks` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `check_date` date NOT NULL,
+  `checker_key` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` bigint unsigned DEFAULT NULL,
+  `confirmed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `expense_summary_triple_checks_date_key` (`check_date`,`checker_key`),
+  KEY `expense_summary_triple_checks_check_date_index` (`check_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -848,7 +957,7 @@ CREATE TABLE `hr_late_fine_rows` (
   KEY `hr_late_fine_rows_staff_id_foreign` (`staff_id`),
   KEY `hr_late_fine_rows_period_month_index` (`period_month`),
   CONSTRAINT `hr_late_fine_rows_staff_id_foreign` FOREIGN KEY (`staff_id`) REFERENCES `hr_staff` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=57 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -865,7 +974,7 @@ CREATE TABLE `hr_office_salary_rows` (
   `monthly_salary` decimal(12,2) NOT NULL DEFAULT '0.00',
   `salary_day_base` tinyint unsigned NOT NULL DEFAULT '28',
   `rest_days` tinyint unsigned NOT NULL DEFAULT '0',
-  `rest_off_dates` json DEFAULT NULL,
+  `rest_off_dates` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `way_count` int unsigned NOT NULL DEFAULT '0',
   `way_rate` decimal(12,2) NOT NULL DEFAULT '0.00',
   `late_minute_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
@@ -880,8 +989,9 @@ CREATE TABLE `hr_office_salary_rows` (
   UNIQUE KEY `hr_office_salary_rows_period_month_staff_id_unique` (`period_month`,`staff_id`),
   KEY `hr_office_salary_rows_staff_id_foreign` (`staff_id`),
   KEY `hr_office_salary_rows_period_month_index` (`period_month`),
-  CONSTRAINT `hr_office_salary_rows_staff_id_foreign` FOREIGN KEY (`staff_id`) REFERENCES `hr_staff` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  CONSTRAINT `hr_office_salary_rows_staff_id_foreign` FOREIGN KEY (`staff_id`) REFERENCES `hr_staff` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `hr_office_salary_rows_chk_1` CHECK (json_valid(`rest_off_dates`))
+) ENGINE=InnoDB AUTO_INCREMENT=57 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -913,7 +1023,135 @@ CREATE TABLE `hr_staff` (
   KEY `hr_staff_staff_group_status_index` (`staff_group`,`status`),
   CONSTRAINT `hr_staff_branch_id_foreign` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`) ON DELETE SET NULL,
   CONSTRAINT `hr_staff_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `kyo_shin_batches`
+--
+
+DROP TABLE IF EXISTS `kyo_shin_batches`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `kyo_shin_batches` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `os_user_id` bigint unsigned NOT NULL,
+  `order_id` bigint unsigned DEFAULT NULL,
+  `payment_method` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'kpay',
+  `kpay_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `kpay_no` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `slip_photo_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `slip_photo_paths` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `slip_table_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `due_finished_at` date DEFAULT NULL,
+  `amount` decimal(14,2) NOT NULL DEFAULT '0.00',
+  `item_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `cash_payout_id` bigint unsigned DEFAULT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `kyo_shin_batches_os_user_id_index` (`os_user_id`),
+  KEY `kyo_shin_batches_order_id_index` (`order_id`),
+  KEY `kyo_shin_batches_cash_payout_id_index` (`cash_payout_id`),
+  CONSTRAINT `kyo_shin_batches_chk_1` CHECK (json_valid(`slip_photo_paths`)),
+  CONSTRAINT `kyo_shin_batches_chk_2` CHECK (json_valid(`item_ids`))
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `kyo_shin_caps`
+--
+
+DROP TABLE IF EXISTS `kyo_shin_caps`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `kyo_shin_caps` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `scope_key` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `total_amount` decimal(14,2) NOT NULL DEFAULT '0.00',
+  `cash_on_hand` decimal(14,2) DEFAULT NULL,
+  `returned_amount` decimal(14,2) DEFAULT NULL,
+  `updated_by` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `kyo_shin_caps_scope_key_unique` (`scope_key`),
+  KEY `kyo_shin_caps_updated_by_foreign` (`updated_by`),
+  CONSTRAINT `kyo_shin_caps_updated_by_foreign` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `kyo_shin_daily_ledgers`
+--
+
+DROP TABLE IF EXISTS `kyo_shin_daily_ledgers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `kyo_shin_daily_ledgers` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `scope_key` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `ledger_date` date NOT NULL,
+  `sa_amount` decimal(14,2) NOT NULL DEFAULT '0.00',
+  `balance` decimal(14,2) NOT NULL DEFAULT '0.00',
+  `cash_held` decimal(14,2) NOT NULL DEFAULT '0.00',
+  `returned_amount` decimal(14,2) NOT NULL DEFAULT '0.00',
+  `os_receivable` decimal(14,2) NOT NULL DEFAULT '0.00',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `kyo_shin_daily_ledgers_scope_key_ledger_date_unique` (`scope_key`,`ledger_date`),
+  KEY `kyo_shin_daily_ledgers_ledger_date_index` (`ledger_date`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `kyo_shin_items`
+--
+
+DROP TABLE IF EXISTS `kyo_shin_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `kyo_shin_items` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `batch_id` bigint unsigned DEFAULT NULL,
+  `dispatch_order_item_id` bigint unsigned NOT NULL,
+  `scope_key` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `branch_id` bigint unsigned DEFAULT NULL,
+  `os_user_id` bigint unsigned NOT NULL DEFAULT '0',
+  `amount` decimal(14,2) NOT NULL DEFAULT '0.00',
+  `payment_method` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `advanced_paid_at` timestamp NULL DEFAULT NULL,
+  `advanced_paid_by` bigint unsigned DEFAULT NULL,
+  `due_finished_at` date DEFAULT NULL,
+  `finished_at` timestamp NULL DEFAULT NULL,
+  `finished_by` bigint unsigned DEFAULT NULL,
+  `checked_at` timestamp NULL DEFAULT NULL,
+  `checked_by` bigint unsigned DEFAULT NULL,
+  `received_at` timestamp NULL DEFAULT NULL,
+  `received_by` bigint unsigned DEFAULT NULL,
+  `last_overdue_notified_on` date DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `kyo_shin_items_dispatch_order_item_id_unique` (`dispatch_order_item_id`),
+  KEY `kyo_shin_items_advanced_paid_by_foreign` (`advanced_paid_by`),
+  KEY `kyo_shin_items_finished_by_foreign` (`finished_by`),
+  KEY `kyo_shin_items_scope_key_status_index` (`scope_key`,`status`),
+  KEY `kyo_shin_items_os_user_id_status_index` (`os_user_id`,`status`),
+  KEY `kyo_shin_items_branch_id_status_index` (`branch_id`,`status`),
+  KEY `kyo_shin_items_due_finished_at_status_index` (`due_finished_at`,`status`),
+  KEY `kyo_shin_items_batch_id_index` (`batch_id`),
+  KEY `kyo_shin_items_checked_by_foreign` (`checked_by`),
+  KEY `kyo_shin_items_received_by_foreign` (`received_by`),
+  CONSTRAINT `kyo_shin_items_advanced_paid_by_foreign` FOREIGN KEY (`advanced_paid_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `kyo_shin_items_checked_by_foreign` FOREIGN KEY (`checked_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `kyo_shin_items_dispatch_order_item_id_foreign` FOREIGN KEY (`dispatch_order_item_id`) REFERENCES `dispatch_order_items` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `kyo_shin_items_finished_by_foreign` FOREIGN KEY (`finished_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `kyo_shin_items_received_by_foreign` FOREIGN KEY (`received_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1016,18 +1254,22 @@ CREATE TABLE `media` (
   `disk` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `conversions_disk` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `size` bigint unsigned NOT NULL,
-  `manipulations` json NOT NULL,
-  `custom_properties` json NOT NULL,
-  `generated_conversions` json NOT NULL,
-  `responsive_images` json NOT NULL,
+  `manipulations` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `custom_properties` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `generated_conversions` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `responsive_images` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `order_column` int unsigned DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `media_uuid_unique` (`uuid`),
   KEY `media_model_type_model_id_index` (`model_type`,`model_id`),
-  KEY `media_order_column_index` (`order_column`)
-) ENGINE=InnoDB AUTO_INCREMENT=552 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `media_order_column_index` (`order_column`),
+  CONSTRAINT `media_chk_1` CHECK (json_valid(`manipulations`)),
+  CONSTRAINT `media_chk_2` CHECK (json_valid(`custom_properties`)),
+  CONSTRAINT `media_chk_3` CHECK (json_valid(`generated_conversions`)),
+  CONSTRAINT `media_chk_4` CHECK (json_valid(`responsive_images`))
+) ENGINE=InnoDB AUTO_INCREMENT=667 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1042,7 +1284,7 @@ CREATE TABLE `migrations` (
   `migration` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `batch` int NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=200 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=229 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1159,14 +1401,15 @@ CREATE TABLE `order_histories` (
   `datetime` datetime DEFAULT NULL,
   `history_type` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `history_message` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `history_data` json DEFAULT NULL,
+  `history_data` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   `deleted_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `order_histories_order_id_foreign` (`order_id`),
-  CONSTRAINT `order_histories_order_id_foreign` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=129 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  CONSTRAINT `order_histories_order_id_foreign` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `order_histories_chk_1` CHECK (json_valid(`history_data`))
+) ENGINE=InnoDB AUTO_INCREMENT=792 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1198,10 +1441,11 @@ CREATE TABLE `order_vehicle_histories` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `order_id` bigint unsigned DEFAULT NULL,
   `delivery_man_id` bigint unsigned DEFAULT NULL,
-  `vehicle_info` json DEFAULT NULL,
+  `vehicle_info` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  CONSTRAINT `order_vehicle_histories_chk_1` CHECK (json_valid(`vehicle_info`))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1215,9 +1459,9 @@ DROP TABLE IF EXISTS `orders`;
 CREATE TABLE `orders` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `client_id` bigint unsigned DEFAULT NULL,
-  `pickup_point` json DEFAULT NULL,
-  `delivery_point` json DEFAULT NULL,
-  `packaging_symbols` json DEFAULT NULL,
+  `pickup_point` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `delivery_point` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `packaging_symbols` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `country_id` bigint unsigned DEFAULT NULL,
   `city_id` bigint unsigned DEFAULT NULL,
   `parcel_type` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1247,7 +1491,7 @@ CREATE TABLE `orders` (
   `fixed_charges` double DEFAULT '0',
   `weight_charge` double DEFAULT '0',
   `distance_charge` double DEFAULT '0',
-  `extra_charges` json DEFAULT NULL,
+  `extra_charges` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `insurance_charge` double NOT NULL DEFAULT '0',
   `package_value` double DEFAULT '0',
   `total_amount` double DEFAULT '0',
@@ -1257,7 +1501,7 @@ CREATE TABLE `orders` (
   `total_parcel` double DEFAULT NULL,
   `vehicle_id` bigint unsigned DEFAULT NULL,
   `pickup_vehicle_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'motorcycle',
-  `vehicle_data` json DEFAULT NULL,
+  `vehicle_data` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `auto_assign` tinyint DEFAULT NULL,
   `cancelled_delivery_man_ids` text COLLATE utf8mb4_unicode_ci,
   `currency` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -1283,8 +1527,13 @@ CREATE TABLE `orders` (
   KEY `orders_client_id_foreign` (`client_id`),
   KEY `orders_is_reschedule_foreign` (`is_reschedule`),
   CONSTRAINT `orders_client_id_foreign` FOREIGN KEY (`client_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `orders_is_reschedule_foreign` FOREIGN KEY (`is_reschedule`) REFERENCES `reschedules` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=126 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  CONSTRAINT `orders_is_reschedule_foreign` FOREIGN KEY (`is_reschedule`) REFERENCES `reschedules` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `orders_chk_1` CHECK (json_valid(`pickup_point`)),
+  CONSTRAINT `orders_chk_2` CHECK (json_valid(`delivery_point`)),
+  CONSTRAINT `orders_chk_3` CHECK (json_valid(`packaging_symbols`)),
+  CONSTRAINT `orders_chk_4` CHECK (json_valid(`extra_charges`)),
+  CONSTRAINT `orders_chk_5` CHECK (json_valid(`vehicle_data`))
+) ENGINE=InnoDB AUTO_INCREMENT=165 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1297,6 +1546,7 @@ DROP TABLE IF EXISTS `os_cash_payouts`;
 CREATE TABLE `os_cash_payouts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `os_user_id` bigint unsigned NOT NULL,
+  `branch_id` bigint unsigned DEFAULT NULL,
   `settlement_batch_id` bigint unsigned DEFAULT NULL,
   `money_transfer_id` bigint unsigned DEFAULT NULL,
   `period_from` date NOT NULL,
@@ -1313,6 +1563,7 @@ CREATE TABLE `os_cash_payouts` (
   `done_note` text COLLATE utf8mb4_unicode_ci,
   `done_photo_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_by` bigint unsigned DEFAULT NULL,
+  `kyo_shin_batch_id` bigint unsigned DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -1320,8 +1571,10 @@ CREATE TABLE `os_cash_payouts` (
   KEY `os_cash_payouts_settlement_batch_id_index` (`settlement_batch_id`),
   KEY `os_cash_payouts_money_transfer_id_index` (`money_transfer_id`),
   KEY `os_cash_payouts_status_index` (`status`),
-  KEY `os_cash_payouts_delivery_man_id_index` (`delivery_man_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `os_cash_payouts_delivery_man_id_index` (`delivery_man_id`),
+  KEY `os_cash_payouts_kyo_shin_batch_id_index` (`kyo_shin_batch_id`),
+  KEY `os_cash_payouts_branch_id_index` (`branch_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1351,7 +1604,7 @@ CREATE TABLE `os_money_transfers` (
   KEY `os_money_transfers_updated_by_foreign` (`updated_by`),
   KEY `os_money_transfers_period_from_period_to_branch_id_index` (`period_from`,`period_to`,`branch_id`),
   CONSTRAINT `os_money_transfers_updated_by_foreign` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1371,7 +1624,7 @@ CREATE TABLE `os_receive_settlements` (
   `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
   `admin_qr_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `os_payslip_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `os_payslip_paths` json DEFAULT NULL,
+  `os_payslip_paths` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `admin_remark` text COLLATE utf8mb4_unicode_ci,
   `finished_by` bigint unsigned DEFAULT NULL,
   `reviewed_by` bigint unsigned DEFAULT NULL,
@@ -1383,8 +1636,9 @@ CREATE TABLE `os_receive_settlements` (
   PRIMARY KEY (`id`),
   KEY `os_receive_settlements_settlement_batch_id_index` (`settlement_batch_id`),
   KEY `os_receive_settlements_os_user_id_index` (`os_user_id`),
-  KEY `os_receive_settlements_status_index` (`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `os_receive_settlements_status_index` (`status`),
+  CONSTRAINT `os_receive_settlements_chk_1` CHECK (json_valid(`os_payslip_paths`))
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1411,7 +1665,7 @@ CREATE TABLE `os_settlement_batches` (
   `slip_pdf_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `kpay_pdf_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `combined_pdf_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `item_ids` json DEFAULT NULL,
+  `item_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `finished_by` bigint unsigned DEFAULT NULL,
   `finished_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -1420,8 +1674,9 @@ CREATE TABLE `os_settlement_batches` (
   KEY `os_settlement_batches_finished_by_foreign` (`finished_by`),
   KEY `os_settlement_batches_os_user_id_from_date_to_date_index` (`os_user_id`,`from_date`,`to_date`),
   CONSTRAINT `os_settlement_batches_finished_by_foreign` FOREIGN KEY (`finished_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `os_settlement_batches_os_user_id_foreign` FOREIGN KEY (`os_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  CONSTRAINT `os_settlement_batches_os_user_id_foreign` FOREIGN KEY (`os_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `os_settlement_batches_chk_1` CHECK (json_valid(`item_ids`))
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1442,7 +1697,7 @@ CREATE TABLE `os_settlement_drafts` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `os_settlement_drafts_os_user_id_from_date_to_date_unique` (`os_user_id`,`from_date`,`to_date`),
   CONSTRAINT `os_settlement_drafts_os_user_id_foreign` FOREIGN KEY (`os_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1517,11 +1772,13 @@ CREATE TABLE `payment_gateways` (
   `type` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `status` tinyint DEFAULT '1' COMMENT '0- InActive, 1- Active',
   `is_test` tinyint DEFAULT '1' COMMENT '0-  No, 1- Yes',
-  `test_value` json DEFAULT NULL,
-  `live_value` json DEFAULT NULL,
+  `test_value` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `live_value` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  CONSTRAINT `payment_gateways_chk_1` CHECK (json_valid(`test_value`)),
+  CONSTRAINT `payment_gateways_chk_2` CHECK (json_valid(`live_value`))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1542,7 +1799,7 @@ CREATE TABLE `payments` (
   `payment_type` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `txn_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `payment_status` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'pending, paid, failed',
-  `transaction_detail` json DEFAULT NULL,
+  `transaction_detail` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   `is_settled` tinyint NOT NULL DEFAULT '0' COMMENT '0 = false, 1 = true',
@@ -1561,7 +1818,8 @@ CREATE TABLE `payments` (
   KEY `payments_delivery_man_id_foreign` (`delivery_man_id`),
   CONSTRAINT `payments_client_id_foreign` FOREIGN KEY (`client_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `payments_delivery_man_id_foreign` FOREIGN KEY (`delivery_man_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `payments_order_id_foreign` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE
+  CONSTRAINT `payments_order_id_foreign` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `payments_chk_1` CHECK (json_valid(`transaction_detail`))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1605,7 +1863,7 @@ CREATE TABLE `personal_access_tokens` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `personal_access_tokens_token_unique` (`token`),
   KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`,`tokenable_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=72 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=117 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1622,7 +1880,7 @@ CREATE TABLE `profofpictures` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=92 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1674,7 +1932,7 @@ CREATE TABLE `ratings` (
   CONSTRAINT `ratings_order_id_foreign` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE,
   CONSTRAINT `ratings_review_user_id_foreign` FOREIGN KEY (`review_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `ratings_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1769,7 +2027,7 @@ CREATE TABLE `rider_remit_logs` (
   KEY `rider_remit_logs_delivery_man_id_index` (`delivery_man_id`),
   KEY `rider_remit_logs_actor_id_index` (`actor_id`),
   KEY `rider_remit_logs_action_index` (`action`)
-) ENGINE=InnoDB AUTO_INCREMENT=38 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=76 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1788,8 +2046,9 @@ CREATE TABLE `rider_remits` (
   `prepaid_amount` double NOT NULL DEFAULT '0',
   `fuel_amount` double NOT NULL DEFAULT '0',
   `fee_amount` double NOT NULL DEFAULT '0',
-  `denominations` json DEFAULT NULL,
+  `denominations` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `kpay_amount` double NOT NULL DEFAULT '0',
+  `kyo_shin_incharge_amount` double NOT NULL DEFAULT '0',
   `is_off` tinyint(1) NOT NULL DEFAULT '0',
   `submitted_at` timestamp NULL DEFAULT NULL,
   `updated_by` bigint unsigned DEFAULT NULL,
@@ -1799,8 +2058,9 @@ CREATE TABLE `rider_remits` (
   UNIQUE KEY `rider_remits_day_branch_rider_uq` (`remit_date`,`branch_id`,`delivery_man_id`),
   KEY `rider_remits_remit_date_index` (`remit_date`),
   KEY `rider_remits_branch_id_index` (`branch_id`),
-  KEY `rider_remits_delivery_man_id_index` (`delivery_man_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `rider_remits_delivery_man_id_index` (`delivery_man_id`),
+  CONSTRAINT `rider_remits_chk_1` CHECK (json_valid(`denominations`))
+) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1839,7 +2099,7 @@ CREATE TABLE `roles` (
   UNIQUE KEY `roles_name_guard_name_unique` (`name`,`guard_name`),
   KEY `roles_employee_type_id_foreign` (`employee_type_id`),
   CONSTRAINT `roles_employee_type_id_foreign` FOREIGN KEY (`employee_type_id`) REFERENCES `employee_types` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1854,10 +2114,11 @@ CREATE TABLE `s_m_s_settings` (
   `title` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `type` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `status` tinyint DEFAULT '1' COMMENT '0- InActive, 1- Active',
-  `values` json DEFAULT NULL,
+  `values` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  CONSTRAINT `s_m_s_settings_chk_1` CHECK (json_valid(`values`))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1997,8 +2258,8 @@ CREATE TABLE `shop_products` (
   `stock_status` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'in_stock',
   `home_section` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'none',
   `flash_sale_ends_at` timestamp NULL DEFAULT NULL,
-  `storage_options` json DEFAULT NULL,
-  `color_options` json DEFAULT NULL,
+  `storage_options` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `color_options` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `sort_order` int unsigned NOT NULL DEFAULT '0',
   `status` tinyint NOT NULL DEFAULT '1',
   `created_at` timestamp NULL DEFAULT NULL,
@@ -2006,7 +2267,9 @@ CREATE TABLE `shop_products` (
   `deleted_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `shop_products_category_id_foreign` (`category_id`),
-  CONSTRAINT `shop_products_category_id_foreign` FOREIGN KEY (`category_id`) REFERENCES `shop_categories` (`id`) ON DELETE SET NULL
+  CONSTRAINT `shop_products_category_id_foreign` FOREIGN KEY (`category_id`) REFERENCES `shop_categories` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `shop_products_chk_1` CHECK (json_valid(`storage_options`)),
+  CONSTRAINT `shop_products_chk_2` CHECK (json_valid(`color_options`))
 ) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -2092,7 +2355,7 @@ CREATE TABLE `user_addresses` (
   PRIMARY KEY (`id`),
   KEY `user_addresses_user_id_foreign` (`user_id`),
   CONSTRAINT `user_addresses_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -2139,7 +2402,8 @@ CREATE TABLE `users` (
   `two_factor_secret` text COLLATE utf8mb4_unicode_ci,
   `two_factor_recovery_codes` text COLLATE utf8mb4_unicode_ci,
   `address` text COLLATE utf8mb4_unicode_ci,
-  `os_profile` json DEFAULT NULL,
+  `os_profile` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `is_kyo_shin` tinyint(1) NOT NULL DEFAULT '0',
   `contact_number` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `daily_contact_number` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `daily_contact_date` date DEFAULT NULL,
@@ -2161,6 +2425,9 @@ CREATE TABLE `users` (
   `welcome_orders_used` int NOT NULL DEFAULT '0',
   `is_temp_password` tinyint NOT NULL DEFAULT '0',
   `created_by_admin` tinyint NOT NULL DEFAULT '0',
+  `is_dispatch_hub` tinyint unsigned NOT NULL DEFAULT '0',
+  `is_mdy_return` tinyint unsigned NOT NULL DEFAULT '0',
+  `hub_parent_id` bigint unsigned DEFAULT NULL,
   `flag` enum('0','1') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '0',
   `otp` int DEFAULT NULL,
   `uid` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -2189,8 +2456,9 @@ CREATE TABLE `users` (
   UNIQUE KEY `users_email_unique` (`email`),
   UNIQUE KEY `users_username_unique` (`username`),
   KEY `users_branch_id_foreign` (`branch_id`),
-  CONSTRAINT `users_branch_id_foreign` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  CONSTRAINT `users_branch_id_foreign` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `users_chk_1` CHECK (json_valid(`os_profile`))
+) ENGINE=InnoDB AUTO_INCREMENT=87 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -2394,7 +2662,7 @@ CREATE TABLE `withdraw_requests` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping routines for database 'point_delivery'
+-- Dumping routines for database 'pointdel_import_tmp'
 --
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -2406,4 +2674,4 @@ CREATE TABLE `withdraw_requests` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-09-04 20:47:09
+-- Dump completed on 2026-09-27  3:57:03

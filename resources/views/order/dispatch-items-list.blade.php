@@ -191,7 +191,8 @@
 
     @section('bottom_script')
         {{ $dataTable->scripts() }}
-        <script src="{{ asset('js/dispatch-item-form.js') }}?v=30"></script>
+        <script src="{{ asset('js/pds-photo-zoom.js') }}?v=3"></script>
+        <script src="{{ asset('js/dispatch-item-form.js') }}?v=35"></script>
         <script src="{{ asset('js/admin-order-list-live.js') }}?v=3"></script>
         <script>
             (function () {

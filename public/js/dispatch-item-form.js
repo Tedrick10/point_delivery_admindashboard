@@ -39,25 +39,90 @@
         return isMandalayName(a) && isMandalayName(b);
     }
 
-    function getCreditMode() {
-        return $('input[name="credit_to"]:checked').val() || 'customer';
+    function getCreditMode($form) {
+        var $scope = ($form && $form.length) ? $form : $('#dispatch_item_form');
+        var $checked = $scope.find('input[name="credit_to"]:checked');
+        if (!$checked.length) {
+            $checked = $('input[name="credit_to"]:checked');
+        }
+        return $checked.val() || 'customer';
     }
 
     /** Backend credit_to is only os|customer. UI "os_paid" maps to os. */
-    function getCreditTo() {
-        var mode = getCreditMode();
+    function getCreditTo($form) {
+        var mode = getCreditMode($form);
         return mode === 'os_paid' ? 'os' : mode;
     }
 
-    function isOsPaidMode() {
-        return getCreditMode() === 'os_paid';
+    function isOsPaidMode($form) {
+        return getCreditMode($form) === 'os_paid';
+    }
+
+    function resolveSelectValue($field, fallbacks) {
+        var value = $field && $field.length ? String($field.val() || '').trim() : '';
+        if (value) {
+            return value;
+        }
+
+        var i;
+        for (i = 0; i < (fallbacks || []).length; i++) {
+            value = String(fallbacks[i] || '').trim();
+            if (value) {
+                return value;
+            }
+        }
+
+        if ($field && $field.length && $field.hasClass('select2-hidden-accessible')) {
+            value = String($field.next('.select2-container').find('.select2-selection__rendered').first().text() || '').trim();
+            if (value && value.toLowerCase().indexOf('select') !== 0) {
+                return value;
+            }
+        }
+
+        return '';
+    }
+
+    function ensureSelectValue($field, value) {
+        value = String(value || '').trim();
+        if (!$field || !$field.length || !value) {
+            return value;
+        }
+
+        var current = String($field.val() || '').trim();
+        if (current === value) {
+            return value;
+        }
+
+        var $match = null;
+        $field.find('option').each(function () {
+            var $opt = $(this);
+            var optVal = String($opt.val() || '').trim();
+            var optText = String($opt.text() || '').trim();
+            if (optVal === value || samePlaceName(optVal, value) || samePlaceName(optText, value)) {
+                $match = $opt;
+                return false;
+            }
+        });
+
+        if ($match) {
+            $field.val($match.val());
+        } else {
+            $field.append(new Option(value, value, true, true));
+        }
+
+        if ($field.hasClass('select2-hidden-accessible')) {
+            $field.trigger('change.select2');
+        }
+
+        return String($field.val() || value).trim();
     }
 
     function updateSummary() {
+        var $form = $('#dispatch_item_form');
         var itemValue = parseFloat($('#item_value').val()) || 0;
         var deliAmount = parseFloat($('#deli_amount').val()) || 0;
-        var osPaid = isOsPaidMode() ? (parseFloat($('#os_paid').val()) || 0) : 0;
-        var creditTo = getCreditTo();
+        var osPaid = isOsPaidMode($form) ? (parseFloat($('#os_paid').val()) || 0) : 0;
+        var creditTo = getCreditTo($form);
         var custGet;
         var osToPay;
 
@@ -83,9 +148,10 @@
     }
 
     function toggleOsPaidField() {
+        var $form = $('#dispatch_item_form');
         var $wrap = $('#os_paid_field_wrap');
 
-        if (isOsPaidMode()) {
+        if (isOsPaidMode($form)) {
             $wrap.show();
             // Default Os Paid amount to current Deli when empty.
             var osPaid = parseFloat($('#os_paid').val()) || 0;
@@ -104,7 +170,7 @@
      * When "Os Paid" credit mode is on, keep OsPaid in sync with Deli Amount.
      */
     function syncOsPaidWithDeliAmount(force) {
-        if (!isOsPaidMode()) {
+        if (!isOsPaidMode($('#dispatch_item_form'))) {
             return;
         }
 
@@ -322,11 +388,14 @@
     }
 
     function renderManagedTownships($township, towns, selected, preserveInvalidSelected, cityName) {
-        var resolvedSelected = selected || '';
+        var placeholder = $township.data('placeholder') || 'Select Township';
+        var resolvedSelected = selected || String($township.data('pending-township') || '').trim() || '';
         var matchedValue = '';
         var selectedIsValid = !!(resolvedSelected && towns.some(function (town) {
             return townshipMatchesManaged(town, resolvedSelected);
         }));
+
+        $township.empty().append(new Option(placeholder, '', false, false));
 
         towns.forEach(function (town) {
             var label = town.label || town.name_mm || town.name;
@@ -341,10 +410,14 @@
         if (preserveInvalidSelected && selected && !selectedIsValid) {
             appendTownshipOption($township, selected, selected, true);
             matchedValue = selected;
+        } else if (selected && !selectedIsValid) {
+            appendTownshipOption($township, selected, selected, true);
+            matchedValue = selected;
         }
 
         if (matchedValue) {
             $township.val(matchedValue);
+            $township.removeData('pending-township');
         }
 
         finishTownshipSelect($township);
@@ -382,29 +455,39 @@
         extras = extras || {};
         var $township = $('#item_township');
         var placeholder = $township.data('placeholder') || 'Select Township';
-        $township.empty().append(new Option(placeholder, '', false, false));
+        // Keep current selection visible until replacements arrive — clearing early makes
+        // Select2 look filled while .val() is empty, which silently blocks Update.
+        var keepSelected = String(selected || $township.val() || '').trim();
+        if (keepSelected) {
+            $township.data('pending-township', keepSelected);
+        }
 
         if (!cityName) {
-            $township.trigger('change');
+            $township.empty().append(new Option(placeholder, '', false, false));
+            if (keepSelected) {
+                $township.append(new Option(keepSelected, keepSelected, true, true));
+            }
+            finishTownshipSelect($township);
             return;
         }
 
         var townshipsUrl = extras.townshipsUrl || formDispatchOptions().townshipsUrl || '';
         if (townshipsUrl) {
-            loadManagedTownships(cityName, extras.cityId, selected, townshipsUrl, preserveInvalidSelected, function () {
-                loadNrcTownships(cityName, nrcState, selected, nrcDataUrl, preserveInvalidSelected);
+            loadManagedTownships(cityName, extras.cityId, keepSelected || selected, townshipsUrl, preserveInvalidSelected, function () {
+                loadNrcTownships(cityName, nrcState, keepSelected || selected, nrcDataUrl, preserveInvalidSelected);
             });
             return;
         }
 
-        loadNrcTownships(cityName, nrcState, selected, nrcDataUrl, preserveInvalidSelected);
+        loadNrcTownships(cityName, nrcState, keepSelected || selected, nrcDataUrl, preserveInvalidSelected);
     }
 
     function loadNrcTownships(cityName, nrcState, selected, nrcDataUrl, preserveInvalidSelected) {
         var $township = $('#item_township');
+        var placeholder = $township.data('placeholder') || 'Select Township';
         var normalizedCity = normalizeName(cityName);
         var normalizedState = normalizeName(nrcState);
-        var resolvedSelected = selected || '';
+        var resolvedSelected = selected || String($township.data('pending-township') || '').trim() || '';
 
         $.getJSON(nrcDataUrl).done(function (data) {
             var states = data.states || [];
@@ -445,34 +528,36 @@
                 });
             }
 
+            var selectedValue = resolvedSelected;
             if (!selectedIsValid) {
-                resolvedSelected = '';
+                selectedValue = '';
             }
+
+            $township.empty().append(new Option(placeholder, '', false, false));
 
             if (matchedState && matchedState.townships && matchedState.townships.length) {
                 matchedState.townships.forEach(function (town) {
                     var label = town.name_mm || town.name_en;
                     var value = label;
-                    var isSelected = !!(resolvedSelected && townshipMatchesSelection(town, resolvedSelected));
+                    var isSelected = !!(selectedValue && townshipMatchesSelection(town, selectedValue));
                     appendTownshipOption($township, label, value, isSelected);
                 });
             }
 
-            if (preserveInvalidSelected && selected && !selectedIsValid) {
-                appendTownshipOption($township, selected, selected, true);
+            if (resolvedSelected && !selectedIsValid) {
+                appendTownshipOption($township, resolvedSelected, resolvedSelected, true);
             }
 
-            if ($township.hasClass('select2-hidden-accessible')) {
-                $township.trigger('change.select2');
-            } else {
-                $township.trigger('change');
+            if (String($township.val() || '').trim()) {
+                $township.removeData('pending-township');
             }
+
+            finishTownshipSelect($township);
         }).fail(function () {
-            if ($township.hasClass('select2-hidden-accessible')) {
-                $township.trigger('change.select2');
-            } else {
-                $township.trigger('change');
+            if (resolvedSelected && !String($township.val() || '').trim()) {
+                ensureSelectValue($township, resolvedSelected);
             }
+            finishTownshipSelect($township);
         });
     }
 
@@ -561,13 +646,40 @@
             showMessage(message);
         } else if (typeof successMessage === 'function') {
             successMessage(message);
+        } else if (typeof Snackbar !== 'undefined' && Snackbar.show) {
+            Snackbar.show({ text: message, pos: 'bottom-center', showAction: false, duration: 4000 });
+        } else {
+            window.alert(message);
         }
     }
 
     function notifyError(message) {
-        if (typeof errorMessage === 'function') {
-            errorMessage(message);
+        message = String(message || 'Unable to save item.');
+        try {
+            if (typeof errorMessage === 'function') {
+                errorMessage(message);
+            } else if (typeof Snackbar !== 'undefined' && Snackbar.show) {
+                Snackbar.show({
+                    text: message,
+                    pos: 'bottom-center',
+                    backgroundColor: '#dc3545',
+                    textColor: '#ffffff',
+                    showAction: false,
+                    duration: 4000
+                });
+            } else {
+                window.alert(message);
+            }
+        } catch (err) {
+            window.alert(message);
         }
+        // Ensure feedback is never hidden behind the photo modal.
+        window.setTimeout(function () {
+            var el = document.querySelector('.snackbar-container');
+            if (el) {
+                el.style.zIndex = '20000';
+            }
+        }, 0);
     }
 
     function persistManagedLocation(url, data, onSuccess, onFail) {
@@ -737,113 +849,216 @@
     };
 
     function bindDispatchItemFormSubmit() {
-        if (window.__dispatchItemFormSubmitBound) {
-            return;
-        }
+        // Always (re)bind — sticky flag used to leave Update dead after modal remounts.
         window.__dispatchItemFormSubmitBound = true;
 
         $(document).off('submit.dispatchItem', '#dispatch_item_form')
             .on('submit.dispatchItem', '#dispatch_item_form', function (e) {
                 e.preventDefault();
+                e.stopPropagation();
+                submitDispatchItemForm($(this));
+            });
 
-                var $form = $(this);
-                var $modal = $form.closest('#remoteModelData');
-                var options = $form.data('dispatch-item-options') || {};
-
-                var requiredFields = [
-                    { selector: '#item_received_date', message: 'Received date is required.' },
-                    { selector: '#from_branch_id', message: 'From branch is required.' },
-                    { selector: '#to_branch_id', message: 'To branch is required.' },
-                    { selector: '#item_delivery_city', message: 'City is required.' },
-                    { selector: '#item_township', message: 'Township is required.' }
-                ];
-
-                for (var i = 0; i < requiredFields.length; i++) {
-                    var $field = $form.find(requiredFields[i].selector);
-                    if (!$field.length || !String($field.val() || '').trim()) {
-                        notifyError(requiredFields[i].message);
-                        return;
-                    }
+        $(document).off('click.dispatchItemSave', '#dispatch_item_form [type="submit"], #dispatch_item_form [data-dispatch-item-save]')
+            .on('click.dispatchItemSave', '#dispatch_item_form [type="submit"], #dispatch_item_form [data-dispatch-item-save]', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var $form = $(this).closest('#dispatch_item_form');
+                if ($form.length) {
+                    submitDispatchItemForm($form);
                 }
-
-                var formData = new FormData(this);
-                formData.set('item_name', String($form.find('#item_name').val() || '').trim());
-                formData.set('remark', String($form.find('#item_remark').val() || '').trim());
-                formData.set('customer_phone', String($form.find('#customer_phone').val() || '').trim());
-
-                // UI modes: os | customer | os_paid → backend credit_to is only os|customer.
-                if (isOsPaidMode()) {
-                    formData.set('credit_to', 'os');
-                    syncOsPaidWithDeliAmount(true);
-                    formData.set('os_paid', String(Math.round(parseFloat($('#os_paid').val()) || 0)));
-                } else if (getCreditMode() === 'os') {
-                    formData.set('credit_to', 'os');
-                    formData.set('os_paid', '0');
-                } else {
-                    formData.set('credit_to', 'customer');
-                    formData.set('os_paid', '0');
-                }
-
-                var spoofMethod = String($form.find('input[name="_method"]').val() || '').toUpperCase();
-                if (spoofMethod && spoofMethod !== 'POST') {
-                    formData.set('_method', spoofMethod);
-                }
-
-                var $submitBtn = $form.find('[type="submit"]');
-                $submitBtn.prop('disabled', true);
-
-                $.ajax({
-                    url: $form.attr('action'),
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    headers: {
-                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json'
-                    },
-                    success: function (res) {
-                        if (res && res.message) {
-                            notifySuccess(res.message);
-                        }
-                        if ($modal.length) {
-                            $modal.modal('hide');
-                        }
-                        if (res && res.moved_to_assign_100 && res.redirect) {
-                            window.setTimeout(function () {
-                                window.location.href = res.redirect;
-                            }, 600);
-                            return;
-                        }
-                        if (res && res.moved_to_admin_done && res.redirect) {
-                            window.setTimeout(function () {
-                                window.location.href = res.redirect;
-                            }, 600);
-                            return;
-                        }
-                        if (res && res.to_branch_id) {
-                            var nextBranch = String(res.to_branch_id);
-                            var branchNode = document.querySelector('[data-active-to-branch]');
-                            var currentBranch = branchNode ? String(branchNode.getAttribute('data-active-to-branch') || '') : '';
-                            if (nextBranch && currentBranch && nextBranch !== currentBranch) {
-                                var nextUrl = new URL(window.location.href);
-                                nextUrl.searchParams.set('to_branch_id', nextBranch);
-                                window.location.href = nextUrl.toString();
-                                return;
-                            }
-                        }
-                        window.reloadDispatchItemsTable();
-                    },
-                    error: function (xhr) {
-                        notifyError(extractErrorMessage(xhr));
-                    },
-                    complete: function () {
-                        $submitBtn.prop('disabled', false);
-                    }
-                });
             });
     }
+
+    function submitDispatchItemForm($form) {
+        try {
+            if (!$form || !$form.length) {
+                return;
+            }
+            if ($form.data('dispatchSaving')) {
+                return;
+            }
+
+            var $modal = $form.closest('#remoteModelData');
+            var savedTownship = String(
+                $form.attr('data-saved-township')
+                || $form.data('savedTownship')
+                || $form.data('pending-township')
+                || ''
+            ).trim();
+
+            var receivedDate = resolveSelectValue($form.find('#item_received_date'), []);
+            var fromBranch = resolveSelectValue($form.find('#from_branch_id'), []);
+            var toBranch = resolveSelectValue($form.find('#to_branch_id'), []);
+            var deliveryCity = resolveSelectValue($form.find('#item_delivery_city'), [
+                $form.attr('data-default-delivery-city')
+            ]);
+            var township = resolveSelectValue($form.find('#item_township'), [
+                savedTownship,
+                $form.find('#item_township').data('pending-township')
+            ]);
+
+            if (township) {
+                township = ensureSelectValue($form.find('#item_township'), township);
+            }
+            if (deliveryCity) {
+                deliveryCity = ensureSelectValue($form.find('#item_delivery_city'), deliveryCity);
+            }
+
+            if (!receivedDate) {
+                notifyError('Received date is required.');
+                return;
+            }
+            if (!fromBranch) {
+                notifyError('From branch is required.');
+                return;
+            }
+            if (!toBranch) {
+                notifyError('To branch is required.');
+                return;
+            }
+            if (!deliveryCity) {
+                notifyError('City is required.');
+                return;
+            }
+            if (!township) {
+                notifyError('Township is required.');
+                return;
+            }
+
+            var formData = new FormData($form.get(0));
+            formData.set('received_date', receivedDate);
+            formData.set('from_branch_id', fromBranch);
+            formData.set('to_branch_id', toBranch);
+            formData.set('delivery_city', deliveryCity);
+            formData.set('township', township);
+            formData.set('item_name', String($form.find('#item_name').val() || '').trim());
+            formData.set('remark', String($form.find('#item_remark').val() || '').trim());
+            formData.set('customer_phone', String($form.find('#customer_phone').val() || '').trim());
+
+            var rotation = 0;
+            if (window.PdsPhotoZoom && typeof window.PdsPhotoZoom.readInlineRotation === 'function') {
+                rotation = window.PdsPhotoZoom.readInlineRotation();
+            } else if (typeof window.__pdsInlinePhotoRotation === 'number') {
+                rotation = window.__pdsInlinePhotoRotation;
+            } else {
+                rotation = parseInt($form.find('[name="photo_rotation"]').val(), 10) || 0;
+            }
+            rotation = ((rotation % 360) + 360) % 360;
+            formData.set('photo_rotation', String(rotation));
+            $form.find('[name="photo_rotation"]').val(String(rotation));
+
+            // UI modes: os | customer | os_paid → backend credit_to is only os|customer.
+            if (isOsPaidMode($form)) {
+                formData.set('credit_to', 'os');
+                syncOsPaidWithDeliAmount(true);
+                formData.set('os_paid', String(Math.round(parseFloat($form.find('#os_paid').val()) || 0)));
+            } else if (getCreditMode($form) === 'os') {
+                formData.set('credit_to', 'os');
+                formData.set('os_paid', '0');
+            } else {
+                formData.set('credit_to', 'customer');
+                formData.set('os_paid', '0');
+            }
+
+            var spoofMethod = String($form.find('input[name="_method"]').val() || '').toUpperCase();
+            if (spoofMethod && spoofMethod !== 'POST') {
+                formData.set('_method', spoofMethod);
+            }
+
+            var $submitBtn = $form.find('[type="submit"], [data-dispatch-item-save]');
+            $form.data('dispatchSaving', true);
+            $submitBtn.prop('disabled', true);
+
+            $.ajax({
+                url: $form.attr('action'),
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                success: function (res) {
+                    if (res && res.message) {
+                        notifySuccess(res.message);
+                    }
+
+                    // Hide first while CSS rotation is still applied — resetting/src-swapping
+                    // in a visible modal flashes the unrotated cached frame.
+                    if ($modal.length) {
+                        $modal.one('hidden.bs.modal.pdsPhotoRotate', function () {
+                            if (typeof window.__pdsResetInlinePhotoRotation === 'function') {
+                                window.__pdsResetInlinePhotoRotation();
+                            }
+                            var img = document.getElementById('pdsItemInlinePhotoImg');
+                            if (img && res && res.photo_url) {
+                                img.removeAttribute('src');
+                            }
+                        });
+                        $modal.modal('hide');
+                    } else if (typeof window.__pdsResetInlinePhotoRotation === 'function') {
+                        window.__pdsResetInlinePhotoRotation();
+                    }
+
+                    if (res && res.moved_to_assign_100 && res.redirect) {
+                        window.setTimeout(function () {
+                            window.location.href = res.redirect;
+                        }, 600);
+                        return;
+                    }
+                    if (res && res.moved_to_admin_done && res.redirect) {
+                        window.setTimeout(function () {
+                            window.location.href = res.redirect;
+                        }, 600);
+                        return;
+                    }
+                    if (res && res.to_branch_id) {
+                        var nextBranch = String(res.to_branch_id);
+                        var branchNode = document.querySelector('[data-active-to-branch]');
+                        var currentBranch = branchNode ? String(branchNode.getAttribute('data-active-to-branch') || '') : '';
+                        if (nextBranch && currentBranch && nextBranch !== currentBranch) {
+                            var nextUrl = new URL(window.location.href);
+                            nextUrl.searchParams.set('to_branch_id', nextBranch);
+                            window.location.href = nextUrl.toString();
+                            return;
+                        }
+                    }
+                    // Slight delay so list thumbs pick up cache-busted URLs after rotate.
+                    window.setTimeout(function () {
+                        window.reloadDispatchItemsTable();
+                    }, res && res.photo_rotated ? 150 : 0);
+                },
+                error: function (xhr) {
+                    notifyError(extractErrorMessage(xhr));
+                },
+                complete: function () {
+                    $form.data('dispatchSaving', false);
+                    $submitBtn.prop('disabled', false);
+                }
+            });
+        } catch (err) {
+            if ($form && $form.length) {
+                $form.data('dispatchSaving', false);
+                $form.find('[type="submit"], [data-dispatch-item-save]').prop('disabled', false);
+            }
+            notifyError((err && err.message) ? err.message : 'Unable to save item.');
+        }
+    }
+
+    window.__pdsSaveDispatchItem = function (event) {
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
+        var $form = $('#dispatch_item_form');
+        if (!$form.length && event && event.target) {
+            $form = $(event.target).closest('#dispatch_item_form');
+        }
+        submitDispatchItemForm($form);
+        return false;
+    };
 
     window.initDispatchItemForm = function (options) {
         options = options || {};

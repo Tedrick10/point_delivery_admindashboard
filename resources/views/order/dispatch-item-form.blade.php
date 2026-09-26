@@ -70,7 +70,16 @@
         ? ($item->relationLoaded('photoMedia') ? $item->photoMedia : $item->photoMedia()->first())
         : null;
     $isPhotoItem = $photoMedia !== null;
-    $photoUrl = $isPhotoItem ? $photoMedia->getUrl() : '';
+    $photoUrl = '';
+    if ($isPhotoItem) {
+        $basePhotoUrl = mediaPublicUrl($photoMedia);
+        if ($basePhotoUrl) {
+            $photoUrl = $basePhotoUrl.'?v='.(
+                ($photoMedia->updated_at?->timestamp)
+                ?: (@filemtime((string) $photoMedia->getPath()) ?: time())
+            );
+        }
+    }
     $photoName = $isPhotoItem ? ($photoMedia->file_name ?? __('message.photo_order')) : '';
     $workflow = app(\App\Services\DispatchOrderWorkflowService::class);
     // Prefer live query/DB return_type over flashed old() so a prior Normal save
@@ -139,22 +148,30 @@
                                              alt="{{ $photoName }}"
                                              class="pds-dispatch-item-photo-img"
                                              id="pdsItemInlinePhotoImg"
-                                             loading="lazy"
+                                             loading="eager"
+                                             decoding="async"
                                              draggable="false">
                                     </div>
                                     <div class="pds-photo-carousel-zoom-bar pds-dispatch-item-photo-zoom-bar">
-                                        <button type="button" class="pds-photo-carousel-zoom-btn" data-inline-photo-zoom="out" aria-label="Zoom out">
+                                        <button type="button" class="pds-photo-carousel-zoom-btn" data-inline-photo-zoom="out" aria-label="Zoom out" title="Zoom out">
                                             <i class="fas fa-search-minus"></i>
                                         </button>
                                         <span class="pds-photo-carousel-zoom-level" data-inline-photo-zoom-level>100%</span>
-                                        <button type="button" class="pds-photo-carousel-zoom-btn" data-inline-photo-zoom="in" aria-label="Zoom in">
+                                        <button type="button" class="pds-photo-carousel-zoom-btn" data-inline-photo-zoom="in" aria-label="Zoom in" title="Zoom in">
                                             <i class="fas fa-search-plus"></i>
                                         </button>
-                                        <button type="button" class="pds-photo-carousel-zoom-btn pds-photo-carousel-zoom-btn--reset" data-inline-photo-zoom="reset" aria-label="Reset zoom">
+                                        <button type="button" class="pds-photo-carousel-zoom-btn" data-inline-photo-zoom="rotate-left" aria-label="Rotate left" title="Rotate left">
+                                            <i class="fas fa-undo"></i>
+                                        </button>
+                                        <button type="button" class="pds-photo-carousel-zoom-btn" data-inline-photo-zoom="rotate-right" aria-label="Rotate right" title="Rotate right">
+                                            <i class="fas fa-redo"></i>
+                                        </button>
+                                        <button type="button" class="pds-photo-carousel-zoom-btn pds-photo-carousel-zoom-btn--reset" data-inline-photo-zoom="reset" aria-label="Reset zoom" title="Reset">
                                             Reset
                                         </button>
                                     </div>
                                     <input type="hidden" name="item_name" id="item_name" value="{{ $itemName ?: $photoName }}">
+                                    <input type="hidden" name="photo_rotation" id="photo_rotation" value="0">
                                 </div>
                             </section>
                         </div>
@@ -225,7 +242,11 @@
                 </div>
                 <div class="pds-dispatch-item-footer-actions">
                     <button type="button" class="pds-dispatch-btn pds-dispatch-btn-ghost" data-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="submit" class="pds-dispatch-btn pds-dispatch-btn-primary">
+                    <button type="submit"
+                            id="dispatch_item_save_btn"
+                            class="pds-dispatch-btn pds-dispatch-btn-primary"
+                            data-dispatch-item-save="1"
+                            onclick="return window.__pdsSaveDispatchItem ? window.__pdsSaveDispatchItem(event) : true;">
                         <i class="fas fa-check"></i>
                         {{ $isEdit ? __('message.update') : __('message.save') }}
                     </button>
@@ -246,147 +267,52 @@
             modalParent: '#remoteModelData',
             savedTownship: @json($township)
         };
-        var src = "{{ asset('js/dispatch-item-form.js') }}?v=29";
+        var formSrc = "{{ asset('js/dispatch-item-form.js') }}?v=36";
+        var zoomSrc = "{{ asset('js/pds-photo-zoom.js') }}?v=3";
+
+        function mountPhotoZoom() {
+            if (window.PdsPhotoZoom && typeof window.PdsPhotoZoom.mountInlinePhoto === 'function') {
+                window.__pdsInlinePhotoRotation = 0;
+                // Fresh modal open — start upright; rotate clicks update hidden field + data attr.
+                window.PdsPhotoZoom.mountInlinePhoto(null, { reset: true });
+            }
+            // Force-reload photo when opened inside a previously-hidden Bootstrap modal.
+            // loading=lazy / display:none often leaves a broken image icon.
+            var img = document.getElementById('pdsItemInlinePhotoImg');
+            if (img) {
+                var src = img.getAttribute('src') || '';
+                if (src && src.charAt(0) !== '?') {
+                    img.setAttribute('loading', 'eager');
+                    img.src = src;
+                }
+            }
+        }
 
         function bootForm() {
             if (typeof window.initDispatchItemForm === 'function') {
                 window.initDispatchItemForm(opts);
             }
-            initDispatchItemInlinePhotoZoom();
+            mountPhotoZoom();
             $('#remoteModelData').addClass('has-photo-item-modal');
         }
 
-        if (typeof window.initDispatchItemForm === 'function') {
-            bootForm();
-        } else {
-            $.getScript(src, bootForm);
+        function loadForm() {
+            if (typeof window.initDispatchItemForm === 'function') {
+                bootForm();
+            } else {
+                $.getScript(formSrc, bootForm);
+            }
         }
 
-        function initDispatchItemInlinePhotoZoom() {
-            var viewport = document.getElementById('pdsItemInlinePhotoViewport');
-            var img = document.getElementById('pdsItemInlinePhotoImg');
-            if (!viewport || !img) {
-                return;
-            }
-
-            var zoomLevel = viewport.parentElement.querySelector('[data-inline-photo-zoom-level]');
-            var scale = 1;
-            var translateX = 0;
-            var translateY = 0;
-            var minScale = 1;
-            var maxScale = 5;
-            var isDragging = false;
-            var dragStartX = 0;
-            var dragStartY = 0;
-            var dragOriginX = 0;
-            var dragOriginY = 0;
-            var activePointers = new Map();
-
-            function clamp(value, min, max) {
-                return Math.min(max, Math.max(min, value));
-            }
-
-            function updateZoomLabel() {
-                if (zoomLevel) {
-                    zoomLevel.textContent = Math.round(scale * 100) + '%';
-                }
-            }
-
-            function applyTransform() {
-                img.style.transform = 'translate(calc(-50% + ' + translateX + 'px), calc(-50% + ' + translateY + 'px)) scale(' + scale + ')';
-                viewport.classList.toggle('is-zoomed', scale > 1.02);
-                updateZoomLabel();
-            }
-
-            function resetTransform() {
-                scale = 1;
-                translateX = 0;
-                translateY = 0;
-                img.style.transform = 'translate(-50%, -50%) scale(1)';
-                viewport.classList.remove('is-zoomed');
-                updateZoomLabel();
-            }
-
-            function zoomAt(clientX, clientY, nextScale) {
-                var rect = viewport.getBoundingClientRect();
-                var centerX = rect.left + rect.width / 2;
-                var centerY = rect.top + rect.height / 2;
-                var offsetX = clientX - centerX;
-                var offsetY = clientY - centerY;
-                var ratio = nextScale / scale;
-                translateX = (translateX - offsetX) * ratio + offsetX;
-                translateY = (translateY - offsetY) * ratio + offsetY;
-                scale = clamp(nextScale, minScale, maxScale);
-                applyTransform();
-            }
-
-            viewport.parentElement.querySelectorAll('[data-inline-photo-zoom]').forEach(function (button) {
-                button.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    var action = button.getAttribute('data-inline-photo-zoom');
-                    if (action === 'reset') {
-                        resetTransform();
-                        return;
-                    }
-                    var rect = viewport.getBoundingClientRect();
-                    var delta = action === 'in' ? 0.35 : -0.35;
-                    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, scale + delta);
-                });
-            });
-
-            viewport.addEventListener('wheel', function (event) {
-                event.preventDefault();
-                event.stopPropagation();
-                var delta = event.deltaY < 0 ? 0.15 : -0.15;
-                zoomAt(event.clientX, event.clientY, scale + delta);
-            }, { passive: false });
-
-            viewport.addEventListener('dblclick', function (event) {
-                event.preventDefault();
-                if (scale > 1.02) {
-                    resetTransform();
-                } else {
-                    zoomAt(event.clientX, event.clientY, 2.2);
-                }
-            });
-
-            viewport.addEventListener('pointerdown', function (event) {
-                if (scale <= 1.02) return;
-                activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-                if (activePointers.size === 1) {
-                    isDragging = true;
-                    dragStartX = event.clientX;
-                    dragStartY = event.clientY;
-                    dragOriginX = translateX;
-                    dragOriginY = translateY;
-                    viewport.setPointerCapture(event.pointerId);
-                }
-            });
-
-            viewport.addEventListener('pointermove', function (event) {
-                if (!activePointers.has(event.pointerId)) return;
-                activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-                if (isDragging && scale > 1.02) {
-                    translateX = dragOriginX + (event.clientX - dragStartX);
-                    translateY = dragOriginY + (event.clientY - dragStartY);
-                    applyTransform();
-                }
-            });
-
-            function endPointer(event) {
-                activePointers.delete(event.pointerId);
-                if (activePointers.size === 0) {
-                    isDragging = false;
-                }
-            }
-
-            viewport.addEventListener('pointerup', endPointer);
-            viewport.addEventListener('pointercancel', endPointer);
+        if (window.PdsPhotoZoom) {
+            loadForm();
+        } else {
+            $.getScript(zoomSrc, loadForm);
         }
 
         $(document).off('hidden.bs.modal.pdsPhotoItem').on('hidden.bs.modal.pdsPhotoItem', '#remoteModelData', function () {
             $(this).removeClass('has-photo-item-modal');
+            window.__pdsInlinePhotoRotation = 0;
         });
     })();
 </script>

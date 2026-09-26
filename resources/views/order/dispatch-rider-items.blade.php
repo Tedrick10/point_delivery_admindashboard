@@ -440,7 +440,8 @@
     @endif
 
     @section('bottom_script')
-        <script src="{{ asset('js/dispatch-item-form.js') }}?v=29"></script>
+        <script src="{{ asset('js/pds-photo-zoom.js') }}?v=3"></script>
+        <script src="{{ asset('js/dispatch-item-form.js') }}?v=35"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(document).ready(function () {
@@ -548,7 +549,6 @@
 
                 var canBulkUpdate = @json($canBulkUpdate);
                 var canReassignRider = @json(! empty($canReassignRider));
-                var includeCurrentRider = false;
                 var reassignFromStatus = @json($status ?? 'pending');
                 var currentRiderId = @json((int) $rider->id);
                 var riderBranchId = @json((int) ($rider->branch_id ?? 0));
@@ -560,6 +560,8 @@
                 var setReturnTypeUrl = @json(route('order.dispatch.rider-items.return-type', ['riderId' => $rider->id]));
                 var toggleReturnUrl = @json(route('order.dispatch.rider-items.toggle-return', ['riderId' => $rider->id, 'itemId' => 0]));
                 var isReturnTab = @json(($status ?? '') === 'return');
+                // Return tab: allow picking the current rider again so parcels re-enter Assigned.
+                var includeCurrentRider = isReturnTab;
                 var csrfToken = @json(csrf_token());
                 var riderSearchUrl = @json(route('ajax-list', ['type' => 'dispatch_deliveryman_search']));
                 var riderCache = [];

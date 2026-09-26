@@ -32,10 +32,11 @@
                                         <div class="pds-photo-carousel-slide"
                                              data-caption="{{ $index + 1 }}. {{ $file->file_name }}">
                                             <div class="pds-photo-carousel-stage">
-                                                <img src="{{ $file->getUrl() }}"
+                                                <img src="{{ mediaPublicUrl($file) }}"
                                                      alt="{{ $file->file_name }}"
                                                      class="pds-photo-carousel-img"
-                                                     loading="lazy"
+                                                     loading="eager"
+                                                     decoding="async"
                                                      draggable="false">
                                             </div>
                                         </div>
@@ -47,18 +48,24 @@
                             </button>
                         </div>
                         <div class="pds-photo-carousel-zoom-bar">
-                            <button type="button" class="pds-photo-carousel-zoom-btn" data-carousel-zoom="out" aria-label="Zoom out">
+                            <button type="button" class="pds-photo-carousel-zoom-btn" data-carousel-zoom="out" aria-label="Zoom out" title="Zoom out">
                                 <i class="fas fa-search-minus"></i>
                             </button>
                             <span class="pds-photo-carousel-zoom-level" data-carousel-zoom-level>100%</span>
-                            <button type="button" class="pds-photo-carousel-zoom-btn" data-carousel-zoom="in" aria-label="Zoom in">
+                            <button type="button" class="pds-photo-carousel-zoom-btn" data-carousel-zoom="in" aria-label="Zoom in" title="Zoom in">
                                 <i class="fas fa-search-plus"></i>
                             </button>
-                            <button type="button" class="pds-photo-carousel-zoom-btn pds-photo-carousel-zoom-btn--reset" data-carousel-zoom="reset" aria-label="Reset zoom">
+                            <button type="button" class="pds-photo-carousel-zoom-btn" data-carousel-zoom="rotate-left" aria-label="Rotate left" title="Rotate left">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                            <button type="button" class="pds-photo-carousel-zoom-btn" data-carousel-zoom="rotate-right" aria-label="Rotate right" title="Rotate right">
+                                <i class="fas fa-redo"></i>
+                            </button>
+                            <button type="button" class="pds-photo-carousel-zoom-btn pds-photo-carousel-zoom-btn--reset" data-carousel-zoom="reset" aria-label="Reset zoom" title="Reset">
                                 Reset
                             </button>
                         </div>
-                        <p class="pds-photo-carousel-zoom-hint">Scroll / pinch ဖြင့် ချုံ/ချဲ့ · ဆွဲပြီး ရွှေ့ · နှစ်ချက်နှိပ် zoom</p>
+                        <p class="pds-photo-carousel-zoom-hint">Scroll / pinch ဖြင့် ချုံ/ချဲ့ · Rotate · ဆွဲပြီး ရွှေ့ · နှစ်ချက်နှိပ် zoom</p>
                         <div class="pds-photo-carousel-meta">
                             <span class="pds-photo-carousel-counter">1 / {{ $photoOrderImages->count() }}</span>
                             <small class="pds-photo-carousel-caption">{{ $photoOrderImages->first()->file_name ?? '' }}</small>
@@ -172,6 +179,7 @@
     </div>
 </div>
 
+<script src="{{ asset('js/pds-photo-zoom.js') }}?v=3"></script>
 <script>
     (function () {
         var root = document.getElementById('photo_order_details_form');
@@ -195,200 +203,26 @@
                         panel.classList.toggle('is-active', isActive);
                         panel.hidden = !isActive;
                     });
+
+                    // User / Pickup tab switch — keep rotate/zoom bound and re-apply active photo.
+                    if (window.PdsPhotoZoom) {
+                        window.PdsPhotoZoom.mountCarousel();
+                    }
                 });
             });
         }
 
-        var carousel = document.getElementById('photoOrderCarousel');
-        if (carousel) {
-            var viewport = document.getElementById('photoOrderGallery');
-            var track = carousel.querySelector('.pds-photo-carousel-track');
-            var slides = carousel.querySelectorAll('.pds-photo-carousel-slide');
-            var prevBtn = carousel.querySelector('.pds-photo-carousel-nav--prev');
-            var nextBtn = carousel.querySelector('.pds-photo-carousel-nav--next');
-            var counter = carousel.parentElement.querySelector('.pds-photo-carousel-counter');
-            var caption = carousel.parentElement.querySelector('.pds-photo-carousel-caption');
-            var zoomLevel = carousel.parentElement.querySelector('[data-carousel-zoom-level]');
-            var currentIndex = 0;
-            var scale = 1;
-            var translateX = 0;
-            var translateY = 0;
-            var minScale = 1;
-            var maxScale = 6;
-            var isDragging = false;
-            var dragStartX = 0;
-            var dragStartY = 0;
-            var dragOriginX = 0;
-            var dragOriginY = 0;
-            var pinchStartDistance = 0;
-            var pinchStartScale = 1;
-            var activePointers = new Map();
-
-            function clamp(value, min, max) {
-                return Math.min(max, Math.max(min, value));
+        function bootCarousel() {
+            if (window.PdsPhotoZoom) {
+                window.PdsPhotoZoom.mountCarousel();
             }
+        }
 
-            function getActiveImg() {
-                if (!slides.length) return null;
-                return slides[currentIndex].querySelector('.pds-photo-carousel-img');
-            }
-
-            function updateZoomLabel() {
-                if (zoomLevel) {
-                    zoomLevel.textContent = Math.round(scale * 100) + '%';
-                }
-            }
-
-            function applyTransform() {
-                var img = getActiveImg();
-                if (!img) return;
-                img.style.transform = 'translate(calc(-50% + ' + translateX + 'px), calc(-50% + ' + translateY + 'px)) scale(' + scale + ')';
-                if (viewport) {
-                    viewport.classList.toggle('is-zoomed', scale > 1.02);
-                }
-                updateZoomLabel();
-            }
-
-            function resetTransform() {
-                scale = 1;
-                translateX = 0;
-                translateY = 0;
-                slides.forEach(function (slide) {
-                    var img = slide.querySelector('.pds-photo-carousel-img');
-                    if (img) {
-                        img.style.transform = 'translate(-50%, -50%) scale(1)';
-                    }
-                });
-                if (viewport) {
-                    viewport.classList.remove('is-zoomed');
-                }
-                updateZoomLabel();
-            }
-
-            function zoomAt(clientX, clientY, nextScale) {
-                if (!viewport) return;
-                var rect = viewport.getBoundingClientRect();
-                var centerX = rect.left + rect.width / 2;
-                var centerY = rect.top + rect.height / 2;
-                var offsetX = clientX - centerX;
-                var offsetY = clientY - centerY;
-                var ratio = nextScale / scale;
-
-                translateX = (translateX - offsetX) * ratio + offsetX;
-                translateY = (translateY - offsetY) * ratio + offsetY;
-                scale = clamp(nextScale, minScale, maxScale);
-                applyTransform();
-            }
-
-            function updateCarousel(index) {
-                if (!slides.length) return;
-                resetTransform();
-                currentIndex = (index + slides.length) % slides.length;
-                track.style.transform = 'translateX(-' + (currentIndex * 100) + '%)';
-                if (counter) {
-                    counter.textContent = (currentIndex + 1) + ' / ' + slides.length;
-                }
-                if (caption) {
-                    caption.textContent = slides[currentIndex].getAttribute('data-caption') || '';
-                }
-                if (prevBtn) prevBtn.disabled = slides.length <= 1;
-                if (nextBtn) nextBtn.disabled = slides.length <= 1;
-            }
-
-            if (prevBtn) {
-                prevBtn.addEventListener('click', function () {
-                    updateCarousel(currentIndex - 1);
-                });
-            }
-            if (nextBtn) {
-                nextBtn.addEventListener('click', function () {
-                    updateCarousel(currentIndex + 1);
-                });
-            }
-
-            carousel.parentElement.querySelectorAll('[data-carousel-zoom]').forEach(function (button) {
-                button.addEventListener('click', function () {
-                    var action = button.getAttribute('data-carousel-zoom');
-                    if (!viewport) return;
-                    var rect = viewport.getBoundingClientRect();
-                    var centerX = rect.left + rect.width / 2;
-                    var centerY = rect.top + rect.height / 2;
-                    if (action === 'in') zoomAt(centerX, centerY, scale * 1.25);
-                    if (action === 'out') zoomAt(centerX, centerY, scale / 1.25);
-                    if (action === 'reset') resetTransform();
-                });
-            });
-
-            if (viewport) {
-                viewport.addEventListener('wheel', function (event) {
-                    event.preventDefault();
-                    var delta = event.deltaY > 0 ? 0.9 : 1.1;
-                    zoomAt(event.clientX, event.clientY, scale * delta);
-                }, { passive: false });
-
-                viewport.addEventListener('dblclick', function (event) {
-                    if (scale > 1.05) {
-                        resetTransform();
-                    } else {
-                        zoomAt(event.clientX, event.clientY, 2.5);
-                    }
-                });
-
-                viewport.addEventListener('pointerdown', function (event) {
-                    if (event.pointerType === 'mouse' && event.button !== 0) return;
-                    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-                    if (activePointers.size === 1) {
-                        isDragging = scale > 1.02;
-                        dragStartX = event.clientX;
-                        dragStartY = event.clientY;
-                        dragOriginX = translateX;
-                        dragOriginY = translateY;
-                        viewport.setPointerCapture(event.pointerId);
-                    } else if (activePointers.size === 2) {
-                        var points = Array.from(activePointers.values());
-                        pinchStartDistance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-                        pinchStartScale = scale;
-                        isDragging = false;
-                    }
-                });
-
-                viewport.addEventListener('pointermove', function (event) {
-                    if (!activePointers.has(event.pointerId)) return;
-                    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-
-                    if (activePointers.size === 2) {
-                        var points = Array.from(activePointers.values());
-                        var distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-                        if (pinchStartDistance > 0) {
-                            var midX = (points[0].x + points[1].x) / 2;
-                            var midY = (points[0].y + points[1].y) / 2;
-                            zoomAt(midX, midY, pinchStartScale * (distance / pinchStartDistance));
-                        }
-                        return;
-                    }
-
-                    if (isDragging) {
-                        translateX = dragOriginX + (event.clientX - dragStartX);
-                        translateY = dragOriginY + (event.clientY - dragStartY);
-                        applyTransform();
-                    }
-                });
-
-                function endPointer(event) {
-                    activePointers.delete(event.pointerId);
-                    if (activePointers.size < 2) {
-                        pinchStartDistance = 0;
-                    }
-                    if (activePointers.size === 0) {
-                        isDragging = false;
-                    }
-                }
-
-                viewport.addEventListener('pointerup', endPointer);
-                viewport.addEventListener('pointercancel', endPointer);
-            }
-
-            updateCarousel(0);
+        if (window.PdsPhotoZoom) {
+            bootCarousel();
+        } else {
+            // Script tag above should have defined it; retry once if order raced.
+            window.setTimeout(bootCarousel, 0);
         }
     })();
 </script>

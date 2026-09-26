@@ -2276,7 +2276,9 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.rider_work_off_assign_blocked')], 422);
         }
 
-        if ((int) $fromRider->id === (int) $toRider->id) {
+        // Pending → must pick a different rider. Return → same rider is allowed
+        // so the parcel can re-enter that rider's Assigned list.
+        if ($fromStatus !== 'return' && (int) $fromRider->id === (int) $toRider->id) {
             return response()->json(['message' => __('message.dispatch_rider_reassign_same')], 422);
         }
 
@@ -4085,6 +4087,7 @@ class OrderController extends Controller
 
         $audit = app(DispatchOrderAuditService::class);
         $before = $audit->itemSnapshot($item);
+        $statusBeforeEdit = (string) ($item->status ?? '');
         $data = $this->validateDispatchItem($request, $order);
 
         if ($workflow->isKyoShinItemValueLocked($item) && $workflow->isKyoShinDeliAmountLocked($item)) {
@@ -4133,6 +4136,20 @@ class OrderController extends Controller
             'admin_updated_at' => now(),
         ]));
 
+        $photoRotation = (int) $request->input('photo_rotation', 0);
+        $photoRotated = false;
+        if ($photoRotation !== 0) {
+            try {
+                $photoRotated = $this->rotateDispatchItemPhoto($item->fresh(['photoMedia']), $photoRotation);
+            } catch (\Throwable $e) {
+                \Log::warning('dispatch item photo rotate failed', [
+                    'item_id' => $item->id,
+                    'rotation' => $photoRotation,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         if (isSuperAdmin() && $workflow->isKyoShinLocked($item)) {
             app(\App\Services\KyoShinService::class)
                 ->syncAdvanceAmountFromDispatchItem($item->fresh(['kyoShinItem.batch']));
@@ -4142,23 +4159,41 @@ class OrderController extends Controller
 
         $this->syncDispatchOrderTotals($order);
         $order = $order->fresh();
-        $workflow->syncOrderWorkflow($order);
+        $movedToAssign100 = $workflow->syncOrderWorkflow($order);
 
         $fresh = $order->fresh();
         $response = [
             'message' => __('message.update_form', ['form' => __('message.item_name')]),
             'to_branch_id' => (int) ($item->to_branch_id ?? 0),
         ];
-        if ($workflow->isReadyForAssign100($fresh)) {
+
+        if ($photoRotated) {
+            $item->loadMissing('photoMedia');
+            $media = $item->photoMedia;
+            if ($media) {
+                $response['photo_url'] = $media->getUrl() . '?v=' . time();
+                $response['photo_rotated'] = true;
+            }
+        }
+
+        // Stay on the current screen after Item Info save.
+        // Never auto-navigate to Assign 100 / Admin Done (Return edits and re-saves
+        // used to bounce because isReadyForAssign100 stayed true).
+        $isPostPickupEdit = in_array($statusBeforeEdit, [
+            'assigned',
+            'courier_assigned',
+            'courier_departed',
+            'pending',
+            'completed',
+            'return',
+            'os_returned',
+        ], true);
+
+        if ($movedToAssign100 > 0 && ! $isPostPickupEdit) {
             $response['moved_to_assign_100'] = true;
-            $response['redirect'] = route('order.dispatch.assign-100');
             $response['message'] = __('message.dispatch_items_moved_to_assign_100');
-        } elseif ($workflow->isAdminDoneAwaitingRider($fresh)) {
+        } elseif ($workflow->isAdminDoneAwaitingRider($fresh) && ! $isPostPickupEdit) {
             $response['moved_to_admin_done'] = true;
-            $response['redirect'] = route('order.index', [
-                'orders_type' => 'list',
-                'dispatch_status' => 'admin_completed',
-            ]);
             $response['message'] = __('message.dispatch_items_moved_to_admin_done');
         }
 
@@ -4440,8 +4475,13 @@ class OrderController extends Controller
             'customer_phone' => 'nullable|string|max:50',
             'customer_name' => 'nullable|string|max:255',
             'customer_address' => 'nullable|string|max:500',
-            'credit_to' => 'required|in:os,customer',
+            'credit_to' => 'required|in:os,customer,os_paid',
         ]);
+
+        // UI may send os_paid; persist as credit_to=os with os_paid amount.
+        if (($data['credit_to'] ?? '') === 'os_paid') {
+            $data['credit_to'] = 'os';
+        }
 
         $data['to_branch_id'] = $this->resolveDispatchToBranchId($data['to_branch_id']);
         $data['delivery_city'] = trim($data['delivery_city']);
@@ -4615,6 +4655,98 @@ class OrderController extends Controller
             'total_parcel' => max(1, (int) $order->total_parcel, $collectedCount),
             'total_amount' => (float) $order->dispatchItems()->sum('deli_amount'),
         ]);
+    }
+
+    /**
+     * Persist CSS-clockwise photo rotation onto the stored media file (90° steps).
+     */
+    private function rotateDispatchItemPhoto(DispatchOrderItem $item, int $cssDegrees): bool
+    {
+        if (! function_exists('imagerotate')) {
+            return false;
+        }
+
+        $cssDegrees = ((int) $cssDegrees) % 360;
+        if ($cssDegrees < 0) {
+            $cssDegrees += 360;
+        }
+        $cssDegrees = (int) (round($cssDegrees / 90) * 90) % 360;
+        if ($cssDegrees === 0) {
+            return false;
+        }
+
+        $item->loadMissing('photoMedia');
+        $media = $item->photoMedia;
+        if (! $media) {
+            return false;
+        }
+
+        $path = function_exists('mediaAbsoluteDiskPath')
+            ? mediaAbsoluteDiskPath($media)
+            : $media->getPath();
+        if (! is_string($path) || $path === '' || ! is_file($path)) {
+            return false;
+        }
+
+        $info = @getimagesize($path);
+        if (! is_array($info) || empty($info['mime'])) {
+            return false;
+        }
+
+        $mime = (string) $info['mime'];
+        $source = match ($mime) {
+            'image/jpeg', 'image/jpg' => @imagecreatefromjpeg($path),
+            'image/png' => @imagecreatefrompng($path),
+            'image/webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($path) : false,
+            'image/gif' => @imagecreatefromgif($path),
+            default => false,
+        };
+        if ($source === false) {
+            return false;
+        }
+
+        // CSS rotate() is clockwise; GD imagerotate() is counter-clockwise.
+        $gdAngle = (360 - $cssDegrees) % 360;
+        if ($mime === 'image/png') {
+            imagealphablending($source, false);
+            imagesavealpha($source, true);
+        }
+
+        $rotated = imagerotate($source, $gdAngle, 0);
+        imagedestroy($source);
+        if ($rotated === false) {
+            return false;
+        }
+
+        if ($mime === 'image/png') {
+            imagealphablending($rotated, false);
+            imagesavealpha($rotated, true);
+            $ok = imagepng($rotated, $path);
+        } elseif ($mime === 'image/webp' && function_exists('imagewebp')) {
+            $ok = imagewebp($rotated, $path, 90);
+        } elseif ($mime === 'image/gif') {
+            $ok = imagegif($rotated, $path);
+        } else {
+            $ok = imagejpeg($rotated, $path, 90);
+        }
+        imagedestroy($rotated);
+
+        if (! $ok) {
+            return false;
+        }
+
+        try {
+            $media->size = filesize($path) ?: $media->size;
+            $media->updated_at = now();
+            $media->save();
+        } catch (\Throwable $e) {
+            \Log::warning('dispatch item photo rotate meta update failed', [
+                'item_id' => $item->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return true;
     }
 
     public function dispatchEdit($id)

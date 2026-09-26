@@ -801,7 +801,7 @@ class DispatchOrderWorkflowService
         return $order->fresh();
     }
 
-    public function syncOrderWorkflow(Order $order): void
+    public function syncOrderWorkflow(Order $order): int
     {
         $order->loadMissing('dispatchItems');
 
@@ -809,7 +809,7 @@ class DispatchOrderWorkflowService
         $this->reclaimPrematureAssign100ItemsForOrder($order);
 
         if (! $this->isReadyForAssign100($order)) {
-            return;
+            return 0;
         }
 
         $items = DispatchOrderItem::query()
@@ -844,6 +844,8 @@ class DispatchOrderWorkflowService
                 ]);
             }
         }
+
+        return $moved;
     }
 
     /**

@@ -97,6 +97,9 @@ class DispatchOrderItemDataTable extends DataTable
                 }
 
                 $url = mediaPublicUrl($row->photoMedia);
+                $cacheV = optional($row->photoMedia->updated_at)->timestamp
+                    ?: (@filemtime((string) $row->photoMedia->getPath()) ?: time());
+                $url = $url . (str_contains($url, '?') ? '&' : '?') . 'v=' . $cacheV;
                 $name = e($row->photoMedia->file_name ?? 'Photo');
 
                 return '<div class="pds-dispatch-photo-thumb-wrap">'
