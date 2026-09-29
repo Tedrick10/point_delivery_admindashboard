@@ -120,6 +120,7 @@ class ExpenseSummaryController extends Controller
             'calendarDays' => $calendarDays,
             'calendarWeekdays' => $triple->weekdayLabels(),
             'tripleCheckers' => $triple->checkerMeta(),
+            'tripleCanView' => $triple->canViewCalendar($authUser),
             'tripleCanConfirm' => $checkerKey !== null,
             'tripleCheckerKey' => $checkerKey,
             'tripleAlreadyConfirmed' => $checkerKey

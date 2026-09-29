@@ -8,7 +8,6 @@
                         <span>{{ __('message.order') }}</span>
                     </div>
                     <h4 class="pds-rider-hero__title">{{ $pageTitle }}</h4>
-                    <p class="pds-rider-hero__subtitle">{{ __('message.rider_remit_subtitle') }}</p>
                 </div>
                 <div class="pds-rider-hero__stat">
                     <span class="pds-rider-hero__stat-value" data-rr-summary="rider_count">{{ $summary->rider_count }}</span>

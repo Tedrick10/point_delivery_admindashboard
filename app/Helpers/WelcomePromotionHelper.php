@@ -9,37 +9,53 @@ class WelcomePromotionHelper
 {
     public static function getDiscountForUser(?User $user, float $amount): array
     {
-        if (!$user) {
+        if (! $user) {
             return ['discount' => 0, 'eligible' => false, 'remaining' => 0];
         }
 
         $promo = WelcomePromotion::getActive();
-        if (!$promo) {
+        if (! $promo) {
             return ['discount' => 0, 'eligible' => false, 'remaining' => 0];
         }
 
-        $used = $user->welcome_orders_used ?? 0;
-        $remaining = max(0, $promo->max_orders - $used);
+        // Super Admin per–Online Shop gate
+        if (! (bool) ($user->welcome_promo_enabled ?? true)) {
+            return ['discount' => 0, 'eligible' => false, 'remaining' => 0];
+        }
+
+        $used = (int) ($user->welcome_orders_used ?? 0);
+        $remaining = max(0, (int) $promo->max_orders - $used);
 
         if ($remaining <= 0) {
             return ['discount' => 0, 'eligible' => false, 'remaining' => 0];
         }
 
-        $discount = $promo->calculateDiscount($amount);
+        $hasShopPercent = $user->welcome_discount_percent !== null && $user->welcome_discount_percent !== '';
+        $discountType = $hasShopPercent ? 'percentage' : $promo->discount_type;
+        $discountValue = $hasShopPercent
+            ? (float) $user->welcome_discount_percent
+            : (float) $promo->discount_value;
+
+        $discount = $promo->calculateDiscount($amount, $hasShopPercent ? $discountValue : null);
+
         return [
             'discount' => $discount,
             'eligible' => true,
             'remaining' => $remaining,
-            'discount_type' => $promo->discount_type,
-            'discount_value' => $promo->discount_value,
+            'discount_type' => $discountType,
+            'discount_value' => $discountValue,
             'max_orders' => $promo->max_orders,
+            'title' => $promo->title,
         ];
     }
 
     public static function applyAfterOrder(User $user): void
     {
         $promo = WelcomePromotion::getActive();
-        if (!$promo) {
+        if (! $promo) {
+            return;
+        }
+        if (! (bool) ($user->welcome_promo_enabled ?? true)) {
             return;
         }
         if (($user->welcome_orders_used ?? 0) < $promo->max_orders) {

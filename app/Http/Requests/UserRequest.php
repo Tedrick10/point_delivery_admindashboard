@@ -42,7 +42,7 @@ class UserRequest extends FormRequest
 
         if ($this->routeIs('deliveryman.*', 'deliveryman.store')) {
             $rules['username'] = 'required|unique:users,username,'.$user_id;
-            $rules['email'] = 'required|email|unique:users,email,'.$user_id;
+            $rules['email'] = 'sometimes|nullable|email|unique:users,email,'.$user_id;
             // Admin sets rider phone (required). No midnight re-entry in Rider App.
             $rules['contact_number'] = 'required|max:30|unique:users,contact_number,'.$user_id;
             $rules['branch_id'] = 'required|exists:branches,id';

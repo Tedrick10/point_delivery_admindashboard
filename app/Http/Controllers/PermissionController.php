@@ -13,6 +13,13 @@ class PermissionController extends Controller
 {
     public function __construct()
     {
+        $this->middleware(function ($request, $next) {
+            if (! isSuperAdmin(auth()->user())) {
+                return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
+            }
+
+            return $next($request);
+        });
     }
 
 
@@ -40,7 +47,7 @@ class PermissionController extends Controller
     /**
      * Only features currently shown in the Admin Panel sidebar.
      */
-    protected function adminPanelPermissionModules(): array
+    public function adminPanelPermissionModules(): array
     {
         $catalog = [
             'order' => [
@@ -62,6 +69,16 @@ class PermissionController extends Controller
                 'label' => __('message.hr_payroll'),
                 'hint' => __('message.roles_module_payroll_hint'),
                 'icon' => 'fas fa-wallet',
+            ],
+            'kyo-shin' => [
+                'label' => __('message.kyo_shin_title'),
+                'hint' => __('message.roles_module_kyo_shin_hint'),
+                'icon' => 'fas fa-coins',
+            ],
+            'expense-summary' => [
+                'label' => __('message.expense_summary_title'),
+                'hint' => __('message.roles_module_expense_summary_hint'),
+                'icon' => 'fas fa-file-invoice-dollar',
             ],
             'subadmin' => [
                 'label' => __('message.account_creation'),
@@ -94,12 +111,24 @@ class PermissionController extends Controller
                 continue;
             }
 
-            $actionOrder = ['list' => 1, 'show' => 2, 'add' => 3, 'edit' => 4, 'delete' => 5];
+            $actionOrder = [
+                'list' => 1,
+                'show' => 2,
+                'add' => 3,
+                'edit' => 4,
+                'delete' => 5,
+                'check' => 6,
+                'edit-due' => 7,
+                'check-nn' => 8,
+                'check-ss' => 9,
+            ];
 
-            $permissions = $parent->subpermission->map(function (Permission $perm) {
-                $suffix = str_contains($perm->name, '-')
-                    ? substr($perm->name, strrpos($perm->name, '-') + 1)
-                    : $perm->name;
+            $permissions = $parent->subpermission->map(function (Permission $perm) use ($key) {
+                $suffix = str_starts_with($perm->name, $key.'-')
+                    ? substr($perm->name, strlen($key) + 1)
+                    : (str_contains($perm->name, '-')
+                        ? substr($perm->name, strrpos($perm->name, '-') + 1)
+                        : $perm->name);
 
                 $action = match ($suffix) {
                     'list' => __('message.list'),
@@ -107,6 +136,12 @@ class PermissionController extends Controller
                     'add' => __('message.add'),
                     'edit' => __('message.edit'),
                     'delete' => __('message.delete'),
+                    'check' => $key === 'expense-summary'
+                        ? __('message.expense_summary_confirm')
+                        : __('message.kyo_shin_check'),
+                    'edit-due' => __('message.kyo_shin_edit_due'),
+                    'check-nn' => __('message.expense_summary_check_nn'),
+                    'check-ss' => __('message.expense_summary_check_ss'),
                     default => ucfirst($suffix),
                 };
 
@@ -201,6 +236,12 @@ class PermissionController extends Controller
         }
 
         Artisan::call('permission:cache-reset');
+
+        if ($request->input('embed_return') === 'super-admin') {
+            return redirect()
+                ->route('super-admin.screens.show', ['screen' => 'roles-permissions'])
+                ->withSuccess(__('message.save_form', ['form' => __('message.roles_and_permission')]));
+        }
 
         return redirect()->route('permission.index')->withSuccess(__('message.save_form', ['form' => __('message.roles_and_permission')]));
     }

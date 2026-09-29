@@ -1,51 +1,56 @@
 <x-master-layout :assets="$assets ?? []">
-    <div class="container-fluid pds-page-wrap pds-motion-enter">
-    <div>
+    <div class="container-fluid pds-page-wrap pds-motion-enter pds-user-reg-page">
         <?php $id = $id ?? null; ?>
         @if(isset($id))
             {!! html()->modelForm($data, 'PATCH', route('users.update', $id))->id('user_form')->attribute('enctype', 'multipart/form-data')->open() !!}
         @else
             {!! html()->form('POST', route('users.store'))->id('user_form')->attribute('enctype', 'multipart/form-data')->open() !!}
         @endif
-        <div class="row">
-            <div class="col-lg-12">
-                <div class="card pds-page-card pds-user-reg-card">
-                    <div class="card-header pds-page-header d-flex justify-content-between align-items-center">
-                        <div>
-                            <h4 class="card-title pds-page-title mb-0">{{ $pageTitle }}</h4>
-                            <p class="pds-user-reg-subtitle mb-0">{{ __('message.sign_up_account') }}</p>
-                        </div>
-                        <a href="{{ route('users.index') }}" class="btn btn-sm btn-outline-primary">{{ __('message.back') }}</a>
+
+        <div class="card pds-page-card pds-user-reg-card">
+            <div class="card-header pds-page-header pds-user-reg-header">
+                <div class="pds-user-reg-header__copy">
+                    <div class="pds-user-reg-header__eyebrow">
+                        <i class="fas fa-store" aria-hidden="true"></i>
+                        <span>{{ __('message.online_shop') }}</span>
                     </div>
+                    <h4 class="card-title pds-page-title pds-user-reg-header__title mb-0">{{ $pageTitle }}</h4>
+                    @unless(isset($id))
+                        <p class="pds-user-reg-subtitle mb-0">{{ __('message.sign_up_account') }}</p>
+                    @endunless
+                </div>
+                <a href="{{ route('users.index') }}" class="btn btn-sm btn-outline-primary pds-user-reg-back">
+                    <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                    <span>{{ __('message.back') }}</span>
+                </a>
+            </div>
 
-                    <div class="card-body pds-page-body pds-user-reg-body">
-                        <div class="pds-user-reg-layout">
-                            <aside class="pds-user-reg-aside">
-                                @include('partials._profile_upload', [
-                                    'profileImage' => $profileImage ?? null,
-                                    'profileTitle' => __('message.profile'),
-                                ])
-                            </aside>
+            <div class="card-body pds-page-body pds-user-reg-body">
+                <div class="pds-user-reg-layout">
+                    <aside class="pds-user-reg-aside">
+                        @include('partials._profile_upload', [
+                            'profileImage' => $profileImage ?? null,
+                            'profileTitle' => __('message.profile'),
+                        ])
+                    </aside>
 
-                            <div class="pds-user-reg-main">
-                                @include('users.partials._registration_fields', ['data' => $data ?? null, 'id' => $id ?? null])
+                    <div class="pds-user-reg-main">
+                        @include('users.partials._registration_fields', ['data' => $data ?? null, 'id' => $id ?? null])
 
-                                @if(!isset($id))
-                                <input type="hidden" name="created_by_admin" value="1">
-                                <input type="hidden" name="is_temp_password" value="1">
-                                @endif
+                        @if(!isset($id))
+                            <input type="hidden" name="created_by_admin" value="1">
+                            <input type="hidden" name="is_temp_password" value="1">
+                        @endif
 
-                                <div class="pds-user-reg-footer">
-                                    {!! html()->submit(isset($id) ? __('message.update') : __('message.save'))->class('btn btn-primary pds-user-reg-save') !!}
-                                </div>
-                            </div>
+                        <div class="pds-user-reg-footer">
+                            {!! html()->submit(isset($id) ? __('message.update') : __('message.save'))->class('btn btn-primary pds-user-reg-save') !!}
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+
         {!! html()->form()->close() !!}
-    </div>
     </div>
     @section('bottom_script')
     <script>

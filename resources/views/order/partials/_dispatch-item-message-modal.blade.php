@@ -1,20 +1,24 @@
 <div class="modal fade" id="dispatchItemMessageModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
         <div class="modal-content pds-item-chat-modal">
-            <div class="modal-header pds-item-chat-modal__header">
-                <div>
-                    <h5 class="modal-title mb-0">
-                        <i class="fab fa-facebook-messenger" aria-hidden="true"></i>
-                        {{ __('message.chat') }}
-                        <small class="text-muted" id="dispatchItemMessageCustomer"></small>
-                    </h5>
-                    <div class="pds-item-chat-modal__meta" id="dispatchItemMessageMeta"></div>
+            <div class="pds-item-chat-modal__header">
+                <div class="pds-item-chat-modal__heading">
+                    <span class="pds-item-chat-modal__icon" aria-hidden="true">
+                        <i class="fas fa-comments"></i>
+                    </span>
+                    <div class="pds-item-chat-modal__titles">
+                        <h5 class="pds-item-chat-modal__title">
+                            {{ __('message.chat') }}
+                            <span class="pds-item-chat-modal__customer" id="dispatchItemMessageCustomer"></span>
+                        </h5>
+                        <div class="pds-item-chat-modal__meta" id="dispatchItemMessageMeta"></div>
+                    </div>
                 </div>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
+                <button type="button" class="pds-item-chat-modal__close" data-dismiss="modal" aria-label="{{ __('message.close') }}">
+                    <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
             </div>
-            <div class="modal-body pds-item-chat-modal__body">
+            <div class="pds-item-chat-modal__body">
                 <div id="dispatchItemMessageList" class="pds-item-msg-list"></div>
 
                 <div id="dispatchItemMessageImagePreview" class="pds-item-chat-image-preview d-none">
@@ -48,226 +52,328 @@
 
                     <textarea
                         id="dispatchItemMessageInput"
-                        class="form-control"
-                        rows="2"
+                        class="pds-item-chat-input"
+                        rows="1"
                         placeholder="{{ __('message.type_message') }}"
                     ></textarea>
-                    <button type="button" class="btn btn-primary pds-item-chat-send" id="dispatchItemMessageSend" title="{{ __('message.send') }}">
+                    <button type="button" class="pds-item-chat-send" id="dispatchItemMessageSend" title="{{ __('message.send') }}">
                         <i class="fas fa-paper-plane"></i>
                         <span>{{ __('message.send') }}</span>
                     </button>
                 </div>
-                <div class="pds-item-chat-hint">Enter = send · Shift+Enter = new line · Emoji / Image supported</div>
             </div>
         </div>
     </div>
 </div>
 
 <style>
-    .pds-item-chat-modal__header {
-        align-items: flex-start;
-        border-bottom: 1px solid #e5e7eb;
+    body.pds-admin .pds-item-chat-modal,
+    body.pds-admin .pds-item-chat-modal h5,
+    body.pds-admin .pds-item-chat-modal button,
+    body.pds-admin .pds-item-chat-modal textarea,
+    body.pds-admin .pds-item-chat-modal span,
+    body.pds-admin .pds-item-chat-modal div {
+        font-family: 'Outfit', 'Noto Sans Myanmar', system-ui, sans-serif !important;
     }
-    .pds-item-chat-modal__header .modal-title {
+    body.pds-admin .pds-item-chat-modal {
+        border: 0;
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 24px 56px rgba(28, 25, 23, 0.16);
+    }
+    body.pds-admin .pds-item-chat-modal__header {
         display: flex;
         align-items: center;
-        gap: 0.4rem;
-        font-weight: 700;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 1rem 1.15rem;
+        background: linear-gradient(180deg, #FFF8F1 0%, #fff 100%);
+        border-bottom: 1px solid rgba(254, 111, 7, 0.12);
     }
-    .pds-item-chat-modal__meta {
-        margin-top: 0.25rem;
-        font-size: 0.78rem;
-        color: #64748b;
-    }
-    .pds-item-chat-modal__body {
-        padding: 0.85rem 1rem 1rem;
-    }
-    .pds-item-msg-list {
-        height: 340px;
-        overflow: auto;
-        padding: 0.75rem;
-        margin-bottom: 0.75rem;
-        background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-    }
-    .pds-item-msg-empty {
-        color: #94a3b8;
-        text-align: center;
-        margin: 4rem 0 0;
-        font-size: 0.9rem;
-    }
-    .pds-item-msg {
+    body.pds-admin .pds-item-chat-modal__heading {
         display: flex;
-        margin-bottom: 0.65rem;
-        align-items: flex-end;
-        gap: 8px;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
     }
-    .pds-item-msg--admin { justify-content: flex-end; }
-    .pds-item-msg--client { justify-content: flex-start; }
-    .pds-item-msg__avatar {
+    body.pds-admin .pds-item-chat-modal__icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+        background: #FE6F07;
+        color: #fff;
+        font-size: 1rem;
+        box-shadow: 0 6px 14px rgba(254, 111, 7, 0.28);
+    }
+    body.pds-admin .pds-item-chat-modal__titles {
+        min-width: 0;
+    }
+    body.pds-admin .pds-item-chat-modal__title {
+        margin: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.35rem;
+        font-size: 1rem;
+        font-weight: 750;
+        color: #1c1917 !important;
+        letter-spacing: -0.01em;
+    }
+    body.pds-admin .pds-item-chat-modal__customer {
+        color: #57534e !important;
+        font-weight: 650;
+        font-size: 0.92rem;
+    }
+    body.pds-admin .pds-item-chat-modal__meta {
+        margin-top: 0.15rem;
+        font-size: 0.76rem;
+        color: #a8a29e;
+        font-weight: 600;
+    }
+    body.pds-admin .pds-item-chat-modal__close {
+        width: 32px;
+        height: 32px;
+        border: 0;
+        border-radius: 999px;
+        background: rgba(28, 25, 23, 0.05);
+        color: #78716c;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    body.pds-admin .pds-item-chat-modal__close:hover {
+        background: rgba(254, 111, 7, 0.12);
+        color: #c2410c;
+    }
+    body.pds-admin .pds-item-chat-modal__body {
+        padding: 0.95rem 1.05rem 1.1rem;
+        background: #fff;
+    }
+    body.pds-admin .pds-item-msg-list {
+        height: 360px;
+        overflow: auto;
+        padding: 0.85rem;
+        margin-bottom: 0.85rem;
+        background: #fafaf9;
+        border: 1px solid #f0ebe6;
+        border-radius: 14px;
+    }
+    body.pds-admin .pds-item-msg-empty {
+        color: #a8a29e;
+        text-align: center;
+        margin: 5rem 0 0;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    body.pds-admin .pds-item-msg {
+        display: flex;
+        margin-bottom: 0.75rem;
+        align-items: flex-end;
+        gap: 0.55rem;
+    }
+    body.pds-admin .pds-item-msg--admin { justify-content: flex-end; }
+    body.pds-admin .pds-item-msg--client { justify-content: flex-start; }
+    body.pds-admin .pds-item-msg__avatar {
         width: 32px;
         height: 32px;
         border-radius: 999px;
         object-fit: cover;
         flex-shrink: 0;
-        background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+        background: linear-gradient(135deg, #FE6F07 0%, #F59E0B 100%);
     }
-    .pds-item-msg__avatar--letter {
+    body.pds-admin .pds-item-msg__avatar--letter {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         color: #fff;
         font-weight: 800;
-        font-size: 0.85rem;
+        font-size: 0.82rem;
     }
-    .pds-item-msg__bubble {
-        max-width: 78%;
-        padding: 0.55rem 0.75rem;
-        border-radius: 14px;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    body.pds-admin .pds-item-msg__bubble {
+        max-width: 72%;
+        padding: 0.65rem 0.85rem;
+        border-radius: 16px;
+        box-shadow: none;
     }
-    .pds-item-msg--admin .pds-item-msg__bubble {
-        background: #fff4eb;
-        border-bottom-right-radius: 4px;
+    body.pds-admin .pds-item-msg--admin .pds-item-msg__bubble {
+        background: #FE6F07;
+        color: #fff;
+        border-bottom-right-radius: 5px;
     }
-    .pds-item-msg--client .pds-item-msg__bubble {
-        background: #eef2ff;
-        border-bottom-left-radius: 4px;
+    body.pds-admin .pds-item-msg--admin .pds-item-msg__meta,
+    body.pds-admin .pds-item-msg--admin .pds-item-msg__text {
+        color: #fff;
     }
-    .pds-item-msg__meta {
+    body.pds-admin .pds-item-msg--admin .pds-item-msg__meta {
+        opacity: 0.85;
+    }
+    body.pds-admin .pds-item-msg--client .pds-item-msg__bubble {
+        background: #fff;
+        border: 1px solid #f0ebe6;
+        border-bottom-left-radius: 5px;
+    }
+    body.pds-admin .pds-item-msg__meta {
         font-size: 0.7rem;
-        color: #64748b;
+        color: #a8a29e;
         margin-bottom: 0.2rem;
+        font-weight: 600;
     }
-    .pds-item-msg__text {
-        color: #0f172a;
+    body.pds-admin .pds-item-msg__text {
+        color: #1c1917;
         white-space: pre-wrap;
         word-break: break-word;
-        line-height: 1.4;
+        line-height: 1.45;
+        font-size: 0.9rem;
+        font-weight: 500;
     }
-    .pds-item-msg__image {
+    body.pds-admin .pds-item-msg__image {
         display: block;
         max-width: 220px;
         max-height: 220px;
         border-radius: 10px;
-        margin-top: 0.25rem;
+        margin-top: 0.35rem;
         object-fit: cover;
+        background: transparent;
     }
-    .pds-item-chat-compose {
-        display: flex;
-        gap: 0.4rem;
-        align-items: flex-end;
+    body.pds-admin .pds-item-chat-compose {
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr) auto;
+        gap: 0.45rem;
+        align-items: end;
+        width: 100%;
     }
-    .pds-item-chat-compose textarea {
-        flex: 1;
-        resize: vertical;
+    body.pds-admin .pds-item-chat-input {
+        width: 100%;
         min-height: 44px;
         max-height: 120px;
+        resize: none;
+        padding: 0.7rem 0.9rem;
+        border: 1px solid #e7e5e4;
+        border-radius: 12px;
+        background: #FFFCF8;
+        color: #1c1917;
+        font-size: 0.9rem;
+        font-weight: 500;
+        line-height: 1.4;
     }
-    .pds-item-chat-icon-btn {
-        width: 40px;
-        height: 40px;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
+    body.pds-admin .pds-item-chat-input:focus {
+        outline: none;
+        border-color: #FE6F07;
         background: #fff;
-        color: #475569;
+        box-shadow: 0 0 0 3px rgba(254, 111, 7, 0.12);
+    }
+    body.pds-admin .pds-item-chat-icon-btn {
+        width: 44px;
+        height: 44px;
+        border: 1px solid #e7e5e4;
+        border-radius: 12px;
+        background: #fff;
+        color: #57534e;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
+        cursor: pointer;
+        transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
     }
-    .pds-item-chat-icon-btn:hover {
-        background: #f8fafc;
-        color: #f97316;
+    body.pds-admin .pds-item-chat-icon-btn:hover {
+        background: #FFF7ED;
+        border-color: #fdba74;
+        color: #FE6F07;
     }
-    .pds-item-chat-emoji-menu {
-        padding: 0.25rem;
-        border-radius: 12px;
+    body.pds-admin .pds-item-chat-emoji-menu {
+        padding: 0.35rem;
+        border-radius: 14px;
         overflow: hidden;
+        border: 1px solid rgba(254, 111, 7, 0.16);
+        box-shadow: 0 16px 40px rgba(28, 25, 23, 0.14);
+        background: #fff;
     }
-    .pds-item-chat-emoji-menu emoji-picker {
+    body.pds-admin .pds-item-chat-emoji-menu emoji-picker {
         --num-columns: 8;
+        --background: #FFFCF8;
+        --border-color: #f0ebe6;
+        --border-radius: 12px;
+        --button-active-background: #FFEDD5;
+        --button-hover-background: #FFF7ED;
+        --category-emoji-padding: 0.4rem;
+        --category-font-color: #44403c;
+        --indicator-color: #FE6F07;
+        --indicator-height: 3px;
+        --input-border-color: #e7e5e4;
+        --input-border-radius: 10px;
+        --input-font-color: #1c1917;
+        --input-placeholder-color: #a8a29e;
+        --outline-color: #FE6F07;
         width: 320px;
         height: 280px;
     }
-    .pds-item-chat-send {
+    body.pds-admin .pds-item-chat-send {
         display: inline-flex;
         align-items: center;
-        gap: 0.35rem;
+        justify-content: center;
+        gap: 0.4rem;
+        min-height: 44px;
+        padding: 0 1.1rem;
+        border: 0;
+        border-radius: 12px;
         white-space: nowrap;
-        background: #f97316;
-        border-color: #ea580c;
+        background: #FE6F07;
+        color: #fff;
+        font-weight: 750;
+        font-size: 0.88rem;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(254, 111, 7, 0.28);
+        transition: background 0.15s ease, transform 0.12s ease;
     }
-    .pds-item-chat-send:hover {
-        background: #ea580c;
-        border-color: #c2410c;
+    body.pds-admin .pds-item-chat-send:hover {
+        background: #e86306;
+        color: #fff;
+        transform: translateY(-1px);
     }
-    .pds-item-chat-hint {
-        margin-top: 0.35rem;
-        font-size: 0.72rem;
-        color: #94a3b8;
-    }
-    .pds-item-chat-image-preview {
+    body.pds-admin .pds-item-chat-image-preview {
         position: relative;
         display: flex;
         align-items: center;
         gap: 0.75rem;
         margin-bottom: 0.65rem;
-        padding: 0.55rem 0.75rem;
-        border: 1px dashed #fdba74;
-        border-radius: 10px;
-        background: #fff7ed;
+        padding: 0.65rem 0.85rem;
+        border: 1px solid rgba(254, 111, 7, 0.2);
+        border-radius: 12px;
+        background: #FFF8F1;
     }
-    .pds-item-chat-image-preview img {
+    body.pds-admin .pds-item-chat-image-preview img {
         width: 56px;
         height: 56px;
         object-fit: cover;
-        border-radius: 8px;
+        border-radius: 10px;
+        background: transparent;
     }
-    .pds-item-chat-image-name {
+    body.pds-admin .pds-item-chat-image-name {
         font-size: 0.8rem;
         color: #9a3412;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        font-weight: 600;
     }
-    .pds-item-chat-image-remove {
+    body.pds-admin .pds-item-chat-image-remove {
         position: absolute;
         top: 6px;
         right: 6px;
         border: 0;
-        background: #fff;
-        color: #ef4444;
+        background: #FE6F07;
+        color: #fff;
         width: 24px;
         height: 24px;
         border-radius: 999px;
-        box-shadow: 0 1px 3px rgba(0,0,0,.12);
-    }
-    .pds-dispatch-action-message {
-        position: relative;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-        color: #0b5fff;
-        background: rgba(11, 95, 255, 0.08);
-    }
-    .pds-dispatch-msg-badge {
-        position: absolute;
-        top: -4px;
-        right: -4px;
-        min-width: 16px;
-        height: 16px;
-        padding: 0 4px;
-        border-radius: 999px;
-        background: #ef4444;
-        color: #fff;
-        font-size: 10px;
-        line-height: 16px;
-        text-align: center;
-        font-weight: 700;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        box-shadow: 0 4px 10px rgba(254, 111, 7, 0.28);
     }
 </style>

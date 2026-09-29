@@ -22,6 +22,7 @@ class HrOfficeSalaryController extends Controller
         $pageTitle = __('message.hr_office_salary_title');
         $assets = [];
         $canEdit = auth()->user()->can('hr-payroll-edit') || auth()->user()->user_type === 'admin';
+        $canEditDeposit = isSuperAdmin(auth()->user());
         $prevMonth = $month->copy()->subMonth()->format('Y-m');
         $nextMonth = $month->copy()->addMonth()->format('Y-m');
         $monthValue = $month->format('Y-m');
@@ -49,6 +50,7 @@ class HrOfficeSalaryController extends Controller
             'pageTitle',
             'assets',
             'canEdit',
+            'canEditDeposit',
             'prevMonth',
             'nextMonth',
             'monthValue',
@@ -65,7 +67,8 @@ class HrOfficeSalaryController extends Controller
 
     public function updateRow(Request $request, $id)
     {
-        if (! auth()->user()->can('hr-payroll-edit') && auth()->user()->user_type !== 'admin') {
+        $user = auth()->user();
+        if (! isSuperAdmin($user) && ! $user->can('hr-payroll-edit') && ($user->user_type ?? '') !== 'admin') {
             return response()->json(['success' => false, 'message' => __('message.demo_permission_denied')], 403);
         }
 
@@ -74,10 +77,13 @@ class HrOfficeSalaryController extends Controller
             return response()->json(['success' => false, 'message' => __('message.demo_permission_denied')], 403);
         }
 
-        $data = $request->validate([
-            'deposit' => 'nullable|numeric|min:0',
+        $rules = [
             'notes' => 'nullable|string|max:1000',
-        ]);
+        ];
+        if (isSuperAdmin($user)) {
+            $rules['deposit'] = 'nullable|numeric|min:0';
+        }
+        $data = $request->validate($rules);
 
         foreach ($data as $key => $value) {
             if ($value !== null) {
@@ -85,6 +91,7 @@ class HrOfficeSalaryController extends Controller
             }
         }
         // monthly_salary / day rate → Super Admin
+        // deposit → Super Admin only
         // rest_days → Employee List Off/On; late_minute / fine / bag → Late Fine sync
         $row->way_count = 0;
         $row->way_rate = 0;

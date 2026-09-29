@@ -25,6 +25,9 @@
 
     <ul class="pds-main-nav__list" id="pdsMainNavList">
         @forelse($pdsNavRoots as $item)
+            @if($item->data('is_section'))
+                @continue
+            @endif
             @php
                 $hasChildren = $item->hasChildren();
                 $titleHtml = $item->title;

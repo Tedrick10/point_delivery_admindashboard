@@ -350,6 +350,155 @@
                 </div>
             </div>
         </div>
+
+        @php
+            $dash = $data['dashboard'] ?? [];
+            $todayPieSeries = [
+                (int) ($dash['total_order_today_peding'] ?? 0),
+                (int) ($dash['total_order_today_inprogress'] ?? 0),
+                (int) ($dash['total_order_today_completed'] ?? 0),
+                (int) ($dash['total_order_today_cancelled'] ?? 0),
+            ];
+            $pipelineLabels = [
+                __('message.created_order'),
+                __('message.assigned_order'),
+                __('message.accepted_order'),
+                __('message.arrived_order'),
+                __('message.picked_order'),
+                __('message.departed_order'),
+                __('message.delivered_order'),
+                __('message.cancel_order'),
+            ];
+            $pipelineSeries = [
+                (int) ($dash['total_create_order'] ?? 0),
+                (int) ($dash['total_assigned_order'] ?? 0),
+                (int) ($dash['total_accepetd_order'] ?? 0),
+                (int) ($dash['total_arrived_order'] ?? 0),
+                (int) ($dash['total_pickup_order'] ?? 0),
+                (int) ($dash['total_departed_order'] ?? 0),
+                (int) ($dash['total_delivered_order'] ?? 0),
+                (int) ($dash['total_cancelled_order'] ?? 0),
+            ];
+            $weeklyLabels = collect($data['weekly_order_count'] ?? [])->pluck('day')->map(function ($day) {
+                return \Illuminate\Support\Str::substr((string) $day, 0, 3);
+            })->values()->all();
+            if (empty($weeklyLabels)) {
+                $weeklyLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            }
+            $cityChartData = collect($cityData ?? [])->take(8)->values()->all();
+        @endphp
+
+        <div class="row pds-dash-charts">
+            <div class="col-lg-4 mb-3">
+                <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
+                    <div class="pds-section-toolbar">
+                        <h5 class="pds-section-title mb-0">{{ __('message.today_status_chart') }}</h5>
+                        <span class="pds-chart-panel__badge">{{ __('message.today_order') }}</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="pds-today-status-pie" class="pds-chart-canvas"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-8 mb-3">
+                <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
+                    <div class="pds-section-toolbar">
+                        <h5 class="pds-section-title mb-0">{{ __('message.order_pipeline_chart') }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="pds-order-pipeline-bar" class="pds-chart-canvas pds-chart-canvas--tall"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-8 mb-3">
+                <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
+                    <div class="pds-section-toolbar">
+                        <h5 class="pds-section-title mb-0">{{ __('message.weekly_order_count') }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="pds-weekly-order-bar" class="pds-chart-canvas"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mb-3">
+                <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
+                    <div class="pds-section-toolbar">
+                        <h5 class="pds-section-title mb-0">{{ __('message.weekly_order_share') }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="dash-count-chart-pie" class="pds-chart-canvas"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-12 mb-3">
+                <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
+                    <div class="pds-section-toolbar">
+                        <h5 class="pds-section-title mb-0">{{ __('message.monthly_order_count') }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="wave-chart" class="pds-chart-canvas pds-chart-canvas--wide"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-7 mb-3">
+                <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
+                    <div class="pds-section-toolbar">
+                        <h5 class="pds-section-title mb-0">{{ __('message.monthly_payment_count') }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="dash-payment-chart-bar" class="pds-chart-canvas pds-chart-canvas--wide"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5 mb-3">
+                <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
+                    <div class="pds-section-toolbar">
+                        <h5 class="pds-section-title mb-0">{{ __('message.orders_by_city') }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="city-package-chart" class="pds-chart-canvas"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-12 mb-3">
+                <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
+                    <div class="pds-section-toolbar">
+                        <h5 class="pds-section-title mb-0">{{ __('message.number_of_packages') }}</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive pds-dash-city-table">
+                            <table id="basic-table" class="table mb-0 text-center" role="grid">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">{{ __('message.city_name') }}</th>
+                                        <th scope="col">{{ __('message.total_number') }}</th>
+                                        <th scope="col">{{ __('message.parcel_in_progress') }}</th>
+                                        <th scope="col">{{ __('message.delivered_package') }}</th>
+                                        <th scope="col">{{ __('message.cancelled_package') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse(($cityData ?? []) as $cityList)
+                                        <tr>
+                                            <td>{{ $cityList['city'] }}</td>
+                                            <td>{{ $cityList['count'] }}</td>
+                                            <td>{{ $cityList['in_progress'] }}</td>
+                                            <td>{{ $cityList['delivered'] }}</td>
+                                            <td>{{ $cityList['cancelled'] }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="5">{{ __('message.no_record_found') }}</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="row">
             <div class="col-lg-12">
                 <div class="card pds-dashboard-panel pds-panel-animate">
@@ -458,16 +607,16 @@
                 </div>
                 <div class="row">
                     <div class="col-md-12">
-                        <div class="card" data-aos="fade-up" data-aos-delay="1000">
-                            <div class="card-header ">
-                                <div class="header-title">
-                                <a href="{{ route('order.index') }} " class="btn btn-sm btn-primary float-right ">{{ __('message.view_all') }}</a>
-                                    <h4 class="card-title">{{ __('message.recent_order')}}</h4>
+                        <div class="card pds-dashboard-panel pds-panel-animate">
+                            <div class="row align-items-center pds-section-toolbar">
+                                <h5 class="pds-section-title mb-0">{{ __('message.recent_order')}}</h5>
+                                <div class="ml-auto pds-section-actions">
+                                    <a href="{{ route('order.index') }}" class="btn btn-sm btn-primary">{{ __('message.view_all') }}</a>
                                 </div>
                             </div>
                             <div class="card-body p-0">
-                                <div class="table-responsive mt-4">
-                                    <table class="table mb-1 table-bordered text-center" role="grid">
+                                <div class="table-responsive pds-dash-city-table">
+                                    <table class="table mb-0 text-center" role="grid">
                                         <thead>
                                             <tr>
                                                 <th scope='col'>{{ __('message.id') }}</th>
@@ -548,16 +697,16 @@
                 </div>
                 <div class="row">
                     <div class="col-md-12">
-                        <div class="card" data-aos="fade-up" data-aos-delay="1000">
-                            <div class="card-header ">
-                                <a href="{{ route('withdrawrequest.index') }} " class="btn btn-sm btn-primary float-right ">{{ __('message.view_all') }}</a>
-                                <div class="header-title">
-                                    <h4 class="card-title">{{ __('message.recent_withdrawrequest')}}</h4>
+                        <div class="card pds-dashboard-panel pds-panel-animate">
+                            <div class="row align-items-center pds-section-toolbar">
+                                <h5 class="pds-section-title mb-0">{{ __('message.recent_withdrawrequest')}}</h5>
+                                <div class="ml-auto pds-section-actions">
+                                    <a href="{{ route('withdrawrequest.index') }}" class="btn btn-sm btn-primary">{{ __('message.view_all') }}</a>
                                 </div>
                             </div>
                             <div class="card-body p-0">
-                                <div class="table-responsive mt-4">
-                                    <table class="table mb-0 table-bordered text-center" role="grid">
+                                <div class="table-responsive pds-dash-city-table">
+                                    <table class="table mb-0 text-center" role="grid">
                                         <thead>
                                             <tr>
                                                 <th scope='col'>{{ __('message.no') }}</th>
@@ -610,262 +759,311 @@
                 </div>
             </div>
         </div>
-        <div class="row">
-            <div class="col-md-6">
-                <div class="card card-block card-stretch card-height">
-                    <div class="card-header d-flex justify-content-between">
-                        <div class="header-title">
-                            <h4 class="card-title">{{ __('message.number_of_packages') }}</h4>
-                        </div>
-                        <div class="card-header-toolbar d-flex align-items-center">
-                        </div>
-                    </div>
-                    <div class="card-body align-items-center">
-                        <div id="city-package-chart"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card" data-aos="fade-up" data-aos-delay="1000">
-                    <div class="card-header ">
-                        <div class="header-title">
-                            <h4 class="card-title">{{ __('message.number_of_packages')}}</h4>
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive mt-4">
-                            <table id="basic-table" class="table mb-1 table-bordered text-center" role="grid">
-                                <thead>
-                                    <tr>
-                                        <th scope='col'>{{ __('message.city_name') }}</th>
-                                        <th scope='col'>{{ __('message.total_number') }}</th>
-                                        <th scope='col'>{{ __('message.parcel_in_progress') }}</th>
-                                        <th scope='col'>{{ __('message.delivered_package') }}</th>
-                                        <th scope='col'>{{ __('message.cancelled_package') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @if($cityData > 0)
-                                        @foreach ($cityData as $cityList)
-                                            <tr>
-                                                <td>{{ $cityList['city'] }}</td>
-                                                <td>{{ $cityList['count'] }}</td>
-                                                <td>{{ $cityList['in_progress'] }}</td>
-                                                <td>{{ $cityList['delivered'] }}</td>
-                                                <td>{{ $cityList['cancelled'] }}</td>
-                                            </tr>
-                                        @endforeach
-                                    @else
-                                         <tr>
-                                            <td colspan="5">{{ __('message.no_record_found') }}</td>
-                                        </tr>
-                                    @endif
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col-lg-8">
-                <div class="card card-block card-stretch card-height">
-                    <div class="card-header d-flex justify-content-between">
-                        <div class="header-title">
-                            <h4 class="card-title">{{ __('message.monthly_payment_count') }}</h4>
-                        </div>
-                        <div class="card-header-toolbar d-flex align-items-center">
-                        </div>
-                    </div>
-                    <div class="card-body align-items-center">
-                        <div id="dash-payment-chart-bar"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-4">
-                <div class="card card-block card-stretch card-height">
-                    <div class="card-header d-flex justify-content-between">
-                        <div class="header-title">
-                            <h4 class="card-title">{{ __('message.weekly_order_count') }}</h4>
-                        </div>
-                        <div class="card-header-toolbar d-flex align-items-center">
-                        </div>
-                    </div>
-                    <div class="card-body align-items-center">
-                        <div id="dash-count-chart-pie"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-12">
-                <div class="card card-block card-stretch card-height">
-                    <div class="card-header d-flex justify-content-between">
-                        <div class="header-title">
-                            <h4 class="card-title">{{ __('message.monthly_order_count') }}</h4>
-                        </div>
-                        <div class="card-header-toolbar d-flex align-items-center">
-                        </div>
-                    </div>
-                    <div class="card-body align-items-center">
-                        <div id="wave-chart"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
-    @section('bottom_script')
+    @push('bottom_script')
         <script>
-             $('#basic-table').DataTable({
-            "dom": '<"row align-items-center"<"col-md-2"><"col-md-6" B><"col-md-4"f>><"table-responsive my-3" rt><"d-flex" <"flex-grow-1" l><"p-2" i><"mt-4" p>><"clear">',
-            "order": [[ 1, "desc" ]]
-        });
+            (function () {
+                if (typeof ApexCharts === 'undefined') {
+                    return;
+                }
 
-            var montlist = <?php echo json_encode($data['monthlist']); ?>;
-            var categories = [];
-            var startDate = new Date(montlist.month_start);
-            var endDate = new Date(montlist.month_end);
-            var siteColor = getComputedStyle(document.documentElement).getPropertyValue('--site-color').trim();
+                if (window.jQuery && $.fn.DataTable && document.getElementById('basic-table')) {
+                    $('#basic-table').DataTable({
+                        dom: '<"row align-items-center"<"col-md-2"><"col-md-6" B><"col-md-4"f>><"table-responsive my-3" rt><"d-flex" <"flex-grow-1" l><"p-2" i><"mt-4" p>><"clear">',
+                        order: [[1, 'desc']]
+                    });
+                }
 
-            for (var currentDate = new Date(startDate); currentDate <= endDate; currentDate.setDate(currentDate.getDate() + 1)) {
-                var formattedDate = currentDate.toISOString().split('T')[0];
-                categories.push(formattedDate);
-            }
+                var palette = {
+                    orange: '#FE6F07',
+                    orangeSoft: '#FF8F3D',
+                    orangePale: '#FFB347',
+                    cream: '#FFF8F1',
+                    ink: '#14110F',
+                    muted: '#78716c',
+                    green: '#16a34a',
+                    blue: '#0ea5e9',
+                    amber: '#f59e0b',
+                    red: '#ef4444',
+                    slate: '#64748b'
+                };
 
-            var barOptions = {
-                series: [{
-                    name: "{{ __('message.completed') }}",
-                    data: [<?= implode(',', array_column($data['completed'], 'total_amount')) ?>]
-                }, {
-                    name: "{{ __('message.cancelled') }}",
-                    data: [<?= implode(',', array_column($data['cancelled'], 'total_amount')) ?>]
-                }],
-                colors: [siteColor, '#000000'],
-                chart: {
-                    type: 'bar',
-                    height: 350
-                },
-                plotOptions: {
-                    bar: {
-                        horizontal: false,
-                        columnWidth: '55%',
-                        endingShape: 'rounded'
-                    }
-                },
-                dataLabels: {
-                    enabled: false
-                },
-                stroke: {
-                    show: true,
-                    width: 1,
-                    colors: ['transparent']
-                },
-                xaxis: {
-                    categories: categories,
-                },
-                yaxis: {
-                    title: {
-                        text: ''
-                    }
-                },
-                tooltip: {
-                    y: {
-                        formatter: function (val) {
-                            return val
-                        }
+                var monthList = @json($data['monthlist'] ?? []);
+                var categories = [];
+                if (monthList.month_start && monthList.month_end) {
+                    var startDate = new Date(monthList.month_start);
+                    var endDate = new Date(monthList.month_end);
+                    for (var currentDate = new Date(startDate); currentDate <= endDate; currentDate.setDate(currentDate.getDate() + 1)) {
+                        categories.push(currentDate.toISOString().split('T')[0]);
                     }
                 }
-            };
-            // pie chart
-            var pieOptions = {
-                series: <?php echo json_encode($weekly_count); ?>,
-                colors: [siteColor, '#000000', 'rgba(254,111,7,0.65)', 'rgba(0,0,0,0.45)', 'rgba(254,111,7,0.35)', 'rgba(0,0,0,0.25)', 'rgba(254,111,7,0.2)'],
-                chart: {
-                    type: 'pie',
-                    height: 350
-                },
-                labels: ['sun','Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-                responsive: [{
-                    breakpoint: 480,
-                    options: {
-                        chart: {
-                            width: 200
+
+                var chartDefaults = {
+                    fontFamily: "Outfit, 'Noto Sans Myanmar', sans-serif",
+                    foreColor: palette.muted,
+                    toolbar: { show: false },
+                    animations: {
+                        enabled: true,
+                        easing: 'easeinout',
+                        speed: 650
+                    }
+                };
+
+                var todaySeries = @json($todayPieSeries);
+                var todayLabels = [
+                    @json(__('message.pending_order')),
+                    @json(__('message.inprogress_order')),
+                    @json(__('message.completed_order')),
+                    @json(__('message.cancel_order'))
+                ];
+                var todayTotal = todaySeries.reduce(function (sum, n) { return sum + Number(n || 0); }, 0);
+
+                if (document.querySelector('#pds-today-status-pie')) {
+                    new ApexCharts(document.querySelector('#pds-today-status-pie'), {
+                        series: todayTotal > 0 ? todaySeries : [1],
+                        labels: todayTotal > 0 ? todayLabels : [@json(__('message.no_record_found'))],
+                        colors: todayTotal > 0
+                            ? [palette.amber, palette.blue, palette.green, palette.red]
+                            : ['#e7e5e4'],
+                        chart: Object.assign({ type: 'donut', height: 320 }, chartDefaults),
+                        plotOptions: {
+                            pie: {
+                                donut: {
+                                    size: '68%',
+                                    labels: {
+                                        show: true,
+                                        name: { show: true, fontSize: '13px', color: palette.muted },
+                                        value: { show: true, fontSize: '22px', fontWeight: 700, color: palette.ink },
+                                        total: {
+                                            show: true,
+                                            label: @json(__('message.total_order')),
+                                            fontSize: '12px',
+                                            color: palette.muted,
+                                            formatter: function () { return String(todayTotal); }
+                                        }
+                                    }
+                                }
+                            }
                         },
-                        legend: {
-                            position: 'bottom'
-                        }
-                    }
-                }]
-            };
-            // wave chart
-            var waveOptions = {
-                series: [{
-                    name: 'Order',
-                    data: <?php echo json_encode(array_column($data['monthly_order_count'], 'total')); ?>
-                }],
-                chart: {
-                    type: 'line',
-                    height: 350
-                },
-                colors: [siteColor],
-                stroke: {
-                    curve: 'smooth'
-                },
-                xaxis: {
-                    categories: categories,
-                },
-                yaxis: {
-                    title: {
-                        text: 'Count'
-                    }
+                        dataLabels: { enabled: false },
+                        legend: { position: 'bottom', fontSize: '12px' },
+                        stroke: { width: 2, colors: ['#fff'] },
+                        tooltip: { y: { formatter: function (val) { return val; } } }
+                    }).render();
                 }
-            };
 
-            //city view order
-            var cityData = @json($cityData);
-
-
-            var cityNames = cityData.map(data => data.city);
-            var cityCounts = cityData.map(data => data.count);
-            var cityColors = cityData.map(data => data.color);
-
-            var totalCount = cityCounts.reduce((acc, count) => acc + count, 0);
-            var cityPercentages = cityCounts.map(count => ((count / totalCount) * 100).toFixed(2));
-
-            var labels = cityNames.map((name, index) => `${name} ${cityCounts[index]} (${cityPercentages[index]}%)`);
-
-            // Chart options
-            var pieOptionsCity = {
-                series: cityCounts,
-                chart: {
-                    type: 'pie',
-                    height: 350,
-                },
-                labels: labels,
-                colors: cityColors,
-                responsive: [{
-                    breakpoint: 480,
-                    options: {
-                        chart: {
-                            width: 200
+                var pipelineLabels = @json($pipelineLabels);
+                var pipelineSeries = @json($pipelineSeries);
+                if (document.querySelector('#pds-order-pipeline-bar')) {
+                    new ApexCharts(document.querySelector('#pds-order-pipeline-bar'), {
+                        series: [{ name: @json(__('message.total_order')), data: pipelineSeries }],
+                        chart: Object.assign({ type: 'bar', height: 320 }, chartDefaults),
+                        plotOptions: {
+                            bar: {
+                                horizontal: true,
+                                borderRadius: 8,
+                                barHeight: '62%',
+                                distributed: true
+                            }
                         },
-                        legend: {
-                            position: 'bottom'
+                        colors: [
+                            '#FE6F07', '#FF8F3D', '#FDBA74', '#FB923C',
+                            '#EA580C', '#C2410C', '#16a34a', '#ef4444'
+                        ],
+                        dataLabels: {
+                            enabled: true,
+                            style: { fontSize: '11px', fontWeight: 700, colors: ['#fff'] }
+                        },
+                        xaxis: {
+                            categories: pipelineLabels,
+                            labels: { style: { fontSize: '11px' } }
+                        },
+                        yaxis: {
+                            labels: { style: { fontSize: '12px', fontWeight: 600 } }
+                        },
+                        grid: { borderColor: '#f5f5f4', strokeDashArray: 4 },
+                        legend: { show: false },
+                        tooltip: { theme: 'light' }
+                    }).render();
+                }
+
+                var weeklyCount = @json($weekly_count);
+                var weeklyLabels = @json($weeklyLabels);
+                if (document.querySelector('#pds-weekly-order-bar')) {
+                    new ApexCharts(document.querySelector('#pds-weekly-order-bar'), {
+                        series: [{ name: @json(__('message.total_order')), data: weeklyCount }],
+                        chart: Object.assign({ type: 'bar', height: 320 }, chartDefaults),
+                        plotOptions: {
+                            bar: {
+                                borderRadius: 10,
+                                columnWidth: '48%',
+                                distributed: true
+                            }
+                        },
+                        colors: [
+                            '#FE6F07', '#FF8F3D', '#FDBA74', '#FB923C',
+                            '#EA580C', '#C2410C', '#9A3412'
+                        ],
+                        dataLabels: { enabled: false },
+                        xaxis: {
+                            categories: weeklyLabels,
+                            labels: { style: { fontWeight: 600 } }
+                        },
+                        yaxis: {
+                            labels: { formatter: function (val) { return Math.round(val); } }
+                        },
+                        grid: { borderColor: '#f5f5f4', strokeDashArray: 4 },
+                        legend: { show: false },
+                        fill: {
+                            type: 'gradient',
+                            gradient: {
+                                shade: 'light',
+                                type: 'vertical',
+                                shadeIntensity: 0.25,
+                                opacityFrom: 1,
+                                opacityTo: 0.85
+                            }
                         }
-                    }
-                }]
-            };
+                    }).render();
+                }
 
-            var barChart = new ApexCharts(document.querySelector("#dash-payment-chart-bar"), barOptions);
-            var pieChart = new ApexCharts(document.querySelector("#dash-count-chart-pie"), pieOptions);
-            var waveChart = new ApexCharts(document.querySelector("#wave-chart"), waveOptions);
-            var cityPieChart = new ApexCharts(document.querySelector("#city-package-chart"), pieOptionsCity);
+                if (document.querySelector('#dash-count-chart-pie')) {
+                    new ApexCharts(document.querySelector('#dash-count-chart-pie'), {
+                        series: weeklyCount,
+                        labels: weeklyLabels,
+                        colors: [
+                            '#FE6F07', '#FF8F3D', '#FDBA74', '#FB923C',
+                            '#EA580C', '#C2410C', '#9A3412'
+                        ],
+                        chart: Object.assign({ type: 'pie', height: 320 }, chartDefaults),
+                        legend: { position: 'bottom', fontSize: '12px' },
+                        dataLabels: {
+                            enabled: true,
+                            style: { fontSize: '11px', fontWeight: 700 }
+                        },
+                        stroke: { width: 2, colors: ['#fff'] }
+                    }).render();
+                }
 
+                var monthlyTotals = @json(array_column($data['monthly_order_count'] ?? [], 'total'));
+                if (document.querySelector('#wave-chart')) {
+                    new ApexCharts(document.querySelector('#wave-chart'), {
+                        series: [{ name: @json(__('message.total_order')), data: monthlyTotals }],
+                        chart: Object.assign({ type: 'area', height: 340 }, chartDefaults),
+                        colors: [palette.orange],
+                        dataLabels: { enabled: false },
+                        stroke: { curve: 'smooth', width: 3 },
+                        fill: {
+                            type: 'gradient',
+                            gradient: {
+                                shadeIntensity: 1,
+                                opacityFrom: 0.45,
+                                opacityTo: 0.05,
+                                stops: [0, 90, 100]
+                            }
+                        },
+                        xaxis: {
+                            categories: categories,
+                            labels: {
+                                rotate: -45,
+                                rotateAlways: categories.length > 14,
+                                style: { fontSize: '10px' }
+                            }
+                        },
+                        yaxis: {
+                            title: { text: @json(__('message.total_order')) },
+                            labels: { formatter: function (val) { return Math.round(val); } }
+                        },
+                        grid: { borderColor: '#f5f5f4', strokeDashArray: 4 },
+                        tooltip: { theme: 'light' }
+                    }).render();
+                }
 
-            barChart.render();
-            pieChart.render();
-            waveChart.render();
-            cityPieChart.render();
+                var completedPayments = @json(array_column($data['completed'] ?? [], 'total_amount'));
+                var cancelledPayments = @json(array_column($data['cancelled'] ?? [], 'total_amount'));
+                if (document.querySelector('#dash-payment-chart-bar')) {
+                    new ApexCharts(document.querySelector('#dash-payment-chart-bar'), {
+                        series: [
+                            { name: @json(__('message.completed')), data: completedPayments },
+                            { name: @json(__('message.cancelled')), data: cancelledPayments }
+                        ],
+                        chart: Object.assign({ type: 'bar', height: 340, stacked: false }, chartDefaults),
+                        colors: [palette.orange, '#1c1917'],
+                        plotOptions: {
+                            bar: {
+                                horizontal: false,
+                                columnWidth: '52%',
+                                borderRadius: 6
+                            }
+                        },
+                        dataLabels: { enabled: false },
+                        stroke: { show: true, width: 2, colors: ['transparent'] },
+                        xaxis: {
+                            categories: categories,
+                            labels: {
+                                rotate: -45,
+                                rotateAlways: categories.length > 14,
+                                style: { fontSize: '10px' }
+                            }
+                        },
+                        yaxis: {
+                            labels: {
+                                formatter: function (val) {
+                                    return Number(val || 0).toLocaleString();
+                                }
+                            }
+                        },
+                        grid: { borderColor: '#f5f5f4', strokeDashArray: 4 },
+                        legend: { position: 'top', horizontalAlign: 'right' },
+                        tooltip: {
+                            y: {
+                                formatter: function (val) {
+                                    return Number(val || 0).toLocaleString();
+                                }
+                            }
+                        }
+                    }).render();
+                }
+
+                var cityData = @json($cityChartData);
+                var cityNames = cityData.map(function (row) { return row.city; });
+                var cityCounts = cityData.map(function (row) { return Number(row.count || 0); });
+                var cityColors = [
+                    '#FE6F07', '#FF8F3D', '#FDBA74', '#FB923C',
+                    '#EA580C', '#0ea5e9', '#16a34a', '#64748b'
+                ];
+                var cityTotal = cityCounts.reduce(function (sum, n) { return sum + n; }, 0);
+
+                if (document.querySelector('#city-package-chart')) {
+                    new ApexCharts(document.querySelector('#city-package-chart'), {
+                        series: cityTotal > 0 ? cityCounts : [1],
+                        labels: cityTotal > 0 ? cityNames : [@json(__('message.no_record_found'))],
+                        colors: cityTotal > 0 ? cityColors : ['#e7e5e4'],
+                        chart: Object.assign({ type: 'donut', height: 340 }, chartDefaults),
+                        plotOptions: {
+                            pie: {
+                                donut: {
+                                    size: '64%',
+                                    labels: {
+                                        show: true,
+                                        total: {
+                                            show: true,
+                                            label: @json(__('message.total_number')),
+                                            fontSize: '12px',
+                                            color: palette.muted,
+                                            formatter: function () { return String(cityTotal); }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        legend: { position: 'bottom', fontSize: '11px' },
+                        dataLabels: { enabled: false },
+                        stroke: { width: 2, colors: ['#fff'] }
+                    }).render();
+                }
+            })();
         </script>
-    @endsection
+    @endpush
 </x-master-layout>

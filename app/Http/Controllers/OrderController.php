@@ -1035,8 +1035,9 @@ class OrderController extends Controller
         $labelService = app(\App\Services\Assign100LabelService::class);
         $labels = $items->map(fn (DispatchOrderItem $item) => $labelService->build($item));
         $autoprint = $request->boolean('autoprint');
+        $embed = $request->boolean('embed');
 
-        return view('order.dispatch-assign-100-labels', compact('labels', 'autoprint'));
+        return view('order.dispatch-assign-100-labels', compact('labels', 'autoprint', 'embed'));
     }
 
     public function dispatchFromMdyToYgn()
@@ -1158,7 +1159,7 @@ class OrderController extends Controller
         $items = $itemsQuery->get();
 
         $pageTitle = $hubService->inboundMenuLabel($hubUser);
-        $pageSubtitle = __('message.hub_to_mdy_subtitle');
+        $pageSubtitle = '';
         $assets = [];
         $destinationBranches = collect();
         $activeToBranchId = 0;
@@ -1204,7 +1205,7 @@ class OrderController extends Controller
         $items = $itemsQuery->get();
 
         $pageTitle = $hubService->inboundMenuLabel();
-        $pageSubtitle = __('message.hub_to_mdy_subtitle');
+        $pageSubtitle = '';
         $assets = [];
         $destinationBranches = collect();
         $activeToBranchId = 0;
@@ -4308,6 +4309,8 @@ class OrderController extends Controller
             ->where('sender_type', 'client')
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
+
+        markDispatchItemMessageNotificationsRead(auth()->user(), (int) $item->id);
 
         $messages = \App\Models\DispatchItemMessage::query()
             ->with(['sender:id,name,user_type', 'media'])

@@ -19,8 +19,8 @@
     <link rel="stylesheet" href="{{ url('/vendor/@fortawesome/fontawesome-free/css/all.min.css') }}">
     @stack('styles')
 </head>
-<body class="sa-panel" style="margin:0;min-height:100vh;display:grid;grid-template-columns:248px 1fr;">
-    <aside class="sa-sidebar" style="background:#0c1222;color:#fff;min-height:100vh;">
+<body class="sa-panel">
+    <aside class="sa-sidebar">
         <div class="sa-brand">
             <span class="sa-brand-mark">SA</span>
             <div>
@@ -94,6 +94,8 @@
         }
     })();
     </script>
+    <script src="{{ public_asset_ver('js/rabbit.js') }}"></script>
+    <script src="{{ public_asset_ver('js/myanmar-text.js') }}"></script>
     @stack('scripts')
 </body>
 </html>

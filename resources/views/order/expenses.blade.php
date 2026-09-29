@@ -31,47 +31,58 @@
                 ],
             ])
 
-            <div class="pds-expenses-toolbar">
-                <div class="pds-expenses-toolbar__month">
-                    <div class="pds-expenses-month-nav">
-                        <a href="{{ route('order.expenses', array_filter(['month' => $prevMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Previous">
-                            <i class="fas fa-chevron-left"></i>
-                        </a>
-                        <span class="pds-expenses-month-nav__label">{{ $monthLabel }}</span>
-                        <a href="{{ route('order.expenses', array_filter(['month' => $nextMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Next">
-                            <i class="fas fa-chevron-right"></i>
-                        </a>
+            <div class="pds-expenses-toolbar pds-expenses-toolbar--panel">
+                <div class="pds-expenses-toolbar__row">
+                    <form method="GET" action="{{ route('order.expenses') }}" class="pds-expenses-filter" id="expensesFilterForm">
+                        <input type="hidden" name="month" value="{{ $monthValue }}">
+                        <input type="hidden" name="branch_id" value="{{ $branchFilter ?? 'all' }}">
+                        <div class="pds-expenses-filter__field">
+                            <label for="expenses_from">{{ __('message.from_date') }}</label>
+                            <div class="pds-expenses-filter__input-wrap">
+                                <i class="far fa-calendar-alt" aria-hidden="true"></i>
+                                <input type="text" name="from_date" id="expenses_from" class="pds-dispatch-input dispatch-datepicker"
+                                       value="{{ $filterFrom }}" autocomplete="off" placeholder="dd-mm-yyyy">
+                            </div>
+                        </div>
+                        <div class="pds-expenses-filter__field">
+                            <label for="expenses_to">{{ __('message.to_date') }}</label>
+                            <div class="pds-expenses-filter__input-wrap">
+                                <i class="far fa-calendar-alt" aria-hidden="true"></i>
+                                <input type="text" name="to_date" id="expenses_to" class="pds-dispatch-input dispatch-datepicker"
+                                       value="{{ $filterTo }}" autocomplete="off" placeholder="dd-mm-yyyy">
+                            </div>
+                        </div>
+                        <div class="pds-expenses-filter__field pds-expenses-filter__field--subject">
+                            <label for="expenses_subject">{{ __('message.subject') }}</label>
+                            <div class="pds-expenses-filter__input-wrap">
+                                <i class="fas fa-tag" aria-hidden="true"></i>
+                                <input type="text" name="subject" id="expenses_subject" class="pds-dispatch-input"
+                                       value="{{ $filterSubject }}"
+                                       placeholder="{{ __('message.expenses_subject') }}" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="pds-expenses-filter__actions">
+                            <button type="submit" class="pds-daily-check-search-btn" title="{{ __('message.check') }}">
+                                <i class="fas fa-search" aria-hidden="true"></i>
+                                <span>{{ __('message.check') }}</span>
+                            </button>
+                        </div>
+                    </form>
+                    <div class="pds-expenses-toolbar__month">
+                        <div class="pds-expenses-month-nav">
+                            <a href="{{ route('order.expenses', array_filter(['month' => $prevMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Previous">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                            <span class="pds-expenses-month-nav__label">{{ $monthLabel }}</span>
+                            <a href="{{ route('order.expenses', array_filter(['month' => $nextMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Next">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </div>
                     </div>
                 </div>
-                <form method="GET" action="{{ route('order.expenses') }}" class="pds-expenses-filter" id="expensesFilterForm">
-                    <input type="hidden" name="month" value="{{ $monthValue }}">
-                    <input type="hidden" name="branch_id" value="{{ $branchFilter ?? 'all' }}">
-                    <div class="pds-expenses-filter__field">
-                        <label for="expenses_from">{{ __('message.from_date') }}</label>
-                        <input type="text" name="from_date" id="expenses_from" class="pds-dispatch-input dispatch-datepicker"
-                               value="{{ $filterFrom }}" autocomplete="off" placeholder="dd-mm-yyyy">
-                    </div>
-                    <div class="pds-expenses-filter__field">
-                        <label for="expenses_to">{{ __('message.to_date') }}</label>
-                        <input type="text" name="to_date" id="expenses_to" class="pds-dispatch-input dispatch-datepicker"
-                               value="{{ $filterTo }}" autocomplete="off" placeholder="dd-mm-yyyy">
-                    </div>
-                    <div class="pds-expenses-filter__field pds-expenses-filter__field--subject">
-                        <label for="expenses_subject">{{ __('message.subject') }}</label>
-                        <input type="text" name="subject" id="expenses_subject" class="pds-dispatch-input"
-                               value="{{ $filterSubject }}"
-                               placeholder="{{ __('message.expenses_subject') }}" autocomplete="off">
-                    </div>
-                    <div class="pds-expenses-filter__actions">
-                        <button type="submit" class="pds-daily-check-search-btn" title="{{ __('message.check') }}">
-                            <i class="fas fa-search" aria-hidden="true"></i>
-                            <span>{{ __('message.check') }}</span>
-                        </button>
-                    </div>
-                </form>
             </div>
 
-            <div class="pds-expenses-board" id="expenses-board">
+            <div class="pds-expenses-board{{ ($cards->count() ?? 0) <= 2 ? ' is-few' : '' }}" id="expenses-board">
                 @forelse($cards as $card)
                     @php
                         $displayItems = collect($card->display_items ?? $card->items);

@@ -1,4 +1,10 @@
 @foreach($items as $item)
+    @if($item->data('is_section'))
+        <li class="pds-nav-section" role="presentation">
+            <span class="pds-nav-section__label">{!! $item->title !!}</span>
+        </li>
+        @continue
+    @endif
     <?php
     if ($item->hasChildren()){
         if ($item->children()->where('isActive',true)->first() !== null){

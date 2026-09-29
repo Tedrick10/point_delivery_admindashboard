@@ -340,7 +340,7 @@
 
         <section class="sa-module-panel sa-late-fine-staff-panel">
             <header class="sa-module-panel__head">
-                <h3>{{ __('message.sa_late_fine_allowance_title') }}</h3>
+                <h3>{{ __('message.sa_rider_fuel_mdy_list') }}</h3>
                 <span>{{ $lateFineStaff->count() }} {{ __('message.hr_people') }}</span>
             </header>
             <p class="sa-fuel-default-panel__hint">{{ __('message.sa_late_fine_allowance_hint') }}</p>
@@ -360,9 +360,7 @@
                             <tr data-staff-id="{{ $member->id }}">
                                 <td>{{ $i + 1 }}</td>
                                 <td><strong>{{ $member->name }}</strong></td>
-                                <td>
-                                    {{ $member->staff_group === 'rider' ? __('message.hr_group_rider') : __('message.hr_group_office') }}
-                                </td>
+                                <td>{{ __('message.hr_group_rider') }}</td>
                                 <td>
                                     <form method="POST"
                                           action="{{ route('super-admin.late-fine.staff.allowance', $member->id) }}"
@@ -387,13 +385,27 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5">{{ __('message.hr_no_accounts_hint') }}</td>
+                                <td colspan="5">{{ __('message.hr_no_rider_accounts_hint') }}</td>
                             </tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
         </section>
+
+        @if(!empty($lateFineSheet))
+            <section class="sa-module-panel sa-late-fine-sheet-panel">
+                <header class="sa-module-panel__head">
+                    <h3>{{ __('message.sa_late_fine_sheet_title') }}</h3>
+                    <span>{{ $lateFineSheet['monthLabel'] ?? '' }}</span>
+                </header>
+                <p class="sa-fuel-default-panel__hint">{{ __('message.sa_late_fine_sheet_hint') }}</p>
+                <div class="pds-hr-page sa-late-fine-sheet-embed">
+                    @include('hr.partials.styles')
+                    @include('hr.partials._late-fine-sheet', $lateFineSheet)
+                </div>
+            </section>
+        @endif
     @endif
 
     @if(($screenKey ?? '') === 'rider-salary')
@@ -448,6 +460,20 @@
                 </table>
             </div>
         </section>
+
+        @if(!empty($riderSalarySheet))
+            <section class="sa-module-panel sa-late-fine-sheet-panel">
+                <header class="sa-module-panel__head">
+                    <h3>{{ __('message.sa_rider_salary_sheet_title') }}</h3>
+                    <span>{{ $riderSalarySheet['monthLabel'] ?? '' }}</span>
+                </header>
+                <p class="sa-fuel-default-panel__hint">{{ __('message.sa_salary_deposit_sheet_hint') }}</p>
+                <div class="pds-hr-page sa-late-fine-sheet-embed sa-salary-sheet-embed">
+                    @include('hr.partials.styles')
+                    @include('hr.partials._rider-salary-sheet', $riderSalarySheet)
+                </div>
+            </section>
+        @endif
     @endif
 
     @if(($screenKey ?? '') === 'office-salary')
@@ -537,6 +563,20 @@
                 </table>
             </div>
         </section>
+
+        @if(!empty($officeSalarySheet))
+            <section class="sa-module-panel sa-late-fine-sheet-panel">
+                <header class="sa-module-panel__head">
+                    <h3>{{ __('message.sa_office_salary_sheet_title') }}</h3>
+                    <span>{{ $officeSalarySheet['monthLabel'] ?? '' }}</span>
+                </header>
+                <p class="sa-fuel-default-panel__hint">{{ __('message.sa_salary_deposit_sheet_hint') }}</p>
+                <div class="pds-hr-page sa-late-fine-sheet-embed sa-salary-sheet-embed">
+                    @include('hr.partials.styles')
+                    @include('hr.partials._office-salary-sheet', $officeSalarySheet)
+                </div>
+            </section>
+        @endif
     @endif
 
     @if(($screenKey ?? '') === 'kyo-shin')
@@ -614,6 +654,37 @@
 
     @if(($screenKey ?? '') === 'expense-summary' && !empty($expenseSummary))
         @include('super-admin.screens.partials.expense-summary-board')
+    @endif
+
+    @if(($screenKey ?? '') === 'welcome-promotion' && !empty($welcomePromotion))
+        @include('super-admin.screens.partials.welcome-promotion-board')
+    @endif
+
+    @if(($screenKey ?? '') === 'account-creation' && !empty($accountCreation))
+        @include('super-admin.screens.partials.account-creation-board')
+    @endif
+
+    @if(($screenKey ?? '') === 'roles-permissions' && !empty($rolesPermissions))
+        <section class="sa-module-panel sa-late-fine-sheet-panel">
+            <header class="sa-module-panel__head">
+                <h3>{{ __('message.sa_screen_roles_permissions') }}</h3>
+                <span>{{ ($rolesPermissions['roles'] ?? collect())->count() }} {{ __('message.role') }}</span>
+            </header>
+            <p class="sa-fuel-default-panel__hint">{{ __('message.sa_roles_permissions_embed_hint') }}</p>
+            <div class="sa-roles-embed">
+                @include('permission.partials._roles-board', $rolesPermissions)
+            </div>
+        </section>
+        <style>
+            .sa-roles-embed .btn {
+                display: inline-flex; align-items: center; gap: 6px;
+                border-radius: 999px; padding: 0.5rem 0.9rem; font-weight: 700;
+                text-decoration: none; border: 1px solid transparent; cursor: pointer;
+            }
+            .sa-roles-embed .btn-primary { background: #0f766e; color: #fff; border-color: #0f766e; }
+            .sa-roles-embed .btn-outline-danger { background: #fff; color: #b91c1c; border-color: #fecaca; }
+            .sa-roles-embed .pds-roles-hero { display: none; }
+        </style>
     @endif
 
     @if(($screenKey ?? '') === 'network' && !empty($networkControl))
@@ -800,8 +871,122 @@
 </div>
 @endsection
 
-@if(($screenKey ?? '') === 'late-fine' || ($screenKey ?? '') === 'rider-salary' || ($screenKey ?? '') === 'office-salary' || ($screenKey ?? '') === 'rider-remit')
+@if(($screenKey ?? '') === 'late-fine' || ($screenKey ?? '') === 'rider-salary' || ($screenKey ?? '') === 'office-salary' || ($screenKey ?? '') === 'rider-remit' || ($screenKey ?? '') === 'account-creation' || ($screenKey ?? '') === 'roles-permissions')
 @push('scripts')
+@if(in_array(($screenKey ?? ''), ['late-fine', 'rider-salary', 'office-salary', 'roles-permissions'], true))
+<script src="{{ asset('frontend-website/assets/js/jquery.min.js') }}"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/izitoast/1.4.0/css/iziToast.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/izitoast/1.4.0/js/iziToast.min.js"></script>
+<style>
+    .sa-late-fine-sheet-embed {
+        overflow-x: auto;
+        margin-top: 4px;
+        padding-bottom: 8px;
+    }
+    .sa-late-fine-sheet-embed .pds-hr-toolbar { margin-top: 0; }
+    .sa-late-fine-sheet-panel { overflow: visible; }
+</style>
+<script>
+(function ($) {
+    $(document).on('click', '.sa-late-fine-sheet-embed [data--confirmation="true"], .sa-roles-embed [data--confirmation="true"]', function (e) {
+        e.preventDefault();
+        var formKey = $(this).attr('data--submit');
+        var title = $(this).attr('data-title') || 'Confirm';
+        var message = $(this).attr('data-message') || 'Are you sure?';
+        if (!window.confirm(title + '\n\n' + message)) {
+            return;
+        }
+        var $form = $('.sa-late-fine-sheet-embed form[data--submit="' + formKey + '"], .sa-roles-embed form[data--submit="' + formKey + '"]');
+        if ($form.length) {
+            $form.trigger('submit');
+        }
+    });
+})(jQuery);
+</script>
+@endif
+@if(($screenKey ?? '') === 'late-fine')
+@include('hr.partials._late-fine-scripts', ['canEdit' => !empty($lateFineSheet['canEdit'])])
+@elseif(($screenKey ?? '') === 'rider-salary')
+@include('hr.partials._rider-salary-scripts', [
+    'canEdit' => !empty($riderSalarySheet['canEdit']),
+    'canEditDeposit' => !empty($riderSalarySheet['canEditDeposit']),
+])
+@elseif(($screenKey ?? '') === 'office-salary')
+@include('hr.partials._office-salary-scripts', [
+    'canEdit' => !empty($officeSalarySheet['canEdit']),
+    'canEditDeposit' => !empty($officeSalarySheet['canEditDeposit']),
+])
+@elseif(($screenKey ?? '') === 'roles-permissions')
+<script>
+(function ($) {
+    $(document).on('click', '.pds-roles-tab', function () {
+        var roleId = $(this).data('role-id');
+        var roleName = $(this).data('role-name') || '';
+        $('.pds-roles-tab').removeClass('is-active');
+        $(this).addClass('is-active');
+        $('#currentRoleLabel').text(String(roleName).replace(/_/g, ' ').replace(/\b\w/g, function (c) {
+            return c.toUpperCase();
+        }));
+        $('.pds-roles-chip').removeClass('is-visible');
+        $('.pds-roles-chip[data-role-panel="' + roleId + '"]').addClass('is-visible');
+        $('.pds-roles-delete-btn').removeClass('is-visible');
+        $('.pds-roles-delete-btn[data-role-panel="' + roleId + '"]').addClass('is-visible');
+    });
+    var $active = $('.pds-roles-tab.is-active');
+    if ($active.length) {
+        $('.pds-roles-delete-btn').removeClass('is-visible');
+        $('.pds-roles-delete-btn[data-role-panel="' + $active.data('role-id') + '"]').addClass('is-visible');
+    }
+})(jQuery);
+</script>
+@endif
+@if(($screenKey ?? '') === 'account-creation')
+<script>
+(function () {
+    var token = document.querySelector('meta[name="csrf-token"]');
+    document.querySelectorAll('.js-sa-employee-work-toggle').forEach(function (input) {
+        input.addEventListener('change', function () {
+            if (input.dataset.saving === '1') return;
+            var id = input.getAttribute('data-id');
+            var workOn = input.checked ? 1 : 0;
+            var previous = !workOn;
+            var wrap = input.closest('.sa-work-switch');
+            var label = wrap ? wrap.querySelector('.js-sa-work-label') : null;
+            input.dataset.saving = '1';
+            input.disabled = true;
+            fetch(@json(url('/super-admin/account-creation')) + '/' + id + '/work-status', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': token ? token.content : '',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ work_on: workOn })
+            }).then(function (res) {
+                return res.json().then(function (data) {
+                    if (!res.ok) throw data;
+                    return data;
+                });
+            }).then(function (data) {
+                var on = !!data.work_on;
+                input.checked = on;
+                if (wrap) {
+                    wrap.classList.toggle('is-on', on);
+                    wrap.classList.toggle('is-off', !on);
+                }
+                if (label) label.textContent = data.label || (on ? 'On' : 'Off');
+            }).catch(function () {
+                input.checked = previous;
+            }).finally(function () {
+                input.dataset.saving = '0';
+                input.disabled = false;
+            });
+        });
+    });
+})();
+</script>
+@endif
 <script>
 (function () {
     function bindSaStaffForms(selector, valueKey) {

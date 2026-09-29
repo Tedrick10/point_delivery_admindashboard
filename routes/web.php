@@ -38,6 +38,8 @@ use App\Http\Controllers\SuperAdmin\OfficeSalarySettingsController as SuperAdmin
 use App\Http\Controllers\SuperAdmin\KyoShinSettingsController as SuperAdminKyoShinSettingsController;
 use App\Http\Controllers\SuperAdmin\ScreenController as SuperAdminScreenController;
 use App\Http\Controllers\SuperAdmin\DeliveryRouteController as SuperAdminDeliveryRouteController;
+use App\Http\Controllers\SuperAdmin\AccountCreationController;
+use App\Http\Controllers\SuperAdmin\RolesPermissionsController;
 use App\Http\Controllers\WalkThroughController;
 use App\Http\Controllers\PushNotificationController;
 use App\Http\Controllers\OrderController;
@@ -687,7 +689,19 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
         Route::post('kyo-shin/total', [SuperAdminKyoShinSettingsController::class, 'saveTotal'])
             ->name('kyo-shin.total');
         Route::resource('branch-admins', SuperAdminBranchAdminController::class)->except(['show']);
+        Route::get('account-creation/create', [AccountCreationController::class, 'create'])->name('account-creation.create');
+        Route::post('account-creation', [AccountCreationController::class, 'store'])->name('account-creation.store');
+        Route::get('account-creation/{id}/edit', [AccountCreationController::class, 'edit'])->name('account-creation.edit');
+        Route::put('account-creation/{id}', [AccountCreationController::class, 'update'])->name('account-creation.update');
+        Route::delete('account-creation/{id}', [AccountCreationController::class, 'destroy'])->name('account-creation.destroy');
+        Route::post('account-creation/{id}/work-status', [AccountCreationController::class, 'updateWorkStatus'])->name('account-creation.work-status');
+        Route::get('roles-permissions/create-role', [RolesPermissionsController::class, 'createRole'])->name('roles-permissions.create-role');
+        Route::post('roles-permissions/roles', [RolesPermissionsController::class, 'storeRole'])->name('roles-permissions.store-role');
         Route::post('expense-summary/confirm', [ExpenseSummaryController::class, 'confirm'])->name('expense-summary.confirm');
+        Route::post('welcome-promotion/settings', [\App\Http\Controllers\SuperAdmin\WelcomePromotionController::class, 'updateSettings'])
+            ->name('welcome-promotion.settings');
+        Route::put('welcome-promotion/shops/{id}', [\App\Http\Controllers\SuperAdmin\WelcomePromotionController::class, 'updateShop'])
+            ->name('welcome-promotion.shop');
     });
 });
 

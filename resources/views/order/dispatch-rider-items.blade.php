@@ -43,9 +43,9 @@
                 </a>
             </div>
 
-            <form method="GET" action="{{ route('order.dispatch.rider-items', ['riderId' => $rider->id]) }}" class="pds-rider-toolbar" id="riderItemsFilterForm">
+            <form method="GET" action="{{ route('order.dispatch.rider-items', ['riderId' => $rider->id]) }}" class="pds-rider-toolbar pds-rider-toolbar--filter" id="riderItemsFilterForm">
                 <input type="hidden" name="branch_id" value="{{ $branchFilter ?? '' }}">
-                <div class="pds-rider-toolbar__fields">
+                <div class="pds-rider-toolbar__fields pds-rider-toolbar__fields--dates">
                     <div class="pds-dispatch-field pds-dispatch-field-sm">
                         <label for="rider_items_from_date">{{ __('message.from') }}</label>
                         <input type="text" name="from_date" id="rider_items_from_date" class="pds-dispatch-input dispatch-datepicker" value="{{ $filterFromDate }}" autocomplete="off">
@@ -70,52 +70,48 @@
 
             @if(! empty($canSelectItems))
                 <div class="pds-rider-toolbar pds-rider-toolbar--bulk" id="riderItemsBulkBar">
-                    <div class="pds-rider-toolbar__fields">
-                        <div class="pds-dispatch-rider-items-total-wrap">
-                            <span class="pds-dispatch-rider-items-total-label">{{ __('message.total') }}</span>
-                            <div class="pds-dispatch-rider-items-total" id="riderItemsSelectedTotal">0</div>
-                        </div>
+                    <div class="pds-dispatch-rider-items-total-wrap">
+                        <span class="pds-dispatch-rider-items-total-label">{{ __('message.total') }}</span>
+                        <div class="pds-dispatch-rider-items-total" id="riderItemsSelectedTotal">0</div>
                     </div>
-                    <div class="pds-rider-toolbar__aside">
-                        <div class="pds-rider-bulk-actions">
-                            @if($canBulkUpdate && ($bulkActions ?? []) !== [])
-                                <div class="pds-dispatch-field pds-dispatch-field-sm">
-                                    <label for="riderItemsBulkAction">{{ __('message.update_to') }}</label>
-                                    <select id="riderItemsBulkAction" class="pds-dispatch-input pds-dispatch-select">
-                                        @if(count($bulkActions) !== 1)
-                                            <option value="">—</option>
-                                        @endif
-                                        @foreach($bulkActions as $actionKey => $actionLabel)
-                                            <option value="{{ $actionKey }}" @selected(count($bulkActions) === 1)>{{ $actionLabel }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <button type="button" class="pds-rider-check-btn" id="riderItemsBulkUpdate">
-                                    <i class="fas fa-sync-alt" aria-hidden="true"></i>
-                                    <span>{{ __('message.update') }}</span>
-                                </button>
-                            @endif
-                            @if(! empty($canReassignRider))
-                                <button type="button" class="pds-assign-action-btn pds-assign-action-btn--rider" id="riderItemsAssignRider" disabled>
-                                    <span class="pds-assign-action-btn__icon" aria-hidden="true">
-                                        <i class="fas fa-motorcycle"></i>
-                                    </span>
-                                    <span class="pds-assign-action-btn__label">{{ __('message.assigned_rider') }}</span>
-                                </button>
-                            @endif
-                            @if(($status ?? '') === 'return')
-                                <div class="pds-return-type-radios" role="radiogroup" aria-label="{{ __('message.return_type') }}">
-                                    <label class="pds-return-type-radio">
-                                        <input type="radio" name="rider_return_type" value="normal" id="riderReturnTypeNormal">
-                                        <span>{{ __('message.return_type_normal') }}</span>
-                                    </label>
-                                    <label class="pds-return-type-radio">
-                                        <input type="radio" name="rider_return_type" value="delivery" id="riderReturnTypeDelivery">
-                                        <span>{{ __('message.return_type_delivery') }}</span>
-                                    </label>
-                                </div>
-                            @endif
-                        </div>
+                    <div class="pds-rider-bulk-actions">
+                        @if($canBulkUpdate && ($bulkActions ?? []) !== [])
+                            <div class="pds-dispatch-field pds-dispatch-field-sm">
+                                <label for="riderItemsBulkAction">{{ __('message.update_to') }}</label>
+                                <select id="riderItemsBulkAction" class="pds-dispatch-input pds-dispatch-select">
+                                    @if(count($bulkActions) !== 1)
+                                        <option value="">—</option>
+                                    @endif
+                                    @foreach($bulkActions as $actionKey => $actionLabel)
+                                        <option value="{{ $actionKey }}" @selected(count($bulkActions) === 1)>{{ $actionLabel }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <button type="button" class="pds-rider-check-btn" id="riderItemsBulkUpdate">
+                                <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                                <span>{{ __('message.update') }}</span>
+                            </button>
+                        @endif
+                        @if(! empty($canReassignRider))
+                            <button type="button" class="pds-assign-action-btn pds-assign-action-btn--rider" id="riderItemsAssignRider" disabled>
+                                <span class="pds-assign-action-btn__icon" aria-hidden="true">
+                                    <i class="fas fa-motorcycle"></i>
+                                </span>
+                                <span class="pds-assign-action-btn__label">{{ __('message.assigned_rider') }}</span>
+                            </button>
+                        @endif
+                        @if(($status ?? '') === 'return')
+                            <div class="pds-return-type-radios" role="radiogroup" aria-label="{{ __('message.return_type') }}">
+                                <label class="pds-return-type-radio">
+                                    <input type="radio" name="rider_return_type" value="normal" id="riderReturnTypeNormal">
+                                    <span>{{ __('message.return_type_normal') }}</span>
+                                </label>
+                                <label class="pds-return-type-radio">
+                                    <input type="radio" name="rider_return_type" value="delivery" id="riderReturnTypeDelivery">
+                                    <span>{{ __('message.return_type_delivery') }}</span>
+                                </label>
+                            </div>
+                        @endif
                     </div>
                 </div>
             @endif
@@ -301,28 +297,47 @@
 
     @if($canBulkUpdate)
     <div class="modal fade" id="riderPendingRemarkModal" tabindex="-1" role="dialog" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">{{ __('message.follow_up_status_pending') }} Remark</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content pds-pending-modal">
+                <div class="pds-pending-modal__head">
+                    <div class="pds-pending-modal__heading">
+                        <span class="pds-pending-modal__chip">Pending</span>
+                        <h5 class="pds-pending-modal__title">Remark</h5>
+                    </div>
+                    <button type="button" class="pds-pending-modal__close" data-dismiss="modal" aria-label="{{ __('message.close') }}">
+                        <i class="fas fa-times" aria-hidden="true"></i>
                     </button>
                 </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="riderPendingRemarkInput">{{ __('message.remark_label') }}</label>
-                        <textarea id="riderPendingRemarkInput" class="form-control" rows="3" placeholder="{{ __('message.remark_label') }}"></textarea>
+                <div class="pds-pending-modal__body">
+                    <div class="pds-pending-modal__field">
+                        <label class="pds-pending-modal__label" for="riderPendingRemarkInput">{{ __('message.remark_label') }}</label>
+                        <textarea id="riderPendingRemarkInput" class="pds-pending-modal__textarea" rows="4" placeholder="{{ __('message.remark_label') }}"></textarea>
                     </div>
-                    <div class="form-group mb-0">
-                        <label for="riderPendingPhotoInput">{{ __('message.image') ?? 'Image' }}</label>
-                        <input type="file" id="riderPendingPhotoInput" class="form-control-file" accept="image/*">
-                        <img src="" alt="" class="pds-delivered-upload__preview is-pending" id="riderPendingUploadPreview" hidden>
+                    <div class="pds-pending-modal__field is-last">
+                        <span class="pds-pending-modal__label">{{ __('message.image') ?? 'Image' }}</span>
+                        <div class="pds-pending-upload-wrap">
+                            <label class="pds-pending-upload" for="riderPendingPhotoInput" id="riderPendingUploadLabel">
+                                <input type="file" id="riderPendingPhotoInput" accept="image/*" hidden>
+                                <span class="pds-pending-upload__empty" id="riderPendingUploadEmpty">
+                                    <span class="pds-pending-upload__icon" id="riderPendingUploadIcon" aria-hidden="true">
+                                        <i class="fas fa-cloud-upload-alt"></i>
+                                    </span>
+                                    <span class="pds-pending-upload__title" id="riderPendingUploadTitle">Tap to upload photo</span>
+                                    <span class="pds-pending-upload__hint">JPG or PNG · max 10MB</span>
+                                </span>
+                                <span class="pds-pending-upload__filled" id="riderPendingUploadFilled" hidden>
+                                    <img src="" alt="" class="pds-pending-upload__preview" id="riderPendingUploadPreview">
+                                </span>
+                            </label>
+                            <button type="button" class="pds-pending-upload__remove" id="riderPendingUploadRemove" hidden aria-label="{{ __('message.remove') ?? 'Remove' }}">
+                                <i class="fas fa-times" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('message.cancel') }}</button>
-                    <button type="button" class="btn btn-primary" id="riderPendingRemarkConfirm">{{ __('message.update') }}</button>
+                <div class="pds-pending-modal__foot">
+                    <button type="button" class="pds-pending-modal__btn pds-pending-modal__btn--ghost" data-dismiss="modal">{{ __('message.cancel') }}</button>
+                    <button type="button" class="pds-pending-modal__btn pds-pending-modal__btn--primary" id="riderPendingRemarkConfirm">{{ __('message.update') }}</button>
                 </div>
             </div>
         </div>
@@ -762,9 +777,34 @@
                     setUploadPreview('riderDeliveredUploadPreview', 'riderDeliveredUploadIcon', file);
                 });
 
+                function resetPendingUploadLabel() {
+                    var $label = $('#riderPendingUploadLabel');
+                    $label.removeClass('has-file');
+                    $('#riderPendingUploadTitle').text('Tap to upload photo');
+                    $('#riderPendingUploadEmpty').prop('hidden', false);
+                    $('#riderPendingUploadFilled').prop('hidden', true);
+                    $('#riderPendingUploadRemove').prop('hidden', true);
+                    setUploadPreview('riderPendingUploadPreview', 'riderPendingUploadIcon', null);
+                }
+
                 $(document).on('change', '#riderPendingPhotoInput', function () {
                     var file = this.files && this.files[0] ? this.files[0] : null;
-                    setUploadPreview('riderPendingUploadPreview', null, file);
+                    if (!file) {
+                        resetPendingUploadLabel();
+                        return;
+                    }
+                    $('#riderPendingUploadLabel').addClass('has-file');
+                    $('#riderPendingUploadEmpty').prop('hidden', true);
+                    $('#riderPendingUploadFilled').prop('hidden', false);
+                    $('#riderPendingUploadRemove').prop('hidden', false);
+                    setUploadPreview('riderPendingUploadPreview', 'riderPendingUploadIcon', file);
+                });
+
+                $(document).on('click', '#riderPendingUploadRemove', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    $('#riderPendingPhotoInput').val('');
+                    resetPendingUploadLabel();
                 });
 
                 $(document).on('click', '#riderItemsBulkUpdate', function (e) {
@@ -786,7 +826,7 @@
                     if (action === 'pending') {
                         $('#riderPendingRemarkInput').val('');
                         $('#riderPendingPhotoInput').val('');
-                        setUploadPreview('riderPendingUploadPreview', null, null);
+                        resetPendingUploadLabel();
                         $('#riderPendingRemarkModal').modal('show');
                         return;
                     }

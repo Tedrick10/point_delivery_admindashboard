@@ -14,24 +14,25 @@
             if (is_array($message)) {
                 $message = implode(', ', $message);
             }
+            $isUnread = empty($notification->read_at);
+            $cardClass = 'pds-notify-card' . ($isUnread ? ' is-unread' : '');
         @endphp
         @if($route)
-            <a href="{{ $route }}" class="sub-card {{ $notification->read_at ? '' : 'notify-list-bg' }}">
+            <a href="{{ $route }}" class="{{ $cardClass }}">
         @else
-            <div class="sub-card {{ $notification->read_at ? '' : 'notify-list-bg' }}">
+            <div class="{{ $cardClass }}">
         @endif
-            <div class="media align-items-center">
-                <div class="media-body ml-3">
-                    <span class="pds-notification-category-badge pds-notification-category-badge--{{ $category }}">
-                        {{ notificationCategoryLabel($category) }}
-                    </span>
-                    <h6 class="mb-0 mt-1">{{ $title }}</h6>
-                    <small class="float-right font-size-12">
-                        {{ timeAgoFormate($notification->created_at) }}
-                    </small>
-                    <p class="mb-0">{{ $message }}</p>
-                </div>
+            <div class="pds-notify-card__top">
+                <span class="pds-notification-category-badge pds-notification-category-badge--{{ $category }}">
+                    {{ notificationCategoryLabel($category) }}
+                </span>
+                <time class="pds-notify-card__time">{{ timeAgoFormate($notification->created_at) }}</time>
             </div>
+            <h6 class="pds-notify-card__title">{{ $title }}</h6>
+            <p class="pds-notify-card__message">{{ $message }}</p>
+            @if($isUnread)
+                <span class="pds-notify-card__dot" aria-hidden="true"></span>
+            @endif
         @if($route)
             </a>
         @else
@@ -39,15 +40,12 @@
         @endif
     @endforeach
     <a href="{{ route('notification.index', ['category' => $activeCategory !== 'all' ? $activeCategory : null]) }}"
-       class="dropdown-item text-center text-primary font-weight-bold py-3 pds-notify-view-all">
+       class="pds-notify-view-all">
         {{ __('message.view_all') }}
     </a>
 @else
-    <div class="sub-card pds-notify-empty">
-        <div class="media align-items-center">
-            <div class="media-body ml-3">
-                <h6 class="mb-0">{{ __('message.no_notification') }}</h6>
-            </div>
-        </div>
+    <div class="pds-notify-empty">
+        <span class="pds-notify-empty__icon" aria-hidden="true"><i class="far fa-bell-slash"></i></span>
+        <p>{{ __('message.no_notification') }}</p>
     </div>
 @endif

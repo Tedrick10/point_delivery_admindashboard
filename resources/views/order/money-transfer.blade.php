@@ -8,7 +8,6 @@
                         <span>{{ __('message.order') }}</span>
                     </div>
                     <h4 class="pds-rider-hero__title">{{ $pageTitle }}</h4>
-                    <p class="pds-rider-hero__subtitle">{{ __('message.money_transfer_subtitle') }}</p>
                 </div>
                 <div class="pds-rider-hero__stat">
                     <span class="pds-rider-hero__stat-value">{{ $summary->os_count }}</span>
@@ -91,9 +90,10 @@
             </form>
 
             <div class="pds-money-transfer-summary" id="mtSummary">
-                <div class="pds-money-transfer-summary__card">
-                    <span class="pds-money-transfer-summary__label">{{ __('message.total_amount') }}</span>
+                <div class="pds-money-transfer-summary__card is-ostopay">
+                    <span class="pds-money-transfer-summary__label">{{ __('message.os_to_pay') }}</span>
                     <strong class="pds-money-transfer-summary__value" data-summary="amount_due">{{ number_format($summary->amount_due) }}</strong>
+                    <em class="pds-money-transfer-summary__hint">{{ __('message.money_transfer_total_hint') }}</em>
                 </div>
                 @if($showKpayAmount)
                     <div class="pds-money-transfer-summary__card is-kpay">
@@ -140,7 +140,7 @@
                                     @if($showMethodCol)
                                         <th>{{ __('message.payment_method') }}</th>
                                     @endif
-                                    <th class="text-right">{{ __('message.amount') }}</th>
+                                    <th class="text-right" title="{{ __('message.money_transfer_col_help_due') }}">{{ __('message.os_to_pay') }}</th>
                                     @if($showCashCols)
                                         <th>{{ __('message.delivery_man') }}</th>
                                         <th>{{ __('message.status') }}</th>

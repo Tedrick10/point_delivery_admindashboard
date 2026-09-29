@@ -28,7 +28,15 @@ class RedirectSuperAdminFromBranchPanel
         'order.update',
         'order.destroy',
         'order.dispatch-store',
+        // Super Admin–owned HR / account screens (opened from SA panel)
+        'hr.late-fine',
+        'hr.office-salary',
+        'hr.rider-salary',
+        'sub-admin',
+        'permission',
+        'role',
         'home',
+        'welcome-promotion',
     ];
 
     public function handle(Request $request, Closure $next)

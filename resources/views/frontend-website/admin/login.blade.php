@@ -9,7 +9,7 @@
     <link href="{{ asset('frontend-website/assets/css/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+Myanmar:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('frontend-website/assets/css/animations.css') }}">
     @if(mighty_language_direction() == 'rtl')
         <link rel="stylesheet" href="{{ asset('css/rtl.css') }}">
@@ -17,9 +17,12 @@
     <style>
         :root {
             --site-color: {{ $themeColor }};
-            --site-color-dark: color-mix(in srgb, var(--site-color) 80%, #000);
+            --site-color-dark: color-mix(in srgb, var(--site-color) 78%, #000);
             --site-color-soft: color-mix(in srgb, var(--site-color) 10%, #fff);
             --site-color-glow: color-mix(in srgb, var(--site-color) 22%, transparent);
+            --login-ink: #14110f;
+            --login-muted: #7a7168;
+            --login-line: rgba(20, 17, 15, 0.09);
         }
 
         * { box-sizing: border-box; }
@@ -27,94 +30,174 @@
         body.admin-login-page {
             margin: 0;
             min-height: 100vh;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            color: #111827;
+            font-family: 'Outfit', 'Noto Sans Myanmar', system-ui, sans-serif;
+            color: var(--login-ink);
             background:
-                radial-gradient(circle at 15% 20%, var(--site-color-glow), transparent 42%),
-                radial-gradient(circle at 85% 80%, color-mix(in srgb, var(--site-color) 14%, transparent), transparent 40%),
-                linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+                radial-gradient(ellipse 90% 70% at 50% -10%, color-mix(in srgb, var(--site-color) 45%, transparent), transparent 55%),
+                radial-gradient(ellipse 50% 40% at 100% 100%, color-mix(in srgb, var(--site-color) 18%, transparent), transparent 55%),
+                radial-gradient(ellipse 40% 35% at 0% 80%, rgba(255, 255, 255, 0.06), transparent 50%),
+                linear-gradient(160deg, #120e0b 0%, #1f1510 42%, #2c1a12 100%);
+            display: grid;
+            place-items: center;
             padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body.admin-login-page::before,
+        body.admin-login-page::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            pointer-events: none;
+            z-index: 0;
+        }
+        body.admin-login-page::before {
+            width: 420px;
+            height: 420px;
+            top: -120px;
+            right: -80px;
+            background: color-mix(in srgb, var(--site-color) 28%, transparent);
+        }
+        body.admin-login-page::after {
+            width: 320px;
+            height: 320px;
+            bottom: -100px;
+            left: -60px;
+            background: rgba(255, 180, 100, 0.12);
+        }
+
+        .login-shell {
+            width: 100%;
+            max-width: 420px;
+            position: relative;
+            z-index: 1;
+            animation: loginRise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        @keyframes loginRise {
+            from { opacity: 0; transform: translateY(20px) scale(0.98); }
+            to { opacity: 1; transform: none; }
         }
 
         .login-card {
-            width: 100%;
-            max-width: 440px;
-            background: rgba(255, 255, 255, 0.92);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.9);
+            background: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.7);
             border-radius: 24px;
-            padding: 2.5rem 2rem 2rem;
+            padding: 2rem 1.75rem 1.5rem;
             box-shadow:
-                0 1px 2px rgba(16, 24, 40, 0.04),
-                0 12px 40px rgba(16, 24, 40, 0.08);
+                0 1px 0 rgba(255, 255, 255, 0.65) inset,
+                0 24px 56px rgba(0, 0, 0, 0.32);
+            position: relative;
+            overflow: hidden;
+        }
+        .login-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--site-color-dark), var(--site-color), #ffb347);
         }
 
         .login-card__brand {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.85rem;
+            margin-bottom: 1.35rem;
             text-align: center;
-            margin-bottom: 1.75rem;
+        }
+
+        .login-card__mark {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(145deg, var(--site-color) 0%, var(--site-color-dark) 100%);
+            color: #fff;
+            font-size: 1.15rem;
+            box-shadow: 0 10px 24px var(--site-color-glow);
         }
 
         .login-card__app-name {
-            font-size: 1.05rem;
+            font-size: 0.72rem;
             font-weight: 700;
-            color: #111827;
-            letter-spacing: -0.02em;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--site-color);
         }
 
         .login-card__title {
-            font-size: 1.75rem;
+            font-size: 1.7rem;
             font-weight: 700;
             letter-spacing: -0.03em;
-            margin: 0 0 0.4rem;
-            text-align: center;
-            color: #0f172a;
+            margin: 0.15rem 0 0;
+            color: var(--login-ink);
+            line-height: 1.15;
         }
 
         .login-card__subtitle {
-            margin: 0 0 1.75rem;
-            text-align: center;
-            color: #64748b;
-            font-size: 0.9375rem;
-            line-height: 1.6;
+            margin: 0.45rem 0 0;
+            color: var(--login-muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            max-width: 28ch;
         }
 
         .login-field {
-            margin-bottom: 1rem;
+            margin-bottom: 0.9rem;
         }
 
         .login-field label {
             display: block;
-            font-size: 0.8125rem;
+            font-size: 0.78rem;
             font-weight: 600;
-            color: #334155;
+            color: #564e47;
             margin-bottom: 0.4rem;
+            letter-spacing: 0.01em;
         }
 
         .login-input-wrap {
             position: relative;
         }
 
+        .login-input-wrap > .login-field-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #a89f96;
+            font-size: 0.85rem;
+            pointer-events: none;
+            z-index: 1;
+        }
+
         .login-input {
             width: 100%;
-            height: 48px;
-            padding: 0 1rem;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            background: #fff;
+            height: 50px;
+            padding: 0 1rem 0 2.55rem;
+            border: 1px solid var(--login-line);
+            border-radius: 14px;
+            background: #faf8f6;
             font-size: 0.9375rem;
-            color: #0f172a;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            color: var(--login-ink);
+            transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
         }
 
         .login-input::placeholder {
-            color: #94a3b8;
+            color: #b0a79e;
+        }
+
+        .login-input:hover {
+            border-color: rgba(20, 17, 15, 0.16);
         }
 
         .login-input:focus {
             outline: none;
+            background: #fff;
             border-color: var(--site-color);
             box-shadow: 0 0 0 4px var(--site-color-glow);
         }
@@ -124,59 +207,61 @@
             right: 14px;
             top: 50%;
             transform: translateY(-50%);
-            color: #94a3b8;
+            color: #948b82;
             cursor: pointer;
             font-size: 0.9rem;
             transition: color 0.2s ease;
+            z-index: 2;
         }
 
         .login-input-wrap .toggle-password:hover {
             color: var(--site-color);
         }
 
-        .login-input-wrap .login-input {
+        .login-input-wrap .login-input.has-toggle {
             padding-right: 2.75rem;
         }
 
         .login-meta {
             display: flex;
             justify-content: flex-end;
-            margin: 0.15rem 0 1.35rem;
+            margin: 0.1rem 0 1.15rem;
         }
 
         .login-meta a {
             font-size: 0.8125rem;
-            font-weight: 500;
+            font-weight: 600;
             color: var(--site-color);
             text-decoration: none;
         }
 
         .login-meta a:hover {
             color: var(--site-color-dark);
+            text-decoration: underline;
+            text-underline-offset: 3px;
         }
 
         .login-submit {
             width: 100%;
-            height: 50px;
+            height: 52px;
             border: none;
-            border-radius: 12px;
-            background: var(--site-color);
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--site-color-dark) 0%, var(--site-color) 55%, #ff8f3d 100%);
             color: #fff;
-            font-size: 0.9375rem;
-            font-weight: 600;
+            font-size: 0.98rem;
+            font-weight: 700;
+            letter-spacing: 0.01em;
             cursor: pointer;
-            transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
-            box-shadow: 0 8px 20px var(--site-color-glow);
+            transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+            box-shadow:
+                0 10px 26px var(--site-color-glow),
+                inset 0 1px 0 rgba(255, 255, 255, 0.28);
         }
 
         .login-submit:hover {
-            background: var(--site-color-dark);
             transform: translateY(-2px);
-            box-shadow: 0 12px 28px var(--site-color-glow);
-        }
-
-        .modal.show .modal-dialog {
-            animation: pdsModalIn 0.38s cubic-bezier(0.4, 0, 0.2, 1) both;
+            filter: brightness(1.03);
+            box-shadow: 0 14px 32px var(--site-color-glow);
         }
 
         .login-submit:active {
@@ -184,17 +269,45 @@
         }
 
         .login-footer {
-            margin-top: 1.5rem;
-            padding-top: 1.25rem;
-            border-top: 1px solid #f1f5f9;
+            margin-top: 1.35rem;
+            padding-top: 1.15rem;
+            border-top: 1px solid var(--login-line);
             text-align: center;
-            font-size: 0.8125rem;
-            color: #94a3b8;
+            font-size: 0.78rem;
+            color: var(--login-muted);
+        }
+
+        .login-card .alert {
+            border: none;
+            border-radius: 14px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .login-card .alert-danger {
+            background: linear-gradient(180deg, #fff8f2 0%, #ffefe6 100%);
+            color: #9f1239;
+            box-shadow: inset 0 0 0 1px rgba(225, 29, 72, 0.12);
+        }
+
+        .login-card .font-medium.text-sm.text-green-600,
+        .login-card .login-status-ok {
+            display: block;
+            padding: 0.75rem 1rem;
+            border-radius: 14px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+            color: #047857 !important;
+            box-shadow: inset 0 0 0 1px rgba(5, 150, 105, 0.16);
         }
 
         .forgotModal-modalcontent {
             border: none;
-            border-radius: 18px;
+            border-radius: 20px;
             overflow: hidden;
         }
 
@@ -209,7 +322,7 @@
         .forgotModal-form {
             height: 48px;
             border-radius: 12px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #f0e6dc;
         }
 
         .forgotModal-form:focus {
@@ -225,17 +338,17 @@
 
         .forgot-cancle-btn {
             border-radius: 10px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #f0e6dc;
         }
 
         @media (max-width: 480px) {
             .login-card {
-                padding: 2rem 1.25rem 1.5rem;
+                padding: 1.65rem 1.25rem 1.25rem;
                 border-radius: 20px;
             }
 
             .login-card__title {
-                font-size: 1.5rem;
+                font-size: 1.45rem;
             }
         }
     </style>
@@ -243,59 +356,68 @@
 
 <body class="admin-login-page">
 
-    <div class="login-card hero-animate-in">
-        <div class="login-card__brand">
-            <div class="login-card__app-name">{{ SettingData('app_content', 'app_name') }}</div>
-        </div>
-
-        <h1 class="login-card__title">Branch Admin</h1>
-        <p class="login-card__subtitle">{{ __('message.Please_enter_your_login_credentials') }}</p>
-
-        <x-auth-session-status class="mb-3" :status="session('status')" />
-        <x-auth-validation-errors class="mb-3" :errors="$errors" />
-
-        <form method="POST" action="{{ route('login.store') }}" data-toggle="validator">
-            @csrf
-            <input type="hidden" name="admin_login" value="admin_login">
-
-            <div class="login-field">
-                <label for="loginEmail">{{ __('message.email') }}</label>
-                <input type="email"
-                       class="login-input"
-                       id="loginEmail"
-                       name="email"
-                       value="{{ old('email') }}"
-                       placeholder="admin@example.com"
-                       required
-                       autofocus>
-            </div>
-
-            <div class="login-field">
-                <label for="loginPassword">{{ __('message.password') }}</label>
-                <div class="login-input-wrap">
-                    <input type="password"
-                           name="password"
-                           id="loginPassword"
-                           class="login-input password"
-                           placeholder="Enter your password"
-                           required
-                           autocomplete="current-password">
-                    <i class="toggle-password fas fa-eye-slash forgot-togglePassword"></i>
+    <div class="login-shell">
+        <div class="login-card">
+            <div class="login-card__brand">
+                <div class="login-card__mark" aria-hidden="true">
+                    <i class="fas fa-store"></i>
+                </div>
+                <div>
+                    <div class="login-card__app-name">{{ SettingData('app_content', 'app_name') }}</div>
+                    <h1 class="login-card__title">Branch Admin</h1>
+                    <p class="login-card__subtitle">{{ __('message.Please_enter_your_login_credentials') }}</p>
                 </div>
             </div>
 
-            <div class="login-meta">
-                <a href="{{ route('auth.recover-password') }}"
-                   data-bs-toggle="modal"
-                   data-bs-target="#forgotModal">{{ __('message.forgot_password') }}</a>
+            <x-auth-session-status class="mb-3" :status="session('status')" />
+            <x-auth-validation-errors class="mb-3" :errors="$errors" />
+
+            <form method="POST" action="{{ route('login.store') }}" data-toggle="validator">
+                @csrf
+                <input type="hidden" name="admin_login" value="admin_login">
+
+                <div class="login-field">
+                    <label for="loginEmail">{{ __('message.email') }}</label>
+                    <div class="login-input-wrap">
+                        <i class="fas fa-envelope login-field-icon" aria-hidden="true"></i>
+                        <input type="email"
+                               class="login-input"
+                               id="loginEmail"
+                               name="email"
+                               value="{{ old('email') }}"
+                               placeholder="admin@example.com"
+                               required
+                               autofocus>
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <label for="loginPassword">{{ __('message.password') }}</label>
+                    <div class="login-input-wrap">
+                        <i class="fas fa-lock login-field-icon" aria-hidden="true"></i>
+                        <input type="password"
+                               name="password"
+                               id="loginPassword"
+                               class="login-input password has-toggle"
+                               placeholder="Enter your password"
+                               required
+                               autocomplete="current-password">
+                        <i class="toggle-password fas fa-eye-slash forgot-togglePassword" role="button" tabindex="0" aria-label="Show password"></i>
+                    </div>
+                </div>
+
+                <div class="login-meta">
+                    <a href="{{ route('auth.recover-password') }}"
+                       data-bs-toggle="modal"
+                       data-bs-target="#forgotModal">{{ __('message.forgot_password') }}</a>
+                </div>
+
+                <button type="submit" class="login-submit">{{ __('message.login') }}</button>
+            </form>
+
+            <div class="login-footer">
+                &copy; {{ date('Y') }} {{ SettingData('app_content', 'app_name') }}
             </div>
-
-            <button type="submit" class="login-submit">{{ __('message.login') }}</button>
-        </form>
-
-        <div class="login-footer">
-            &copy; {{ date('Y') }} {{ SettingData('app_content', 'app_name') }}
-            <div class="mt-2"><a href="{{ route('super-admin.login') }}" style="color:#0d9488;font-weight:600;text-decoration:none;">Super Admin login</a></div>
         </div>
     </div>
 
@@ -331,12 +453,20 @@
     <script src="{{ asset('frontend-website/assets/js/bootstrap.min.js') }}"></script>
     <script>
         document.querySelectorAll('.forgot-togglePassword').forEach((toggle) => {
-            toggle.addEventListener('click', function () {
-                const input = this.closest('.login-input-wrap').querySelector('.password');
+            const flip = () => {
+                const input = toggle.closest('.login-input-wrap').querySelector('.password');
                 const isPassword = input.getAttribute('type') === 'password';
                 input.setAttribute('type', isPassword ? 'text' : 'password');
-                this.classList.toggle('fa-eye-slash', !isPassword);
-                this.classList.toggle('fa-eye', isPassword);
+                toggle.classList.toggle('fa-eye-slash', !isPassword);
+                toggle.classList.toggle('fa-eye', isPassword);
+                toggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+            };
+            toggle.addEventListener('click', flip);
+            toggle.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    flip();
+                }
             });
         });
     </script>

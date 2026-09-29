@@ -108,18 +108,7 @@ class Assign100LabelService
 
         $company = trim((string) (SettingData('order_invoice', 'company_name') ?: config('app.name') ?: 'Point Delivery'));
         $hotline = trim((string) (SettingData('order_invoice', 'company_contact_number') ?: ''));
-        $logoUrl = '';
-        try {
-            $invoice = \App\Models\Setting::query()
-                ->where('type', 'order_invoice')
-                ->where('key', 'company_logo')
-                ->first();
-            $logoUrl = (string) (($invoice ? getSingleMedia($invoice, 'company_logo') : null)
-                ?: getSingleMedia(appSettingData('get'), 'site_logo', null)
-                ?: '');
-        } catch (\Throwable $e) {
-            $logoUrl = '';
-        }
+        $logoUrl = $this->labelLogoDataUri();
 
         return (object) [
             'item' => $item,
@@ -144,5 +133,70 @@ class Assign100LabelService
             'deli_amount' => number_format($deli),
             'remark' => $remark !== '' ? $remark : '-',
         ];
+    }
+
+    protected function labelLogoDataUri(): string
+    {
+        static $cached = null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        try {
+            $cleanLogo = public_path('images/point-logo-circle.png');
+            if (is_file($cleanLogo) && function_exists('imagecreatefrompng')) {
+                $src = @imagecreatefrompng($cleanLogo);
+                if ($src !== false) {
+                    $tw = 128;
+                    $th = 128;
+                    $dst = imagecreatetruecolor($tw, $th);
+                    imagealphablending($dst, false);
+                    imagesavealpha($dst, true);
+                    $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+                    imagefilledrectangle($dst, 0, 0, $tw, $th, $transparent);
+                    imagealphablending($dst, true);
+                    imagecopyresampled(
+                        $dst,
+                        $src,
+                        0,
+                        0,
+                        0,
+                        0,
+                        $tw,
+                        $th,
+                        imagesx($src),
+                        imagesy($src)
+                    );
+                    ob_start();
+                    imagesavealpha($dst, true);
+                    imagepng($dst, null, 6);
+                    $bytes = ob_get_clean();
+                    imagedestroy($src);
+                    imagedestroy($dst);
+                    if (is_string($bytes) && $bytes !== '') {
+                        return $cached = 'data:image/png;base64,'.base64_encode($bytes);
+                    }
+                }
+            }
+
+            if (is_file($cleanLogo)) {
+                $bytes = file_get_contents($cleanLogo);
+                if ($bytes !== false && $bytes !== '') {
+                    return $cached = 'data:image/png;base64,'.base64_encode($bytes);
+                }
+            }
+
+            $invoice = \App\Models\Setting::query()
+                ->where('type', 'order_invoice')
+                ->where('key', 'company_logo')
+                ->first();
+            $remote = (string) (($invoice ? getSingleMedia($invoice, 'company_logo') : null)
+                ?: getSingleMedia(appSettingData('get'), 'site_logo', null)
+                ?: '');
+
+            return $cached = $remote;
+        } catch (\Throwable $e) {
+            return $cached = '';
+        }
     }
 }

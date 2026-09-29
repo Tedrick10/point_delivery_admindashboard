@@ -28,6 +28,12 @@
                 ->data('permission', 'order-add')
                 ->link->attr(['class' => '']);
 
+            $menu
+                ->add('<span>' . __('message.nav_operations') . '</span>', ['class' => 'pds-nav-section'])
+                ->data('is_section', true)
+                ->link->href('javascript:void(0)')
+                ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
+
             // Order (group)
             $menu
                 ->add('<span>' . __('message.order') . '</span>', ['class' => ''])
@@ -90,8 +96,8 @@
                     '</span></span>';
             }
 
-            $menu->order
-                ->add($assign100Label, ['class' => 'sidebar-layout'])
+            $menu
+                ->add($assign100Label, ['class' => ''])
                 ->data('permission', 'order-list')
                 ->prepend('<i class="fas fa-users-cog"></i>')
                 ->nickname('assign100')
@@ -172,98 +178,14 @@
                     $assignedItemCount .
                     '</span>';
                 $menu->order
-                    ->add('<span>' . __('message.assigned_item_list') . ' ' . $assignedBadge . '</span>', [
-                        'class' => 'sidebar-layout',
-                        'route' => 'order.dispatch.assigned-items',
-                    ])
-                    ->data('permission', 'order-list')
-                    ->prepend('<i class="fas fa-clipboard-check"></i>')
-                    ->link->attr(['class' => '']);
-            }
-
-            $menu->order
-                ->add('<span>' . __('message.os_list') . '</span>', [
+                ->add('<span>' . __('message.assigned_item_list') . ' ' . $assignedBadge . '</span>', [
                     'class' => 'sidebar-layout',
-                    'route' => 'order.dispatch.os-list',
-                ])
-                ->data('permission', 'order-list')
-                ->prepend('<i class="fas fa-store"></i>')
-                ->link->attr(['class' => '']);
-
-            $kyoShinScopes = app(\App\Services\KyoShinService::class)->allowedScopeKeys(Auth::user());
-            if ($kyoShinScopes !== []) {
-                $menu->order
-                    ->add('<span>' . __('message.kyo_shin_title') . '</span>', [
-                        'class' => 'sidebar-layout',
-                        'route' => 'order.kyo-shin',
-                    ])
-                    ->data('permission', 'order-list')
-                    ->prepend('<i class="fas fa-coins"></i>')
-                    ->link->attr(['class' => '']);
-            }
-
-            $menu->order
-                ->add('<span>' . __('message.daily_check_list') . '</span>', [
-                    'class' => 'sidebar-layout',
-                    'route' => 'order.daily-checklist',
+                    'route' => 'order.dispatch.assigned-items',
                 ])
                 ->data('permission', 'order-list')
                 ->prepend('<i class="fas fa-clipboard-check"></i>')
                 ->link->attr(['class' => '']);
-
-            $menu->order
-                ->add('<span>' . __('message.money_transfer_list') . '</span>', [
-                    'class' => 'sidebar-layout',
-                    'route' => 'order.money-transfer',
-                ])
-                ->data('permission', 'order-list')
-                ->prepend('<i class="fas fa-exchange-alt"></i>')
-                ->link->attr(['class' => '']);
-
-            $menu->order
-                ->add('<span>' . __('message.rider_remit_title') . '</span>', [
-                    'class' => 'sidebar-layout',
-                    'route' => 'order.rider-remit',
-                ])
-                ->data('permission', 'order-list')
-                ->prepend('<i class="fas fa-wallet"></i>')
-                ->link->attr(['class' => '']);
-
-            $menu->order
-                ->add('<span>' . __('message.cash_payout_title') . '</span>', [
-                    'class' => 'sidebar-layout',
-                    'route' => ['order.cash-payout', 'status' => 'unassigned'],
-                ])
-                ->data('permission', 'order-list')
-                ->prepend('<i class="fas fa-money-bill-wave"></i>')
-                ->link->attr(['class' => '']);
-
-            $menu->order
-                ->add('<span>' . __('message.os_receive_screen_title') . '</span>', [
-                    'class' => 'sidebar-layout',
-                    'route' => 'order.os-receive',
-                ])
-                ->data('permission', 'order-list')
-                ->prepend('<i class="fas fa-hand-holding-usd"></i>')
-                ->link->attr(['class' => '']);
-
-            $menu->order
-                ->add('<span>' . __('message.expenses_title') . '</span>', [
-                    'class' => 'sidebar-layout',
-                    'route' => 'order.expenses',
-                ])
-                ->data('permission', 'order-list')
-                ->prepend('<i class="fas fa-receipt"></i>')
-                ->link->attr(['class' => '']);
-
-            $menu->order
-                ->add('<span>' . __('message.expense_summary_title') . '</span>', [
-                    'class' => 'sidebar-layout',
-                    'route' => 'order.expense-summary',
-                ])
-                ->data('permission', 'order-list')
-                ->prepend('<i class="fas fa-chart-pie"></i>')
-                ->link->attr(['class' => '']);
+            }
 
             $workflow = app(\App\Services\DispatchOrderWorkflowService::class);
             $workflow->healPickupErrorChoicesToCancelled();
@@ -327,6 +249,12 @@
                 ->prepend('<i class="fas fa-ban"></i>')
                 ->link->attr(['class' => '']);
 
+            $menu
+                ->add('<span>' . __('message.nav_partners') . '</span>', ['class' => 'pds-nav-section'])
+                ->data('is_section', true)
+                ->link->href('javascript:void(0)')
+                ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
+
             // Rider List
             $menu
                 ->add('<span>' . __('message.rider_list') . '</span>', [
@@ -355,17 +283,114 @@
                 ->prepend('<i class="fa fa-user-tie"></i>')
                 ->link->attr(['class' => '']);
 
-            // From / To / City — managed only in Super Admin panel (not branch sidebar)
-
-            // My Salary — visible to office accounts (own salary)
             $menu
-                ->add('<span>' . __('message.hr_my_salary_title') . '</span>', [
-                    'route' => 'hr.my-salary.index',
+                ->add('<span>' . __('message.nav_finance') . '</span>', ['class' => 'pds-nav-section'])
+                ->data('is_section', true)
+                ->link->href('javascript:void(0)')
+                ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
+
+            // Settlement / Finance (group)
+            $menu
+                ->add('<span>' . __('message.settlement') . '</span>', ['class' => ''])
+                ->prepend('<i class="fas fa-hand-holding-usd"></i>')
+                ->nickname('settlement')
+                ->data('permission', 'order-list')
+                ->link->attr(['class' => ''])
+                ->href('#settlement');
+
+            $menu->settlement
+                ->add('<span>' . __('message.os_list') . '</span>', [
+                    'class' => 'sidebar-layout',
+                    'route' => 'order.dispatch.os-list',
                 ])
+                ->data('permission', 'order-list')
+                ->prepend('<i class="fas fa-store"></i>')
+                ->link->attr(['class' => '']);
+
+            $kyoShinScopes = app(\App\Services\KyoShinService::class)->allowedScopeKeys(Auth::user());
+            if ($kyoShinScopes !== []) {
+                $menu->settlement
+                    ->add('<span>' . __('message.kyo_shin_title') . '</span>', [
+                        'class' => 'sidebar-layout',
+                        'route' => 'order.kyo-shin',
+                    ])
+                    ->data('permission', 'order-list')
+                    ->prepend('<i class="fas fa-coins"></i>')
+                    ->link->attr(['class' => '']);
+            }
+
+            $menu->settlement
+                ->add('<span>' . __('message.daily_check_list') . '</span>', [
+                    'class' => 'sidebar-layout',
+                    'route' => 'order.daily-checklist',
+                ])
+                ->data('permission', 'order-list')
+                ->prepend('<i class="fas fa-clipboard-check"></i>')
+                ->link->attr(['class' => '']);
+
+            $menu->settlement
+                ->add('<span>' . __('message.money_transfer_list') . '</span>', [
+                    'class' => 'sidebar-layout',
+                    'route' => 'order.money-transfer',
+                ])
+                ->data('permission', 'order-list')
+                ->prepend('<i class="fas fa-exchange-alt"></i>')
+                ->link->attr(['class' => '']);
+
+            $menu->settlement
+                ->add('<span>' . __('message.rider_remit_title') . '</span>', [
+                    'class' => 'sidebar-layout',
+                    'route' => 'order.rider-remit',
+                ])
+                ->data('permission', 'order-list')
                 ->prepend('<i class="fas fa-wallet"></i>')
                 ->link->attr(['class' => '']);
 
-            // HR / Payroll (admin)
+            $menu->settlement
+                ->add('<span>' . __('message.cash_payout_title') . '</span>', [
+                    'class' => 'sidebar-layout',
+                    'route' => ['order.cash-payout', 'status' => 'unassigned'],
+                ])
+                ->data('permission', 'order-list')
+                ->prepend('<i class="fas fa-money-bill-wave"></i>')
+                ->link->attr(['class' => '']);
+
+            $menu->settlement
+                ->add('<span>' . __('message.os_receive_screen_title') . '</span>', [
+                    'class' => 'sidebar-layout',
+                    'route' => 'order.os-receive',
+                ])
+                ->data('permission', 'order-list')
+                ->prepend('<i class="fas fa-hand-holding-usd"></i>')
+                ->link->attr(['class' => '']);
+
+            $menu->settlement
+                ->add('<span>' . __('message.expenses_title') . '</span>', [
+                    'class' => 'sidebar-layout',
+                    'route' => 'order.expenses',
+                ])
+                ->data('permission', 'order-list')
+                ->prepend('<i class="fas fa-receipt"></i>')
+                ->link->attr(['class' => '']);
+
+            $menu->settlement
+                ->add('<span>' . __('message.expense_summary_title') . '</span>', [
+                    'class' => 'sidebar-layout',
+                    'route' => 'order.expense-summary',
+                ])
+                ->data('permission', 'order-list')
+                ->prepend('<i class="fas fa-chart-pie"></i>')
+                ->link->attr(['class' => '']);
+
+            $menu
+                ->add('<span>' . __('message.nav_admin') . '</span>', ['class' => 'pds-nav-section'])
+                ->data('is_section', true)
+                ->link->href('javascript:void(0)')
+                ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
+
+            // From / To / City — managed only in Super Admin panel (not branch sidebar)
+
+            // HR / Payroll (admin) — Late Time Fine / Extra Fine / ရုံးမှခဏယူငွေ → Super Admin only
             $menu
                 ->add('<span>' . __('message.hr_payroll') . '</span>', ['class' => ''])
                 ->prepend('<i class="fas fa-users-cog"></i>')
@@ -373,15 +398,6 @@
                 ->data('permission', 'hr-payroll-list')
                 ->link->attr(['class' => ''])
                 ->href('#hrpayroll');
-
-            $menu->hrpayroll
-                ->add('<span>' . __('message.hr_late_fine_title') . '</span>', [
-                    'class' => 'sidebar-layout',
-                    'route' => 'hr.late-fine.index',
-                ])
-                ->data('permission', 'hr-payroll-list')
-                ->prepend('<i class="fas fa-user-clock"></i>')
-                ->link->attr(['class' => '']);
 
             $menu->hrpayroll
                 ->add('<span>' . __('message.hr_office_salary_title') . '</span>', [
@@ -401,23 +417,13 @@
                 ->prepend('<i class="fas fa-motorcycle"></i>')
                 ->link->attr(['class' => '']);
 
-            // Account Creation
-            $menu
-                ->add('<span>' . __('message.account_creation') . '</span>', [
-                    'route' => 'sub-admin.index',
-                ])
-                ->data('permission', 'subadmin-list')
-                ->prepend('<i class="fas fa-user-plus"></i>')
-                ->link->attr(['class' => '']);
+            // Account Creation + Roles & Permission — Super Admin panel only
 
-            // Roles & Permission (combined)
             $menu
-                ->add('<span>' . __('message.roles_and_permission') . '</span>', [
-                    'route' => 'permission.index',
-                ])
-                ->data('permission', 'permission-list')
-                ->prepend('<i class="fas fa-user-shield"></i>')
-                ->link->attr(['class' => '']);
+                ->add('<span>' . __('message.nav_system') . '</span>', ['class' => 'pds-nav-section'])
+                ->data('is_section', true)
+                ->link->href('javascript:void(0)')
+                ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
 
             // Terms & Privacy
             $menu
@@ -695,18 +701,20 @@
 @endphp
 
 <div class="mm-sidebar sidebar-default pds-sidebar">
-    <div class="mm-sidebar-logo d-flex align-items-center justify-content-between pds-sidebar-brand">
-        <a href="{{ route('home') }}" class="header-logo pds-brand-link">
-            <span class="pds-brand-mark">
-                <img src="{{ getSingleMedia(appSettingData('get'), 'site_logo', null) }}"
-                    class="img-fluid mode light-img rounded-normal light-logo site_logo_preview pds-brand-logo" alt="logo">
-                <img src="{{ getSingleMedia(appSettingData('get'), 'site_dark_logo', null) }}"
-                    class="img-fluid mode dark-img rounded-normal darkmode-logo site_dark_logo_preview pds-brand-logo" alt="dark-logo">
+    <div class="mm-sidebar-logo pds-sidebar-brand">
+        <a href="{{ route('home') }}" class="header-logo pds-brand-link" title="POINT Delivery Service">
+            <img src="{{ getSingleMedia(appSettingData('get'), 'site_logo', null) }}"
+                class="img-fluid mode light-img light-logo site_logo_preview pds-brand-logo" alt="">
+            <img src="{{ getSingleMedia(appSettingData('get'), 'site_dark_logo', null) }}"
+                class="img-fluid mode dark-img darkmode-logo site_dark_logo_preview pds-brand-logo" alt="">
+            <span class="pds-brand-copy">
+                <span class="pds-brand-copy__name">POINT</span>
+                <span class="pds-brand-copy__tag">Delivery Service</span>
             </span>
         </a>
-        <div class="side-menu-bt-sidebar pds-sidebar-toggle">
-            <i class="fas fa-bars wrapper-menu"></i>
-        </div>
+        <button type="button" class="pds-sidebar-toggle wrapper-menu" aria-label="Toggle menu">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+        </button>
     </div>
 
     <div class="data-scrollbar pds-sidebar-scroll" data-scroll="1">

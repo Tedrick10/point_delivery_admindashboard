@@ -189,6 +189,21 @@ class SuperAdminDashboardService
                 ['label' => __('message.sa_akos_given'), 'value' => $s['summary_ako_month'], 'money' => true],
                 ['label' => __('message.sa_days_generated'), 'value' => $s['summary_days'], 'money' => false],
             ],
+            'welcome-promotion' => (static function () {
+                $promo = \App\Models\WelcomePromotion::getActive();
+                $enabled = \App\Models\User::query()
+                    ->where('user_type', 'client')
+                    ->where('welcome_promo_enabled', 1)
+                    ->count();
+                $shops = \App\Models\User::query()->where('user_type', 'client')->count();
+
+                return [
+                    ['label' => __('message.status'), 'value' => $promo ? __('message.enable') : __('message.disable'), 'money' => false, 'raw' => true],
+                    ['label' => __('message.discount_value'), 'value' => $promo ? (($promo->discount_type === 'percentage' ? $promo->discount_value.'%' : number_format($promo->discount_value, 0))) : '—', 'money' => false, 'raw' => true],
+                    ['label' => __('message.max_orders'), 'value' => $promo?->max_orders ?? 0, 'money' => false],
+                    ['label' => __('message.sa_welcome_promo_shops_enabled'), 'value' => $enabled.'/'.$shops, 'money' => false, 'raw' => true],
+                ];
+            })(),
             'late-fine' => [
                 ['label' => __('message.hr_allowance_minutes'), 'value' => __('message.sa_late_fine_metric_per_staff'), 'money' => false, 'raw' => true],
                 ['label' => __('message.hr_fine_per_minute'), 'value' => app(\App\Services\HrPayrollService::class)->defaultFinePerMinute(), 'money' => true],

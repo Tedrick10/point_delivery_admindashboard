@@ -5,29 +5,39 @@ namespace Database\Seeders;
 use App\Models\Branch;
 use App\Models\DispatchOrderItem;
 use App\Models\Order;
+use App\Models\OsMoneyTransfer;
 use App\Models\OsSettlementBatch;
 use App\Models\User;
 use App\Services\DailyCheckListService;
+use App\Services\MoneyTransferService;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
- * Real finished dispatch items for Daily Check List (today, MDY Branch).
+ * Demo finished dispatch items for Daily Check List + Money Transfer
+ * on the Yangon settlement default date (today − 1), မန္တလေး branch.
  */
 class DailyCheckSampleSeeder extends Seeder
 {
+    public const TARGET_OS_COUNT = 20;
+
     public function run(): void
     {
-        $today = Carbon::now('Asia/Yangon')->toDateString();
-        $now = now();
+        $listDay = Carbon::parse(yangonSettlementDefaultDate('Y-m-d'), 'Asia/Yangon')->toDateString();
+        // First Completed on Yangon day C lands on list day C−1.
+        $completedAt = Carbon::parse($listDay, 'Asia/Yangon')->addDay()->setTime(10, 30, 0);
 
         $branch = Branch::query()
             ->where('status', 1)
             ->where(function ($q) {
-                $q->where('name', 'like', '%MDY Branch%')
+                $q->where('name', 'မန္တလေး')
+                    ->orWhere('name', 'like', '%MDY Branch%')
                     ->orWhere('name', 'MDY Branch');
             })
+            ->orderBy('id')
             ->first()
             ?? Branch::query()->where('status', 1)->orderBy('id')->first();
 
@@ -55,209 +65,229 @@ class DailyCheckSampleSeeder extends Seeder
             ->where('user_type', 'delivery_man')
             ->where('status', 1)
             ->orderBy('name')
+            ->limit(8)
             ->get();
 
-        $zin = $riders->first(fn (User $u) => stripos((string) $u->name, 'Zin Min') !== false);
-        $others = $riders->filter(fn (User $u) => ! $zin || (int) $u->id !== (int) $zin->id)->take(4);
-        $riders = collect($zin ? [$zin] : [])->merge($others)->take(5)->values();
-
-        if ($riders->count() < 3) {
-            $this->command?->warn('Need at least 3 active riders.');
+        if ($riders->count() < 1) {
+            $this->command?->warn('Need at least 1 active rider.');
 
             return;
         }
 
-        $clients = User::query()
-            ->where('user_type', 'client')
-            ->where('status', 1)
-            ->orderBy('id')
-            ->limit(5)
-            ->get();
-
-        if ($clients->count() < 3) {
-            $this->command?->warn('Need at least 3 active OS clients.');
+        $clients = $this->ensureDemoClients(self::TARGET_OS_COUNT, $branchId);
+        if ($clients->count() < self::TARGET_OS_COUNT) {
+            $this->command?->warn('Could not ensure '.self::TARGET_OS_COUNT.' OS clients.');
 
             return;
         }
 
         $slipPath = $this->ensureSampleSlipPath();
 
-        DispatchOrderItem::query()
-            ->whereDate('received_date', $today)
-            ->where(function ($q) {
-                $q->where('item_name', 'like', 'Daily Check sample %')
-                    ->orWhere('item_name', 'like', 'Daily Check gate sample %')
-                    ->orWhere('remark', 'Daily Check sample');
-            })
-            ->delete();
+        $this->cleanupPreviousSamples($listDay);
 
-        $itemValues = [12000, 8500, 15000, 6000, 9500];
-        $deliValues = [3500, 2500, 4000, 2000, 3000];
+        $itemValues = [12000, 8500, 15000, 6000, 9500, 11000, 14000, 7500, 16000, 5000];
+        $deliValues = [3500, 2500, 4000, 2000, 3000, 2800, 3200, 2200, 3800, 1800];
 
-        foreach ($riders as $i => $rider) {
-            $calc = DispatchOrderItem::computeAmounts($itemValues[$i % 5], $deliValues[$i % 5], 0, 0, 'customer');
-
-            for ($n = 1; $n <= 2; $n++) {
-                $item = $this->makeItem($src, $today, $now, $branchId);
-                $item->order_id = $this->orderForClient($src, $clients[$i % $clients->count()]->id)->id;
-                $item->delivery_man_id = (int) $rider->id;
-                $item->item_name = 'Daily Check sample R'.($i + 1).'-'.$n;
-                $item->remark = 'Daily Check sample';
-                $item->item_value = $itemValues[$i % 5];
-                $item->deli_amount = $deliValues[$i % 5];
-                $item->credit_to = 'customer';
-                $item->pickup_pay_mode = 'customer_pay';
-                $item->cust_get = $calc['cust_get'];
-                $item->os_to_pay = $calc['os_to_pay'];
-                $item->customer_name = (string) $rider->name;
-                $item->save();
-            }
-
-            $this->command?->info('Rider '.$rider->name.' — 2 finished items');
-        }
-
-        $gateRider = $riders->first(
-            fn (User $u) => stripos((string) $u->name, 'Zin Min') === false
-                && stripos((string) $u->name, 'Kyaw') !== false
-        ) ?? $riders->first(fn (User $u) => stripos((string) $u->name, 'Zin Min') === false);
-
-        if ($gateRider) {
-            $this->seedGateRiderItems($src, $today, $now, $branchId, $gateRider, $clients->first());
-        }
-
+        $osRowCount = 0;
         foreach ($clients as $i => $client) {
             $order = $this->orderForClient($src, (int) $client->id);
-            $osItemIds = [];
+            $rider = $riders[$i % $riders->count()];
+            $payAmount = $itemValues[$i % count($itemValues)];
+            $deliAmount = $deliValues[$i % count($deliValues)];
+            $payCalc = DispatchOrderItem::computeAmounts($payAmount, $deliAmount, 0, 0, 'customer');
 
-            $payCalc = DispatchOrderItem::computeAmounts($itemValues[$i % 5], $deliValues[$i % 5], 0, 0, 'customer');
-            $pay = $this->makeItem($src, $today, $now, $branchId);
+            $pay = $this->makeItem($src, $listDay, $completedAt, $branchId);
             $pay->order_id = $order->id;
-            $pay->delivery_man_id = $this->deliveryManForOsItem($riders, $gateRider, $i);
-            $pay->item_name = 'Daily Check sample OS-P'.($i + 1);
+            $pay->delivery_man_id = (int) $rider->id;
+            $pay->item_name = 'Daily Check sample OS-'.str_pad((string) ($i + 1), 2, '0', STR_PAD_LEFT);
             $pay->remark = 'Daily Check sample';
-            $pay->item_value = $itemValues[$i % 5];
-            $pay->deli_amount = $deliValues[$i % 5];
+            $pay->item_value = $payAmount;
+            $pay->deli_amount = $deliAmount;
             $pay->credit_to = 'customer';
             $pay->pickup_pay_mode = 'customer_pay';
             $pay->cust_get = $payCalc['cust_get'];
             $pay->os_to_pay = $payCalc['os_to_pay'];
             $pay->customer_name = (string) $client->name;
             $pay->save();
-            $osItemIds[] = (int) $pay->id;
 
-            $recvCalc = DispatchOrderItem::computeAmounts(0, $deliValues[$i % 5], 0, 0, 'os');
-            $recv = $this->makeItem($src, $today, $now, $branchId);
-            $recv->order_id = $order->id;
-            $recv->delivery_man_id = $this->deliveryManForOsItem($riders, $gateRider, $i + 1);
-            $recv->item_name = 'Daily Check sample OS-R'.($i + 1);
-            $recv->remark = 'Daily Check sample';
-            $recv->item_value = 0;
-            $recv->deli_amount = $deliValues[$i % 5];
-            $recv->credit_to = 'os';
-            $recv->pickup_pay_mode = 'os_pay';
-            $recv->cust_get = $recvCalc['cust_get'];
-            $recv->os_to_pay = $recvCalc['os_to_pay'];
-            $recv->customer_name = (string) $client->name;
-            $recv->save();
-            $osItemIds[] = (int) $recv->id;
+            $amount = (float) $pay->displayOsToPay();
+            $method = $i % 2 === 0 ? 'kpay' : 'cash';
 
-            OsSettlementBatch::query()->create([
+            $batch = OsSettlementBatch::query()->create([
                 'os_user_id' => (int) $client->id,
-                'from_date' => $today,
-                'to_date' => $today,
-                'amount' => (float) $pay->displayOsToPay() + (float) $recv->displayOsToPay(),
-                'payment_method' => $i % 2 === 0 ? 'kpay' : 'cash',
+                'from_date' => $listDay,
+                'to_date' => $listDay,
+                'amount' => $amount,
+                'payment_method' => $method,
                 'settlement_side' => null,
                 'delivery_format' => 'table',
                 'kpay_name' => (string) $client->name,
-                'kpay_no' => (string) ($client->contact_number ?? ''),
+                'kpay_no' => (string) ($client->contact_number ?? '09'.str_pad((string) (100000000 + $i), 9, '0', STR_PAD_LEFT)),
                 'kpay_slip_path' => $slipPath,
-                'item_ids' => $osItemIds,
+                'item_ids' => [(int) $pay->id],
                 'finished_by' => 1,
-                'finished_at' => $now,
+                'finished_at' => $completedAt,
             ]);
 
-            $this->command?->info('OS '.$client->name.' — pay + receive finished');
+            OsMoneyTransfer::query()->updateOrCreate(
+                [
+                    'os_user_id' => (int) $client->id,
+                    'period_from' => $listDay,
+                    'period_to' => $listDay,
+                    'payment_method' => $method,
+                ],
+                [
+                    'branch_id' => $branchId,
+                    'settlement_batch_id' => (int) $batch->id,
+                    'cash_amount' => $method === 'cash' ? $amount : 0,
+                    'kpay_amount' => $method === 'kpay' ? $amount : 0,
+                    'freight_amount' => 0,
+                    'remark' => 'Daily Check sample',
+                    'updated_by' => 1,
+                ]
+            );
+
+            $osRowCount++;
+        }
+
+        // Extra rider-side Daily Check rows (mode=rider / all).
+        foreach ($riders->take(5) as $i => $rider) {
+            $calc = DispatchOrderItem::computeAmounts($itemValues[$i % 10], $deliValues[$i % 10], 0, 0, 'customer');
+            for ($n = 1; $n <= 2; $n++) {
+                $item = $this->makeItem($src, $listDay, $completedAt, $branchId);
+                $item->order_id = $this->orderForClient($src, (int) $clients[$i % $clients->count()]->id)->id;
+                $item->delivery_man_id = (int) $rider->id;
+                $item->item_name = 'Daily Check sample R'.($i + 1).'-'.$n;
+                $item->remark = 'Daily Check sample';
+                $item->item_value = $itemValues[$i % 10];
+                $item->deli_amount = $deliValues[$i % 10];
+                $item->credit_to = 'customer';
+                $item->pickup_pay_mode = 'customer_pay';
+                $item->cust_get = $calc['cust_get'];
+                $item->os_to_pay = $calc['os_to_pay'];
+                $item->customer_name = (string) $rider->name;
+                // Rider list does not require Finish; leave admin_finished_at for OS-only items.
+                $item->admin_finished_at = null;
+                $item->save();
+            }
         }
 
         $svc = app(DailyCheckListService::class);
-        $riderRows = $svc->listRows($today, $today, 'rider', $branchId, null, null);
-        $osRows = $svc->listRows($today, $today, 'os', $branchId, null, null);
-        $zin = User::query()->where('user_type', 'delivery_man')->where('name', 'like', '%Zin Min%')->value('id');
-        $zinRows = $zin
-            ? $svc->listRows($today, $today, 'rider', $branchId, null, (int) $zin)->count()
-            : 0;
-        $gateRiderRows = $gateRider
-            ? $svc->listRows($today, $today, 'rider', $branchId, null, (int) $gateRider->id)->count()
-            : 0;
+        $mt = app(MoneyTransferService::class);
+        $osRows = $svc->listRows($listDay, $listDay, 'os', $branchId, null, null);
+        $riderRows = $svc->listRows($listDay, $listDay, 'rider', $branchId, null, null);
+        $mtSheet = $mt->listSheet($listDay, $listDay, $branchId, null, 'all');
 
         $this->command?->info(sprintf(
-            'Done %s (%s): %d rider invoices, %d OS invoices, Zin Min Oo=%d, Gate rider %s=%d',
-            $today,
+            'Done %s (%s): %d OS seeded, Daily Check OS=%d / Rider=%d, Money Transfer=%d',
+            $listDay,
             $branch->name,
-            $riderRows->count(),
+            $osRowCount,
             $osRows->count(),
-            $zinRows,
-            $gateRider?->name ?? '-',
-            $gateRiderRows
+            $riderRows->count(),
+            $mtSheet['rows']->count()
         ));
     }
 
-    /**
-     * Gate delivery samples for a rider other than Zin Min Oo (Daily Check Gate column).
-     */
-    protected function seedGateRiderItems(
-        DispatchOrderItem $src,
-        string $today,
-        Carbon $now,
-        int $branchId,
-        User $rider,
-        ?User $client
-    ): void {
-        if (! $client) {
-            return;
+    protected function ensureDemoClients(int $need, int $branchId)
+    {
+        $clients = User::query()
+            ->where('user_type', 'client')
+            ->where('status', 1)
+            ->orderBy('id')
+            ->get();
+
+        $i = 1;
+        while ($clients->count() < $need) {
+            $email = 'demo.os.'.str_pad((string) $i, 2, '0', STR_PAD_LEFT).'@point.demo';
+            $existing = User::query()->where('email', $email)->first();
+            if ($existing) {
+                if ($existing->trashed()) {
+                    $existing->restore();
+                }
+                $existing->fill([
+                    'name' => 'Demo OS '.$i,
+                    'user_type' => 'client',
+                    'status' => 1,
+                    'approval_status' => 'approved',
+                    'branch_id' => $branchId,
+                    'contact_number' => '09'.str_pad((string) (200000000 + $i), 9, '0', STR_PAD_LEFT),
+                ])->save();
+                $clients->push($existing);
+                $i++;
+                continue;
+            }
+
+            $user = User::query()->create([
+                'name' => 'Demo OS '.$i,
+                'email' => $email,
+                'username' => 'demo_os_'.$i.'_'.Str::lower(Str::random(4)),
+                'password' => Hash::make('password'),
+                'user_type' => 'client',
+                'status' => 1,
+                'approval_status' => 'approved',
+                'branch_id' => $branchId,
+                'contact_number' => '09'.str_pad((string) (200000000 + $i), 9, '0', STR_PAD_LEFT),
+                'created_by_admin' => 1,
+            ]);
+            if (method_exists($user, 'assignRole')) {
+                try {
+                    $user->assignRole('client');
+                } catch (\Throwable $e) {
+                    // Role may already exist / package optional.
+                }
+            }
+            $clients->push($user);
+            $i++;
         }
 
-        $order = $this->orderForClient($src, (int) $client->id);
-        $scenarios = [
-            ['item' => 10000, 'deli' => 3000, 'gate' => 1000, 'gate_os_paid' => 0],
-            ['item' => 12000, 'deli' => 3500, 'gate' => 1500, 'gate_os_paid' => 1500],
-            ['item' => 8000, 'deli' => 2500, 'gate' => 2000, 'gate_os_paid' => 500],
-        ];
+        return $clients->take($need)->values();
+    }
 
-        foreach ($scenarios as $i => $s) {
-            $calc = DispatchOrderItem::computeAmounts($s['item'], $s['deli'], 0, 0, 'customer');
-            $item = $this->makeItem($src, $today, $now, $branchId);
-            $item->order_id = $order->id;
-            $item->delivery_man_id = (int) $rider->id;
-            $item->item_name = 'Daily Check gate sample G'.($i + 1);
-            $item->remark = 'Daily Check sample';
-            $item->item_value = $s['item'];
-            $item->deli_amount = $s['deli'];
-            $item->gate_amount = $s['gate'];
-            $item->gate_os_paid = $s['gate_os_paid'];
-            $item->delivered_type = 'gate';
-            $item->credit_to = 'customer';
-            $item->pickup_pay_mode = 'customer_pay';
-            $item->cust_get = $calc['cust_get'];
-            $item->os_to_pay = $calc['os_to_pay'];
-            $item->customer_name = (string) $rider->name;
-            $item->save();
+    protected function cleanupPreviousSamples(string $listDay): void
+    {
+        $sampleItemIds = DispatchOrderItem::query()
+            ->where(function ($q) {
+                $q->where('item_name', 'like', 'Daily Check sample %')
+                    ->orWhere('item_name', 'like', 'Daily Check gate sample %')
+                    ->orWhere('remark', 'Daily Check sample');
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if ($sampleItemIds !== []) {
+            OsSettlementBatch::query()
+                ->where(function ($q) use ($sampleItemIds) {
+                    foreach ($sampleItemIds as $id) {
+                        $q->orWhereJsonContains('item_ids', $id);
+                    }
+                })
+                ->delete();
         }
 
-        $this->command?->info(sprintf(
-            'Rider %s — 3 gate items (Gate %s / %s / %s)',
-            $rider->name,
-            number_format($scenarios[0]['gate']),
-            number_format($scenarios[1]['gate']),
-            number_format($scenarios[2]['gate'])
-        ));
+        OsMoneyTransfer::query()
+            ->where('remark', 'Daily Check sample')
+            ->orWhere(function ($q) use ($listDay) {
+                $q->whereDate('period_from', $listDay)
+                    ->whereDate('period_to', $listDay)
+                    ->whereHas('osUser', fn ($u) => $u->where('email', 'like', 'demo.os.%@point.demo'));
+            })
+            ->delete();
+
+        DispatchOrderItem::query()
+            ->where(function ($q) {
+                $q->where('item_name', 'like', 'Daily Check sample %')
+                    ->orWhere('item_name', 'like', 'Daily Check gate sample %')
+                    ->orWhere('remark', 'Daily Check sample');
+            })
+            ->delete();
     }
 
     protected function makeItem(
         DispatchOrderItem $src,
-        string $today,
-        Carbon $now,
+        string $listDay,
+        Carbon $completedAt,
         int $branchId
     ): DispatchOrderItem {
         $item = $src->replicate([
@@ -272,11 +302,11 @@ class DailyCheckSampleSeeder extends Seeder
         $item->gate_amount = 0;
         $item->gate_os_paid = 0;
         $item->status = 'completed';
-        $item->admin_completed_at = $now;
-        $item->admin_finished_at = $now;
-        $item->admin_updated_at = $now;
-        $item->received_date = $today;
-        $item->assigned_at = $today.' 09:00:00';
+        $item->admin_completed_at = $completedAt;
+        $item->admin_finished_at = $completedAt;
+        $item->admin_updated_at = $completedAt;
+        $item->received_date = $listDay;
+        $item->assigned_at = $listDay.' 09:00:00';
 
         return $item;
     }
@@ -297,17 +327,6 @@ class DailyCheckSampleSeeder extends Seeder
         $order->save();
 
         return $order;
-    }
-
-    protected function deliveryManForOsItem($riders, ?User $gateRider, int $offset): ?int
-    {
-        $gateId = $gateRider ? (int) $gateRider->id : 0;
-        $pool = $riders->filter(fn (User $u) => (int) $u->id !== $gateId)->values();
-        if ($pool->isEmpty()) {
-            return null;
-        }
-
-        return (int) $pool[$offset % $pool->count()]->id;
     }
 
     protected function ensureSampleSlipPath(): string

@@ -56,11 +56,13 @@
         'routeQuery' => $periodQuery,
     ])
 
-    <div class="pds-expense-summary-split sa-expense-summary-split">
+    <div class="pds-expense-summary-split sa-expense-summary-split{{ empty($expenseSummary['tripleCanView'] ?? false) ? ' is-no-calendar' : '' }}">
+        @if(! empty($expenseSummary['tripleCanView'] ?? false))
         @include('order.partials._expense-summary-calendar', ($expenseSummary ?? []) + [
             'calendarDayUrl' => $saDayUrl,
             'calendarMonthUrl' => $saMonthUrl,
         ])
+        @endif
 
         <div class="pds-expense-summary-split__main">
             <form method="GET" action="{{ route('super-admin.screens.show', 'expense-summary') }}" class="sa-expense-summary-filter">
@@ -430,4 +432,6 @@
         setTimeout(bootSaSummaryDates, 40);
     })();
 </script>
+@if(! empty($expenseSummary['tripleCanView'] ?? false))
 @include('order.partials._expense-summary-triple-check-js')
+@endif

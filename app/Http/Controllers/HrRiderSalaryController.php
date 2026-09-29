@@ -22,6 +22,7 @@ class HrRiderSalaryController extends Controller
         $pageTitle = __('message.hr_rider_salary_title');
         $assets = [];
         $canEdit = auth()->user()->can('hr-payroll-edit') || auth()->user()->user_type === 'admin';
+        $canEditDeposit = isSuperAdmin(auth()->user());
         $prevMonth = $month->copy()->subMonth()->format('Y-m');
         $nextMonth = $month->copy()->addMonth()->format('Y-m');
         $monthValue = $month->format('Y-m');
@@ -44,6 +45,7 @@ class HrRiderSalaryController extends Controller
             'pageTitle',
             'assets',
             'canEdit',
+            'canEditDeposit',
             'prevMonth',
             'nextMonth',
             'monthValue',
@@ -58,7 +60,8 @@ class HrRiderSalaryController extends Controller
 
     public function updateRow(Request $request, $id)
     {
-        if (! auth()->user()->can('hr-payroll-edit') && auth()->user()->user_type !== 'admin') {
+        $user = auth()->user();
+        if (! isSuperAdmin($user) && ! $user->can('hr-payroll-edit') && ($user->user_type ?? '') !== 'admin') {
             return response()->json(['success' => false, 'message' => __('message.demo_permission_denied')], 403);
         }
 
@@ -67,12 +70,16 @@ class HrRiderSalaryController extends Controller
             return response()->json(['success' => false, 'message' => __('message.demo_permission_denied')], 403);
         }
 
-        $data = $request->validate([
-            'deposit' => 'nullable|numeric|min:0',
+        $rules = [
             'notes' => 'nullable|string|max:1000',
-        ]);
+        ];
+        if (isSuperAdmin($user)) {
+            $rules['deposit'] = 'nullable|numeric|min:0';
+        }
+        $data = $request->validate($rules);
 
         // way_count → auto from Delivered items; 1 way စာ → Super Admin only
+        // deposit → Super Admin only
         // late_minute / fine / bag_deduction → Late Fine sync
         foreach ($data as $key => $value) {
             if ($value !== null) {

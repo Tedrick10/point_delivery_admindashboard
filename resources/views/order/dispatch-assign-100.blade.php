@@ -1,27 +1,5 @@
 <x-master-layout :assets="$assets ?? []">
     <style>
-        .pds-assign-100-tabs {
-            display: flex; flex-wrap: wrap; gap: 8px;
-            margin: 0 0 14px; padding: 0 2px;
-        }
-        .pds-assign-100-tab {
-            display: inline-flex; align-items: center; gap: 8px;
-            border: 1px solid #e2e8f0; background: #fff; color: #334155;
-            border-radius: 999px; padding: 8px 14px; font-weight: 700;
-            text-decoration: none; transition: .15s ease;
-        }
-        .pds-assign-100-tab em {
-            font-style: normal; min-width: 22px; height: 22px; padding: 0 6px;
-            border-radius: 999px; background: #f1f5f9; color: #64748b;
-            display: inline-grid; place-items: center; font-size: 12px;
-        }
-        .pds-assign-100-tab:hover { border-color: #fdba74; color: #c2410c; text-decoration: none; }
-        .pds-assign-100-tab.is-active {
-            background: linear-gradient(135deg, #FE6F07, #ff8f3d);
-            border-color: transparent; color: #fff;
-            box-shadow: 0 8px 18px rgba(254, 111, 7, .24);
-        }
-        .pds-assign-100-tab.is-active em { background: rgba(255,255,255,.22); color: #fff; }
         .pds-assign-action-btn--kyo-shin { background: #fff7ed; border-color: #fdba74; color: #c2410c; }
         .pds-assign-action-btn--kyo-shin:disabled { opacity: .45; }
         .pds-kyo-shin-row-badge {
@@ -188,20 +166,6 @@
         }
         .pds-kyo-shin-modal__btn--primary:hover { filter: brightness(1.03); }
         .pds-kyo-shin-modal__btn--primary:disabled { opacity: .5; box-shadow: none; }
-        .pds-dm-branch-tabs {
-            display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
-        }
-        .pds-dm-branch-tab {
-            display: inline-flex; align-items: center; gap: 8px;
-            border: 1px solid #e2e8f0; background: #fff; color: #334155;
-            border-radius: 999px; padding: 8px 14px; font-weight: 700;
-            text-decoration: none;
-        }
-        .pds-dm-branch-tab:hover { border-color: #fdba74; color: #c2410c; text-decoration: none; }
-        .pds-dm-branch-tab.is-active {
-            background: linear-gradient(135deg, #FE6F07, #ff8f3d);
-            border-color: transparent; color: #fff;
-        }
     </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-assign-100-page">
         <div class="pds-dispatch-to-assign-screen">
@@ -276,26 +240,25 @@
                 </div>
             @endif
 
-            <div class="pds-dispatch-to-assign-filter">
+            <div class="pds-dispatch-to-assign-filter pds-assign-100-filter">
                 <div class="pds-dispatch-to-assign-filter-grid pds-dispatch-assign-100-filter-grid">
-                    <div class="pds-dispatch-field pds-dispatch-field-sm">
-                        <label for="assign_100_status">{{ __('message.status') }}</label>
-                        <select id="assign_100_status" class="pds-dispatch-input pds-dispatch-select" disabled>
-                            <option value="assigned" selected>ASSIGNED</option>
-                        </select>
-                    </div>
                     <div class="pds-dispatch-to-assign-os-filter">
                         <div class="pds-dispatch-field pds-dispatch-field-sm">
                             <label for="assign_100_os_name">{{ __('message.os_name') }}</label>
-                            <input type="text" id="assign_100_os_name" class="pds-dispatch-input" placeholder="{{ __('message.os_name') }}" autocomplete="off">
+                            <div class="pds-follow-up-os-input-wrap">
+                                <input type="text" id="assign_100_os_name" class="pds-dispatch-input" placeholder="{{ __('message.os_name') }}" autocomplete="off">
+                                <button type="button" class="pds-dispatch-to-assign-os-search-btn" id="openAssign100OsSearch" title="{{ __('message.to_find_os_name') }}">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
                         </div>
-                        <button type="button" class="pds-dispatch-to-assign-os-search-btn" id="openAssign100OsSearch" title="{{ __('message.to_find_os_name') }}">
-                            <i class="fas fa-search"></i>
-                        </button>
                     </div>
                     <div class="pds-dispatch-field pds-dispatch-field-sm">
                         <label for="assign_100_customer_search">{{ __('message.customer_name') }} / {{ __('message.phone') }}</label>
-                        <input type="text" id="assign_100_customer_search" class="pds-dispatch-input" placeholder="{{ __('message.customer_name') }} / {{ __('message.phone') }}" autocomplete="off">
+                        <div class="pds-assign-100-input-icon">
+                            <i class="fas fa-user" aria-hidden="true"></i>
+                            <input type="text" id="assign_100_customer_search" class="pds-dispatch-input" placeholder="{{ __('message.customer_name') }} / {{ __('message.phone') }}" autocomplete="off">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -336,7 +299,9 @@
                                     <th>{{ __('message.item_value') }}</th>
                                     <th>{{ __('message.deli_amount') }}</th>
                                     <th>{{ __('message.remark_label') }}</th>
-                                    <th>{{ __('message.action') }}</th>
+                                    @if(($assignMode ?? '') !== 'mdy_inbound')
+                                        <th>{{ __('message.action') }}</th>
+                                    @endif
                                 </tr>
                             </thead>
                             <tbody>
@@ -397,9 +362,11 @@
                                         <td>{{ number_format((float) $item->item_value) }}</td>
                                         <td class="text-right pds-follow-up-num-cell">{!! formatDispatchDeliAmountHtml($item) !!}</td>
                                         <td title="{{ $item->remark }}">{{ stringLong($item->remark ?? '', 'title', 16) ?: '-' }}</td>
-                                        <td>
-                                            @include('order.dispatch-item-action', ['item' => $item, 'hideGate' => true, 'showAssign100Print' => true])
-                                        </td>
+                                        @if(($assignMode ?? '') !== 'mdy_inbound')
+                                            <td>
+                                                @include('order.dispatch-item-action', ['item' => $item, 'hideGate' => true, 'showAssign100Print' => true])
+                                            </td>
+                                        @endif
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -413,6 +380,21 @@
     @include('order.partials._os_search_modal')
     @include('order.partials._rider_assign_modal')
     @include('order.partials._dispatch-item-message-modal')
+
+    <div class="pds-label-popup" id="assign100LabelPopup" hidden>
+        <div class="pds-label-popup__backdrop" data-label-popup-close></div>
+        <div class="pds-label-popup__panel" role="dialog" aria-modal="true" aria-label="{{ __('message.assign_100_print_labels') }}">
+            <div class="pds-label-popup__head">
+                <strong>{{ __('message.assign_100_print_labels') }}</strong>
+                <div class="pds-label-popup__actions">
+                    <button type="button" class="pds-label-popup__btn" id="assign100LabelPrintBtn">{{ __('message.print') }}</button>
+                    <button type="button" class="pds-label-popup__btn pds-label-popup__btn--ghost" data-label-popup-close>{{ __('message.close') }}</button>
+                </div>
+            </div>
+            <iframe class="pds-label-popup__frame" id="assign100LabelFrame" title="{{ __('message.assign_100_print_labels') }}"></iframe>
+        </div>
+    </div>
+
     @if($showKyoShinAction)
     <div class="modal fade pds-dispatch-modal" id="kyoShinGiveModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" style="max-width: 460px;">
@@ -611,6 +593,49 @@
                     return ids;
                 }
 
+                function openAssign100LabelPopup(url) {
+                    var $popup = $('#assign100LabelPopup');
+                    var $frame = $('#assign100LabelFrame');
+                    if (!$popup.length || !$frame.length || !url) {
+                        return;
+                    }
+                    $frame.attr('src', url);
+                    $popup.removeAttr('hidden').addClass('is-open');
+                    $('body').addClass('pds-label-popup-open');
+                }
+
+                function closeAssign100LabelPopup() {
+                    var $popup = $('#assign100LabelPopup');
+                    var $frame = $('#assign100LabelFrame');
+                    $popup.attr('hidden', true).removeClass('is-open');
+                    $frame.attr('src', 'about:blank');
+                    $('body').removeClass('pds-label-popup-open');
+                }
+
+                $(document).on('click', '.js-assign100-label-popup', function (e) {
+                    e.preventDefault();
+                    openAssign100LabelPopup($(this).data('url'));
+                });
+
+                $(document).on('click', '[data-label-popup-close]', function (e) {
+                    e.preventDefault();
+                    closeAssign100LabelPopup();
+                });
+
+                $('#assign100LabelPrintBtn').on('click', function () {
+                    var frame = document.getElementById('assign100LabelFrame');
+                    if (frame && frame.contentWindow) {
+                        frame.contentWindow.focus();
+                        frame.contentWindow.print();
+                    }
+                });
+
+                $(document).on('keydown.assign100LabelPopup', function (e) {
+                    if (e.key === 'Escape' && $('#assign100LabelPopup').hasClass('is-open')) {
+                        closeAssign100LabelPopup();
+                    }
+                });
+
                 $('#printAssign100LabelsBtn').on('click', function () {
                     var ids = getVisibleCheckedItemIds();
                     if (!ids.length) {
@@ -629,7 +654,8 @@
                         return;
                     }
                     var params = ids.map(function (id) { return 'ids[]=' + encodeURIComponent(id); });
-                    window.open(@json(route('order.dispatch.assign-100-labels')) + '?' + params.join('&'), '_blank');
+                    params.push('embed=1');
+                    openAssign100LabelPopup(@json(route('order.dispatch.assign-100-labels')) + '?' + params.join('&'));
                 });
 
                 function updateAssignRiderButtonState() {

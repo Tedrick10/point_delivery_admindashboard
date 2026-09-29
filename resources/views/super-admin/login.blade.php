@@ -7,128 +7,181 @@
     <link rel="icon" type="image/x-icon" href="{{ getSingleMedia(appSettingData('get'), 'site_favicon', null) }}">
     <link href="{{ asset('frontend-website/assets/css/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('vendor/@fortawesome/fontawesome-free/css/all.min.css') }}"/>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+Myanmar:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --sa-ink: #0c1222;
             --sa-accent: #0d9488;
             --sa-accent-dark: #0f766e;
+            --sa-accent-light: #14b8a6;
             --sa-glow: rgba(13, 148, 136, 0.22);
-            --sa-paper: #f4f7f6;
-            --sa-border: #e2e8f0;
+            --sa-soft: rgba(13, 148, 136, 0.1);
+            --sa-muted: #6b7280;
+            --sa-line: rgba(15, 23, 42, 0.1);
         }
         * { box-sizing: border-box; }
         body.sa-login {
             margin: 0;
             min-height: 100vh;
-            font-family: 'DM Sans', system-ui, sans-serif;
+            font-family: 'Outfit', 'Noto Sans Myanmar', system-ui, sans-serif;
             color: var(--sa-ink);
             background:
-                radial-gradient(ellipse at 10% 0%, var(--sa-glow), transparent 50%),
-                radial-gradient(ellipse at 90% 100%, rgba(15, 23, 42, 0.08), transparent 45%),
-                linear-gradient(165deg, #0c1222 0%, #134e4a 48%, #0f766e 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+                radial-gradient(ellipse 90% 70% at 50% -10%, rgba(20, 184, 166, 0.35), transparent 55%),
+                radial-gradient(ellipse 45% 40% at 100% 100%, rgba(254, 111, 7, 0.12), transparent 50%),
+                radial-gradient(ellipse 40% 35% at 0% 85%, rgba(255, 255, 255, 0.05), transparent 50%),
+                linear-gradient(160deg, #07141a 0%, #0c2a2a 45%, #134e4a 100%);
+            display: grid;
+            place-items: center;
             padding: 1.5rem;
             position: relative;
+            overflow: hidden;
         }
-        .sa-login-lang { position: absolute; top: 1.25rem; right: 1.25rem; }
-        .sa-lang { position: relative; }
-        .sa-lang__btn {
-            display: inline-flex; align-items: center; gap: 0.4rem; min-height: 34px;
-            padding: 0.3rem 0.65rem 0.3rem 0.4rem; border: 1px solid rgba(255,255,255,0.25);
-            border-radius: 999px; background: rgba(255,255,255,0.12); color: #fff;
-            font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; cursor: pointer;
-            backdrop-filter: blur(8px);
+        body.sa-login::before,
+        body.sa-login::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(70px);
+            pointer-events: none;
+            z-index: 0;
         }
-        .sa-lang__flag {
-            width: 20px; height: 20px; border-radius: 999px; overflow: hidden;
-            display: grid; place-items: center; background: #f1f5f9;
+        body.sa-login::before {
+            width: 380px;
+            height: 380px;
+            top: -100px;
+            left: -60px;
+            background: rgba(20, 184, 166, 0.22);
         }
-        .sa-lang__flag img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .sa-lang__chevron { font-size: 0.55rem; opacity: 0.8; }
-        .sa-lang__menu {
-            position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 40; width: 220px;
-            padding: 0.45rem; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff;
-            color: var(--sa-ink); box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+        body.sa-login::after {
+            width: 300px;
+            height: 300px;
+            bottom: -80px;
+            right: -40px;
+            background: rgba(13, 148, 136, 0.18);
         }
-        .sa-lang__menu-head {
-            padding: 0.35rem 0.55rem 0.5rem; font-size: 0.68rem; font-weight: 800;
-            letter-spacing: 0.06em; text-transform: uppercase; color: #94a3b8;
-        }
-        .sa-lang__list { list-style: none; margin: 0; padding: 0; }
-        .sa-lang__item {
-            display: flex; align-items: center; gap: 0.55rem; padding: 0.5rem 0.55rem;
-            border-radius: 10px; color: inherit; text-decoration: none;
-        }
-        .sa-lang__item:hover { background: #f1f5f9; }
-        .sa-lang__item.is-active { background: #ecfdf5; }
-        .sa-lang__label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.05rem; }
-        .sa-lang__label strong { font-size: 0.84rem; font-weight: 700; color: #0f172a; }
-        .sa-lang__label small { font-size: 0.7rem; color: #94a3b8; }
-        .sa-lang__check { color: #0d9488; font-size: 0.75rem; }
-        .sa-lang__empty { padding: 0.65rem; font-size: 0.8rem; color: #94a3b8; text-align: center; }
-        .sa-card {
+
+        .sa-shell {
             width: 100%;
             max-width: 420px;
-            background: rgba(255,255,255,0.96);
-            border-radius: 20px;
-            padding: 2.25rem 2rem 1.75rem;
-            box-shadow: 0 24px 60px rgba(0,0,0,0.28);
-            animation: saRise 0.55s ease both;
+            position: relative;
+            z-index: 1;
+            animation: saRise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
         @keyframes saRise {
-            from { opacity: 0; transform: translateY(16px); }
+            from { opacity: 0; transform: translateY(20px) scale(0.98); }
             to { opacity: 1; transform: none; }
         }
-        .sa-eyebrow {
-            font-size: 0.7rem;
-            font-weight: 700;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: var(--sa-accent);
-            margin-bottom: 0.4rem;
+
+        body.sa-login .sa-card {
+            background: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            border-radius: 24px;
+            padding: 2rem 1.75rem 1.5rem;
+            box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.65) inset,
+                0 24px 56px rgba(0, 0, 0, 0.35);
+            position: relative;
+            overflow: hidden;
+        }
+        body.sa-login .sa-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--sa-accent-dark), var(--sa-accent), var(--sa-accent-light));
+        }
+
+        .sa-brand {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.85rem;
+            margin-bottom: 1.35rem;
             text-align: center;
         }
+        .sa-mark {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(145deg, var(--sa-accent-light) 0%, var(--sa-accent-dark) 100%);
+            color: #fff;
+            font-size: 1.15rem;
+            box-shadow: 0 10px 24px var(--sa-glow);
+        }
+        .sa-eyebrow {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--sa-accent);
+            margin: 0;
+        }
         .sa-title {
-            font-family: 'Instrument Serif', Georgia, serif;
-            font-size: 2rem;
+            font-size: 1.7rem;
             text-align: center;
-            margin: 0 0 0.35rem;
-            letter-spacing: -0.02em;
+            margin: 0.15rem 0 0;
+            letter-spacing: -0.03em;
+            font-weight: 700;
+            line-height: 1.15;
+            color: var(--sa-ink);
         }
         .sa-sub {
             text-align: center;
-            color: #64748b;
+            color: var(--sa-muted);
             font-size: 0.9rem;
-            margin-bottom: 1.5rem;
+            margin: 0.45rem 0 0;
+            line-height: 1.5;
+            max-width: 32ch;
         }
-        .sa-field { margin-bottom: 1rem; }
+
+        .sa-field { margin-bottom: 0.9rem; }
         .sa-field label {
             display: block;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             font-weight: 600;
-            margin-bottom: 0.35rem;
-            color: #334155;
-        }
-        .sa-field input {
-            width: 100%;
-            height: 48px;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 0 0.95rem;
-            font-size: 0.95rem;
-        }
-        .sa-field input:focus {
-            outline: none;
-            border-color: var(--sa-accent);
-            box-shadow: 0 0 0 4px var(--sa-glow);
+            margin-bottom: 0.4rem;
+            color: #374151;
+            letter-spacing: 0.01em;
         }
         .sa-input-wrap {
             position: relative;
         }
-        .sa-input-wrap input {
+        .sa-field-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            font-size: 0.85rem;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .sa-field input {
+            width: 100%;
+            height: 50px;
+            border: 1px solid var(--sa-line);
+            border-radius: 14px;
+            padding: 0 1rem 0 2.55rem;
+            font-size: 0.9375rem;
+            background: #f8fafc;
+            color: var(--sa-ink);
+            transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+        }
+        .sa-field input::placeholder { color: #9ca3af; }
+        .sa-field input:hover { border-color: rgba(15, 23, 42, 0.18); }
+        .sa-field input:focus {
+            outline: none;
+            background: #fff;
+            border-color: var(--sa-accent);
+            box-shadow: 0 0 0 4px var(--sa-glow);
+        }
+        .sa-input-wrap input.has-toggle {
             padding-right: 2.75rem;
         }
         .sa-toggle-password {
@@ -143,69 +196,148 @@
             z-index: 2;
         }
         .sa-toggle-password:hover { color: var(--sa-accent-dark); }
+
+        .sa-remember {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            margin: 0.15rem 0 1.15rem;
+            font-size: 0.84rem;
+            color: var(--sa-muted);
+            cursor: pointer;
+            user-select: none;
+        }
+        .sa-remember input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            margin: 0;
+            accent-color: var(--sa-accent);
+            cursor: pointer;
+        }
+
         .sa-btn {
             width: 100%;
-            height: 48px;
+            height: 52px;
             border: 0;
-            border-radius: 12px;
-            background: linear-gradient(135deg, var(--sa-accent), var(--sa-accent-dark));
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--sa-accent-light) 0%, var(--sa-accent) 50%, var(--sa-accent-dark) 100%);
             color: #fff;
             font-weight: 700;
-            margin-top: 0.5rem;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            font-size: 0.95rem;
+            letter-spacing: 0.01em;
+            transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+            box-shadow:
+                0 10px 26px var(--sa-glow),
+                inset 0 1px 0 rgba(255, 255, 255, 0.25);
         }
         .sa-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 24px var(--sa-glow);
+            transform: translateY(-2px);
+            filter: brightness(1.03);
+            box-shadow: 0 14px 32px var(--sa-glow);
             color: #fff;
         }
+        .sa-btn:active { transform: translateY(0); }
+
         .sa-foot {
-            margin-top: 1.25rem;
+            margin-top: 1.35rem;
+            padding-top: 1.15rem;
+            border-top: 1px solid var(--sa-line);
             text-align: center;
-            font-size: 0.8rem;
-            color: #94a3b8;
+            font-size: 0.82rem;
+            color: var(--sa-muted);
         }
-        .sa-foot a { color: var(--sa-accent-dark); font-weight: 600; text-decoration: none; }
-        .alert { border-radius: 12px; font-size: 0.875rem; }
+        .sa-foot a {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin-left: 0.2rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            background: var(--sa-soft);
+            color: var(--sa-accent-dark);
+            font-weight: 700;
+            text-decoration: none;
+            transition: background 0.15s ease, transform 0.15s ease;
+        }
+        .sa-foot a:hover {
+            background: rgba(13, 148, 136, 0.16);
+            transform: translateY(-1px);
+        }
+
+        body.sa-login .alert {
+            border: none;
+            border-radius: 14px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+        }
+        body.sa-login .alert-danger {
+            background: linear-gradient(180deg, #fff5f5 0%, #ffe8e8 100%);
+            color: #9f1239;
+            box-shadow: inset 0 0 0 1px rgba(225, 29, 72, 0.14);
+        }
+
+        @media (max-width: 480px) {
+            body.sa-login .sa-card {
+                padding: 1.65rem 1.25rem 1.25rem;
+                border-radius: 20px;
+            }
+            .sa-title { font-size: 1.45rem; }
+        }
     </style>
 </head>
 <body class="sa-login">
-    <div class="sa-login-lang">
-        @include('super-admin.partials.language-switcher')
-    </div>
-    <div class="sa-card">
-        <div class="sa-eyebrow">{{ __('message.sa_network_control') }}</div>
-        <h1 class="sa-title">{{ __('message.sa_super_admin') }}</h1>
-        <p class="sa-sub">{{ __('message.sa_login_sub') }}</p>
-
-        @if ($errors->any())
-            <div class="alert alert-danger">
-                @foreach ($errors->all() as $error)
-                    <div>{{ $error }}</div>
-                @endforeach
-            </div>
-        @endif
-
-        <form method="POST" action="{{ route('super-admin.login.store') }}">
-            @csrf
-            <div class="sa-field">
-                <label for="email">{{ __('message.email') }}</label>
-                <input id="email" type="email" name="email" value="{{ old('email') }}" required autofocus placeholder="superadmin@admin.com">
-            </div>
-            <div class="sa-field">
-                <label for="password">{{ __('message.password') }}</label>
-                <div class="sa-input-wrap">
-                    <input id="password" type="password" name="password" class="password" required autocomplete="current-password">
-                    <i class="sa-toggle-password fas fa-eye-slash" role="button" tabindex="0" aria-label="Show password"></i>
+    <div class="sa-shell">
+        <div class="sa-card">
+            <div class="sa-brand">
+                <div class="sa-mark" aria-hidden="true">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <div>
+                    <p class="sa-eyebrow">{{ __('message.sa_network_control') }}</p>
+                    <h1 class="sa-title">{{ __('message.sa_super_admin') }}</h1>
+                    <p class="sa-sub">{{ __('message.sa_login_sub') }}</p>
                 </div>
             </div>
-            <label class="d-flex align-items-center gap-2 mb-2" style="font-size:0.85rem;color:#64748b;">
-                <input type="checkbox" name="remember" value="1"> {{ __('message.sa_remember_me') }}
-            </label>
-            <button type="submit" class="sa-btn">{{ __('message.sa_enter_panel') }}</button>
-        </form>
-        <div class="sa-foot">
-            {{ __('message.sa_branch_admin_q') }} <a href="{{ route('admin-login') }}">{{ __('message.sa_admin_hub_login') }}</a>
+
+            @if ($errors->any())
+                <div class="alert alert-danger">
+                    @foreach ($errors->all() as $error)
+                        <div>{{ $error }}</div>
+                    @endforeach
+                </div>
+            @endif
+
+            <form method="POST" action="{{ route('super-admin.login.store') }}">
+                @csrf
+                <div class="sa-field">
+                    <label for="email">{{ __('message.email') }}</label>
+                    <div class="sa-input-wrap">
+                        <i class="fas fa-envelope sa-field-icon" aria-hidden="true"></i>
+                        <input id="email" type="email" name="email" value="{{ old('email') }}" required autofocus placeholder="superadmin@admin.com">
+                    </div>
+                </div>
+                <div class="sa-field">
+                    <label for="password">{{ __('message.password') }}</label>
+                    <div class="sa-input-wrap">
+                        <i class="fas fa-lock sa-field-icon" aria-hidden="true"></i>
+                        <input id="password" type="password" name="password" class="password has-toggle" required autocomplete="current-password">
+                        <i class="sa-toggle-password fas fa-eye-slash" role="button" tabindex="0" aria-label="Show password"></i>
+                    </div>
+                </div>
+                <label class="sa-remember">
+                    <input type="checkbox" name="remember" value="1"> {{ __('message.sa_remember_me') }}
+                </label>
+                <button type="submit" class="sa-btn">{{ __('message.sa_enter_panel') }}</button>
+            </form>
+            <div class="sa-foot">
+                {{ __('message.sa_branch_admin_q') }}
+                <a href="{{ route('admin-login') }}">
+                    <i class="fas fa-store" aria-hidden="true"></i>
+                    {{ __('message.sa_admin_hub_login') }}
+                </a>
+            </div>
         </div>
     </div>
     <script>

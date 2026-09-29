@@ -38,6 +38,11 @@ class NotificationController extends Controller
             }
         }
 
+        // Keep Notification "User Messages" in sync with Message menu unread chats.
+        syncUnreadDispatchItemMessageNotifications($user);
+        $user->unsetRelation('notifications');
+        $user->unsetRelation('unreadNotifications');
+
         $notifications = $user->notifications;
         if ($category !== 'all') {
             $notifications = $notifications->filter(function ($notification) use ($category) {
@@ -63,6 +68,9 @@ class NotificationController extends Controller
     public function notificationCounts(Request $request)
     {
         $user = auth()->user();
+
+        syncUnreadDispatchItemMessageNotifications($user);
+        $user->unsetRelation('unreadNotifications');
 
         $unread_count = 0;
         $unread_total_count = 0;

@@ -650,6 +650,7 @@ class KyoShinService
     /**
      * Received money waiting in ပြန်ရငွေ until Check.
      * Return / Os Returned ကြိုရှင်း parcels auto-enter ပြန်ရငွေ (no Admin Received step).
+     * Settlement-finished delivered parcels also sit in ပြန်ရငွေ.
      */
     protected function isPendingReturnedMoney(DispatchOrderItem $item): bool
     {
@@ -657,7 +658,15 @@ class KyoShinService
             return false;
         }
 
-        return $this->isReceivedKyoShinItem($item);
+        if ($this->isReceivedKyoShinItem($item)) {
+            return true;
+        }
+
+        if ($this->isReturnKyoShinItem($item)) {
+            return true;
+        }
+
+        return $this->isSettlementFinishedKyoShinItem($item);
     }
 
     /**
@@ -710,9 +719,28 @@ class KyoShinService
             $items = $this->itemsForOs($scopeKey, $tab, $osId, null, null);
             foreach ($items as $item) {
                 $row = $item->kyoShinItem;
-                if (! $row || ! empty($row->checked_at) || ! $this->isPendingReturnedMoney($item)) {
+                if (! $row || ! empty($row->checked_at)) {
                     continue;
                 }
+
+                if ($tab === self::TAB_ADVANCED_PAID) {
+                    if (! $this->isDeliveredKyoShinItem($item)) {
+                        continue;
+                    }
+                    // ပို့ပြီး Check: ensure ပြန်ရငွေ entry then move into လက်ရှိရှိတဲ့ငွေ.
+                    if (
+                        Schema::hasColumn('kyo_shin_items', 'received_at')
+                        && empty($row->received_at)
+                    ) {
+                        $row->received_at = $now;
+                        if (Schema::hasColumn('kyo_shin_items', 'received_by')) {
+                            $row->received_by = $actor->id;
+                        }
+                    }
+                } elseif (! $this->isPendingReturnedMoney($item)) {
+                    continue;
+                }
+
                 $row->checked_at = $now;
                 $row->checked_by = $actor->id;
                 $row->save();

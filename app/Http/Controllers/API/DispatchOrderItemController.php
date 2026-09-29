@@ -729,7 +729,7 @@ class DispatchOrderItemController extends Controller
             ->where($riderScope)
             ->whereIn('status', $statuses)
             ->whereNull('admin_completed_at');
-        $this->applyDeliveryListDayFilter($baseQuery, $fromDay, $toDay);
+        $this->applyRiderDeliveryListDayFilter($baseQuery, $fromDay, $toDay);
 
         $counts = [
             'all' => (clone $baseQuery)->count(),
@@ -754,7 +754,7 @@ class DispatchOrderItemController extends Controller
             ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
-        $this->applyDeliveryListDayFilter($query, $fromDay, $toDay);
+        $this->applyRiderDeliveryListDayFilter($query, $fromDay, $toDay);
 
         if ($statusFilter !== '' && $statusFilter !== 'all') {
             if ($statusFilter === 'courier_assigned') {
@@ -828,7 +828,7 @@ class DispatchOrderItemController extends Controller
             ->whereHas('order', function ($q) use ($user) {
                 $q->where('client_id', $user->id);
             });
-        $this->applyDeliveryListDayFilter($baseQuery, $fromDay, $toDay);
+        $this->applyClientDeliveryListDayFilter($baseQuery, $fromDay, $toDay);
 
         $counts = [
             'all' => (clone $baseQuery)->count(),
@@ -853,7 +853,7 @@ class DispatchOrderItemController extends Controller
             ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
-        $this->applyDeliveryListDayFilter($query, $fromDay, $toDay);
+        $this->applyClientDeliveryListDayFilter($query, $fromDay, $toDay);
 
         if ($statusFilter === 'undelivered') {
             $query->whereIn('status', ['assigned', 'courier_assigned', 'courier_departed', 'pending']);
@@ -1062,6 +1062,7 @@ class DispatchOrderItemController extends Controller
 
     /**
      * Filter by received_date; fall back to assigned_at / created_at when received_date is null.
+     * Kept for shared/admin helpers that still expect received_date work-day stamps.
      */
     protected function applyDeliveryListDayFilter(Builder $query, string $fromDay, string $toDay): void
     {
@@ -1082,6 +1083,45 @@ class DispatchOrderItemController extends Controller
                         });
                 });
         });
+    }
+
+    /**
+     * Rider day-by-day — parcels worked/assigned that Yangon day.
+     * Prefer assigned_at so claiming an older pool item still appears on today.
+     */
+    protected function applyRiderDeliveryListDayFilter(Builder $query, string $fromDay, string $toDay): void
+    {
+        $query->where(function ($dateQuery) use ($fromDay, $toDay) {
+            $dateQuery->where(function ($q) use ($fromDay, $toDay) {
+                $q->whereNotNull('assigned_at')
+                    ->whereDate('assigned_at', '>=', $fromDay)
+                    ->whereDate('assigned_at', '<=', $toDay);
+            })->orWhere(function ($q) use ($fromDay, $toDay) {
+                $q->whereNull('assigned_at')
+                    ->whereBetween('received_date', [$fromDay, $toDay]);
+            })->orWhere(function ($q) use ($fromDay, $toDay) {
+                $q->whereNull('assigned_at')
+                    ->whereNull('received_date')
+                    ->whereDate('created_at', '>=', $fromDay)
+                    ->whereDate('created_at', '<=', $toDay);
+            });
+        });
+    }
+
+    /**
+     * OS App 「အပ်လိုက်သည့် ပါဆယ်များ」day-by-day — only parcels submitted that Yangon day.
+     * Uses immutable item created_at (Asia/Yangon), not mutable received_date
+     * (which was previously rolled forward for Assign 100 / rider work queues).
+     */
+    protected function applyClientDeliveryListDayFilter(Builder $query, string $fromDay, string $toDay): void
+    {
+        $fromStart = Carbon::parse($fromDay, 'Asia/Yangon')->startOfDay()->utc();
+        $toEnd = Carbon::parse($toDay, 'Asia/Yangon')->endOfDay()->utc();
+
+        $query->whereBetween('created_at', [
+            $fromStart->format('Y-m-d H:i:s'),
+            $toEnd->format('Y-m-d H:i:s'),
+        ]);
     }
 
     /**
@@ -1621,8 +1661,7 @@ class DispatchOrderItemController extends Controller
                 'status' => 'courier_assigned',
                 'delivery_man_id' => $user->id,
                 'assigned_at' => now(),
-                // Show on rider Assigned tab for today (day-by-day list).
-                'received_date' => Carbon::now('Asia/Yangon')->toDateString(),
+                // Keep original received_date (OS submission day). Rider day lists use assigned_at / received_date fallback.
             ]);
 
         if ($updated === 0) {

@@ -30,7 +30,8 @@
                 ],
             ])
 
-            <div class="pds-expense-summary-split">
+            <div class="pds-expense-summary-split{{ empty($tripleCanView) ? ' is-no-calendar' : '' }}">
+                @if(! empty($tripleCanView))
                 @include('order.partials._expense-summary-calendar', [
                     'calendarDayUrl' => function ($ymd) use ($selectedBranchId) {
                         $day = \Carbon\Carbon::parse($ymd, 'Asia/Yangon');
@@ -58,46 +59,70 @@
                         ]));
                     },
                 ])
+                @endif
 
                 <div class="pds-expense-summary-split__main">
-            <div class="pds-expenses-toolbar">
-                <div class="pds-expenses-toolbar__month">
-                    <div class="pds-expenses-month-nav">
-                        <a href="{{ route('order.expense-summary', array_filter(['month' => $prevMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Previous">
-                            <i class="fas fa-chevron-left"></i>
-                        </a>
-                        <span class="pds-expenses-month-nav__label">{{ $monthLabel }}</span>
-                        @if(! empty($calendarNextDisabled))
-                            <span class="pds-expenses-month-nav__btn is-disabled" aria-disabled="true" title="Next">
-                                <i class="fas fa-chevron-right"></i>
-                            </span>
-                        @else
-                            <a href="{{ route('order.expense-summary', array_filter(['month' => $nextMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Next">
-                                <i class="fas fa-chevron-right"></i>
+            <div class="pds-expenses-toolbar pds-expenses-toolbar--panel">
+                <div class="pds-expenses-toolbar__row">
+                    <form method="GET" action="{{ route('order.expense-summary') }}" class="pds-expenses-filter" id="expenseSummaryFilterForm">
+                        <input type="hidden" name="month" value="{{ $monthValue }}">
+                        <input type="hidden" name="branch_id" value="{{ $branchFilter ?? '' }}">
+                        <div class="pds-expenses-filter__field">
+                            <label for="summary_from">{{ __('message.from_date') }}</label>
+                            <div class="pds-expenses-filter__input-wrap">
+                                <i class="far fa-calendar-alt" aria-hidden="true"></i>
+                                <input type="text" name="from_date" id="summary_from" class="pds-dispatch-input dispatch-datepicker"
+                                       value="{{ $filterFrom }}" autocomplete="off" placeholder="dd-mm-yyyy">
+                            </div>
+                        </div>
+                        <div class="pds-expenses-filter__field">
+                            <label for="summary_to">{{ __('message.to_date') }}</label>
+                            <div class="pds-expenses-filter__input-wrap">
+                                <i class="far fa-calendar-alt" aria-hidden="true"></i>
+                                <input type="text" name="to_date" id="summary_to" class="pds-dispatch-input dispatch-datepicker"
+                                       value="{{ $filterTo }}" autocomplete="off" placeholder="dd-mm-yyyy">
+                            </div>
+                        </div>
+                        <div class="pds-expenses-filter__actions">
+                            <button type="submit" class="pds-daily-check-search-btn" title="{{ __('message.check') }}">
+                                <i class="fas fa-search" aria-hidden="true"></i>
+                                <span>{{ __('message.check') }}</span>
+                            </button>
+                        </div>
+                    </form>
+                    <div class="pds-expenses-toolbar__month">
+                        <div class="pds-expenses-month-nav">
+                            <a href="{{ route('order.expense-summary', array_filter(['month' => $prevMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Previous">
+                                <i class="fas fa-chevron-left"></i>
                             </a>
-                        @endif
+                            <span class="pds-expenses-month-nav__label">{{ $monthLabel }}</span>
+                            @if(! empty($calendarNextDisabled))
+                                <span class="pds-expenses-month-nav__btn is-disabled" aria-disabled="true" title="Next">
+                                    <i class="fas fa-chevron-right"></i>
+                                </span>
+                            @else
+                                <a href="{{ route('order.expense-summary', array_filter(['month' => $nextMonth, 'branch_id' => $selectedBranchId ?? null])) }}" class="pds-expenses-month-nav__btn" title="Next">
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                            @endif
+                        </div>
                     </div>
                 </div>
-                <form method="GET" action="{{ route('order.expense-summary') }}" class="pds-expenses-filter" id="expenseSummaryFilterForm">
-                    <input type="hidden" name="month" value="{{ $monthValue }}">
-                    <input type="hidden" name="branch_id" value="{{ $branchFilter ?? '' }}">
-                    <div class="pds-expenses-filter__field">
-                        <label for="summary_from">{{ __('message.from_date') }}</label>
-                        <input type="text" name="from_date" id="summary_from" class="pds-dispatch-input dispatch-datepicker"
-                               value="{{ $filterFrom }}" autocomplete="off" placeholder="dd-mm-yyyy">
-                    </div>
-                    <div class="pds-expenses-filter__field">
-                        <label for="summary_to">{{ __('message.to_date') }}</label>
-                        <input type="text" name="to_date" id="summary_to" class="pds-dispatch-input dispatch-datepicker"
-                               value="{{ $filterTo }}" autocomplete="off" placeholder="dd-mm-yyyy">
-                    </div>
-                    <div class="pds-expenses-filter__actions">
-                        <button type="submit" class="pds-daily-check-search-btn" title="{{ __('message.check') }}">
-                            <i class="fas fa-search" aria-hidden="true"></i>
-                            <span>{{ __('message.check') }}</span>
-                        </button>
-                    </div>
-                </form>
+            </div>
+
+            <div class="pds-expense-summary-metrics" aria-label="{{ __('message.expense_summary_title') }}">
+                <div class="pds-expense-summary-metric is-income">
+                    <span class="pds-expense-summary-metric__label">{{ __('message.expense_summary_income') }}</span>
+                    <strong class="pds-expense-summary-metric__value">{{ number_format($totalIncome) }}</strong>
+                </div>
+                <div class="pds-expense-summary-metric is-expense">
+                    <span class="pds-expense-summary-metric__label">{{ __('message.expense_summary_expense') }}</span>
+                    <strong class="pds-expense-summary-metric__value">{{ number_format($totalExpense) }}</strong>
+                </div>
+                <div class="pds-expense-summary-metric is-ako{{ ((float) $totalAko) < 0 ? ' is-neg' : '' }}">
+                    <span class="pds-expense-summary-metric__label">{{ __('message.expense_summary_ako_given') }}</span>
+                    <strong class="pds-expense-summary-metric__value">{{ number_format($totalAko) }}</strong>
+                </div>
             </div>
 
             <div class="pds-expense-summary-table-wrap">
@@ -129,8 +154,8 @@
                                 $hasIncomeCard = count($incomeItems) > 0 || (float) $row->income > 0;
                             @endphp
                             <tr>
-                                <td>{{ $index + 1 }}</td>
-                                <td>{{ $row->summary_date->format('d-m-Y') }}</td>
+                                <td class="is-no">{{ $index + 1 }}</td>
+                                <td class="is-date">{{ $row->summary_date->format('d-m-Y') }}</td>
                                 <td class="is-income">
                                     <span class="pds-expense-summary-amt-cell">
                                         <span class="pds-expense-summary-amt">{{ number_format($row->income) }}</span>
@@ -406,5 +431,7 @@
             });
         })();
     </script>
+    @if(! empty($tripleCanView))
     @include('order.partials._expense-summary-triple-check-js')
+    @endif
 </x-master-layout>

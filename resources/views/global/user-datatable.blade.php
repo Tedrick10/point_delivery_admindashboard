@@ -28,9 +28,9 @@
     </div>
 
     <div class="pds-list-filters__actions">
-        <button type="submit" class="btn btn-sm btn-primary">{{ __('message.apply_filter') }}</button>
+        <button type="submit" class="btn btn-sm btn-primary pds-os-filter-apply">{{ __('message.apply_filter') }}</button>
         @isset($reset_file_button)
-            {!! $reset_file_button !!}
+            <span class="pds-os-filter-reset">{!! $reset_file_button !!}</span>
         @endisset
     </div>
 {!! html()->form()->close() !!}

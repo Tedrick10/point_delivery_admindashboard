@@ -49,7 +49,6 @@
             <div class="pds-dispatch-field pds-dispatch-field--full">
                 <div class="pds-user-reg-password-change">
                     <h6 class="pds-user-reg-password-change__title">{{ __('message.change_password') }}</h6>
-                    <p class="pds-user-reg-password-change__hint">{{ __('message.reg_change_password_hint') }}</p>
                 </div>
             </div>
 
@@ -170,7 +169,7 @@
             <span>{{ __('message.status') }}</span>
         </h6>
         <div class="pds-dispatch-grid pds-dispatch-grid-2">
-            <div class="pds-dispatch-field">
+            <div class="pds-dispatch-field pds-dispatch-field--full">
                 <label for="reg_approval_status">{{ __('message.status') }} <span class="text-danger">*</span></label>
                 @php
                     $approvalValue = old(

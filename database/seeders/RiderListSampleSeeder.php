@@ -48,9 +48,13 @@ class RiderListSampleSeeder extends Seeder
         }
 
         $mdyBranchId = (int) (Branch::query()->where('status', 1)->where('name', 'မန္တလေး')->value('id') ?? 0);
-        $ygnBranchId = (int) (Branch::query()->where('status', 1)->where('name', 'ရန်ကုန်')->value('id') ?? 0);
+        $hubService = app(DispatchHubService::class);
+        $ygnBranchIds = $hubService->yangonBranchIds();
+        $ygnBranchId = (int) ($ygnBranchIds[0]
+            ?? Branch::query()->where('status', 1)->where('name', 'like', '%Yangon%')->value('id')
+            ?? 0);
         if ($mdyBranchId <= 0 || $ygnBranchId <= 0) {
-            $this->command?->warn('မန္တလေး / ရန်ကုန် branches missing.');
+            $this->command?->warn('မန္တလေး / Yangon branches missing.');
 
             return;
         }
@@ -259,6 +263,70 @@ class RiderListSampleSeeder extends Seeder
                 3500,
                 'Rider List sample '.$rider->name.' onway-1',
                 'courier_departed'
+            );
+            $this->createSampleItem(
+                $src,
+                $order,
+                $rider,
+                $today,
+                $mdyBranchId,
+                $mdyBranchId,
+                11500 + ($i * 400),
+                3200,
+                'Rider List sample '.$rider->name.' pending-1',
+                'pending'
+            );
+            $this->createSampleItem(
+                $src,
+                $order,
+                $rider,
+                $today,
+                $mdyBranchId,
+                $mdyBranchId,
+                14000 + ($i * 600),
+                4000,
+                'Rider List sample '.$rider->name.' delivered-1',
+                'completed',
+                adminCompletedAt: null
+            );
+            $this->createSampleItem(
+                $src,
+                $order,
+                $rider,
+                $today,
+                $mdyBranchId,
+                $mdyBranchId,
+                16000 + ($i * 550),
+                3800,
+                'Rider List sample '.$rider->name.' completed-1',
+                'completed',
+                adminCompletedAt: Carbon::parse($today.' 11:00:00', 'Asia/Yangon')
+            );
+            $this->createSampleItem(
+                $src,
+                $order,
+                $rider,
+                $today,
+                $mdyBranchId,
+                $mdyBranchId,
+                17500 + ($i * 450),
+                3600,
+                'Rider List sample '.$rider->name.' finished-1',
+                'completed',
+                adminCompletedAt: Carbon::parse($today.' 12:00:00', 'Asia/Yangon'),
+                adminFinishedAt: Carbon::parse($today.' 13:00:00', 'Asia/Yangon')
+            );
+            $this->createSampleItem(
+                $src,
+                $order,
+                $rider,
+                $today,
+                $mdyBranchId,
+                $mdyBranchId,
+                8000 + ($i * 300),
+                2800,
+                'Rider List sample '.$rider->name.' return-1',
+                'return'
             );
         }
 

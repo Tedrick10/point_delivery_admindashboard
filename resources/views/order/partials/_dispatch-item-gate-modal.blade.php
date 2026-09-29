@@ -1,33 +1,38 @@
 <div class="modal fade" id="dispatchItemGateModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content pds-gate-modal">
-            <div class="modal-header pds-gate-modal__header">
-                <h5 class="modal-title mb-0">{{ __('message.update_gate') }}</h5>
-                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
+            <div class="pds-gate-modal__head">
+                <div class="pds-gate-modal__brand">
+                    <span class="pds-gate-modal__icon" aria-hidden="true">
+                        <i class="fas fa-door-open"></i>
+                    </span>
+                    <div>
+                        <h5 class="pds-gate-modal__title">{{ __('message.update_gate') }}</h5>
+                        <p class="pds-gate-modal__customer" id="dispatchItemGateCustomer">—</p>
+                    </div>
+                </div>
+                <button type="button" class="pds-gate-modal__close" data-dismiss="modal" aria-label="{{ __('message.close') }}">
+                    <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
             </div>
-            <div class="modal-body">
-                <div class="text-center mb-3">
-                    <h5 class="mb-0" id="dispatchItemGateCustomer">—</h5>
-                </div>
-                <div class="form-group">
+            <div class="pds-gate-modal__body">
+                <div class="pds-gate-modal__field">
                     <label for="dispatchItemGateAmount">{{ __('message.gate_amount') }}</label>
-                    <input type="number" min="0" step="1" class="form-control pds-dispatch-input" id="dispatchItemGateAmount">
+                    <input type="number" min="0" step="1" class="pds-gate-modal__input" id="dispatchItemGateAmount" inputmode="numeric">
                 </div>
-                <div class="form-group">
+                <div class="pds-gate-modal__field">
                     <label for="dispatchItemGateOsPaid">{{ __('message.os_paid_for_gate') }}</label>
-                    <input type="number" min="0" step="1" class="form-control pds-dispatch-input" id="dispatchItemGateOsPaid">
+                    <input type="number" min="0" step="1" class="pds-gate-modal__input" id="dispatchItemGateOsPaid" inputmode="numeric">
                 </div>
-                <p class="small text-muted mb-3" id="dispatchItemGateHint">{{ __('message.gate_deduction_hint') }}</p>
-                <div class="form-group mb-0">
+                <p class="pds-gate-modal__hint" id="dispatchItemGateHint">{{ __('message.gate_deduction_hint') }}</p>
+                <div class="pds-gate-modal__field mb-0">
                     <label for="dispatchItemGateRemark">{{ __('message.remark') }}</label>
-                    <input type="text" class="form-control pds-dispatch-input" id="dispatchItemGateRemark">
+                    <input type="text" class="pds-gate-modal__input" id="dispatchItemGateRemark" placeholder="{{ __('message.remark') }}">
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('message.cancel') }}</button>
-                <button type="button" class="btn btn-primary" id="dispatchItemGateSave">{{ __('message.update_gate') }}</button>
+            <div class="pds-gate-modal__foot">
+                <button type="button" class="pds-gate-modal__btn pds-gate-modal__btn--ghost" data-dismiss="modal">{{ __('message.cancel') }}</button>
+                <button type="button" class="pds-gate-modal__btn pds-gate-modal__btn--primary" id="dispatchItemGateSave">{{ __('message.update_gate') }}</button>
             </div>
         </div>
     </div>

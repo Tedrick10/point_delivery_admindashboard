@@ -28,6 +28,30 @@ body.pds-admin.sidebar-main .pds-sidebar.mm-sidebar {
     width: var(--pds-sidebar-w-collapsed) !important;
 }
 
+/* Always keep a way to reopen the sidebar on desktop */
+@media (min-width: 1300px) {
+    body.pds-admin .pds-topbar-menu-btn.wrapper-menu,
+    body.pds-admin .mm-top-navbar .mm-navbar-custom .wrapper-menu {
+        display: inline-flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    body.pds-admin.sidebar-main .pds-sidebar .pds-brand-link,
+    body.pds-admin.sidebar-main .pds-sidebar .pds-brand-logo,
+    body.pds-admin.sidebar-main .pds-sidebar .pds-brand-copy {
+        display: none !important;
+    }
+
+    body.pds-admin.sidebar-main .pds-sidebar .pds-sidebar-toggle.wrapper-menu,
+    body.pds-admin.sidebar-main .pds-sidebar button.pds-sidebar-toggle {
+        display: inline-flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+}
+
 /* ── Top bar ───────────────────────────────────────────── */
 body.pds-admin .mm-top-navbar.pds-topbar {
     width: calc(100% - var(--pds-sidebar-w)) !important;

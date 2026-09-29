@@ -726,9 +726,6 @@
                     if(res.type == "markas_read"){
                         window.notificationList('', category);
                     }
-                    if (res.type !== 'markas_read') {
-                        $('.notify_count').removeClass('notification_tag').text('');
-                    }
                 }
             });
         };
@@ -803,21 +800,16 @@
                 type: 'get',
                 url: url,
                 success: function(res){
-                    if(res.counts > 0){
-                        $('.notify_count').addClass('notification_tag').text(res.counts);
-                        setNotification(res.counts);
-                        $('.notification_list span.dots').addClass('d-none')
-                        $('.notify_count').removeClass('d-none')
-                    }else{
-                        $('.notify_count').addClass('d-none')
-                        $('.notification_list span.dots').removeClass('d-none')
+                    var $badge = $('.pds-topbar-notify .notify_count').first();
+                    var count = Number(res.counts) || 0;
+                    if (count > 0) {
+                        var label = count >= 100 ? '99+' : String(count);
+                        $badge.addClass('notification_tag').text(label).removeClass('d-none');
+                        setNotification(count);
+                    } else {
+                        $badge.addClass('d-none').removeClass('notification_tag').text('');
                     }
-
-                    if(res.counts <= 0 && res.unread_total_count > 0){
-                        $('.notification_list span.dots').removeClass('d-none')
-                    }else{
-                        $('.notification_list span.dots').addClass('d-none')
-                    }
+                    $('.notification_list span.dots').addClass('d-none');
                 }
             });
         }

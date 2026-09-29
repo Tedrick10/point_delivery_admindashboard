@@ -1,5 +1,5 @@
 <x-master-layout :assets="$assets ?? []">
-    <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-list-page">
+    <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-list-page{{ request('dispatch_status') === 'pre_order' ? ' pds-pre-pickup-page' : '' }}">
         <div class="row">
             <div class="col-lg-12">
                 <div class="card card-block card-stretch card-height pds-page-card">

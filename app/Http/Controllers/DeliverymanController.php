@@ -259,6 +259,10 @@ class DeliverymanController extends Controller
 
         $request['password'] = bcrypt($request->password);
         $request['username'] = $request->username ?? stristr($request->email, "@", true) . rand(100, 1000);
+        if (! filled($request->email)) {
+            $base = preg_replace('/[^a-zA-Z0-9._-]/', '', (string) $request->username) ?: ('rider' . rand(1000, 9999));
+            $request['email'] = strtolower($base) . rand(10, 99) . '@demo.local';
+        }
         $request['display_name'] = $request['name'];
         $request['user_type'] = 'delivery_man';
         $request['status'] = $request->status ?? 1;

@@ -8,7 +8,6 @@
                         <span>{{ __('message.order') }}</span>
                     </div>
                     <h4 class="pds-rider-hero__title">{{ $pageTitle }}</h4>
-                    <p class="pds-rider-hero__subtitle">{{ __('message.os_list_settlement_subtitle') }}</p>
                 </div>
                 <div class="pds-rider-hero__stat">
                     <span class="pds-rider-hero__stat-value">{{ ($payToOsRows->count() ?? 0) + ($receiveFromOsRows->count() ?? 0) + ($kyoShinPayRows->count() ?? 0) }}</span>
@@ -126,10 +125,6 @@
                         role="tabpanel"
                     >
                         <div class="pds-os-settlement-bulk-bar" data-section="pay" @if($payToOsRows->isEmpty()) style="display:none" @endif>
-                            <div class="pds-os-settlement-bulk-bar__hint">
-                                <i class="fas fa-info-circle" aria-hidden="true"></i>
-                                <span>{{ __('message.os_settlement_bulk_hint') }}</span>
-                            </div>
                             <div class="pds-os-settlement-bulk-bar__actions">
                                 <button type="button" class="pds-os-finish-all-btn" id="osSettlementFinishAllPay" disabled>
                                     <i class="fas fa-check-double" aria-hidden="true"></i>
@@ -195,10 +190,6 @@
                         </div>
 
                         <div class="pds-os-settlement-bulk-bar pds-os-settlement-bulk-bar--receive" data-section="receive" @if($receiveFromOsRows->isEmpty()) style="display:none" @endif>
-                            <div class="pds-os-settlement-bulk-bar__hint">
-                                <i class="fas fa-info-circle" aria-hidden="true"></i>
-                                <span>{{ __('message.os_settlement_receive_bulk_hint') }}</span>
-                            </div>
                             <div class="pds-os-settlement-bulk-bar__actions">
                                 <button type="button" class="pds-os-finish-all-btn" id="osSettlementFinishAllReceive" disabled>
                                     <i class="fas fa-check-double" aria-hidden="true"></i>
@@ -241,10 +232,6 @@
                         role="tabpanel"
                     >
                         <div class="pds-os-settlement-bulk-bar" data-section="kyo_shin" @if($kyoShinPayRows->isEmpty()) style="display:none" @endif>
-                            <div class="pds-os-settlement-bulk-bar__hint">
-                                <i class="fas fa-info-circle" aria-hidden="true"></i>
-                                <span>{{ __('message.os_settlement_kyo_shin_bulk_hint') }}</span>
-                            </div>
                             <div class="pds-os-settlement-bulk-bar__actions">
                                 <button type="button" class="pds-os-finish-all-btn" id="osSettlementFinishAllKyoShin" @disabled($kyoShinPayRows->isEmpty())>
                                     <i class="fas fa-check-double" aria-hidden="true"></i>

@@ -50,46 +50,10 @@
             letter-spacing: 0;
             line-height: 1.2;
         }
-        .pds-dispatch-items-tabs {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin: 0;
-            padding: 14px 1.35rem 0;
+        .pds-dispatch-items-page .pds-dispatch-items-tabs {
+            margin: 0 1.35rem 0.85rem;
+            width: auto;
         }
-        .pds-dispatch-items-tab {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            border: 1px solid #e2e8f0;
-            background: #fff;
-            color: #334155;
-            border-radius: 999px;
-            padding: 8px 14px;
-            font-weight: 700;
-            text-decoration: none;
-            transition: .15s ease;
-        }
-        .pds-dispatch-items-tab em {
-            font-style: normal;
-            min-width: 22px;
-            height: 22px;
-            padding: 0 6px;
-            border-radius: 999px;
-            background: #f1f5f9;
-            color: #64748b;
-            display: inline-grid;
-            place-items: center;
-            font-size: 12px;
-        }
-        .pds-dispatch-items-tab:hover { border-color: #fdba74; color: #c2410c; text-decoration: none; }
-        .pds-dispatch-items-tab.is-active {
-            background: linear-gradient(135deg, #FE6F07, #ff8f3d);
-            border-color: transparent;
-            color: #fff;
-            box-shadow: 0 8px 18px rgba(254, 111, 7, .24);
-        }
-        .pds-dispatch-items-tab.is-active em { background: rgba(255,255,255,.22); color: #fff; }
     </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-items-page" data-active-to-branch="{{ (int) ($activeToBranchId ?? 0) }}">
         <div class="pds-dispatch-items-screen">

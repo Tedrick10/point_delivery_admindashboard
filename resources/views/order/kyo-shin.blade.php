@@ -8,7 +8,6 @@
                         <span>{{ __('message.order') }}</span>
                     </div>
                     <h4 class="pds-rider-hero__title">{{ $pageTitle }}</h4>
-                    <p class="pds-rider-hero__subtitle">{{ __('message.kyo_shin_subtitle') }}</p>
                 </div>
             </div>
 
@@ -130,7 +129,6 @@
                         <input type="hidden" name="tab" value="{{ $tab }}">
                         <input type="hidden" name="from_date" value="{{ $fromRaw }}">
                         <input type="hidden" name="to_date" value="{{ $toRaw }}">
-                        <p class="pds-kyo-shin-check-bar__hint">{{ __('message.kyo_shin_check_hint') }}</p>
                         <button type="submit" class="pds-rider-check-btn" id="kyoShinCheckBtn" disabled>
                             <i class="fas fa-check" aria-hidden="true"></i>
                             <span>{{ __('message.kyo_shin_check') }}</span>
@@ -323,6 +321,14 @@
                                                             <i class="fas fa-check" aria-hidden="true"></i>
                                                         </span>
                                                     @endif
+                                                @elseif($tab === \App\Services\KyoShinService::TAB_ADVANCED_PAID && (int) ($row->unchecked_count ?? 0) > 0)
+                                                    <input
+                                                        type="checkbox"
+                                                        class="pds-kyo-shin-os-check"
+                                                        form="kyoShinCheckForm"
+                                                        name="os_ids[]"
+                                                        value="{{ $row->id }}"
+                                                    >
                                                 @elseif((int) ($row->pending_returned_count ?? 0) > 0)
                                                     <input
                                                         type="checkbox"
@@ -918,15 +924,15 @@
             padding: 0.42rem 0.75rem;
             border: 0;
             border-radius: 999px;
-            background: #7c3aed;
+            background: linear-gradient(135deg, #FE6F07, #FF8F3D);
             color: #fff;
             font-size: 0.76rem;
             font-weight: 700;
             line-height: 1.2;
             white-space: nowrap;
-            box-shadow: 0 6px 14px rgba(124, 58, 237, 0.22);
+            box-shadow: 0 6px 14px rgba(254, 111, 7, 0.28);
         }
-        .pds-kyo-shin-send-os-btn:hover { background: #6d28d9; color: #fff; }
+        .pds-kyo-shin-send-os-btn:hover { filter: brightness(1.04); color: #fff; }
         .pds-kyo-shin-send-os-btn i { font-size: 0.72rem; }
         body.pds-admin .pds-kyo-shin-checked-mark,
         body.pds-admin .pds-kyo-shin-checked-mark i { color: #fff !important; }

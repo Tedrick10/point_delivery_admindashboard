@@ -37,7 +37,8 @@ class User extends Authenticatable implements HasMedia
         'player_id', 'latitude', 'longitude', 'status', 'rider_work_on', 'rider_work_off_date', 'last_notification_seen' , 'login_type', 'uid', 'fcm_token', 'otp_verify_at'
         ,'app_version', 'last_location_update_at', 'app_source','last_actived_at','document_verified_at' ,'is_autoverified_document',
         'is_autoverified_email','is_autoverified_mobile','vehicle_id','referral_code','partner_referral_code','flag','apple_user_identifier',
-        'is_vip', 'welcome_orders_used', 'is_temp_password', 'created_by_admin', 'is_dispatch_hub', 'is_mdy_return',
+        'is_vip', 'welcome_orders_used', 'welcome_promo_enabled', 'welcome_discount_percent',
+        'is_temp_password', 'created_by_admin', 'is_dispatch_hub', 'is_mdy_return',
         'hub_parent_id', 'os_profile', 'is_kyo_shin',
         'approval_status',
     ];
@@ -74,6 +75,9 @@ class User extends Authenticatable implements HasMedia
         'is_mdy_return' => 'boolean',
         'is_kyo_shin' => 'boolean',
         'hub_parent_id' => 'integer',
+        'welcome_promo_enabled' => 'boolean',
+        'welcome_discount_percent' => 'float',
+        'welcome_orders_used' => 'integer',
     ];
 
     /**

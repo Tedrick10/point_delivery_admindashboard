@@ -8,7 +8,6 @@
                         <span>{{ __('message.order') }}</span>
                     </div>
                     <h4 class="pds-rider-hero__title">{{ $pageTitle }}</h4>
-                    <p class="pds-rider-hero__subtitle">{{ __('message.rider_list_subtitle') }}</p>
                 </div>
                 <div class="pds-rider-hero__actions">
                     <button type="button" class="pds-rider-of-month-btn" id="pds-rider-of-month-btn">

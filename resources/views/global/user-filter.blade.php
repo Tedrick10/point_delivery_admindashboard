@@ -8,7 +8,6 @@
                         <span>{{ __('message.online_shop') }}</span>
                     </div>
                     <h4 class="pds-os-list-hero__title">{{ $pageTitle ?? __('message.online_shop') }}</h4>
-                    <p class="pds-os-list-hero__subtitle">{{ __('message.online_shop_list_subtitle') }}</p>
                 </div>
                 <div class="pds-os-list-hero__actions">
                     @if(isset($export))

@@ -445,26 +445,22 @@ class DispatchOrderWorkflowService
             'admin_uncompleted' => $query->whereHas('dispatchItems', function ($item) {
                 $item->where('status', 'collected')->whereNull('admin_updated_at');
             }),
+            // Admin Done only: item info complete, rider has not finished pick-up yet.
             'admin_completed' => $query->whereNotNull('delivery_man_id')
                 ->whereNotIn('status', ['courier_picked_up', 'courier_departed', 'completed', 'pickup_error', 'cancelled'])
-                ->where(function ($q) {
-                    $q->where(function ($sub) {
-                        $sub->whereHas('dispatchItems', function ($item) {
-                            $item->where('status', 'collected');
-                        })->whereDoesntHave('dispatchItems', function ($item) {
-                            $item->where('status', 'collected')->whereNull('admin_updated_at');
-                        });
-                    })->orWhere(function ($sub) {
-                        $sub->whereDoesntHave('dispatchItems', function ($item) {
-                            $item->where('status', 'collected');
-                        })->whereHas('dispatchItems', function ($item) {
-                            $item->whereIn('status', ['assigned', 'courier_assigned', 'courier_departed', 'pending', 'completed']);
-                        });
-                    });
+                ->whereHas('dispatchItems', function ($item) {
+                    $item->where('status', 'collected');
+                })
+                ->whereDoesntHave('dispatchItems', function ($item) {
+                    $item->where('status', 'collected')->whereNull('admin_updated_at');
                 }),
             'rider_pick_up_unassigned' => $query->whereNull('delivery_man_id'),
+            // Pick Up Rider only: rider assigned, Admin Done not yet, Rider Done not yet.
             'rider_pick_up_assigned' => $query->whereNotNull('delivery_man_id')
-                ->whereNotIn('status', ['courier_picked_up', 'courier_departed', 'completed', 'pickup_error', 'cancelled']),
+                ->whereNotIn('status', ['courier_picked_up', 'courier_departed', 'completed', 'pickup_error', 'cancelled'])
+                ->whereHas('dispatchItems', function ($item) {
+                    $item->where('status', 'collected')->whereNull('admin_updated_at');
+                }),
             'rider_pick_up_error' => $query->where('status', 'pickup_error')
                 ->where(function ($q) {
                     $q->whereNull('pickup_error_choice')
@@ -478,15 +474,12 @@ class DispatchOrderWorkflowService
                         ->orWhere('reason', 'like', '%User cancelled after pickup error%')
                         ->orWhere('reason', 'like', '%User chose express after pickup error%');
                 }),
+            // Rider Done only: rider finished pick-up, Admin Item Info still incomplete.
+            // When both are done the order leaves Order List for Assign 100 — do not keep it here.
             'rider_pick_up_done' => $query->whereNotNull('delivery_man_id')
                 ->where('status', 'courier_picked_up')
-                ->where(function ($q) {
-                    // Rider done first — Admin Item Info still incomplete.
-                    $q->whereHas('dispatchItems', function ($item) {
-                        $item->where('status', 'collected')->whereNull('admin_updated_at');
-                    })->orWhereDoesntHave('dispatchItems', function ($item) {
-                        $item->where('status', 'collected');
-                    });
+                ->whereHas('dispatchItems', function ($item) {
+                    $item->where('status', 'collected')->whereNull('admin_updated_at');
                 }),
             'kyo_shin' => $query->where(function ($q) {
                 // Already given ကြိုရှင်း, or flagged shop after Rider Done + Admin Done (Assign 100+).
@@ -507,6 +500,8 @@ class DispatchOrderWorkflowService
 
     public function applyOrderListQuery($query, ?string $listTab = null)
     {
+        // All + ကြိုရှင်း keep Assign 100 rows after Rider Done + Admin Done.
+        // Pick Up / Pick Up Rider / Rider Done / Admin Done stay exclusive.
         $includeAssign100 = in_array($listTab, ['all', 'kyo_shin'], true);
 
         $query->where(function ($outer) use ($includeAssign100) {
@@ -535,16 +530,23 @@ class DispatchOrderWorkflowService
                                 ->whereIn('status', ['courier_assigned', 'courier_arrived', 'active'])
                                 ->whereHas('dispatchItems');
                         })->orWhere(function ($riderDone) {
-                            // Rider completed pick-up; stay on Order List until Assign 100.
+                            // Rider Done only while Admin Item Info is still incomplete.
                             $riderDone->whereNotNull('delivery_man_id')
                                 ->where('status', 'courier_picked_up')
                                 ->whereHas('dispatchItems', function ($item) {
-                                    $item->where('status', 'collected');
+                                    $item->where('status', 'collected')->whereNull('admin_updated_at');
                                 });
                         })->orWhere(function ($adminDone) {
-                            // Admin filled all item info; may still wait for Assign 100 sync.
+                            // Admin Done only while rider has not finished pick-up yet.
                             $adminDone->whereNotNull('delivery_man_id')
-                                ->whereNotIn('status', ['pickup_error', 'cancelled', 'completed', 'draft'])
+                                ->whereNotIn('status', [
+                                    'courier_picked_up',
+                                    'courier_departed',
+                                    'completed',
+                                    'pickup_error',
+                                    'cancelled',
+                                    'draft',
+                                ])
                                 ->whereHas('dispatchItems', function ($item) {
                                     $item->where('status', 'collected');
                                 })
@@ -573,7 +575,7 @@ class DispatchOrderWorkflowService
                     ->whereDoesntHave('dispatchItems');
             });
 
-            // All tab keeps orders after Rider Done + Admin Done move them to Assign 100.
+            // All / ကြိုရှင်း: keep orders after Rider Done + Admin Done → Assign 100.
             if ($includeAssign100) {
                 $outer->orWhere(function ($assign100) {
                     $assign100->whereNotIn('status', ['pickup_error', 'cancelled', 'draft'])
@@ -611,6 +613,7 @@ class DispatchOrderWorkflowService
 
         // Keep counts in sync with the table (Admin Done may reclaim premature Assign 100 rows).
         $this->reclaimPrematureAssign100Items();
+        $this->promoteReadyOrdersToAssign100();
         $this->healUtcRolloverReceivedDates();
 
         $yangonToday = Carbon::now('Asia/Yangon');
@@ -895,7 +898,9 @@ class DispatchOrderWorkflowService
     }
 
     /**
-     * Assign 100 pool items use Yangon calendar day for received_date (day-by-day lists).
+     * Fill missing received_date for Assign 100 pool rows only.
+     * Never overwrite an existing date — OS App day-by-day relies on
+     * the original submission day staying stable.
      */
     public function refreshAssign100PoolReceivedDates(): int
     {
@@ -907,10 +912,7 @@ class DispatchOrderWorkflowService
             ->when(\Illuminate\Support\Facades\Schema::hasColumn('dispatch_order_items', 'hub_user_id'), function ($query) {
                 $query->whereNull('hub_user_id');
             })
-            ->where(function ($query) use ($today) {
-                $query->whereNull('received_date')
-                    ->orWhere('received_date', '<', $today);
-            })
+            ->whereNull('received_date')
             ->update(['received_date' => $today]);
     }
 
@@ -943,6 +945,36 @@ class DispatchOrderWorkflowService
             ->where('status', 'assigned')
             ->whereNull('delivery_man_id')
             ->update($payload);
+    }
+
+    /**
+     * Move collected items to Assign 100 when both Rider Done + Admin Done.
+     * Keeps Order List tab badges from counting finished workflow orders.
+     */
+    public function promoteReadyOrdersToAssign100(): int
+    {
+        $orderIds = Order::query()
+            ->whereNull('deleted_at')
+            ->whereNotNull('delivery_man_id')
+            ->whereIn('status', ['courier_picked_up', 'courier_departed', 'completed'])
+            ->whereHas('dispatchItems', function ($item) {
+                $item->where('status', 'collected');
+            })
+            ->whereDoesntHave('dispatchItems', function ($item) {
+                $item->where('status', 'collected')->whereNull('admin_updated_at');
+            })
+            ->pluck('id');
+
+        $moved = 0;
+        foreach ($orderIds as $orderId) {
+            $order = Order::query()->with('dispatchItems')->find($orderId);
+            if (! $order) {
+                continue;
+            }
+            $moved += $this->syncOrderWorkflow($order);
+        }
+
+        return $moved;
     }
 
     /**

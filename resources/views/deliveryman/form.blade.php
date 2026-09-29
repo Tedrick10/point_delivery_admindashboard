@@ -43,18 +43,6 @@
                                     </div>
 
                                     <div class="form-group col-md-6">
-                                        {{ html()->label(__('message.email').' <span class="text-danger">*</span>', 'email')->class('form-control-label') }}
-                                        {{ html()->text('email', isset($id) ? optional($data)->email : old('email'))
-                                            ->placeholder(__('message.email'))
-                                            ->class('form-control')
-                                            ->required()
-                                            ->when(isset($id), fn($field) => $field->attribute('readonly', 'readonly')) }}
-                                        @error('email')
-                                            <span class="help-block error">{{ $message }}</span>
-                                        @enderror
-                                    </div>
-
-                                    <div class="form-group col-md-6">
                                         {{ html()->label(__('message.username').' <span class="text-danger">*</span>', 'username')->class('form-control-label') }}
                                         {{ html()->text('username', isset($id) ? optional($data)->username : old('username'))
                                             ->placeholder(__('message.username'))
@@ -180,13 +168,11 @@
 
                 formValidation("#deliveryman_form", {
                     name: { required: true },
-                    email: { required: true, email: true },
                     username: { required: true },
                     password: { required: {{ isset($id) ? 'false' : 'true' }}, minlength: 6 },
                     password_confirmation: { equalTo: '#password' },
                 }, {
                     name: { required: "{{__('message.please_enter_name')}}"},
-                    email: { required: "{{__('message.please_enter_email')}}" },
                     username: { required: "{{__('message.please_enter_username')}}" },
                     password: { required: "{{__('message.please_enter_password')}}", minlength: "{{__('message.please_enter_new_password')}}" },
                     password_confirmation: { equalTo: "{{__('message.please_enter_confirm_password')}}" },

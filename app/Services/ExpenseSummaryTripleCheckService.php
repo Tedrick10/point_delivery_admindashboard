@@ -43,6 +43,44 @@ class ExpenseSummaryTripleCheckService
             return ExpenseSummaryTripleCheck::KEY_SUPER_ADMIN;
         }
 
+        // Roles & Permissions ACC (Super Admin grants these).
+        if ($user->can('expense-summary-check-nn')) {
+            return ExpenseSummaryTripleCheck::KEY_MA_NOE_NOE;
+        }
+        if ($user->can('expense-summary-check-ss')) {
+            return ExpenseSummaryTripleCheck::KEY_MA_PHYU_SIN;
+        }
+        // Generic calendar Confirm ACC — slot from name when possible.
+        if ($user->can('expense-summary-check')) {
+            return $this->namedCheckerSlot($user);
+        }
+
+        return null;
+    }
+
+    /**
+     * Calendar is visible only to Super Admin or roles granted a check permission.
+     */
+    public function canViewCalendar(?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if (function_exists('isSuperAdmin') && isSuperAdmin($user)) {
+            return true;
+        }
+
+        return $user->can('expense-summary-check')
+            || $user->can('expense-summary-check-nn')
+            || $user->can('expense-summary-check-ss');
+    }
+
+    /**
+     * Legacy / fallback identity match (EN + Myanmar names).
+     */
+    protected function namedCheckerSlot(User $user): ?string
+    {
         $haystack = mb_strtolower(trim(implode(' ', array_filter([
             (string) ($user->name ?? ''),
             (string) ($user->username ?? ''),
@@ -56,6 +94,8 @@ class ExpenseSummaryTripleCheckService
         if (str_contains($haystack, 'noe noe')
             || str_contains($haystack, 'manoenoe')
             || str_contains($haystack, 'noenoe')
+            || str_contains($haystack, 'နိုးနိုး')
+            || str_contains($haystack, 'မနိုးနိုး')
         ) {
             return ExpenseSummaryTripleCheck::KEY_MA_NOE_NOE;
         }
@@ -66,6 +106,10 @@ class ExpenseSummaryTripleCheckService
             || str_contains($haystack, 'phyu sin')
             || str_contains($haystack, 'maphyusin')
             || str_contains($haystack, 'phyusin')
+            || str_contains($haystack, 'ရွှေစင်')
+            || str_contains($haystack, 'မရွှေစင်')
+            || str_contains($haystack, 'ဖြူစင်')
+            || str_contains($haystack, 'မဖြူစင်')
         ) {
             return ExpenseSummaryTripleCheck::KEY_MA_PHYU_SIN;
         }

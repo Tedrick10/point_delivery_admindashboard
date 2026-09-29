@@ -38,7 +38,7 @@ class KyoShinController extends Controller
         $pageTitle = __('message.kyo_shin_title');
         $assets = [];
         $canEditDue = $this->canEditDue();
-        $canCheck = in_array($tab, [
+        $canCheck = $this->canCheck() && in_array($tab, [
             KyoShinService::TAB_ADVANCED_PAID,
             KyoShinService::TAB_FINISHED,
         ], true);
@@ -154,6 +154,9 @@ class KyoShinController extends Controller
     public function markChecked(Request $request)
     {
         $this->authorizeList();
+        if (! $this->canCheck()) {
+            abort(403, __('message.demo_permission_denied'));
+        }
 
         $scopeKey = $this->resolvedScope($request);
         $tab = $this->resolvedTab($request);
@@ -298,15 +301,32 @@ class KyoShinController extends Controller
     {
         $this->authorizeList();
         if (! $this->canEditDue()) {
-            abort(403, __('message.demo_permission_denied'));
+            abort(403, __('message.kyo_shin_due_denied'));
         }
     }
 
     protected function canEditDue(): bool
     {
         $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
 
-        return (bool) ($user && $user->can('order-edit'));
+        // Last Finished Date — Super Admin, or roles granted kyo-shin-edit-due.
+        return isSuperAdmin($user) || $user->can('kyo-shin-edit-due');
+    }
+
+    /**
+     * ကြိုရှင်း Check — Super Admin, or roles granted kyo-shin-check.
+     */
+    protected function canCheck(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return isSuperAdmin($user) || $user->can('kyo-shin-check');
     }
 
     protected function parsedDueDay(Request $request): string

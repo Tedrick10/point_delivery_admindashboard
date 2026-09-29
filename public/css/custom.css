@@ -124,20 +124,15 @@
     font-size: 12px;
     border-radius: 100px;
     line-height: normal;
-    /* height: 18px;
-    width: 20px; */
     font-weight: bold;
     text-align: center;
     display: inline-block;
 }
 
-.nav-item span.count-mail {
-    height: 22px !important;
-    width: 22px !important;
-    font-size: 12px;
-    line-height: 20px !important;
-    right: 0px;
-    top: 10px;
+/* Do not enlarge the topbar notification pill — sizing lives in admin-dashboard-theme.css */
+body.pds-admin .pds-topbar-tool .notify_count.count-mail {
+    height: auto;
+    width: auto;
 }
 
 h6 .notification_count {

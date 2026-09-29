@@ -1,5 +1,7 @@
 <!-- Backend Bundle JavaScript -->
 <script src="{{ public_asset_ver('js/backend-bundle.min.js') }}"></script>
+<script src="{{ public_asset_ver('js/rabbit.js') }}"></script>
+<script src="{{ public_asset_ver('js/myanmar-text.js') }}"></script>
 <script>window.PDS_MYANMAR_NRC_DATA_URL = @json(asset('data/myanmar-nrc.json'));</script>
 <script src="{{ public_asset_ver('js/myanmar-nrc-box.js') }}"></script>
 <script src="{{ public_asset_ver('js/os-account-modal.js') }}"></script>

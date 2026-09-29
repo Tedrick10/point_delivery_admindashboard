@@ -12,6 +12,17 @@ use Illuminate\Support\Facades\Schema;
 
 class SubAdminController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware(function ($request, $next) {
+            if (! isSuperAdmin(auth()->user())) {
+                return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
+            }
+
+            return $next($request);
+        });
+    }
+
     /**
      * Display a listing of the resource.
      *
@@ -19,10 +30,6 @@ class SubAdminController extends Controller
      */
     public function index(SubAdminDataTable $dataTable)
     {
-        if (!auth()->user()->can('subadmin-list')) {
-            $message = __('message.demo_permission_denied');
-            return redirect()->back()->withErrors($message);
-        }
         $pageTitle = __('message.list_form_title', ['form' => __('message.sub_admin')]);
         $employeeType = null;
         $roleFilter = request('role');
@@ -55,10 +62,6 @@ class SubAdminController extends Controller
      */
     public function create()
     {
-        if (!auth()->user()->can('subadmin-add')) {
-            $message = __('message.demo_permission_denied');
-            return redirect()->back()->withErrors($message);
-        }
         $pageTitle =  __('message.sub_admin');
         $employeeType = null;
         $selectedRole = request('role');
@@ -81,10 +84,6 @@ class SubAdminController extends Controller
      */
     public function store(UserRequest $request)
     {
-        if (! auth()->user()->can('subadmin-add')) {
-            return redirect()->back()->withInput()->withErrors(__('message.demo_permission_denied'));
-        }
-
         $allowedRoles = $this->employeeRoleOptions()->keys()->all();
         $data = $request->validate([
             'name' => 'required|string|max:255',
@@ -157,10 +156,6 @@ class SubAdminController extends Controller
      */
     public function edit($id)
     {
-        if (!auth()->user()->can('subadmin-edit')) {
-            $message = __('message.demo_permission_denied');
-            return redirect()->back()->withErrors($message);
-        }
         $pageTitle = __('message.update_form_title',[ 'form' => __('message.sub_admin')]);
         $data = User::whereNotIn('user_type',['admin','client','delivery_man'])->findOrFail($id);
         $profileImage = getSingleMedia($data, 'profile_image');
@@ -185,10 +180,6 @@ class SubAdminController extends Controller
      */
     public function update(Request $request, $id)
     {
-        if (!auth()->user()->can('subadmin-edit')) {
-            $message = __('message.demo_permission_denied');
-            return redirect()->back()->withErrors($message);
-        }
         $user = User::whereNotIn('user_type', ['admin', 'client', 'delivery_man'])->find($id);
 
         $message = __('message.not_found_entry', ['name' => __('message.sub_admin')]);
@@ -243,10 +234,6 @@ class SubAdminController extends Controller
      */
     public function destroy($id)
     {
-        if (!auth()->user()->can('subadmin-delete')) {
-            $message = __('message.demo_permission_denied');
-            return redirect()->back()->withErrors($message);
-        }
         $user = User::find($id);
         $status = 'error';
         $message = __('message.not_found_entry', ['name' => __('message.sub_admin')]);

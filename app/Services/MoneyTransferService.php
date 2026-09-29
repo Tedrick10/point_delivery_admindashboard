@@ -255,11 +255,10 @@ class MoneyTransferService
                 continue;
             }
 
-            if ($invRows->isEmpty() && $entry) {
-                $amountDue = round((float) $entry->cash_amount + (float) $entry->kpay_amount, 2);
-            } else {
-            $amountDue = round(-1 * (float) $invRows->sum('amount'), 2);
-            }
+            // Money Transfer Amount = Daily Check OS to pay (KPay + Cash), not Cust Get amount.
+            $dcOsToPay = round((float) $invRows->sum('os_to_pay'), 2);
+            $dcKpay = round((float) $invRows->sum('kpay_amount'), 2);
+            $dcCash = round((float) $invRows->sum('cash_amount'), 2);
 
             $invoiceCount = $invRows->count();
             $itemCount = (int) $invRows->sum('item_count');
@@ -268,13 +267,29 @@ class MoneyTransferService
             $invoiceIds = $invRows->pluck('id')->map(fn ($id) => (int) $id)->all();
             $gateTotal = $this->sumGateForInvoices($invoiceIds);
 
-            $cash = $entry ? (float) $entry->cash_amount : 0.0;
-            $kpay = $entry ? (float) $entry->kpay_amount : 0.0;
+            $cash = $entry ? (float) $entry->cash_amount : $dcCash;
+            $kpay = $entry ? (float) $entry->kpay_amount : $dcKpay;
             $method = $entry?->payment_method
-                ?? ($cash > 0 && $kpay <= 0 ? 'cash' : 'kpay');
+                ?? (abs($cash) > 0.001 && abs($kpay) <= 0.001 ? 'cash' : 'kpay');
 
             if ($paymentMethod && $method !== $paymentMethod) {
                 continue;
+            }
+
+            if ($invRows->isEmpty() && $entry) {
+                $amountDue = round(abs((float) $entry->cash_amount) + abs((float) $entry->kpay_amount), 2);
+            } elseif ($paymentMethod === 'kpay') {
+                $amountDue = round(abs($dcKpay) >= 0.001 ? abs($dcKpay) : abs($dcOsToPay), 2);
+                $kpay = $entry ? abs((float) $entry->kpay_amount) : $amountDue;
+                $cash = 0.0;
+            } elseif ($paymentMethod === 'cash') {
+                $amountDue = round(abs($dcCash) >= 0.001 ? abs($dcCash) : abs($dcOsToPay), 2);
+                $cash = $entry ? abs((float) $entry->cash_amount) : $amountDue;
+                $kpay = 0.0;
+            } else {
+                // Total / OS to pay = KPay + Cash (Daily Check List).
+                $splitTotal = abs($dcKpay) + abs($dcCash);
+                $amountDue = round($splitTotal >= 0.001 ? $splitTotal : abs($dcOsToPay), 2);
             }
 
             $freight = $entry && $entry->freight_amount !== null
@@ -283,7 +298,7 @@ class MoneyTransferService
             $freightIsOverride = $entry && $entry->freight_amount !== null;
             $remark = $entry?->remark ?? '';
 
-            $paid = round($cash + $kpay, 2);
+            $paid = round(abs($cash) + abs($kpay), 2);
             $remaining = round($amountDue - $paid, 2);
             $status = $this->statusFor($amountDue, $paid, $remaining);
 
@@ -356,12 +371,32 @@ class MoneyTransferService
     }
 
     /**
-     * Combined Money Transfer Amount: all OS Finish totals (Kpay + Cash), not split.
+     * Combined Money Transfer Total = Daily Check OS to pay (KPay + Cash).
+     * Falls back to settlement Finish batches when Daily Check has no rows.
      *
      * @return array{kpay: float, cash: float, total: float}
      */
     public function finishTotals(string $fromDay, string $toDay, ?int $osId = null, ?int $branchId = null): array
     {
+        $invoiceRows = $this->dailyCheck->listRows($fromDay, $toDay, 'os', $branchId, $osId, null);
+        if ($branchId && $branchId > 0) {
+            $invoiceRows = $invoiceRows->filter(fn ($row) => (int) ($row->branch_id ?? 0) === $branchId)->values();
+        }
+
+        if ($invoiceRows->isNotEmpty()) {
+            $kpay = round((float) $invoiceRows->sum(fn ($row) => abs((float) ($row->kpay_amount ?? 0))), 2);
+            $cash = round((float) $invoiceRows->sum(fn ($row) => abs((float) ($row->cash_amount ?? 0))), 2);
+            $osToPay = round((float) $invoiceRows->sum(fn ($row) => abs((float) ($row->os_to_pay ?? 0))), 2);
+            $split = round($kpay + $cash, 2);
+
+            return [
+                'kpay' => $kpay,
+                'cash' => $cash,
+                // Total must equal KPay + Cash (OS to pay).
+                'total' => $split >= 0.001 ? $split : $osToPay,
+            ];
+        }
+
         $batches = $this->batchesInRange($fromDay, $toDay, $osId, null, $branchId);
 
         $kpay = 0.0;

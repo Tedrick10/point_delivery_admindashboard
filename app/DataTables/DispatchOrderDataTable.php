@@ -319,8 +319,8 @@ class DispatchOrderDataTable extends OrderDataTable
                 ->title(__('message.action'))
                 ->exportable(false)
                 ->printable(false)
-                ->width(80)
-                ->addClass('text-center')
+                ->width(160)
+                ->addClass('text-center pds-dispatch-action-cell')
                 ->footer(''),
         ]);
 
@@ -433,8 +433,10 @@ class DispatchOrderDataTable extends OrderDataTable
         if ($isDedicated) {
             $workflow->applyDedicatedPickupListQuery($query, (string) $dispatchStatus);
         } else {
-            // Pull back Admin-Done-only items that landed in Assign 100 too early.
+            // Pull back Admin-Done-only items that landed in Assign 100 too early,
+            // then promote fully done orders so Order List badges drop to zero.
             $workflow->reclaimPrematureAssign100Items();
+            $workflow->promoteReadyOrdersToAssign100();
             $workflow->healUtcRolloverReceivedDates();
             $listTab = $this->resolveOrderListDispatchStatus($dispatchStatus) ?: 'all';
             $workflow->applyOrderListQuery($query, $listTab);

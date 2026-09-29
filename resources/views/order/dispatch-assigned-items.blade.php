@@ -4,22 +4,10 @@
             <div class="pds-dispatch-to-assign-topbar">
                 <div class="pds-dispatch-to-assign-topbar-copy">
                     <h4 class="pds-dispatch-to-assign-heading">{{ $pageTitle ?? __('message.assigned_item_list') }}</h4>
-                    <p class="pds-dispatch-to-assign-subtitle">
-                        {{ __('message.assigned_item_list_subtitle') }}
-                        · {{ __('message.item_count') }} = <strong id="assignedItemCount">{{ $items->count() }}</strong>
-                    </p>
-                </div>
-                <div class="pds-dispatch-to-assign-topbar-actions">
-                    <a href="{{ route('order.dispatch.assign-100') }}" class="pds-assign-action-btn pds-assign-action-btn--rider" title="{{ __('message.assign_100') }}">
-                        <span class="pds-assign-action-btn__icon" aria-hidden="true">
-                            <i class="fas fa-users-cog"></i>
-                        </span>
-                        <span class="pds-assign-action-btn__label">{{ __('message.assign_100') }}</span>
-                    </a>
                 </div>
             </div>
 
-            <div class="pds-dispatch-to-assign-filter">
+            <div class="pds-dispatch-to-assign-filter pds-msg-toolbar">
                 @php $tabCounts = $tabCounts ?? ['unread' => 0, 'unanswered' => 0, 'answered' => 0]; @endphp
                 <div class="pds-msg-tabs" id="assignedMsgTabs" role="tablist">
                     <button type="button" class="pds-msg-tabs__btn is-active" data-msg-tab="unread">
@@ -35,7 +23,7 @@
                         <span class="pds-msg-tabs__count" data-count-for="answered">{{ $tabCounts['answered'] }}</span>
                     </button>
                 </div>
-                <div class="pds-dispatch-to-assign-filter-grid pds-dispatch-assign-100-filter-grid">
+                <div class="pds-dispatch-to-assign-filter-grid pds-dispatch-assign-100-filter-grid pds-msg-filters">
                     <div class="pds-dispatch-field pds-dispatch-field-sm">
                         <label for="assigned_rider_filter">{{ __('message.delivery_man') }}</label>
                         <input type="text" id="assigned_rider_filter" class="pds-dispatch-input" placeholder="{{ __('message.delivery_man') }}" autocomplete="off">
@@ -53,13 +41,13 @@
 
             <div class="pds-dispatch-to-assign-body">
                 @if($items->isEmpty())
-                    <div class="pds-dispatch-to-assign-empty" id="assignedEmptyState">
-                        <i class="fas fa-inbox"></i>
+                    <div class="pds-dispatch-to-assign-empty pds-msg-empty" id="assignedEmptyState">
+                        <span class="pds-msg-empty__icon" aria-hidden="true"><i class="far fa-comments"></i></span>
                         <p>{{ __('message.no_record_found') }}</p>
                     </div>
                 @else
-                    <div class="pds-dispatch-to-assign-empty d-none" id="assignedFilterEmptyState">
-                        <i class="fas fa-search"></i>
+                    <div class="pds-dispatch-to-assign-empty pds-msg-empty d-none" id="assignedFilterEmptyState">
+                        <span class="pds-msg-empty__icon" aria-hidden="true"><i class="fas fa-search"></i></span>
                         <p>{{ __('message.no_record_found') }}</p>
                     </div>
                     <div class="pds-msg-thread-list" id="assignedTableShell">
@@ -144,160 +132,6 @@
     @include('order.partials._dispatch-item-message-modal')
 
     @section('bottom_script')
-        <style>
-            .pds-msg-thread-list {
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                padding: 0 0 1.25rem;
-            }
-            .pds-msg-thread-card {
-                display: flex;
-                align-items: flex-start;
-                gap: 12px;
-                padding: 14px 16px;
-                border-radius: 14px;
-                border: 1px solid #e2e8f0;
-                background: #fff;
-                transition: border-color 0.15s ease, box-shadow 0.15s ease;
-            }
-            .pds-msg-thread-card:hover {
-                border-color: #fdba74;
-                box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-            }
-            .pds-msg-thread-card.is-unread {
-                background: linear-gradient(90deg, #fff7ed 0%, #fff 55%);
-                border-color: #fed7aa;
-            }
-            .pds-msg-thread-card__avatar {
-                width: 42px;
-                height: 42px;
-                border-radius: 999px;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                flex-shrink: 0;
-                overflow: hidden;
-                background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
-                color: #fff;
-                font-weight: 800;
-                font-size: 1rem;
-            }
-            .pds-msg-thread-card__avatar.has-photo {
-                background: #e2e8f0;
-            }
-            .pds-msg-thread-card__avatar img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                display: block;
-            }
-            .pds-msg-thread-card__body { flex: 1; min-width: 0; }
-            .pds-msg-thread-card__line1 {
-                display: flex;
-                align-items: baseline;
-                justify-content: space-between;
-                gap: 10px;
-            }
-            .pds-msg-thread-card__parcel {
-                color: #0f172a;
-                font-size: 0.95rem;
-            }
-            .pds-msg-thread-card__time {
-                color: #94a3b8;
-                font-size: 0.75rem;
-                flex-shrink: 0;
-            }
-            .pds-msg-thread-card__line2 {
-                margin-top: 3px;
-                color: #475569;
-                font-size: 0.84rem;
-                font-weight: 600;
-            }
-            .pds-msg-thread-card__line3 {
-                margin-top: 4px;
-                color: #334155;
-                font-size: 0.86rem;
-                line-height: 1.35;
-                display: -webkit-box;
-                -webkit-line-clamp: 2;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
-            }
-            .pds-msg-thread-card.is-unread .pds-msg-thread-card__line3 {
-                font-weight: 700;
-                color: #0f172a;
-            }
-            .pds-msg-thread-card__sender {
-                color: #ea580c;
-                font-weight: 800;
-                margin-right: 4px;
-            }
-            .pds-msg-thread-card__aside {
-                display: flex;
-                flex-direction: column;
-                align-items: flex-end;
-                gap: 8px;
-                flex-shrink: 0;
-            }
-            .pds-msg-thread-card__badge {
-                display: inline-flex;
-                min-width: 22px;
-                height: 22px;
-                padding: 0 7px;
-                align-items: center;
-                justify-content: center;
-                border-radius: 999px;
-                background: #ea580c;
-                color: #fff;
-                font-size: 0.72rem;
-                font-weight: 800;
-            }
-            .pds-msg-tabs {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 8px;
-                margin-bottom: 14px;
-            }
-            .pds-msg-tabs__btn {
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                border: 1px solid #e2e8f0;
-                background: #fff;
-                color: #475569;
-                border-radius: 999px;
-                padding: 7px 14px;
-                font-size: 0.84rem;
-                font-weight: 700;
-                cursor: pointer;
-                transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-            }
-            .pds-msg-tabs__btn:hover {
-                border-color: #fdba74;
-                color: #c2410c;
-            }
-            .pds-msg-tabs__btn.is-active {
-                background: #ea580c;
-                border-color: #ea580c;
-                color: #fff;
-            }
-            .pds-msg-tabs__count {
-                display: inline-flex;
-                min-width: 20px;
-                height: 20px;
-                padding: 0 6px;
-                align-items: center;
-                justify-content: center;
-                border-radius: 999px;
-                background: rgba(15, 23, 42, 0.08);
-                font-size: 0.72rem;
-                font-weight: 800;
-            }
-            .pds-msg-tabs__btn.is-active .pds-msg-tabs__count {
-                background: rgba(255, 255, 255, 0.22);
-            }
-        </style>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(document).ready(function () {
@@ -350,7 +184,6 @@
                         if (show) visible += 1;
                     });
 
-                    $('#assignedItemCount').text(visible);
                     $('#assignedFilterEmptyState').toggleClass('d-none', visible !== 0);
                     $('#assignedTableShell').toggleClass('d-none', visible === 0);
                 }
@@ -374,6 +207,22 @@
                 $('#assignedMsgTabs .pds-msg-tabs__btn').removeClass('is-active');
                 $('#assignedMsgTabs [data-msg-tab="' + activeMsgTab + '"]').addClass('is-active');
                 applyAssignedFilters();
+
+                // Deep-link from Notification → open the matching chat thread.
+                try {
+                    var params = new URLSearchParams(window.location.search || '');
+                    var openItemId = String(params.get('item_id') || '').trim();
+                    if (openItemId) {
+                        var $card = $('#assignedTableShell .pds-msg-thread-card[data-item-id="' + openItemId + '"]');
+                        if ($card.length) {
+                            $card.removeClass('d-none');
+                            var $btn = $card.find('.js-dispatch-item-message').first();
+                            if ($btn.length) {
+                                setTimeout(function () { $btn.trigger('click'); }, 250);
+                            }
+                        }
+                    }
+                } catch (e) {}
 
                 $(document).on('click', '.pds-dispatch-action-edit.loadRemoteModel', function (e) {
                     e.stopPropagation();

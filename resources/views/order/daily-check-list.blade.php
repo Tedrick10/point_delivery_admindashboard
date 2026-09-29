@@ -24,7 +24,6 @@
                         <span>{{ __('message.order') }}</span>
                     </div>
                     <h4 class="pds-rider-hero__title">{{ $pageTitle }}</h4>
-                    <p class="pds-rider-hero__subtitle">{{ __('message.daily_check_list_subtitle') }}</p>
                 </div>
                 <div class="pds-rider-hero__stat">
                     <span class="pds-rider-hero__stat-value">{{ $rows->count() }}</span>

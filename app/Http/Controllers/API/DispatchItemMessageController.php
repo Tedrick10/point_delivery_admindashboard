@@ -230,6 +230,21 @@ class DispatchItemMessageController extends Controller
                     'error' => $e->getMessage(),
                 ]);
             }
+        } elseif ($senderType === 'client') {
+            try {
+                $payload = buildDispatchItemMessageNotificationPayload(
+                    $item,
+                    $user,
+                    $body,
+                    $hasImage
+                );
+                notifyAdminsDispatchItemMessage($payload);
+            } catch (\Throwable $e) {
+                \Log::warning('admin notify failed after client item message', [
+                    'item_id' => $item->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         return json_custom_response([

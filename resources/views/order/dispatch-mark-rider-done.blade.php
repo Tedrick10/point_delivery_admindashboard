@@ -180,21 +180,29 @@
                                     <div class="pds-ard-section__label">
                                         {{ __('message.admin_rider_done_photo') }} <i>*</i>
                                     </div>
-                                    <label class="pds-ard-upload">
-                                        <input type="file"
-                                               name="items[{{ $itemId }}][photo]"
-                                               class="js-ard-photo"
-                                               accept="image/*"
-                                               required>
-                                        <span class="pds-ard-upload__preview" hidden>
-                                            <img src="" alt="" data-ard-preview-img>
-                                        </span>
-                                        <span class="pds-ard-upload__icon" aria-hidden="true"><i class="fas fa-camera"></i></span>
-                                        <span class="pds-ard-upload__text">
-                                            <strong data-ard-file-label>{{ __('message.admin_rider_done_photo_pick') }}</strong>
-                                            <small>{{ __('message.admin_rider_done_photo_required') }}</small>
-                                        </span>
-                                    </label>
+                                    <div class="pds-ard-upload-wrap">
+                                        <label class="pds-ard-upload">
+                                            <input type="file"
+                                                   name="items[{{ $itemId }}][photo]"
+                                                   class="js-ard-photo"
+                                                   accept="image/*"
+                                                   required>
+                                            <span class="pds-ard-upload__preview" hidden>
+                                                <img src="" alt="" data-ard-preview-img>
+                                            </span>
+                                            <span class="pds-ard-upload__icon" aria-hidden="true"><i class="fas fa-camera"></i></span>
+                                            <span class="pds-ard-upload__text">
+                                                <strong data-ard-file-label>{{ __('message.admin_rider_done_photo_pick') }}</strong>
+                                                <small>{{ __('message.admin_rider_done_photo_required') }}</small>
+                                            </span>
+                                        </label>
+                                        <button type="button"
+                                                class="pds-ard-upload__remove js-ard-photo-remove"
+                                                hidden
+                                                aria-label="{{ __('message.remove') ?? 'Remove' }}">
+                                            <i class="fas fa-times" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             @endif
                         </section>
@@ -284,9 +292,11 @@
         var input = this;
         var file = input.files && input.files[0];
         var $upload = $(input).closest('.pds-ard-upload');
+        var $wrap = $(input).closest('.pds-ard-upload-wrap');
         var $label = $upload.find('[data-ard-file-label]');
         var $preview = $upload.find('.pds-ard-upload__preview');
         var $img = $preview.find('[data-ard-preview-img]');
+        var $remove = $wrap.find('.js-ard-photo-remove');
         var prevUrl = $upload.data('preview-url');
 
         if (prevUrl) {
@@ -297,16 +307,41 @@
         if (file && file.type && file.type.indexOf('image/') === 0) {
             var url = URL.createObjectURL(file);
             $upload.data('preview-url', url);
-            $img.attr('src', url).attr('alt', file.name);
+            $img.attr('src', url).attr('alt', '');
             $preview.prop('hidden', false);
             $upload.addClass('has-file');
-            $label.text(file.name);
+            $remove.prop('hidden', false);
         } else {
             $img.attr('src', '').attr('alt', '');
             $preview.prop('hidden', true);
             $upload.removeClass('has-file');
+            $remove.prop('hidden', true);
             $label.text(@json(__('message.admin_rider_done_photo_pick')));
         }
+    });
+
+    $form.on('click', '.js-ard-photo-remove', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var $wrap = $(this).closest('.pds-ard-upload-wrap');
+        var $upload = $wrap.find('.pds-ard-upload');
+        var $input = $wrap.find('.js-ard-photo');
+        var $label = $upload.find('[data-ard-file-label]');
+        var $preview = $upload.find('.pds-ard-upload__preview');
+        var $img = $preview.find('[data-ard-preview-img]');
+        var prevUrl = $upload.data('preview-url');
+
+        if (prevUrl) {
+            URL.revokeObjectURL(prevUrl);
+            $upload.removeData('preview-url');
+        }
+
+        $input.val('');
+        $img.attr('src', '').attr('alt', '');
+        $preview.prop('hidden', true);
+        $upload.removeClass('has-file');
+        $(this).prop('hidden', true);
+        $label.text(@json(__('message.admin_rider_done_photo_pick')));
     });
 
     $form.off('submit.ard').on('submit.ard', function (e) {

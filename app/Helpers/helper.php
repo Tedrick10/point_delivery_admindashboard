@@ -2262,7 +2262,7 @@ function inferNotificationCategory(array $data): string
 
     $type = strtolower((string) ($data['type'] ?? ''));
 
-    if ($type === 'customersupport') {
+    if ($type === 'customersupport' || $type === 'dispatch_item_message') {
         return 'user_messages';
     }
 
@@ -2330,6 +2330,13 @@ function buildCustomerSupportNotificationPayload(CustomerSupport $support, User 
 
 function notificationRouteForData(array $data): ?string
 {
+    if (!empty($data['dispatch_order_item_id'])) {
+        return route('order.dispatch.assigned-items', array_filter([
+            'item_id' => (int) $data['dispatch_order_item_id'],
+            'order_id' => !empty($data['order_id']) ? (int) $data['order_id'] : null,
+        ]));
+    }
+
     if (!empty($data['support_id'])) {
         return route('customersupport.show', $data['support_id']);
     }
@@ -2362,6 +2369,189 @@ function notifyAdminsCustomerSupport(array $notification_data): void
             $admin->notify(new CommonNotification('customersupport', $pushData));
         }
     });
+}
+
+/**
+ * Build notification payload for an OS/client parcel chat message.
+ */
+function buildDispatchItemMessageNotificationPayload(
+    \App\Models\DispatchOrderItem $item,
+    \App\Models\User $sender,
+    ?string $messageText = null,
+    bool $isImage = false
+): array {
+    $parcel = trim((string) ($item->code ?: ''));
+    $parcelLabel = $parcel !== '' ? $parcel : ('#'.$item->id);
+    $senderName = trim((string) ($sender->name ?? '')) ?: __('message.user');
+
+    if ($isImage) {
+        $summary = __('message.notification_user_sent_image', ['user' => $senderName]);
+    } else {
+        $summary = __('message.notification_user_sent_one_message', ['user' => $senderName]);
+    }
+
+    $preview = trim((string) ($messageText ?? ''));
+    if ($preview === '' && $isImage) {
+        $preview = __('message.image');
+    }
+
+    return [
+        'type' => 'dispatch_item_message',
+        'category' => 'user_messages',
+        'dispatch_order_item_id' => (int) $item->id,
+        'order_id' => (int) ($item->order_id ?? 0),
+        'subject' => __('message.message').' · '.$parcelLabel,
+        'message' => $preview !== '' ? ($summary.' — '.$preview) : $summary,
+        'created_by' => $sender->id,
+        'sender_id' => $sender->id,
+        'sender_name' => $senderName,
+        'has_image' => $isImage,
+    ];
+}
+
+/**
+ * Notify all panel staff that a user sent a parcel chat message.
+ */
+function notifyAdminsDispatchItemMessage(array $notification_data): void
+{
+    $payload = array_merge([
+        'type' => 'dispatch_item_message',
+        'category' => 'user_messages',
+    ], $notification_data);
+    $payload['type'] = 'dispatch_item_message';
+    $payload['category'] = 'user_messages';
+
+    getPanelStaffUsers()->each(function ($admin) use ($payload) {
+        // Prefer one unread notification per parcel thread.
+        $existing = $admin->unreadNotifications
+            ->first(function ($notification) use ($payload) {
+                $data = is_array($notification->data) ? $notification->data : [];
+
+                return ($data['type'] ?? '') === 'dispatch_item_message'
+                    && (int) ($data['dispatch_order_item_id'] ?? 0) === (int) ($payload['dispatch_order_item_id'] ?? 0);
+            });
+
+        if ($existing) {
+            $existing->forceFill([
+                'data' => array_merge(is_array($existing->data) ? $existing->data : [], $payload),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ])->save();
+
+            return;
+        }
+
+        $admin->notify(new \App\Notifications\CustomerSupportNotification($payload));
+    });
+}
+
+/**
+ * Backfill User Message notifications for unread client parcel chats
+ * (so the Notification panel matches the Message menu badge).
+ */
+function syncUnreadDispatchItemMessageNotifications(?\App\Models\User $user = null): void
+{
+    $user = $user ?? auth()->user();
+    if (! $user || ! isAdminPanelUser($user)) {
+        return;
+    }
+
+    $unreadRows = \App\Models\DispatchItemMessage::query()
+        ->select([
+            'dispatch_order_item_id',
+            \Illuminate\Support\Facades\DB::raw('MAX(id) as last_message_id'),
+        ])
+        ->where('sender_type', 'client')
+        ->whereNull('read_at')
+        ->groupBy('dispatch_order_item_id')
+        ->get();
+
+    if ($unreadRows->isEmpty()) {
+        return;
+    }
+
+    $existingByItem = [];
+    foreach ($user->notifications as $notification) {
+        $data = is_array($notification->data) ? $notification->data : [];
+        if (($data['type'] ?? '') !== 'dispatch_item_message') {
+            continue;
+        }
+        $itemId = (int) ($data['dispatch_order_item_id'] ?? 0);
+        if ($itemId <= 0) {
+            continue;
+        }
+        $ts = optional($notification->created_at)->timestamp ?? 0;
+        if (! isset($existingByItem[$itemId]) || $ts > $existingByItem[$itemId]) {
+            $existingByItem[$itemId] = $ts;
+        }
+    }
+
+    $lastMessages = \App\Models\DispatchItemMessage::query()
+        ->with(['sender', 'media'])
+        ->whereIn('id', $unreadRows->pluck('last_message_id')->filter()->all())
+        ->get()
+        ->keyBy('id');
+
+    $items = \App\Models\DispatchOrderItem::query()
+        ->whereIn('id', $unreadRows->pluck('dispatch_order_item_id')->all())
+        ->get()
+        ->keyBy('id');
+
+    foreach ($unreadRows as $row) {
+        $itemId = (int) $row->dispatch_order_item_id;
+        $item = $items->get($itemId);
+        $last = $lastMessages->get($row->last_message_id);
+        if ($itemId <= 0 || ! $item || ! $last) {
+            continue;
+        }
+
+        $messageTs = optional($last->created_at)->timestamp ?? 0;
+        $alreadyTs = $existingByItem[$itemId] ?? 0;
+        // Already notified for this message (or a newer one) — don't recreate after mark-as-read.
+        if ($alreadyTs > 0 && $alreadyTs >= $messageTs) {
+            continue;
+        }
+
+        $sender = $last->sender;
+        if (! $sender) {
+            $sender = new \App\Models\User([
+                'id' => (int) ($last->sender_id ?? 0),
+                'name' => __('message.user'),
+            ]);
+        }
+
+        $isImage = ($last->message_type === 'image') || getMediaFileExit($last, 'chat_image');
+        $payload = buildDispatchItemMessageNotificationPayload(
+            $item,
+            $sender,
+            $last->message,
+            $isImage
+        );
+
+        $user->notify(new \App\Notifications\CustomerSupportNotification($payload));
+        $existingByItem[$itemId] = now()->timestamp;
+    }
+}
+
+/**
+ * Mark User Message notifications for a parcel thread as read.
+ */
+function markDispatchItemMessageNotificationsRead(\App\Models\User $user, int $dispatchOrderItemId): void
+{
+    if ($dispatchOrderItemId <= 0) {
+        return;
+    }
+
+    $user->unreadNotifications
+        ->filter(function ($notification) use ($dispatchOrderItemId) {
+            $data = is_array($notification->data) ? $notification->data : [];
+
+            return ($data['type'] ?? '') === 'dispatch_item_message'
+                && (int) ($data['dispatch_order_item_id'] ?? 0) === $dispatchOrderItemId;
+        })
+        ->each(function ($notification) {
+            $notification->markAsRead();
+        });
 }
 
 function notifyUserCustomerSupport(User $user, array $notification_data): void
@@ -6213,6 +6403,16 @@ if (! function_exists('public_css_inline')) {
         $css = str_replace('</style>', '<\/style>', $css);
 
         return $css;
+    }
+}
+
+/**
+ * Normalize Zawgyi Myanmar text to Unicode (safe for display and storage).
+ */
+if (! function_exists('myanmar_unicode')) {
+    function myanmar_unicode(?string $text): string
+    {
+        return app(\App\Services\MyanmarTextService::class)->toUnicode($text);
     }
 }
 

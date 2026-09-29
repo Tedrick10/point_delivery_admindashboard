@@ -24,11 +24,15 @@ class WelcomePromotion extends Model
         return static::where('status', 1)->first();
     }
 
-    public function calculateDiscount(float $amount): float
+    public function calculateDiscount(float $amount, ?float $overridePercent = null): float
     {
+        if ($overridePercent !== null) {
+            return round($amount * $overridePercent / 100, 2);
+        }
         if ($this->discount_type === 'percentage') {
             return round($amount * $this->discount_value / 100, 2);
         }
+
         return min($this->discount_value, $amount);
     }
 }

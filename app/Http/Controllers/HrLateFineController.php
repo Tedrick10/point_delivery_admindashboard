@@ -10,10 +10,31 @@ use Illuminate\Http\Request;
 
 class HrLateFineController extends Controller
 {
+    protected function ensureSuperAdmin()
+    {
+        if (! isSuperAdmin(auth()->user())) {
+            return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
+        }
+
+        return null;
+    }
+
+    protected function redirectAfterMutation(Request $request, string $month)
+    {
+        if ($request->input('embed_return') === 'super-admin') {
+            return redirect()->route('super-admin.screens.show', [
+                'screen' => 'late-fine',
+                'month' => $month,
+            ]);
+        }
+
+        return redirect()->route('hr.late-fine.index', ['month' => $month]);
+    }
+
     public function index(Request $request, HrPayrollService $service)
     {
-        if (! auth()->user()->can('hr-payroll-list') && auth()->user()->user_type !== 'admin') {
-            return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
+        if ($deny = $this->ensureSuperAdmin()) {
+            return $deny;
         }
 
         $month = $service->parseMonth($request->get('month'));
@@ -27,7 +48,7 @@ class HrLateFineController extends Controller
         $staffOptions = $service->payrollStaffOptions();
         $pageTitle = __('message.hr_late_fine_title');
         $assets = [];
-        $canEdit = auth()->user()->can('hr-payroll-edit') || auth()->user()->user_type === 'admin';
+        $canEdit = true;
         $prevMonth = $month->copy()->subMonth()->format('Y-m');
         $nextMonth = $month->copy()->addMonth()->format('Y-m');
         $monthValue = $month->format('Y-m');
@@ -52,7 +73,7 @@ class HrLateFineController extends Controller
 
     public function updateRow(Request $request, $id, HrPayrollService $service)
     {
-        if (! auth()->user()->can('hr-payroll-edit') && auth()->user()->user_type !== 'admin') {
+        if (! isSuperAdmin(auth()->user())) {
             return response()->json(['success' => false, 'message' => __('message.demo_permission_denied')], 403);
         }
 
@@ -111,8 +132,8 @@ class HrLateFineController extends Controller
 
     public function storeItem(Request $request, HrPayrollService $service)
     {
-        if (! auth()->user()->can('hr-payroll-add') && auth()->user()->user_type !== 'admin') {
-            return redirect()->back()->withErrors(__('message.demo_permission_denied'));
+        if ($deny = $this->ensureSuperAdmin()) {
+            return $deny;
         }
 
         $data = $request->validate([
@@ -149,14 +170,14 @@ class HrLateFineController extends Controller
             $service->syncSalaryDeductionsFromLateFine($month);
         }
 
-        return redirect()->route('hr.late-fine.index', ['month' => $month->format('Y-m')])
+        return $this->redirectAfterMutation($request, $month->format('Y-m'))
             ->withSuccess(__('message.save_form', ['form' => __('message.hr_late_fine_item')]));
     }
 
-    public function destroyItem($id, HrPayrollService $service)
+    public function destroyItem(Request $request, $id, HrPayrollService $service)
     {
-        if (! auth()->user()->can('hr-payroll-delete') && auth()->user()->user_type !== 'admin') {
-            return redirect()->back()->withErrors(__('message.demo_permission_denied'));
+        if ($deny = $this->ensureSuperAdmin()) {
+            return $deny;
         }
 
         $item = HrLateFineItem::with('staff')->findOrFail($id);
@@ -170,14 +191,14 @@ class HrLateFineController extends Controller
             $service->syncSalaryDeductionsFromLateFine($month);
         }
 
-        return redirect()->route('hr.late-fine.index', ['month' => $month->format('Y-m')])
+        return $this->redirectAfterMutation($request, $month->format('Y-m'))
             ->withSuccess(__('message.delete_form', ['form' => __('message.hr_late_fine_item')]));
     }
 
     public function storeBagItem(Request $request, HrPayrollService $service)
     {
-        if (! auth()->user()->can('hr-payroll-add') && auth()->user()->user_type !== 'admin') {
-            return redirect()->back()->withErrors(__('message.demo_permission_denied'));
+        if ($deny = $this->ensureSuperAdmin()) {
+            return $deny;
         }
 
         $data = $request->validate([
@@ -209,14 +230,14 @@ class HrLateFineController extends Controller
             $service->syncSalaryDeductionsFromLateFine($month);
         }
 
-        return redirect()->route('hr.late-fine.index', ['month' => $month->format('Y-m')])
+        return $this->redirectAfterMutation($request, $month->format('Y-m'))
             ->withSuccess(__('message.save_form', ['form' => __('message.hr_bag_deduction')]));
     }
 
-    public function destroyBagItem($id, HrPayrollService $service)
+    public function destroyBagItem(Request $request, $id, HrPayrollService $service)
     {
-        if (! auth()->user()->can('hr-payroll-delete') && auth()->user()->user_type !== 'admin') {
-            return redirect()->back()->withErrors(__('message.demo_permission_denied'));
+        if ($deny = $this->ensureSuperAdmin()) {
+            return $deny;
         }
 
         $item = \App\Models\HrBagDeductionItem::with('staff')->findOrFail($id);
@@ -230,7 +251,7 @@ class HrLateFineController extends Controller
             $service->syncSalaryDeductionsFromLateFine($month);
         }
 
-        return redirect()->route('hr.late-fine.index', ['month' => $month->format('Y-m')])
+        return $this->redirectAfterMutation($request, $month->format('Y-m'))
             ->withSuccess(__('message.delete_form', ['form' => __('message.hr_bag_deduction')]));
     }
 }

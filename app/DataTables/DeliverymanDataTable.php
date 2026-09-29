@@ -92,13 +92,6 @@ class DeliverymanDataTable extends DataTable
                     . e($display)
                     . '</span>';
             })
-            ->editColumn('email', function ($query) {
-                $email = auth()->user()->hasRole('admin')
-                    ? maskSensitiveInfo('email', $query->email)
-                    : maskSensitiveInfo('email', $query->email);
-
-                return '<span class="pds-dm-email" title="' . e($email) . '">' . e($email) . '</span>';
-            })
             ->editColumn('last_actived_at', function ($query) {
                 $label = dateAgoFormate($query->last_actived_at, true) ?? '-';
 
@@ -173,7 +166,7 @@ class DeliverymanDataTable extends DataTable
                     return view('deliveryman.action', compact('data', 'action_type', 'deleted_at'))->render();
                 }
             })
-            ->rawColumns(['checkbox', 'action', 'deliveryman', 'contact_number', 'email', 'created_at', 'last_actived_at', 'rider_work_on', 'is_autoverified_email','is_autoverified_mobile','is_autoverified_document']);
+            ->rawColumns(['checkbox', 'action', 'deliveryman', 'contact_number', 'created_at', 'last_actived_at', 'rider_work_on', 'is_autoverified_email','is_autoverified_mobile','is_autoverified_document']);
     }
 
     /**
@@ -280,7 +273,6 @@ class DeliverymanDataTable extends DataTable
                 ->orderable(false)
                 ->width(52),
             ['data' => 'deliveryman', 'name' => 'deliveryman', 'title' => __('message.name'), 'orderable' => false, 'class' => 'pds-dm-col-name text-capitalize'],
-            ['data' => 'email', 'name' => 'email', 'title' => __('message.email'), 'class' => 'pds-dm-col-email'],
             ['data' => 'city_id', 'name' => 'city_id', 'title' => __('message.city'), 'class' => 'pds-dm-col-city'],
             ['data' => 'country_id', 'name' => 'country_id', 'title' => __('message.country'), 'class' => 'pds-dm-col-country'],
             ['data' => 'contact_number', 'name' => 'contact_number', 'title' => __('message.contact_number'), 'class' => 'pds-dm-col-phone'],

@@ -48,6 +48,8 @@ class UserResource extends JsonResource
             'country_name'              => optional($this->country)->name,
             'city_id'                   => $this->city_id,
             'city_name'                 => optional($this->city)->name,
+            'branch_id'                 => $this->branch_id,
+            'branch_name'               => optional($this->branch)->name,
             'address'                   => $this->address,
             'contact_number'            => $this->contact_number,
             'daily_contact_number'      => $this->daily_contact_number,

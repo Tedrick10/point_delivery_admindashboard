@@ -9,6 +9,17 @@ use App\Services\EmployeeTypeService;
 
 class RoleController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware(function ($request, $next) {
+            if (! isSuperAdmin(auth()->user())) {
+                return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
+            }
+
+            return $next($request);
+        });
+    }
+
     /**
      * Display a listing of the resource.
      *
@@ -21,7 +32,7 @@ class RoleController extends Controller
         $assets = ['datatable'];
         
         $button = '';
-        if($auth_user->can('role-add')){
+        if ($auth_user->can('role-add') || isSuperAdmin($auth_user)) {
             $button='<a href="'.route('permission.add',['type'=>'role']).'" class="float-right btn btn-sm btn-primary loadRemoteModel"><i class="fa fa-plus-circle"></i> '.__('message.add_form_title',['form' => __('message.role')]).'</a>';
         }
         return $dataTable->render('role.index', compact('assets','pageTitle','button','auth_user'));
@@ -98,7 +109,7 @@ class RoleController extends Controller
             return redirect()->back()->withErrors($message);
         }
 
-        if (!auth()->user()->can('role-add')) {
+        if (! auth()->user()->can('role-add') && ! isSuperAdmin(auth()->user())) {
             $message = __('message.demo_permission_denied');
             if (request()->ajax()) {
                 return response()->json(['status' => false, 'message' => $message, 'event' => 'validation']);
@@ -120,6 +131,12 @@ class RoleController extends Controller
 
         if (!$result['status']) {
             return redirect()->back()->withErrors($result['message']);
+        }
+
+        if (request('redirect_to') === 'super-admin') {
+            return redirect()
+                ->route('super-admin.screens.show', ['screen' => 'roles-permissions'])
+                ->withSuccess($result['message']);
         }
 
         if (request('redirect_to') === 'permission') {
