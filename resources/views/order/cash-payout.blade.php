@@ -3,7 +3,7 @@
         .pds-kyo-shin-row-badge {
             display: inline-flex; align-items: center; margin-left: 6px;
             padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
-            background: #ffedd5; color: #c2410c;
+            background: rgba(var(--brand-rgb), 0.16); color: var(--site-color);
         }
         .pds-cash-payout-page .pds-cash-payout-photo-stack { max-width: 220px; }
     </style>

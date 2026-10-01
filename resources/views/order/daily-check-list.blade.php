@@ -8,8 +8,8 @@
             border-radius: 999px;
             font-size: 10px;
             font-weight: 800;
-            background: #ffedd5;
-            color: #c2410c;
+            background: rgba(var(--brand-rgb), 0.16);
+            color: var(--site-color);
             letter-spacing: .02em;
             white-space: nowrap;
             vertical-align: middle;

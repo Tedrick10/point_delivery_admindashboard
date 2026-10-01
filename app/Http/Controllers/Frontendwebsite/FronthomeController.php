@@ -383,7 +383,7 @@ class FronthomeController extends Controller
                 case 'admin':
                 case 'delivery_man':
                     Auth::logout();
-                    return redirect()->route('frontend-section')->with('user_type', $role);
+                    return redirect()->route('admin-login')->with('user_type', $role);
                 case 'client':
                     return redirect()->route('home')->with('user_type', 'client');
             }

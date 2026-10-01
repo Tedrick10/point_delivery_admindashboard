@@ -32,21 +32,21 @@
             min-width: 168px;
             padding: 8px 14px 9px;
             border-radius: 12px;
-            border: 1px solid #fdba74;
-            background: #fff7ed;
-            box-shadow: 0 6px 16px rgba(254, 111, 7, .12);
+            border: 1px solid rgba(var(--brand-rgb), 0.45);
+            background: rgba(var(--brand-rgb), 0.08);
+            box-shadow: 0 6px 16px rgba(var(--brand-rgb), .12);
         }
         .pds-selected-item-value-box span {
             font-size: 11px;
             font-weight: 700;
-            color: #c2410c;
+            color: var(--site-color);
             letter-spacing: .01em;
             line-height: 1.2;
         }
         .pds-selected-item-value-box strong {
             font-size: 18px;
             font-weight: 800;
-            color: #9a3412;
+            color: var(--site-color);
             letter-spacing: 0;
             line-height: 1.2;
         }

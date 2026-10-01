@@ -10,7 +10,7 @@
         @include('partials._head')
 
     </head>
-    <body class="pds-admin" id="app">
+    <body class="pds-admin pds-theme-{{ uiThemePackId() }}" id="app">
         <script>
             try {
                 if (localStorage.getItem('dark') === 'true') {

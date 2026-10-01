@@ -2,19 +2,20 @@
 <html>
 <head>
     <meta charset="utf-8">
+    @php $pdfBrand = brandColorHex(); @endphp
     <style>
         body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1f2937; }
         table { width: 100%; border-collapse: collapse; }
-        th { background: #f97316; color: #fff; padding: 6px 4px; }
+        th { background: {{ $pdfBrand }}; color: #fff; padding: 6px 4px; }
         td { padding: 5px 4px; border-bottom: 1px solid #e5e7eb; }
-        tfoot td { background: #f97316; color: #fff; font-weight: bold; }
+        tfoot td { background: {{ $pdfBrand }}; color: #fff; font-weight: bold; }
         .text-right { text-align: right; }
         .is-negative { color: #dc2626; font-weight: bold; }
         tfoot td.is-negative { color: #dc2626; }
         .header { margin-bottom: 12px; }
         .company { font-size: 14px; font-weight: bold; }
         .meta { font-size: 9px; color: #6b7280; }
-        .badge { display: inline-block; padding: 2px 6px; background: #fff7ed; border: 1px solid #fdba74; border-radius: 4px; }
+        .badge { display: inline-block; padding: 2px 6px; background: #fff7ed; border: 1px solid {{ $pdfBrand }}; border-radius: 4px; color: {{ $pdfBrand }}; }
     </style>
 </head>
 <body>

@@ -223,7 +223,7 @@
         .pds-kyo-shin-row-badge {
             display: inline-flex; align-items: center; padding: 2px 7px;
             border-radius: 999px; font-size: 10px; font-weight: 800;
-            background: #ffedd5; color: #c2410c;
+            background: rgba(var(--brand-rgb), 0.16); color: var(--site-color);
         }
         .pds-kyo-shin-proofs {
             display: flex;
@@ -245,7 +245,7 @@
             height: 100%;
             object-fit: cover;
         }
-        .pds-kyo-shin-proof:hover { border-color: #fdba74; }
+        .pds-kyo-shin-proof:hover { border-color: rgba(var(--brand-rgb), 0.45); }
         .pds-kyo-shin-due-cell { display: inline-flex; flex-direction: column; gap: 4px; min-width: 148px; }
         .pds-kyo-shin-due-editor {
             display: inline-flex;
@@ -276,10 +276,10 @@
             width: 26px;
             height: 26px;
             border-radius: 8px;
-            background: #fff7ed;
-            color: #c2410c;
+            background: rgba(var(--brand-rgb), 0.08);
+            color: var(--site-color);
         }
-        .pds-kyo-shin-due-editor:hover { border-color: #fdba74; }
+        .pds-kyo-shin-due-editor:hover { border-color: rgba(var(--brand-rgb), 0.45); }
         .pds-kyo-shin-status-stack { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 6px; }
         .pds-kyo-shin-received-badge {
             display: inline-flex; align-items: center; gap: 5px;

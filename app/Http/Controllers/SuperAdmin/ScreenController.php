@@ -52,6 +52,11 @@ class ScreenController extends Controller
         $welcomePromotion = null;
         $accountCreation = null;
         $rolesPermissions = null;
+        $generalSetting = null;
+        $apiServerSetting = null;
+        $companyContact = null;
+        $appStoreUpdate = null;
+        $uiTheme = null;
         if ($screen === 'late-fine') {
             $payroll = app(HrPayrollService::class);
             $payroll->syncStaffFromAccounts();
@@ -202,6 +207,16 @@ class ScreenController extends Controller
             $accountCreation = AccountCreationController::screenPayload($request);
         } elseif ($screen === 'roles-permissions') {
             $rolesPermissions = RolesPermissionsController::screenPayload();
+        } elseif ($screen === 'general-setting') {
+            $generalSetting = SystemSettingsController::generalPayload();
+        } elseif ($screen === 'company-contact') {
+            $companyContact = SystemSettingsController::companyContactPayload();
+        } elseif ($screen === 'api-server-setting') {
+            $apiServerSetting = SystemSettingsController::apiServerPayload();
+        } elseif ($screen === 'app-store-update') {
+            $appStoreUpdate = SystemSettingsController::appStorePayload();
+        } elseif ($screen === 'ui-theme') {
+            $uiTheme = UiThemeController::screenPayload();
         }
 
         return view('super-admin.screens.show', [
@@ -233,6 +248,11 @@ class ScreenController extends Controller
             'welcomePromotion' => $welcomePromotion,
             'accountCreation' => $accountCreation,
             'rolesPermissions' => $rolesPermissions,
+            'generalSetting' => $generalSetting,
+            'apiServerSetting' => $apiServerSetting,
+            'companyContact' => $companyContact,
+            'appStoreUpdate' => $appStoreUpdate,
+            'uiTheme' => $uiTheme,
         ]);
     }
 }

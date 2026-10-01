@@ -3,12 +3,12 @@
         .pds-kyo-shin-row-badge {
             display: inline-flex; align-items: center; margin-left: 6px;
             padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
-            background: #ffedd5; color: #c2410c; letter-spacing: .02em; white-space: nowrap;
+            background: rgba(var(--brand-rgb), 0.16); color: var(--site-color); letter-spacing: .02em; white-space: nowrap;
             vertical-align: middle;
         }
         .pds-return-retry-check {
             display: inline-flex; align-items: center; gap: 6px;
-            margin: 0; font-size: 11px; font-weight: 800; color: #c2410c;
+            margin: 0; font-size: 11px; font-weight: 800; color: var(--site-color);
             white-space: nowrap; cursor: pointer; user-select: none;
         }
         .pds-return-retry-check input { width: 16px; height: 16px; accent-color: #ea580c; cursor: pointer; }

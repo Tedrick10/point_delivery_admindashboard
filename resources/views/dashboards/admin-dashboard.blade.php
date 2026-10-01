@@ -776,15 +776,15 @@
                 }
 
                 var palette = {
-                    orange: '#FE6F07',
-                    orangeSoft: '#FF8F3D',
+                    orange: (window.pdsBrandColor || '#FE6F07'),
+                    orangeSoft: (window.pdsBrandColor || '#FE6F07'),
                     orangePale: '#FFB347',
                     cream: '#FFF8F1',
                     ink: '#14110F',
                     muted: '#78716c',
                     green: '#16a34a',
                     blue: '#0ea5e9',
-                    amber: '#f59e0b',
+                    amber: (window.pdsBrandColor || '#FE6F07'),
                     red: '#ef4444',
                     slate: '#64748b'
                 };
@@ -800,7 +800,7 @@
                 }
 
                 var chartDefaults = {
-                    fontFamily: "Outfit, 'Noto Sans Myanmar', sans-serif",
+                    fontFamily: (window.pdsBrandFontFamily || "Outfit, 'Noto Sans Myanmar', sans-serif"),
                     foreColor: palette.muted,
                     toolbar: { show: false },
                     animations: {
@@ -868,8 +868,8 @@
                             }
                         },
                         colors: [
-                            '#FE6F07', '#FF8F3D', '#FDBA74', '#FB923C',
-                            '#EA580C', '#C2410C', '#16a34a', '#ef4444'
+                            (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'),
+                            '#EA580C', (window.pdsBrandColor || '#FE6F07'), '#16a34a', '#ef4444'
                         ],
                         dataLabels: {
                             enabled: true,
@@ -902,8 +902,8 @@
                             }
                         },
                         colors: [
-                            '#FE6F07', '#FF8F3D', '#FDBA74', '#FB923C',
-                            '#EA580C', '#C2410C', '#9A3412'
+                            (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'),
+                            '#EA580C', (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07')
                         ],
                         dataLabels: { enabled: false },
                         xaxis: {
@@ -933,8 +933,8 @@
                         series: weeklyCount,
                         labels: weeklyLabels,
                         colors: [
-                            '#FE6F07', '#FF8F3D', '#FDBA74', '#FB923C',
-                            '#EA580C', '#C2410C', '#9A3412'
+                            (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'),
+                            '#EA580C', (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07')
                         ],
                         chart: Object.assign({ type: 'pie', height: 320 }, chartDefaults),
                         legend: { position: 'bottom', fontSize: '12px' },
@@ -1030,7 +1030,7 @@
                 var cityNames = cityData.map(function (row) { return row.city; });
                 var cityCounts = cityData.map(function (row) { return Number(row.count || 0); });
                 var cityColors = [
-                    '#FE6F07', '#FF8F3D', '#FDBA74', '#FB923C',
+                    (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'),
                     '#EA580C', '#0ea5e9', '#16a34a', '#64748b'
                 ];
                 var cityTotal = cityCounts.reduce(function (sum, n) { return sum + n; }, 0);

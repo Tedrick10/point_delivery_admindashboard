@@ -13,12 +13,41 @@
 
         <!-- Styles -->
         <link rel="stylesheet" href="{{ public_asset_ver('css/backend.css') }}">
-        @php $guestTheme = public_css_inline('css/admin-dashboard-theme.css'); @endphp
+        @php
+            $guestTheme = trim(
+                public_css_inline('css/admin-dashboard-theme.css')."\n".
+                public_css_inline('css/admin-themes.css')
+            );
+            $liveBrandHex = $themeColor ?? brandColorHex();
+            $liveBrandRgb = $brandColorRgb ?? brandColorRgb();
+            $liveFontFamily = $brandFontFamily ?? brandFontCssFamily();
+        @endphp
         @if($guestTheme !== '')
             <style id="pds-admin-theme-inline">{!! $guestTheme !!}</style>
         @else
             <link rel="stylesheet" href="{{ public_asset_ver('css/admin-dashboard-theme.css') }}">
+            <link rel="stylesheet" href="{{ public_asset_ver('css/admin-themes.css') }}">
         @endif
+        <style id="pds-brand-live">
+        :root, html, body.pds-admin {
+            --site-color: {{ $liveBrandHex }} !important;
+            --primary: {{ $liveBrandHex }} !important;
+            --admin-primary: {{ $liveBrandHex }} !important;
+            --pds-primary: {{ $liveBrandHex }} !important;
+            --pds-accent: {{ $liveBrandHex }} !important;
+            --brand-rgb: {{ $liveBrandRgb }} !important;
+            --admin-primary-light: rgba({{ $liveBrandRgb }}, 0.12) !important;
+            --admin-primary-soft: rgba({{ $liveBrandRgb }}, 0.08) !important;
+            --admin-font: {{ $liveFontFamily }} !important;
+        }
+        body.pds-admin .btn-primary,
+        body.pds-admin .btn-warning,
+        body.pds-admin .bg-primary {
+            background-color: {{ $liveBrandHex }} !important;
+            border-color: {{ $liveBrandHex }} !important;
+        }
+        </style>
+        <script>window.pdsBrandColor = @json($liveBrandHex);</script>
 
         @if(mighty_language_direction() == 'rtl')
         <link rel="stylesheet" href="{{ asset('css/rtl.css') }}">
@@ -28,7 +57,7 @@
             <link rel="stylesheet" href="{{ asset('vendor/intlTelInput/css/intlTelInput.css') }}">
         @endif
     </head>
-    <body class=" " >
+    <body class="pds-admin pds-theme-{{ uiThemePackId() }}">
 
         <div class="wrapper">
             {{ $slot }}

@@ -109,8 +109,11 @@ return [
     'order_invoice' => [
         'company_name' => '',
         'company_contact_number' => '',
+        'company_hotline' => '',
         'company_address' => '',
-        'company_logo' => ''
+        'company_email' => '',
+        'express_phone' => '',
+        'company_logo' => '',
     ],
     'SMS_SETTING' => [
         'twilio' => [ 'sid', 'token', 'service_sid', 'from'],

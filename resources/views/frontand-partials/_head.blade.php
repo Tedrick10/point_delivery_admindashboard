@@ -15,6 +15,15 @@
 
 <style>
     :root {
-        --site-color: {{ $themeColor }};
+        --site-color: {{ $themeColor ?? brandColorHex() }};
+        --brand-rgb: {{ $brandColorRgb ?? brandColorRgb() }};
+        --admin-font: {{ $brandFontFamily ?? brandFontCssFamily() }};
+    }
+    body, button, input, select, textarea {
+        font-family: var(--admin-font);
     }
 </style>
+@php $liveFontPack = $brandFontPack ?? brandFontPack(); @endphp
+@if(!empty($liveFontPack['google']))
+    <link href="https://fonts.googleapis.com/css2?family={{ $liveFontPack['google'] }}&display=swap" rel="stylesheet">
+@endif

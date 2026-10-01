@@ -24,9 +24,11 @@ class SettingRequest extends FormRequest
     public function rules()
     {        
         return [
-            'site_logo' => 'image|mimes:jpg,jpeg,png',
-            'site_dark_logo' => 'image|mimes:jpg,jpeg,png',
-            'site_favicon' => 'image|mimes:jpg,jpeg,png',
+            'site_logo' => 'nullable|image|mimes:jpg,jpeg,png,webp,ico',
+            'site_dark_logo' => 'nullable|image|mimes:jpg,jpeg,png,webp,ico',
+            'site_favicon' => 'nullable|image|mimes:jpg,jpeg,png,webp,ico,gif',
+            'brand_color' => 'nullable|in:point,amber,delivery_job',
+            'brand_font' => 'nullable|in:outfit,z17_strength,rubik',
         ];
     }
 

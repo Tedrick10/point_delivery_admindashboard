@@ -285,7 +285,7 @@
                             title: dispatchConfig.labels.success,
                             text: detail,
                             confirmButtonText: dispatchConfig.labels.close,
-                            confirmButtonColor: '#FE6F07'
+                            confirmButtonColor: (window.pdsBrandColor || '#FE6F07')
                         });
                         return;
                     }

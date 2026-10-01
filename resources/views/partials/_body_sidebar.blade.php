@@ -441,16 +441,6 @@
                 ->data('permission', 'privacy policy')
                 ->prepend('<i class="fas fa-user-shield"></i>')
                 ->link->attr(['class' => '']);
-
-            // API Server IP
-            $menu
-                ->add('<span>' . __('message.api_server_settings') . '</span>', [
-                    'route' => ['setting.index', 'page' => 'api-server-setting'],
-                ])
-                ->prepend('<i class="fas fa-network-wired"></i>')
-                ->nickname('api_server_setting')
-                ->data('permission', 'system setting')
-                ->link->attr(['class' => '']);
         }
 
         if (Auth::user() && Auth::user()->user_type == 'client') {

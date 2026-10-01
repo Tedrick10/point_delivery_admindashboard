@@ -1,0 +1,625 @@
+/**
+ * Point Delivery — Admin UI packs (Point var(--site-color) only)
+ * classic = default cream chrome | liquid_glass = soft glass skin | aurora = dense editorial
+ * Geometry stays on Classic shell (pds-layout.css). These packs only restyle surfaces.
+ */
+
+/* ==========================================================================
+   Liquid Glass
+   ======================================================================== */
+body.pds-admin.pds-theme-liquid_glass {
+    --admin-surface: #FBF6F1;
+    --admin-card: rgba(255, 255, 255, 0.82);
+    --admin-text: #1C1917;
+    --admin-primary-light: rgba(var(--brand-rgb), 0.12);
+    --admin-primary-soft: rgba(var(--brand-rgb), 0.08);
+    --admin-border: rgba(28, 25, 23, 0.08);
+    --admin-muted: rgba(28, 25, 23, 0.55);
+    --admin-shadow: 0 12px 32px rgba(var(--brand-rgb), 0.08);
+    --admin-radius: 22px;
+    --admin-radius-sm: 14px;
+    --pds-accent-2: var(--site-color);
+    --pds-text: #1C1917;
+    --pds-muted: #8A8178;
+    --pds-border: rgba(28, 25, 23, 0.08);
+    --pds-radius-xl: 22px;
+    --pds-radius-lg: 18px;
+    --pds-radius-md: 14px;
+    --pds-surface-1: rgba(255, 255, 255, 0.82);
+}
+
+body.pds-admin.pds-theme-liquid_glass,
+body.pds-admin.pds-theme-liquid_glass #app {
+    background:
+        radial-gradient(ellipse 55% 40% at 100% 0%, rgba(var(--brand-rgb), 0.14), transparent 55%),
+        radial-gradient(ellipse 45% 35% at 0% 100%, rgba(255, 176, 112, 0.16), transparent 50%),
+        linear-gradient(180deg, rgba(var(--brand-rgb), 0.06) 0%, #F7F0EA 100%) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .pds-sidebar.mm-sidebar,
+body.pds-admin.pds-theme-liquid_glass aside.pds-sidebar.mm-sidebar {
+    background: rgba(255, 255, 255, 0.78) !important;
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border-right: 1px solid rgba(255, 255, 255, 0.85) !important;
+    box-shadow: 4px 0 24px rgba(var(--brand-rgb), 0.04) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .pds-topbar.mm-top-navbar,
+body.pds-admin.pds-theme-liquid_glass .mm-top-navbar.pds-topbar {
+    background: rgba(255, 255, 255, 0.82) !important;
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.9) !important;
+    box-shadow: 0 8px 24px rgba(var(--brand-rgb), 0.05) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .content-page.pds-content-shell,
+body.pds-admin.pds-theme-liquid_glass .content-page {
+    background: transparent !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .card,
+body.pds-admin.pds-theme-liquid_glass .mm-card,
+body.pds-admin.pds-theme-liquid_glass .pds-card,
+body.pds-admin.pds-theme-liquid_glass .pds-dashboard-panel,
+body.pds-admin.pds-theme-liquid_glass .content-page .card.card-block.card-stretch,
+body.pds-admin.pds-theme-liquid_glass .shadow-card,
+body.pds-admin.pds-theme-liquid_glass .iq-card,
+body.pds-admin.pds-theme-liquid_glass .modal-content,
+body.pds-admin.pds-theme-liquid_glass .dropdown-menu,
+body.pds-admin.pds-theme-liquid_glass .pds-page-header,
+body.pds-admin.pds-theme-liquid_glass .pds-list-toolbar {
+    background: rgba(255, 255, 255, 0.84) !important;
+    border: 1px solid rgba(255, 255, 255, 0.92) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 10px 28px rgba(var(--brand-rgb), 0.07) !important;
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+
+body.pds-admin.pds-theme-liquid_glass .pds-dashboard-hero {
+    border-radius: 22px !important;
+    box-shadow: 0 16px 36px rgba(var(--brand-rgb), 0.22) !important;
+    border: 1px solid rgba(255, 255, 255, 0.35) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .card .card-body,
+body.pds-admin.pds-theme-liquid_glass .pds-dashboard-panel > .card-body {
+    background: transparent !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .card .card-header,
+body.pds-admin.pds-theme-liquid_glass .card-header {
+    background: transparent !important;
+    border-bottom: 1px solid rgba(28, 25, 23, 0.06) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .card.card-block.card-stretch::before,
+body.pds-admin.pds-theme-liquid_glass .shadow-card::before,
+body.pds-admin.pds-theme-liquid_glass .pds-dashboard-panel::before,
+body.pds-admin.pds-theme-liquid_glass .pds-stats-grid .card::before {
+    display: none !important;
+    content: none !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .pds-stats-grid .card.card-block,
+body.pds-admin.pds-theme-liquid_glass .pds-stats-grid .shadow-card {
+    border-radius: 18px !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .pds-stats-grid .mm-cart-image {
+    border-radius: 999px !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .btn,
+body.pds-admin.pds-theme-liquid_glass .btn-md,
+body.pds-admin.pds-theme-liquid_glass .btn-sm,
+body.pds-admin.pds-theme-liquid_glass a.btn,
+body.pds-admin.pds-theme-liquid_glass .page-link {
+    border-radius: 999px !important;
+    font-weight: 650 !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .btn-primary,
+body.pds-admin.pds-theme-liquid_glass .bg-primary,
+body.pds-admin.pds-theme-liquid_glass .badge-primary,
+body.pds-admin.pds-theme-liquid_glass .btn-primary:hover,
+body.pds-admin.pds-theme-liquid_glass .btn-primary:focus,
+body.pds-admin.pds-theme-liquid_glass .page-item.active .page-link {
+    background-color: var(--site-color) !important;
+    border-color: var(--site-color) !important;
+    background-image: none !important;
+    color: #fff !important;
+    box-shadow: 0 8px 20px rgba(var(--brand-rgb), 0.28) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .text-primary,
+body.pds-admin.pds-theme-liquid_glass a.text-primary {
+    color: var(--site-color) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .form-control,
+body.pds-admin.pds-theme-liquid_glass .custom-select,
+body.pds-admin.pds-theme-liquid_glass .select2-container--default .select2-selection--single,
+body.pds-admin.pds-theme-liquid_glass .select2-container--default .select2-selection--multiple {
+    border-radius: 14px !important;
+    background: rgba(255, 255, 255, 0.9) !important;
+    border-color: rgba(28, 25, 23, 0.10) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .pds-sidebar .mm-sidebar-menu .side-menu > li > a,
+body.pds-admin.pds-theme-liquid_glass .pds-sidebar .sidebar-layout > a {
+    margin: 0.15rem 0.75rem !important;
+    padding: 0.7rem 1rem !important;
+    border-radius: 999px !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .pds-sidebar .mm-sidebar-menu .side-menu > li.active > a,
+body.pds-admin.pds-theme-liquid_glass .pds-sidebar .mm-sidebar-menu .side-menu li.active-menu > a,
+body.pds-admin.pds-theme-liquid_glass .pds-sidebar .sidebar-layout.active > a {
+    background: rgba(var(--brand-rgb), 0.14) !important;
+    color: var(--site-color) !important;
+    box-shadow: inset 0 0 0 1px rgba(var(--brand-rgb), 0.18);
+}
+
+body.pds-admin.pds-theme-liquid_glass .table {
+    border-collapse: separate !important;
+    border-spacing: 0 8px !important;
+}
+body.pds-admin.pds-theme-liquid_glass .table thead th {
+    background: transparent !important;
+    border: 0 !important;
+    color: #8A8178 !important;
+    font-size: 0.72rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+body.pds-admin.pds-theme-liquid_glass .table tbody tr {
+    background: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 6px 16px rgba(var(--brand-rgb), 0.05);
+}
+body.pds-admin.pds-theme-liquid_glass .table tbody td {
+    border: 0 !important;
+    padding-top: 0.85rem !important;
+    padding-bottom: 0.85rem !important;
+}
+body.pds-admin.pds-theme-liquid_glass .table tbody tr td:first-child { border-radius: 14px 0 0 14px; }
+body.pds-admin.pds-theme-liquid_glass .table tbody tr td:last-child { border-radius: 0 14px 14px 0; }
+
+body.pds-admin.pds-theme-liquid_glass .nav-tabs .nav-link {
+    border-radius: 999px !important;
+    border: 0 !important;
+}
+body.pds-admin.pds-theme-liquid_glass .nav-tabs .nav-link.active {
+    background: rgba(var(--brand-rgb), 0.12) !important;
+    color: var(--site-color) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .badge,
+body.pds-admin.pds-theme-liquid_glass .badge-pill {
+    border-radius: 999px !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .alert {
+    border-radius: 16px !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass h1,
+body.pds-admin.pds-theme-liquid_glass h2,
+body.pds-admin.pds-theme-liquid_glass h3,
+body.pds-admin.pds-theme-liquid_glass .card-title,
+body.pds-admin.pds-theme-liquid_glass .pds-section-title {
+    font-family: var(--admin-font) !important;
+    letter-spacing: -0.02em;
+    font-weight: 700 !important;
+}
+
+/* Liquid geometry: floating sidebar/topbar, inset shell, bento stats */
+body.pds-admin.pds-theme-liquid_glass .pds-sidebar.mm-sidebar,
+body.pds-admin.pds-theme-liquid_glass aside.pds-sidebar.mm-sidebar {
+    top: 16px !important;
+    left: 16px !important;
+    bottom: 16px !important;
+    height: auto !important;
+    width: calc(var(--pds-sidebar-w) - 8px) !important;
+    border-radius: 24px !important;
+    border: 1px solid rgba(255, 255, 255, 0.9) !important;
+    overflow: hidden !important;
+    box-shadow: 0 16px 40px rgba(var(--brand-rgb), 0.08) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass.sidebar-main .pds-sidebar.mm-sidebar,
+body.pds-admin.pds-theme-liquid_glass.sidebar-main aside.pds-sidebar.mm-sidebar {
+    width: calc(var(--pds-sidebar-w-collapsed) - 4px) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .pds-topbar.mm-top-navbar,
+body.pds-admin.pds-theme-liquid_glass .mm-top-navbar.pds-topbar {
+    top: 16px !important;
+    right: 16px !important;
+    left: calc(var(--pds-sidebar-w) + 20px) !important;
+    width: auto !important;
+    border-radius: 20px !important;
+    border: 1px solid rgba(255, 255, 255, 0.92) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass.sidebar-main .pds-topbar.mm-top-navbar,
+body.pds-admin.pds-theme-liquid_glass.sidebar-main .mm-top-navbar.pds-topbar {
+    left: calc(var(--pds-sidebar-w-collapsed) + 20px) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .content-page.pds-content-shell,
+body.pds-admin.pds-theme-liquid_glass .content-page {
+    padding: 24px 20px 28px !important;
+    margin-left: calc(var(--pds-sidebar-w) + 12px) !important;
+    width: calc(100% - var(--pds-sidebar-w) - 28px) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass.sidebar-main .content-page.pds-content-shell,
+body.pds-admin.pds-theme-liquid_glass.sidebar-main .content-page {
+    margin-left: calc(var(--pds-sidebar-w-collapsed) + 12px) !important;
+    width: calc(100% - var(--pds-sidebar-w-collapsed) - 28px) !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .pds-stats-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 14px !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .pds-stats-grid > [class*="col-"] {
+    width: auto !important;
+    max-width: none !important;
+    flex: none !important;
+    padding: 0 !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .pds-stats-grid > [class*="col-"]:first-child {
+    grid-column: span 2 !important;
+}
+
+body.pds-admin.pds-theme-liquid_glass .card,
+body.pds-admin.pds-theme-liquid_glass .mm-card,
+body.pds-admin.pds-theme-liquid_glass .pds-card,
+body.pds-admin.pds-theme-liquid_glass .pds-dashboard-panel,
+body.pds-admin.pds-theme-liquid_glass .content-page .card.card-block.card-stretch,
+body.pds-admin.pds-theme-liquid_glass .shadow-card {
+    border-radius: 22px !important;
+}
+
+/* ==========================================================================
+   Aurora — light editorial (Point orange · white · black)
+   ======================================================================== */
+body.pds-admin.pds-theme-aurora {
+    --admin-surface: #FFFFFF;
+    --admin-card: #FFFFFF;
+    --admin-text: #111111;
+    --admin-primary-light: rgba(var(--brand-rgb), 0.12);
+    --admin-primary-soft: rgba(var(--brand-rgb), 0.08);
+    --admin-border: #E5E5E5;
+    --admin-muted: #6B6B6B;
+    --admin-shadow: 0 8px 24px rgba(17, 17, 17, 0.06);
+    --admin-radius: 8px;
+    --admin-radius-sm: 6px;
+    --pds-accent-2: var(--site-color);
+    --pds-text: #111111;
+    --pds-muted: #6B6B6B;
+    --pds-border: #E5E5E5;
+    --pds-radius-xl: 8px;
+    --pds-radius-lg: 8px;
+    --pds-radius-md: 6px;
+    --pds-surface-1: #FFFFFF;
+}
+
+body.pds-admin.pds-theme-aurora,
+body.pds-admin.pds-theme-aurora #app {
+    background: #FFFFFF !important;
+    color: #111111 !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-sidebar.mm-sidebar,
+body.pds-admin.pds-theme-aurora aside.pds-sidebar.mm-sidebar {
+    background: #FFFFFF !important;
+    border-right: 1px solid #E5E5E5 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-radius: 0 !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-sidebar .pds-sidebar-brand,
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-logo.pds-sidebar-brand,
+body.pds-admin.pds-theme-aurora .pds-sidebar .pds-brand-link,
+body.pds-admin.pds-theme-aurora .pds-sidebar .pds-brand-copy,
+body.pds-admin.pds-theme-aurora .pds-sidebar .pds-brand-copy span,
+body.pds-admin.pds-theme-aurora .pds-sidebar .pds-brand-copy strong,
+body.pds-admin.pds-theme-aurora .pds-sidebar .pds-nav-section__label {
+    color: #111111 !important;
+    border-bottom-color: #E5E5E5 !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-sidebar .pds-nav-section__label,
+body.pds-admin.pds-theme-aurora .pds-sidebar .pds-nav-section__label span {
+    color: #6B6B6B !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu > li > a,
+body.pds-admin.pds-theme-aurora .pds-sidebar .sidebar-layout > a,
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu li a {
+    color: #111111 !important;
+    margin: 0 !important;
+    padding: 0.55rem 0.9rem !important;
+    border-radius: 0 !important;
+    border-left: 3px solid transparent !important;
+    font-size: 0.84rem !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu > li.active > a,
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu li.active-menu > a,
+body.pds-admin.pds-theme-aurora .pds-sidebar .sidebar-layout.active > a,
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu li.active > a {
+    background: #FFF4EB !important;
+    color: var(--site-color) !important;
+    border-left-color: var(--site-color) !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu > li > a:hover {
+    background: #F7F7F7 !important;
+    color: #111111 !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu li a > i:not(.mm-arrow-right),
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu svg {
+    color: var(--site-color) !important;
+    background: #FFF4EB !important;
+    border: 1px solid rgba(var(--brand-rgb), 0.16) !important;
+}
+
+/* Varied icon accents (Point orange + supporting hues) */
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu > li:nth-child(6n+1) > a > i:not(.mm-arrow-right) {
+    color: var(--site-color) !important;
+    background: rgba(var(--brand-rgb), 0.12) !important;
+    border-color: rgba(var(--brand-rgb), 0.2) !important;
+}
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu > li:nth-child(6n+2) > a > i:not(.mm-arrow-right) {
+    color: #0284C7 !important;
+    background: rgba(2, 132, 199, 0.12) !important;
+    border-color: rgba(2, 132, 199, 0.2) !important;
+}
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu > li:nth-child(6n+3) > a > i:not(.mm-arrow-right) {
+    color: #16A34A !important;
+    background: rgba(22, 163, 74, 0.12) !important;
+    border-color: rgba(22, 163, 74, 0.2) !important;
+}
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu > li:nth-child(6n+4) > a > i:not(.mm-arrow-right) {
+    color: #DB2777 !important;
+    background: rgba(219, 39, 119, 0.12) !important;
+    border-color: rgba(219, 39, 119, 0.2) !important;
+}
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu > li:nth-child(6n+5) > a > i:not(.mm-arrow-right) {
+    color: #7C3AED !important;
+    background: rgba(124, 58, 237, 0.12) !important;
+    border-color: rgba(124, 58, 237, 0.2) !important;
+}
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu > li:nth-child(6n) > a > i:not(.mm-arrow-right) {
+    color: #0F766E !important;
+    background: rgba(15, 118, 110, 0.12) !important;
+    border-color: rgba(15, 118, 110, 0.2) !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu li.active > a i:not(.mm-arrow-right),
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu li.active-menu > a i:not(.mm-arrow-right),
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu li a:hover i:not(.mm-arrow-right) {
+    color: var(--site-color) !important;
+    background: rgba(var(--brand-rgb), 0.16) !important;
+    border-color: rgba(var(--brand-rgb), 0.28) !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu li ul,
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu li .submenu {
+    background: #F7F7F7 !important;
+    border: 1px solid #E5E5E5 !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu li .submenu li a {
+    color: #6B6B6B !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu li .submenu li.active > a,
+body.pds-admin.pds-theme-aurora .pds-sidebar .mm-sidebar-menu .side-menu li .submenu li a:hover {
+    color: var(--site-color) !important;
+    background: #FFF4EB !important;
+}
+
+body.pds-admin.pds-theme-aurora .mm-footer,
+body.pds-admin.pds-theme-aurora footer,
+body.pds-admin.pds-theme-aurora .pds-footer {
+    background: #FFFFFF !important;
+    border-top: 1px solid #E5E5E5 !important;
+    color: #6B6B6B !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-topbar.mm-top-navbar,
+body.pds-admin.pds-theme-aurora .mm-top-navbar.pds-topbar {
+    background: #FFFFFF !important;
+    border-bottom: 1px solid #E5E5E5 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-radius: 0 !important;
+    color: #111111 !important;
+}
+
+body.pds-admin.pds-theme-aurora .content-page.pds-content-shell,
+body.pds-admin.pds-theme-aurora .content-page {
+    background: #F7F7F7 !important;
+}
+
+body.pds-admin.pds-theme-aurora .card,
+body.pds-admin.pds-theme-aurora .mm-card,
+body.pds-admin.pds-theme-aurora .pds-card,
+body.pds-admin.pds-theme-aurora .pds-dashboard-panel,
+body.pds-admin.pds-theme-aurora .content-page .card.card-block.card-stretch,
+body.pds-admin.pds-theme-aurora .shadow-card,
+body.pds-admin.pds-theme-aurora .iq-card,
+body.pds-admin.pds-theme-aurora .modal-content,
+body.pds-admin.pds-theme-aurora .pds-page-header {
+    background: #FFFFFF !important;
+    border: 1px solid #E5E5E5 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 8px 24px rgba(17, 17, 17, 0.04) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    color: #111111 !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-dashboard-hero {
+    border-radius: 8px !important;
+    box-shadow: none !important;
+    border: 1px solid #E5E5E5 !important;
+}
+
+body.pds-admin.pds-theme-aurora .dropdown-menu {
+    background: #FFFFFF !important;
+    border: 1px solid #E5E5E5 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 12px 28px rgba(17, 17, 17, 0.08) !important;
+}
+
+body.pds-admin.pds-theme-aurora .card .card-body,
+body.pds-admin.pds-theme-aurora .pds-dashboard-panel > .card-body {
+    background: transparent !important;
+    color: #111111 !important;
+}
+
+body.pds-admin.pds-theme-aurora .card .card-header,
+body.pds-admin.pds-theme-aurora .card-header {
+    background: #FFF4EB !important;
+    border-bottom: 1px solid #E5E5E5 !important;
+    color: #111111 !important;
+}
+
+body.pds-admin.pds-theme-aurora .card.card-block.card-stretch::before,
+body.pds-admin.pds-theme-aurora .shadow-card::before,
+body.pds-admin.pds-theme-aurora .pds-dashboard-panel::before {
+    display: none !important;
+    content: none !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-stats-grid .card.card-block,
+body.pds-admin.pds-theme-aurora .pds-stats-grid .shadow-card {
+    border-radius: 8px !important;
+    border-left: 3px solid var(--site-color) !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-stats-grid .mm-cart-image {
+    border-radius: 6px !important;
+}
+
+body.pds-admin.pds-theme-aurora .btn,
+body.pds-admin.pds-theme-aurora .btn-md,
+body.pds-admin.pds-theme-aurora .btn-sm,
+body.pds-admin.pds-theme-aurora a.btn,
+body.pds-admin.pds-theme-aurora .page-link {
+    border-radius: 6px !important;
+    font-weight: 650 !important;
+}
+
+body.pds-admin.pds-theme-aurora .btn-primary,
+body.pds-admin.pds-theme-aurora .bg-primary,
+body.pds-admin.pds-theme-aurora .badge-primary,
+body.pds-admin.pds-theme-aurora .btn-primary:hover,
+body.pds-admin.pds-theme-aurora .btn-primary:focus,
+body.pds-admin.pds-theme-aurora .page-item.active .page-link {
+    background-color: var(--site-color) !important;
+    border-color: var(--site-color) !important;
+    background-image: none !important;
+    color: #fff !important;
+    box-shadow: none !important;
+}
+
+body.pds-admin.pds-theme-aurora .text-primary,
+body.pds-admin.pds-theme-aurora a.text-primary {
+    color: var(--site-color) !important;
+}
+
+body.pds-admin.pds-theme-aurora .form-control,
+body.pds-admin.pds-theme-aurora .custom-select,
+body.pds-admin.pds-theme-aurora .select2-container--default .select2-selection--single,
+body.pds-admin.pds-theme-aurora .select2-container--default .select2-selection--multiple {
+    border-radius: 6px !important;
+    background: #FFFFFF !important;
+    border-color: #E5E5E5 !important;
+    color: #111111 !important;
+}
+
+body.pds-admin.pds-theme-aurora .table {
+    border-collapse: collapse !important;
+    border-spacing: 0 !important;
+    color: #111111 !important;
+}
+body.pds-admin.pds-theme-aurora .table thead th {
+    background: #FFF4EB !important;
+    border: 0 !important;
+    border-bottom: 1px solid #E5E5E5 !important;
+    color: #111111 !important;
+    font-size: 0.72rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-radius: 0 !important;
+}
+body.pds-admin.pds-theme-aurora .table tbody td {
+    border: 0 !important;
+    border-bottom: 1px solid #E5E5E5 !important;
+    background: #FFFFFF !important;
+    color: #111111 !important;
+}
+body.pds-admin.pds-theme-aurora .table tbody tr:nth-child(even) td {
+    background: #F7F7F7 !important;
+}
+body.pds-admin.pds-theme-aurora .table tbody tr td:first-child,
+body.pds-admin.pds-theme-aurora .table tbody tr td:last-child {
+    border-radius: 0 !important;
+}
+
+body.pds-admin.pds-theme-aurora .nav-tabs .nav-link {
+    border-radius: 0 !important;
+    border: 0 !important;
+    color: #6B6B6B !important;
+}
+body.pds-admin.pds-theme-aurora .nav-tabs .nav-link.active {
+    background: transparent !important;
+    color: var(--site-color) !important;
+    border-bottom: 3px solid var(--site-color) !important;
+}
+
+body.pds-admin.pds-theme-aurora .badge,
+body.pds-admin.pds-theme-aurora .badge-pill {
+    border-radius: 4px !important;
+}
+
+body.pds-admin.pds-theme-aurora .alert {
+    border-radius: 8px !important;
+    background: #FFF4EB !important;
+    border: 1px solid #E5E5E5 !important;
+    color: #111111 !important;
+}
+
+body.pds-admin.pds-theme-aurora .pds-list-toolbar {
+    background: #FFFFFF !important;
+    border: 1px solid #E5E5E5 !important;
+    border-radius: 8px !important;
+}
+
+body.pds-admin.pds-theme-aurora h1,
+body.pds-admin.pds-theme-aurora h2,
+body.pds-admin.pds-theme-aurora h3,
+body.pds-admin.pds-theme-aurora .card-title,
+body.pds-admin.pds-theme-aurora .pds-section-title {
+    font-family: var(--admin-font) !important;
+    letter-spacing: -0.02em;
+    font-weight: 700 !important;
+    color: #111111 !important;
+}
+

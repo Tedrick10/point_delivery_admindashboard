@@ -107,7 +107,7 @@ class Assign100LabelService
             : now('Asia/Yangon')->format('d-m-Y');
 
         $company = trim((string) (SettingData('order_invoice', 'company_name') ?: config('app.name') ?: 'Point Delivery'));
-        $hotline = trim((string) (SettingData('order_invoice', 'company_contact_number') ?: ''));
+        $hotline = companyHotlinePhone();
         $logoUrl = $this->labelLogoDataUri();
 
         return (object) [

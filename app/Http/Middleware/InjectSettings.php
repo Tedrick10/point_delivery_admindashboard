@@ -10,8 +10,13 @@ class InjectSettings
 {
     public function handle($request, Closure $next)
     {
-        $themeColor = AppSetting::all()->pluck('color')[0] ?? '#FE6F07';
+        $themeColor = brandColorHex();
         view()->share('themeColor', $themeColor);
+        view()->share('brandColorRgb', brandColorRgb());
+        view()->share('brandFontFamily', brandFontCssFamily());
+        view()->share('brandFontId', brandFontId());
+        view()->share('brandFontPack', brandFontPack());
+        view()->share('brandColorId', brandColorId());
 
         return $next($request);
     }

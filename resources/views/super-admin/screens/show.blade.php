@@ -136,7 +136,7 @@
             .sa-delivery-route-body .pds-daily-check-search-btn { background: #0f766e; color: #fff; }
             .sa-delivery-route-body .pds-cash-payout-btn--ok { background: #15803d; color: #fff; }
             .sa-delivery-route-body .pds-cash-payout-btn--warn {
-                background: #fff; color: #c2410c; border: 1px solid #fdba74;
+                background: #fff; color: var(--site-color); border: 1px solid rgba(var(--brand-rgb), 0.45);
             }
             .sa-delivery-route-body .pds-route-inline-form { display: flex; gap: 8px; align-items: center; }
             .sa-delivery-route-body .pds-route-inline-form input[type="text"] {
@@ -687,6 +687,93 @@
         </style>
     @endif
 
+    @if(($screenKey ?? '') === 'general-setting' && !empty($generalSetting))
+        <section class="sa-module-panel sa-system-settings-panel">
+            <header class="sa-module-panel__head">
+                <div>
+                    <h3>{{ __('message.sa_screen_general_setting') }}</h3>
+                    <p class="mb-0 text-muted">{{ __('message.sa_screen_general_setting_sub') }}</p>
+                </div>
+            </header>
+            @if(session('success'))
+                <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
+            @endif
+            @if(session('error'))
+                <p class="sa-fuel-default-panel__err">{{ session('error') }}</p>
+            @endif
+            @if($errors->any())
+                <p class="sa-fuel-default-panel__err">{{ $errors->first() }}</p>
+            @endif
+            <div class="sa-system-settings-embed">
+                @include('setting.general-setting', $generalSetting)
+            </div>
+        </section>
+    @endif
+
+    @if(($screenKey ?? '') === 'company-contact' && !empty($companyContact))
+        <section class="sa-module-panel sa-system-settings-panel">
+            <header class="sa-module-panel__head">
+                <div>
+                    <h3>{{ __('message.sa_screen_company_contact') }}</h3>
+                    <p class="mb-0 text-muted">{{ __('message.sa_screen_company_contact_sub') }}</p>
+                </div>
+            </header>
+            @if(session('success'))
+                <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
+            @endif
+            @if(session('error'))
+                <p class="sa-fuel-default-panel__err">{{ session('error') }}</p>
+            @endif
+            <div class="sa-system-settings-embed">
+                @include('setting.company-contact-setting', $companyContact)
+            </div>
+        </section>
+    @endif
+
+    @if(($screenKey ?? '') === 'app-store-update' && !empty($appStoreUpdate))
+        <section class="sa-module-panel sa-system-settings-panel">
+            <header class="sa-module-panel__head">
+                <div>
+                    <h3>{{ __('message.sa_screen_app_store_update') }}</h3>
+                    <p class="mb-0 text-muted">{{ __('message.sa_screen_app_store_update_sub') }}</p>
+                </div>
+            </header>
+            @if(session('success'))
+                <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
+            @endif
+            @if(session('error'))
+                <p class="sa-fuel-default-panel__err">{{ session('error') }}</p>
+            @endif
+            <div class="sa-system-settings-embed">
+                @include('setting.app-store-update', $appStoreUpdate)
+            </div>
+        </section>
+    @endif
+
+    @if(($screenKey ?? '') === 'api-server-setting' && !empty($apiServerSetting))
+        <section class="sa-module-panel sa-system-settings-panel">
+            <header class="sa-module-panel__head">
+                <div>
+                    <h3>{{ __('message.sa_screen_api_server') }}</h3>
+                    <p class="mb-0 text-muted">{{ __('message.sa_screen_api_server_sub') }}</p>
+                </div>
+            </header>
+            @if(session('success'))
+                <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
+            @endif
+            @if(session('error'))
+                <p class="sa-fuel-default-panel__err">{{ session('error') }}</p>
+            @endif
+            <div class="sa-system-settings-embed">
+                @include('setting.api-server-setting', $apiServerSetting)
+            </div>
+        </section>
+    @endif
+
+    @if(($screenKey ?? '') === 'ui-theme' && !empty($uiTheme))
+        @include('super-admin.screens.partials.ui-theme-board')
+    @endif
+
     @if(($screenKey ?? '') === 'network' && !empty($networkControl))
         @php
             $nc = $networkControl;
@@ -783,9 +870,9 @@
             .sa-network-alert-list { display: grid; gap: 10px; }
             .sa-network-alert-list__item {
                 display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-                padding: 12px 14px; border-radius: 12px; background: #fff7ed; border: 1px solid #fed7aa;
+                padding: 12px 14px; border-radius: 12px; background: rgba(var(--brand-rgb), 0.08); border: 1px solid rgba(var(--brand-rgb), 0.28);
             }
-            .sa-network-alert-list__item span { color: #9a3412; flex: 1; }
+            .sa-network-alert-list__item span { color: var(--site-color); flex: 1; }
             .sa-network-defaults { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; }
             .sa-network-defaults__card {
                 background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 16px;
@@ -871,12 +958,16 @@
 </div>
 @endsection
 
-@if(($screenKey ?? '') === 'late-fine' || ($screenKey ?? '') === 'rider-salary' || ($screenKey ?? '') === 'office-salary' || ($screenKey ?? '') === 'rider-remit' || ($screenKey ?? '') === 'account-creation' || ($screenKey ?? '') === 'roles-permissions')
+@if(($screenKey ?? '') === 'late-fine' || ($screenKey ?? '') === 'rider-salary' || ($screenKey ?? '') === 'office-salary' || ($screenKey ?? '') === 'rider-remit' || ($screenKey ?? '') === 'account-creation' || ($screenKey ?? '') === 'roles-permissions' || ($screenKey ?? '') === 'general-setting' || ($screenKey ?? '') === 'api-server-setting' || ($screenKey ?? '') === 'company-contact' || ($screenKey ?? '') === 'app-store-update')
 @push('scripts')
-@if(in_array(($screenKey ?? ''), ['late-fine', 'rider-salary', 'office-salary', 'roles-permissions'], true))
+@if(in_array(($screenKey ?? ''), ['late-fine', 'rider-salary', 'office-salary', 'roles-permissions', 'general-setting', 'api-server-setting', 'company-contact', 'app-store-update'], true))
 <script src="{{ asset('frontend-website/assets/js/jquery.min.js') }}"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/izitoast/1.4.0/css/iziToast.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/izitoast/1.4.0/js/iziToast.min.js"></script>
+@if(($screenKey ?? '') === 'general-setting')
+<link rel="stylesheet" href="{{ asset('css/vendor/select2.min.css') }}">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+@endif
 <style>
     .sa-late-fine-sheet-embed {
         overflow-x: auto;
@@ -885,10 +976,44 @@
     }
     .sa-late-fine-sheet-embed .pds-hr-toolbar { margin-top: 0; }
     .sa-late-fine-sheet-panel { overflow: visible; }
+    .sa-system-settings-embed .select2-container { width: 100% !important; }
+    .sa-app-store-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.25rem;
+        margin-top: 0.5rem;
+    }
+    .sa-app-store-card__head {
+        display: flex;
+        gap: 0.85rem;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+    }
+    .sa-app-store-card__icon {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 0.75rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--site-color, #FE6F07) 16%, #fff);
+        color: var(--site-color, #FE6F07);
+        flex-shrink: 0;
+    }
+    .sa-app-store-card__head h4 {
+        margin: 0 0 0.2rem;
+        font-size: 1.05rem;
+        font-weight: 700;
+    }
+    .sa-app-store-card__head p {
+        margin: 0 0 0.55rem;
+        color: #64748b;
+        font-size: 0.9rem;
+    }
 </style>
 <script>
 (function ($) {
-    $(document).on('click', '.sa-late-fine-sheet-embed [data--confirmation="true"], .sa-roles-embed [data--confirmation="true"]', function (e) {
+    $(document).on('click', '.sa-late-fine-sheet-embed [data--confirmation="true"], .sa-roles-embed [data--confirmation="true"], .sa-system-settings-embed [data--confirmation="true"]', function (e) {
         e.preventDefault();
         var formKey = $(this).attr('data--submit');
         var title = $(this).attr('data-title') || 'Confirm';
@@ -899,6 +1024,11 @@
         var $form = $('.sa-late-fine-sheet-embed form[data--submit="' + formKey + '"], .sa-roles-embed form[data--submit="' + formKey + '"]');
         if ($form.length) {
             $form.trigger('submit');
+            return;
+        }
+        var href = $(this).attr('href');
+        if (href && href !== '#') {
+            window.location.href = href;
         }
     });
 })(jQuery);

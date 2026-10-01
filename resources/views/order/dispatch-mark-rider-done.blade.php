@@ -398,7 +398,7 @@
                         icon: 'success',
                         title: @json(__('message.success')),
                         text: (res && res.message) ? res.message : @json(__('message.admin_rider_done_success')),
-                        confirmButtonColor: '#FE6F07'
+                        confirmButtonColor: (window.pdsBrandColor || '#FE6F07')
                     });
                 }
                 var dt = window.LaravelDataTables && window.LaravelDataTables['dataTableBuilder'];
@@ -410,7 +410,7 @@
                     : @json(__('message.something_went_wrong'));
                 if (window.SnackBar) SnackBar({ message: msg, status: 'error' });
                 else if (window.Swal) {
-                    Swal.fire({ icon: 'error', title: @json(__('message.error')), text: msg, confirmButtonColor: '#FE6F07' });
+                    Swal.fire({ icon: 'error', title: @json(__('message.error')), text: msg, confirmButtonColor: (window.pdsBrandColor || '#FE6F07') });
                 } else {
                     alert(msg);
                 }

@@ -131,11 +131,11 @@
         .pds-roles-page { --rp-gap: 16px; }
         .pds-roles-hero {
             display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
-            background: linear-gradient(135deg, #fff7ed 0%, #ffffff 55%);
+            background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.08) 0%, #ffffff 55%);
             border: 1px solid #ffe4cc; border-radius: 20px; padding: 22px 24px; margin-bottom: 18px;
         }
         .pds-roles-hero__eyebrow {
-            display: inline-flex; align-items: center; gap: 8px; color: #FE6F07; font-weight: 600; font-size: 13px; margin-bottom: 6px;
+            display: inline-flex; align-items: center; gap: 8px; color: var(--site-color); font-weight: 600; font-size: 13px; margin-bottom: 6px;
         }
         .pds-roles-hero__title { margin: 0; font-size: 26px; font-weight: 700; color: #0f172a; }
         .pds-roles-hero__subtitle { margin: 6px 0 0; color: #64748b; }
@@ -154,13 +154,13 @@
             display: flex; align-items: center; gap: 12px; width: 100%; border: 1px solid transparent;
             background: #f8fafc; border-radius: 14px; padding: 12px 14px; text-align: left; transition: .2s ease;
         }
-        .pds-roles-tab:hover { background: #fff7ed; border-color: #ffd8b0; }
+        .pds-roles-tab:hover { background: rgba(var(--brand-rgb), 0.08); border-color: #ffd8b0; }
         .pds-roles-tab.is-active {
-            background: linear-gradient(135deg, #FE6F07, #ff8f3d); color: #fff; box-shadow: 0 8px 20px rgba(254, 111, 7, .28);
+            background: linear-gradient(135deg, var(--site-color), var(--site-color)); color: #fff; box-shadow: 0 8px 20px rgba(var(--brand-rgb), .28);
         }
         .pds-roles-tab__avatar {
             width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
-            background: rgba(255,255,255,.75); color: #FE6F07; font-weight: 700;
+            background: rgba(255,255,255,.75); color: var(--site-color); font-weight: 700;
         }
         .pds-roles-tab.is-active .pds-roles-tab__avatar { background: rgba(255,255,255,.2); color: #fff; }
         .pds-roles-tab__name { font-weight: 600; }
@@ -181,7 +181,7 @@
         .pds-roles-module__header { display: flex; gap: 12px; margin-bottom: 14px; }
         .pds-roles-module__icon {
             width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
-            background: #fff7ed; color: #FE6F07; flex: 0 0 auto;
+            background: rgba(var(--brand-rgb), 0.08); color: var(--site-color); flex: 0 0 auto;
         }
         .pds-roles-module__header h5 { margin: 0; font-size: 16px; font-weight: 700; color: #0f172a; }
         .pds-roles-module__header p { margin: 4px 0 0; color: #64748b; font-size: 13px; }
@@ -192,9 +192,9 @@
         }
         .pds-roles-chip.is-visible { display: inline-flex; }
         .pds-roles-chip:has(input:checked) {
-            background: #fff7ed; border-color: #FE6F07; color: #c2410c;
+            background: rgba(var(--brand-rgb), 0.08); border-color: var(--site-color); color: var(--site-color);
         }
-        .pds-roles-chip input { width: 16px; height: 16px; accent-color: #FE6F07; margin: 0; }
+        .pds-roles-chip input { width: 16px; height: 16px; accent-color: var(--site-color); margin: 0; }
         .pds-roles-empty { grid-column: 1 / -1; text-align: center; padding: 40px; color: #64748b; }
         @media (max-width: 991px) {
             .pds-roles-shell { grid-template-columns: 1fr; }

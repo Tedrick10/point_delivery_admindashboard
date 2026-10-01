@@ -18,7 +18,14 @@ class LanguageTableController extends Controller
         $version_data = LanguageVersionDetail::where('version_no',request('version_no'))->first();
 
         if (isset($version_data) && !empty($version_data)) {
-            return json_custom_response([ 'status' => false, 'data' => [] , 'theme_color' => appSettingcurrency('color')]);
+            return json_custom_response([
+                'status' => false,
+                'data' => [],
+                'theme_color' => brandColorHex(),
+                'ui_theme' => uiThemePackId(),
+                'brand_font' => brandFontId(),
+                'brand_color' => brandColorId(),
+            ]);
         }
 
         $language_content = LanguageList::query()->where('status','1')->orderBy('id', 'asc')->get();
@@ -33,7 +40,10 @@ class LanguageTableController extends Controller
             'default_language_id' => optional($language_version)->default_language_id,
             'data' => $items,
             'allow_deliveryman' => $is_allow_deliveryman,
-            'theme_color' => appSettingcurrency('color') ?? '#FE6F07',
+            'theme_color' => brandColorHex(),
+            'ui_theme' => uiThemePackId(),
+            'brand_font' => brandFontId(),
+            'brand_color' => brandColorId(),
             'twilio_sms' => $is_twilio_active
         ];
 

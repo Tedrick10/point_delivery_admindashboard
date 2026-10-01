@@ -152,7 +152,7 @@
                                 <li class="dropdown-item pds-profile-menu__logout">
                                     <form method="POST" action="{{ route('logout') }}" class="pds-profile-menu__logout-form">
                                         @csrf
-                                        <button type="submit" class="pds-profile-menu__logout-btn" style="-webkit-appearance:none;appearance:none;border:0;outline:0;box-shadow:none;background:transparent;width:100%;display:flex;align-items:center;gap:0.65rem;padding:0.7rem 1rem;margin:0;font:inherit;font-weight:600;font-size:0.86rem;color:#c2410c;cursor:pointer;text-align:left;">
+                                        <button type="submit" class="pds-profile-menu__logout-btn" style="-webkit-appearance:none;appearance:none;border:0;outline:0;box-shadow:none;background:transparent;width:100%;display:flex;align-items:center;gap:0.65rem;padding:0.7rem 1rem;margin:0;font:inherit;font-weight:600;font-size:0.86rem;color:var(--site-color);cursor:pointer;text-align:left;">
                                             <svg class="svg-icon" width="20" height="20" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#ea580c" aria-hidden="true">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                                             </svg>
@@ -205,7 +205,7 @@
                                 <li class="dropdown-item pds-profile-menu__logout">
                                     <form method="POST" action="{{ route('logout') }}" class="pds-profile-menu__logout-form">
                                         @csrf
-                                        <button type="submit" class="pds-profile-menu__logout-btn" style="-webkit-appearance:none;appearance:none;border:0;outline:0;box-shadow:none;background:transparent;width:100%;display:flex;align-items:center;gap:0.65rem;padding:0.7rem 1rem;margin:0;font:inherit;font-weight:600;font-size:0.86rem;color:#c2410c;cursor:pointer;text-align:left;">
+                                        <button type="submit" class="pds-profile-menu__logout-btn" style="-webkit-appearance:none;appearance:none;border:0;outline:0;box-shadow:none;background:transparent;width:100%;display:flex;align-items:center;gap:0.65rem;padding:0.7rem 1rem;margin:0;font:inherit;font-weight:600;font-size:0.86rem;color:var(--site-color);cursor:pointer;text-align:left;">
                                             <svg class="svg-icon" width="20" height="20" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#ea580c" aria-hidden="true">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                                             </svg>

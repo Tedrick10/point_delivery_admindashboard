@@ -736,7 +736,7 @@ class ClientController extends Controller
             'alert-type' => 'success'
         );
 
-        return redirect()->route('frontend-section')->with($notification);
+        return redirect()->route('admin-login')->with($notification);
     }
 
     public function userExcel()

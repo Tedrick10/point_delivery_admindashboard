@@ -33,11 +33,7 @@ class SettingController extends Controller
         $page = $request->page;
 
         if ($page == '') {
-            if ($auth_user->hasAnyRole(['admin', 'demo_admin'])) {
-                $page = 'general-setting';
-            } else {
-                $page = 'profile_form';
-            }
+            $page = 'profile_form';
         }
 
         return view('setting.index', compact('page', 'pageTitle', 'auth_user', 'assets'));
@@ -157,8 +153,16 @@ class SettingController extends Controller
             case 'invoice-setting':
                 $pageTitle = __('message.invoice');
                 $invoice = config('constant.order_invoice');
+                $textKeys = [
+                    'company_name',
+                    'company_contact_number',
+                    'company_hotline',
+                    'company_address',
+                    'company_email',
+                    'express_phone',
+                ];
                 foreach ($invoice as $key => $val) {
-                    if (in_array($key, ['company_name', 'company_contact_number', 'company_address'])) {
+                    if (in_array($key, $textKeys, true)) {
                         $invoice[$key] = Setting::where('type', 'order_invoice')->where('key', $key)->pluck('value')->first();
                     } else {
                         $invoice[$key] = Setting::where('type', 'order_invoice')->where('key', $key)->first();
@@ -388,6 +392,12 @@ class SettingController extends Controller
         $request->merge(['language_option' => $language_option]);
 
         $request->merge(['site_name' => str_replace("'", "", str_replace('"', '', $request->site_name))]);
+
+        // Theme packs are controlled only from Super Admin → App Theme.
+        $packPrimary = uiThemePack()['primary'] ?? null;
+        if ($packPrimary) {
+            $request->merge(['color' => $packPrimary]);
+        }
 
         $res = AppSetting::updateOrCreate(['id' => $request->id], $request->all());
 

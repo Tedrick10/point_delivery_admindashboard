@@ -114,7 +114,7 @@ Route::get('migrate', function () {
             ]);
         }
 
-        return redirect()->route('frontend-section');
+        return redirect()->route('admin-login');
     } catch (\Exception $e) {
         return 'Migration failed: ' . $e->getMessage();
     }
@@ -702,6 +702,16 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
             ->name('welcome-promotion.settings');
         Route::put('welcome-promotion/shops/{id}', [\App\Http\Controllers\SuperAdmin\WelcomePromotionController::class, 'updateShop'])
             ->name('welcome-promotion.shop');
+        Route::post('system-settings/general', [\App\Http\Controllers\SuperAdmin\SystemSettingsController::class, 'updateGeneral'])
+            ->name('system-settings.general');
+        Route::post('system-settings/api-server', [\App\Http\Controllers\SuperAdmin\SystemSettingsController::class, 'updateApiServer'])
+            ->name('system-settings.api-server');
+        Route::post('system-settings/company-contact', [\App\Http\Controllers\SuperAdmin\SystemSettingsController::class, 'updateCompanyContact'])
+            ->name('system-settings.company-contact');
+        Route::post('system-settings/app-store-update', [\App\Http\Controllers\SuperAdmin\SystemSettingsController::class, 'updateAppStore'])
+            ->name('system-settings.app-store-update');
+        Route::post('ui-theme', [\App\Http\Controllers\SuperAdmin\UiThemeController::class, 'update'])
+            ->name('ui-theme.update');
     });
 });
 
@@ -710,14 +720,22 @@ Route::get($admin_routes, [FronthomeController::class, 'adminLogin'])->name('adm
 
 Route::get('admin/verify-otp', [FronthomeController::class, 'verifyOTP'])->name('verify-otp');
 Route::post('admin/verify-otp-post', [FronthomeController::class, 'verifyOTP_post'])->name('verify-otp-post');
-Route::get('frontend-section', [FronthomeController::class, 'index'])->name('frontend-section');
+Route::get('frontend-section', function () {
+    return redirect()->route('admin-login');
+})->name('frontend-section');
 Route::get('ordertracking', [FronthomeController::class, 'ordertracking'])->name('ordertracking');
 Route::get('email-order/{id}', [FronthomeController::class, 'emailOrder'])->name('email-order');
 Route::post('orderhistory', [FronthomeController::class, 'orderhistory'])->name('orderhistory');
-Route::get('aboutusdetail', [FronthomeController::class, 'about_us'])->name('about-us');
-Route::get('contactus', [FronthomeController::class, 'contactus'])->name('contactus');
+Route::get('aboutusdetail', function () {
+    return redirect()->route('admin-login');
+})->name('about-us');
+Route::get('contactus', function () {
+    return redirect()->route('admin-login');
+})->name('contactus');
 Route::get('privacypolicy', [FronthomeController::class, 'privacypolicy'])->name('privacypolicy');
-Route::get('delivery-partner', [FronthomeController::class, 'deliverypartner'])->name('deliverypartner');
+Route::get('delivery-partner', function () {
+    return redirect()->route('admin-login');
+})->name('deliverypartner');
 Route::get('termofservice', [FronthomeController::class, 'termofservice'])->name('termofservice');
 Route::get('delete-account', [FronthomeController::class, 'deleteAccount'])->name('delete-account');
 Route::post('client-store', [ClientController::class, 'frontendclientstore'])->name('client.store');

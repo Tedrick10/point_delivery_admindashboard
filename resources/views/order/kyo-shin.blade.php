@@ -569,7 +569,7 @@
             padding: 18px 20px;
             border-radius: 20px;
             border: 1px solid #ffd7b0;
-            background: linear-gradient(135deg, #fff7ed 0%, #fff 58%, #fffaf5 100%);
+            background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.08) 0%, #fff 58%, #fffaf5 100%);
             box-shadow: 0 12px 28px rgba(154, 52, 18, 0.06);
         }
         .pds-kyo-shin-hero__icon {
@@ -580,8 +580,8 @@
             place-items: center;
             flex-shrink: 0;
             color: #fff;
-            background: linear-gradient(135deg, #FE6F07, #ff8f3d);
-            box-shadow: 0 10px 20px rgba(254, 111, 7, 0.28);
+            background: linear-gradient(135deg, var(--site-color), var(--site-color));
+            box-shadow: 0 10px 20px rgba(var(--brand-rgb), 0.28);
             font-size: 20px;
         }
         .pds-kyo-shin-hero__copy {
@@ -592,7 +592,7 @@
             display: block;
             font-size: 13px;
             font-weight: 700;
-            color: #9a3412;
+            color: var(--site-color);
             letter-spacing: .01em;
         }
         .pds-kyo-shin-hero__copy strong {
@@ -619,8 +619,8 @@
             padding: 0 12px;
             border-radius: 999px;
             background: #fff;
-            border: 1px solid #fed7aa;
-            color: #c2410c;
+            border: 1px solid rgba(var(--brand-rgb), 0.28);
+            color: var(--site-color);
             font-size: 13px;
             font-weight: 800;
             font-style: normal;
@@ -699,10 +699,10 @@
             width: 30px;
             height: 30px;
             margin: 0;
-            border: 1px solid #fdba74;
+            border: 1px solid rgba(var(--brand-rgb), 0.45);
             border-radius: 999px;
             background: #fff;
-            color: #c2410c;
+            color: var(--site-color);
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -732,17 +732,17 @@
             justify-content: space-between;
             gap: 12px;
             padding: 22px 22px 18px;
-            background: linear-gradient(180deg, #fff7ed 0%, #fffdf9 100%);
-            border-bottom: 1px solid #ffedd5;
+            background: linear-gradient(180deg, rgba(var(--brand-rgb), 0.08) 0%, #fffdf9 100%);
+            border-bottom: 1px solid rgba(var(--brand-rgb), 0.16);
         }
         .pds-kyo-shin-ledger__heading { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
         .pds-kyo-shin-ledger__icon {
             width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center;
-            background: linear-gradient(135deg, #FE6F07, #ff8f3d); color: #fff;
-            box-shadow: 0 10px 20px rgba(254, 111, 7, .28); flex-shrink: 0;
+            background: linear-gradient(135deg, var(--site-color), var(--site-color)); color: #fff;
+            box-shadow: 0 10px 20px rgba(var(--brand-rgb), .28); flex-shrink: 0;
         }
         .pds-kyo-shin-ledger__title { margin: 0; font-size: 1.2rem; font-weight: 800; color: #1c1917; line-height: 1.3; }
-        .pds-kyo-shin-ledger__sub { margin: 4px 0 0; font-size: 13px; font-weight: 600; color: #9a3412; }
+        .pds-kyo-shin-ledger__sub { margin: 4px 0 0; font-size: 13px; font-weight: 600; color: var(--site-color); }
         .pds-kyo-shin-ledger__close {
             width: 36px; height: 36px; border: 0; border-radius: 10px; background: #fff; color: #78716c;
             box-shadow: inset 0 0 0 1px #e7e5e4; cursor: pointer;
@@ -759,8 +759,8 @@
         }
         .pds-kyo-shin-ledger__day-head {
             padding: 12px 16px 10px;
-            background: linear-gradient(90deg, #fff7ed 0%, #ffffff 72%);
-            border-bottom: 1px solid #ffedd5;
+            background: linear-gradient(90deg, rgba(var(--brand-rgb), 0.08) 0%, #ffffff 72%);
+            border-bottom: 1px solid rgba(var(--brand-rgb), 0.16);
         }
         .pds-kyo-shin-ledger__day-label {
             display: inline-flex;
@@ -768,7 +768,7 @@
             gap: 8px;
             font-weight: 800;
             font-size: 0.95rem;
-            color: #9a3412;
+            color: var(--site-color);
             white-space: nowrap;
         }
         .pds-kyo-shin-ledger__day-label i { color: #ea580c; }
@@ -806,7 +806,7 @@
             font-weight: 700;
             color: #94a3b8;
         }
-        .pds-kyo-shin-ledger__metric.is-total { border-color: #fdba74; background: #fff7ed; }
+        .pds-kyo-shin-ledger__metric.is-total { border-color: rgba(var(--brand-rgb), 0.45); background: rgba(var(--brand-rgb), 0.08); }
         .pds-kyo-shin-ledger__metric.is-held { border-color: #86efac; background: #f0fdf4; }
         .pds-kyo-shin-ledger__metric.is-returned { border-color: #fcd34d; background: #fffbeb; }
         .pds-kyo-shin-ledger__metric.is-remain { border-color: #93c5fd; background: #eff6ff; }
@@ -823,7 +823,7 @@
             color: #94a3b8;
             text-align: center;
         }
-        .pds-kyo-shin-ledger__empty i { font-size: 28px; color: #fdba74; }
+        .pds-kyo-shin-ledger__empty i { font-size: 28px; color: rgba(var(--brand-rgb), 0.45); }
         .pds-kyo-shin-ledger__empty p { margin: 0; font-weight: 700; color: #78716c; }
         @media (max-width: 640px) {
             .pds-kyo-shin-ledger__grid { grid-template-columns: 1fr; }
@@ -866,23 +866,23 @@
             width: 26px;
             height: 26px;
             border-radius: 8px;
-            background: #fff7ed;
-            color: #c2410c;
+            background: rgba(var(--brand-rgb), 0.08);
+            color: var(--site-color);
         }
-        .pds-kyo-shin-due-editor:hover { border-color: #fdba74; }
-        .pds-kyo-shin-due-editor:hover .pds-kyo-shin-due-edit-icon { background: #ffedd5; }
+        .pds-kyo-shin-due-editor:hover { border-color: rgba(var(--brand-rgb), 0.45); }
+        .pds-kyo-shin-due-editor:hover .pds-kyo-shin-due-edit-icon { background: rgba(var(--brand-rgb), 0.16); }
         .pds-rider-count--kyo-shin.is-link,
         body.pds-admin .pds-rider-count--kyo-shin.is-link {
             background: #fff;
-            border: 2px solid #fb923c;
+            border: 2px solid var(--site-color);
             color: #ea580c;
             box-shadow: none;
         }
         .pds-rider-count--kyo-shin.is-link:hover,
         body.pds-admin .pds-rider-count--kyo-shin.is-link:hover {
-            background: #fff7ed;
+            background: rgba(var(--brand-rgb), 0.08);
             border-color: #f97316;
-            color: #c2410c;
+            color: var(--site-color);
             text-decoration: none;
             transform: translateY(-1px);
         }
@@ -893,13 +893,13 @@
             gap: 12px;
             margin: 0 0 12px;
             padding: 10px 14px;
-            border: 1px solid #fed7aa;
+            border: 1px solid rgba(var(--brand-rgb), 0.28);
             border-radius: 14px;
-            background: #fff7ed;
+            background: rgba(var(--brand-rgb), 0.08);
         }
         .pds-kyo-shin-check-bar__hint {
             margin: 0;
-            color: #9a3412;
+            color: var(--site-color);
             font-size: 13px;
             font-weight: 600;
         }
@@ -924,13 +924,13 @@
             padding: 0.42rem 0.75rem;
             border: 0;
             border-radius: 999px;
-            background: linear-gradient(135deg, #FE6F07, #FF8F3D);
+            background: linear-gradient(135deg, var(--site-color), var(--site-color));
             color: #fff;
             font-size: 0.76rem;
             font-weight: 700;
             line-height: 1.2;
             white-space: nowrap;
-            box-shadow: 0 6px 14px rgba(254, 111, 7, 0.28);
+            box-shadow: 0 6px 14px rgba(var(--brand-rgb), 0.28);
         }
         .pds-kyo-shin-send-os-btn:hover { filter: brightness(1.04); color: #fff; }
         .pds-kyo-shin-send-os-btn i { font-size: 0.72rem; }

@@ -12,11 +12,28 @@
                     <div class="card-body">
                         <div class="new-user-info">
                             <div class="row">
+                                @php
+                                    $textKeys = [
+                                        'company_name',
+                                        'company_contact_number',
+                                        'company_hotline',
+                                        'company_address',
+                                        'company_email',
+                                        'express_phone',
+                                    ];
+                                @endphp
                                 @foreach($invoice as $key => $value)
-                                    @if( in_array( $key, ['company_name','company_contact_number','company_address'] ))
+                                    @if( in_array( $key, $textKeys, true ))
                                         <div class="col-md-6 form-group">
                                             {!! html()->label(__('message.'.$key))->for($key)->class('form-control-label') !!}
-                                            {!! html()->text($key, $value ?? null)->placeholder(__('message.'.$key))->class('form-control')->required() !!}
+                                            {!! html()->text($key, $value ?? null)->placeholder(__('message.'.$key))->class('form-control') !!}
+                                            @if($key === 'company_contact_number')
+                                                <small class="text-muted">{{ __('message.company_contact_number_hint') }}</small>
+                                            @elseif($key === 'company_hotline')
+                                                <small class="text-muted">{{ __('message.company_hotline_hint') }}</small>
+                                            @elseif($key === 'express_phone')
+                                                <small class="text-muted">{{ __('message.express_phone_hint') }}</small>
+                                            @endif
                                         </div>
                                     @else
                                         <div class="form-group col-md-4">

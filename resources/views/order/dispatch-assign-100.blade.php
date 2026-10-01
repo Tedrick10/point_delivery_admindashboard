@@ -1,11 +1,11 @@
 <x-master-layout :assets="$assets ?? []">
     <style>
-        .pds-assign-action-btn--kyo-shin { background: #fff7ed; border-color: #fdba74; color: #c2410c; }
+        .pds-assign-action-btn--kyo-shin { background: rgba(var(--brand-rgb), 0.08); border-color: rgba(var(--brand-rgb), 0.45); color: var(--site-color); }
         .pds-assign-action-btn--kyo-shin:disabled { opacity: .45; }
         .pds-kyo-shin-row-badge {
             display: inline-flex; align-items: center; margin-left: 6px;
             padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
-            background: #ffedd5; color: #c2410c; letter-spacing: .02em;
+            background: rgba(var(--brand-rgb), 0.16); color: var(--site-color); letter-spacing: .02em;
         }
         .pds-kyo-shin-modal {
             border: 0;
@@ -19,8 +19,8 @@
             justify-content: space-between;
             gap: 12px;
             padding: 22px 22px 16px;
-            background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
-            border-bottom: 1px solid #ffedd5;
+            background: linear-gradient(180deg, rgba(var(--brand-rgb), 0.08) 0%, #ffffff 100%);
+            border-bottom: 1px solid rgba(var(--brand-rgb), 0.16);
         }
         .pds-kyo-shin-modal__heading {
             display: flex;
@@ -34,9 +34,9 @@
             border-radius: 14px;
             display: grid;
             place-items: center;
-            background: linear-gradient(135deg, #FE6F07, #ff8f3d);
+            background: linear-gradient(135deg, var(--site-color), var(--site-color));
             color: #fff;
-            box-shadow: 0 10px 20px rgba(254, 111, 7, .28);
+            box-shadow: 0 10px 20px rgba(var(--brand-rgb), .28);
             flex-shrink: 0;
         }
         .pds-kyo-shin-modal__title {
@@ -52,8 +52,8 @@
             margin-top: 6px;
             padding: 3px 10px;
             border-radius: 999px;
-            background: #ffedd5;
-            color: #c2410c;
+            background: rgba(var(--brand-rgb), 0.16);
+            color: var(--site-color);
             font-size: 12px;
             font-weight: 700;
             letter-spacing: 0;
@@ -99,7 +99,7 @@
             border-radius: 999px;
             display: grid;
             place-items: center;
-            background: #fff7ed;
+            background: rgba(var(--brand-rgb), 0.08);
             color: #ea580c;
             font-size: 11px;
             flex-shrink: 0;
@@ -137,8 +137,8 @@
         }
         .pds-kyo-shin-modal__date input:focus {
             outline: none;
-            border-color: #fb923c;
-            box-shadow: 0 0 0 4px rgba(254, 111, 7, .12);
+            border-color: var(--site-color);
+            box-shadow: 0 0 0 4px rgba(var(--brand-rgb), .12);
         }
         .pds-kyo-shin-modal__footer {
             display: flex;
@@ -160,9 +160,9 @@
         }
         .pds-kyo-shin-modal__btn--ghost:hover { background: #e7e5e4; }
         .pds-kyo-shin-modal__btn--primary {
-            background: linear-gradient(135deg, #FE6F07, #ff8f3d);
+            background: linear-gradient(135deg, var(--site-color), var(--site-color));
             color: #fff;
-            box-shadow: 0 10px 18px rgba(254, 111, 7, .24);
+            box-shadow: 0 10px 18px rgba(var(--brand-rgb), .24);
         }
         .pds-kyo-shin-modal__btn--primary:hover { filter: brightness(1.03); }
         .pds-kyo-shin-modal__btn--primary:disabled { opacity: .5; box-shadow: none; }

@@ -37,6 +37,8 @@ class RedirectSuperAdminFromBranchPanel
         'role',
         'home',
         'welcome-promotion',
+        'remove.file',
+        'ajax-list',
     ];
 
     public function handle(Request $request, Closure $next)

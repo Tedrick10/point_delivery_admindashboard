@@ -29,7 +29,7 @@
             color: var(--sa-ink);
             background:
                 radial-gradient(ellipse 90% 70% at 50% -10%, rgba(20, 184, 166, 0.35), transparent 55%),
-                radial-gradient(ellipse 45% 40% at 100% 100%, rgba(254, 111, 7, 0.12), transparent 50%),
+                radial-gradient(ellipse 45% 40% at 100% 100%, rgba(var(--brand-rgb), 0.12), transparent 50%),
                 radial-gradient(ellipse 40% 35% at 0% 85%, rgba(255, 255, 255, 0.05), transparent 50%),
                 linear-gradient(160deg, #07141a 0%, #0c2a2a 45%, #134e4a 100%);
             display: grid;
@@ -322,7 +322,7 @@
                     <label for="password">{{ __('message.password') }}</label>
                     <div class="sa-input-wrap">
                         <i class="fas fa-lock sa-field-icon" aria-hidden="true"></i>
-                        <input id="password" type="password" name="password" class="password has-toggle" required autocomplete="current-password">
+                        <input id="password" type="password" name="password" class="password has-toggle" required autocomplete="current-password" placeholder="Enter your password">
                         <i class="sa-toggle-password fas fa-eye-slash" role="button" tabindex="0" aria-label="Show password"></i>
                     </div>
                 </div>

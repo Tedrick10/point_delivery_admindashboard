@@ -246,7 +246,7 @@
             height: 52px;
             border: none;
             border-radius: 14px;
-            background: linear-gradient(135deg, var(--site-color-dark) 0%, var(--site-color) 55%, #ff8f3d 100%);
+            background: linear-gradient(135deg, var(--site-color-dark) 0%, var(--site-color) 55%, var(--site-color) 100%);
             color: #fff;
             font-size: 0.98rem;
             font-weight: 700;

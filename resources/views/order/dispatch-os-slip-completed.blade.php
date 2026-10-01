@@ -101,7 +101,7 @@
                                         <td class="text-right">{{ $row['gate'] ?? number_format((float) ($row['gate_amount'] ?? 0)) }}</td>
                                         <td class="text-right {{ !empty($row['exclude_from_settlement_amount']) ? '' : ($row['os_to_pay_is_receive'] ? 'is-negative' : '') }}">
                                             @if(!empty($row['exclude_from_settlement_amount']))
-                                                <span class="pds-slip-kyo-shin-badge" style="display:inline-block;padding:1px 7px;border-radius:999px;background:#ffedd5;color:#c2410c;font-size:10px;font-weight:800;">{{ __('message.kyo_shin_title') }}</span>
+                                                <span class="pds-slip-kyo-shin-badge" style="display:inline-block;padding:1px 7px;border-radius:999px;background:rgba(var(--brand-rgb), 0.16);color:var(--site-color);font-size:10px;font-weight:800;">{{ __('message.kyo_shin_title') }}</span>
                                             @else
                                                 {{ $row['os_to_pay_display'] }}
                                             @endif

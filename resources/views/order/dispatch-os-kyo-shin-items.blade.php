@@ -107,7 +107,7 @@
         .pds-kyo-shin-row-badge {
             display: inline-flex; align-items: center; padding: 2px 7px;
             border-radius: 999px; font-size: 10px; font-weight: 800;
-            background: #ffedd5; color: #c2410c;
+            background: rgba(var(--brand-rgb), 0.16); color: var(--site-color);
         }
         .pds-kyo-shin-proofs {
             display: flex;
@@ -121,8 +121,8 @@
             height: 56px;
             border-radius: 8px;
             overflow: hidden;
-            border: 1px solid #fdba74;
-            background: #fff7ed;
+            border: 1px solid rgba(var(--brand-rgb), 0.45);
+            background: rgba(var(--brand-rgb), 0.08);
         }
         .pds-kyo-shin-proof img {
             width: 100%;

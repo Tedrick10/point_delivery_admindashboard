@@ -3945,39 +3945,7 @@ class OrderController extends Controller
      */
     protected function dispatchOsSlipCompany(): array
     {
-        $app = appSettingData('get');
-        $companyName = SettingData('order_invoice', 'company_name')
-            ?: ($app->site_name ?? null)
-            ?: 'Point Delivery';
-        $companyPhone = SettingData('order_invoice', 'company_contact_number')
-            ?: ($app->contact_number ?? null)
-            ?: ($app->help_support_number ?? null)
-            ?: '09400080670, 09402578059';
-        $companyAddress = SettingData('order_invoice', 'company_address')
-            ?: ($app->site_description ?? null)
-            ?: '62A, 104A*105.';
-        $companyEmail = SettingData('order_invoice', 'company_email')
-            ?: ($app->site_email ?? null)
-            ?: 'point@gmail.com';
-
-        $logoUrl = SettingData('order_invoice', 'company_logo');
-        if (! $logoUrl) {
-            $logoSetting = Setting::where('type', 'order_invoice')->where('key', 'company_logo')->first();
-            if ($logoSetting) {
-                $logoUrl = getSingleMedia($logoSetting, 'company_logo', null);
-            }
-        }
-        if (! $logoUrl && $app) {
-            $logoUrl = getSingleMedia($app, 'site_logo', null);
-        }
-
-        return [
-            'name' => $companyName,
-            'phone' => $companyPhone,
-            'address' => $companyAddress,
-            'email' => $companyEmail,
-            'logo' => $logoUrl,
-        ];
+        return slipCompanyInfo();
     }
 
     public function dispatchItemEdit($orderId, $itemId)

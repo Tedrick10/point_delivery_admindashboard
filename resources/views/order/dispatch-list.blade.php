@@ -359,7 +359,7 @@
                                         icon: 'success',
                                         title: @json(__('message.success')),
                                         text: (res && res.message) ? res.message : @json(__('message.pickup_cancelled_restored')),
-                                        confirmButtonColor: '#FE6F07',
+                                        confirmButtonColor: (window.pdsBrandColor || '#FE6F07'),
                                         confirmButtonText: @json(__('message.close'))
                                     });
                                 } else {
@@ -379,7 +379,7 @@
                                         icon: 'error',
                                         title: @json(__('message.error')),
                                         text: msg,
-                                        confirmButtonColor: '#FE6F07'
+                                        confirmButtonColor: (window.pdsBrandColor || '#FE6F07')
                                     });
                                 } else {
                                     alert(msg);
@@ -401,7 +401,7 @@
                             reverseButtons: true,
                             confirmButtonText: @json(__('message.yes')),
                             cancelButtonText: @json(__('message.cancel')),
-                            confirmButtonColor: '#FE6F07',
+                            confirmButtonColor: (window.pdsBrandColor || '#FE6F07'),
                             cancelButtonColor: '#94a3b8',
                             buttonsStyling: true,
                             customClass: {
@@ -448,7 +448,7 @@
                                         icon: 'success',
                                         title: @json(__('message.success')),
                                         text: (res && res.message) ? res.message : @json(__('message.pre_pickup_moved_to_order_list')),
-                                        confirmButtonColor: '#FE6F07',
+                                        confirmButtonColor: (window.pdsBrandColor || '#FE6F07'),
                                         confirmButtonText: @json(__('message.close'))
                                     });
                                 } else {
@@ -468,7 +468,7 @@
                                         icon: 'error',
                                         title: @json(__('message.error')),
                                         text: msg,
-                                        confirmButtonColor: '#FE6F07'
+                                        confirmButtonColor: (window.pdsBrandColor || '#FE6F07')
                                     });
                                 } else {
                                     alert(msg);
@@ -490,7 +490,7 @@
                             reverseButtons: true,
                             confirmButtonText: @json(__('message.yes')),
                             cancelButtonText: @json(__('message.cancel')),
-                            confirmButtonColor: '#FE6F07',
+                            confirmButtonColor: (window.pdsBrandColor || '#FE6F07'),
                             cancelButtonColor: '#94a3b8',
                             buttonsStyling: true,
                             customClass: {

@@ -3,7 +3,7 @@
         .pds-kyo-shin-row-badge {
             display: inline-flex; align-items: center; margin-left: 6px;
             padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
-            background: #ffedd5; color: #c2410c; letter-spacing: .02em;
+            background: rgba(var(--brand-rgb), 0.16); color: var(--site-color); letter-spacing: .02em;
         }
     </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page">

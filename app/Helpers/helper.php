@@ -108,19 +108,82 @@ function pickupErrorExpressAvailable(?Carbon $errorAt, ?Carbon $now = null): boo
     return $now->lessThanOrEqualTo(pickupErrorExpressCutoff($errorAt, $now));
 }
 
+/**
+ * Company contact for slips / labels / express service (order_invoice settings).
+ */
+function slipCompanyInfo(): array
+{
+    $app = appSettingData('get');
+    $companyName = trim((string) (SettingData('order_invoice', 'company_name') ?: ''))
+        ?: trim((string) ($app->site_name ?? ''))
+        ?: 'Point Delivery';
+    $companyPhone = trim((string) (SettingData('order_invoice', 'company_contact_number') ?: ''))
+        ?: trim((string) ($app->support_number ?? ''))
+        ?: '09400080670, 09402578059';
+    $companyAddress = trim((string) (SettingData('order_invoice', 'company_address') ?: ''))
+        ?: '62A, 104A*105.';
+    $companyEmail = trim((string) (SettingData('order_invoice', 'company_email') ?: ''))
+        ?: trim((string) ($app->site_email ?? ''))
+        ?: trim((string) ($app->support_email ?? ''))
+        ?: 'point@gmail.com';
+    $hotline = trim((string) (SettingData('order_invoice', 'company_hotline') ?: ''))
+        ?: $companyPhone;
+
+    $logoUrl = SettingData('order_invoice', 'company_logo');
+    if (! $logoUrl) {
+        $logoSetting = Setting::where('type', 'order_invoice')->where('key', 'company_logo')->first();
+        if ($logoSetting) {
+            $logoUrl = getSingleMedia($logoSetting, 'company_logo', null);
+        }
+    }
+    if (! $logoUrl && $app) {
+        $logoUrl = getSingleMedia($app, 'site_logo', null);
+    }
+
+    return [
+        'name' => $companyName,
+        'phone' => $companyPhone,
+        'address' => $companyAddress,
+        'email' => $companyEmail,
+        'hotline' => $hotline,
+        'logo' => $logoUrl,
+    ];
+}
+
+function companyHotlinePhone(): string
+{
+    return (string) (slipCompanyInfo()['hotline'] ?? '');
+}
+
+function expressServicePhone(): string
+{
+    $phone = trim((string) (SettingData('order_invoice', 'express_phone') ?: ''));
+    if ($phone !== '') {
+        return $phone;
+    }
+    $app = appSettingData('get');
+    $support = trim((string) ($app->support_number ?? ''));
+    if ($support !== '') {
+        return $support;
+    }
+
+    return '09765650634';
+}
+
 function pickupErrorClientWindow(?Order $order): array
 {
     $status = $order->status ?? null;
     $choiceEarly = (string) ($order->pickup_error_choice ?? '');
     $isPickupError = $status === 'pickup_error';
     $isExpressCancelled = $status === 'cancelled' && $choiceEarly === 'express';
+    $expressPhone = expressServicePhone();
 
     if (! $order || (! $isPickupError && ! $isExpressCancelled)) {
         return [
             'status' => $status,
             'options' => [],
             'show_express_phone' => false,
-            'express_phone' => '09765650634',
+            'express_phone' => $expressPhone,
             'express_message' => null,
             'can_cancel' => false,
             'auto_cancel_at' => null,
@@ -165,7 +228,7 @@ function pickupErrorClientWindow(?Order $order): array
             'status' => 'cancelled',
             'options' => [],
             'show_express_phone' => $showExpressPhone,
-            'express_phone' => '09765650634',
+            'express_phone' => $expressPhone,
             'express_message' => $expressMessage,
             'can_cancel' => false,
             'auto_cancel_at' => $autoCancelAt->toIso8601String(),
@@ -181,7 +244,7 @@ function pickupErrorClientWindow(?Order $order): array
             'status' => 'pickup_error',
             'options' => [],
             'show_express_phone' => false,
-            'express_phone' => '09765650634',
+            'express_phone' => $expressPhone,
             'express_message' => null,
             'can_cancel' => false,
             'auto_cancel_at' => $autoCancelAt->toIso8601String(),
@@ -198,7 +261,7 @@ function pickupErrorClientWindow(?Order $order): array
             'status' => 'pickup_error',
             'options' => [],
             'show_express_phone' => $showExpressPhone,
-            'express_phone' => '09765650634',
+            'express_phone' => $expressPhone,
             'express_message' => $expressMessage,
             'can_cancel' => false,
             'auto_cancel_at' => $autoCancelAt->toIso8601String(),
@@ -230,7 +293,7 @@ function pickupErrorClientWindow(?Order $order): array
         'status' => 'pickup_error',
         'options' => $options,
         'show_express_phone' => $showExpressPhone,
-        'express_phone' => '09765650634',
+        'express_phone' => $expressPhone,
         'express_message' => $expressMessage,
         'can_cancel' => true,
         'auto_cancel_at' => $autoCancelAt->toIso8601String(),
@@ -1678,6 +1741,199 @@ function calculate_distance($lat1, $lng1, $lat2, $lng2, $unit)
     }
 }
 
+
+/**
+ * UI theme packs shared by Admin Panel, User App, and Rider App.
+ * classic | liquid_glass | aurora
+ * Accent hue comes from brandColorHex() (Super Admin brand color).
+ */
+function uiThemePacks(): array
+{
+    $primary = brandColorHex();
+    $rgb = brandColorRgb();
+    $soft = "rgba({$rgb}, 0.10)";
+    $softStrong = "rgba({$rgb}, 0.12)";
+
+    return [
+        'classic' => [
+            'id' => 'classic',
+            'name' => 'Classic Point',
+            'subtitle' => 'Current Point layout · cream shell',
+            'primary' => $primary,
+            'surface' => '#F7F4F0',
+            'card' => '#FFFFFF',
+            'text' => '#14110F',
+            'muted' => 'rgba(20, 17, 15, 0.55)',
+            'border' => 'rgba(20, 17, 15, 0.08)',
+            'soft' => $soft,
+            'radius' => '18px',
+        ],
+        'liquid_glass' => [
+            'id' => 'liquid_glass',
+            'name' => 'Liquid Glass',
+            'subtitle' => 'Soft glass cards · pill nav',
+            'primary' => $primary,
+            'surface' => '#FBF6F1',
+            'card' => 'rgba(255, 255, 255, 0.82)',
+            'text' => '#1C1917',
+            'muted' => 'rgba(28, 25, 23, 0.55)',
+            'border' => 'rgba(255, 255, 255, 0.85)',
+            'soft' => $softStrong,
+            'radius' => '22px',
+        ],
+        'aurora' => [
+            'id' => 'aurora',
+            'name' => 'Aurora',
+            'subtitle' => 'Dense cards · accent rails',
+            'primary' => $primary,
+            'surface' => '#EDE9E5',
+            'card' => '#FFFFFF',
+            'text' => '#1C1917',
+            'muted' => 'rgba(28, 25, 23, 0.55)',
+            'border' => 'rgba(28, 25, 23, 0.12)',
+            'soft' => $soft,
+            'radius' => '8px',
+        ],
+    ];
+}
+
+function uiThemePackId(): string
+{
+    $id = (string) (SettingData('APP_THEME', 'UI_THEME_PACK') ?: 'classic');
+    $packs = uiThemePacks();
+
+    return isset($packs[$id]) ? $id : 'classic';
+}
+
+function uiThemePack(?string $id = null): array
+{
+    $packs = uiThemePacks();
+    $key = $id ?: uiThemePackId();
+
+    return $packs[$key] ?? $packs['classic'];
+}
+
+/**
+ * Super Admin brand accent colors (Admin + User + Rider).
+ * point = current Point orange, amber = #FEA500, delivery_job = Delivery Job blue.
+ */
+function brandColorPacks(): array
+{
+    return [
+        'point' => [
+            'id' => 'point',
+            'name' => 'Point Color',
+            'hex' => '#FE6F07',
+            'rgb' => '254, 111, 7',
+        ],
+        'amber' => [
+            'id' => 'amber',
+            'name' => 'Amber',
+            'hex' => '#FEA500',
+            'rgb' => '254, 165, 0',
+        ],
+        'delivery_job' => [
+            'id' => 'delivery_job',
+            'name' => 'Delivery Job Color',
+            'hex' => '#1D6FE8',
+            'rgb' => '29, 111, 232',
+        ],
+    ];
+}
+
+function brandColorId(): string
+{
+    $id = (string) (SettingData('APP_THEME', 'BRAND_COLOR') ?: 'point');
+    $packs = brandColorPacks();
+
+    return isset($packs[$id]) ? $id : 'point';
+}
+
+function brandColorPack(?string $id = null): array
+{
+    $packs = brandColorPacks();
+    $key = $id ?: brandColorId();
+
+    return $packs[$key] ?? $packs['point'];
+}
+
+function brandColorHex(?string $id = null): string
+{
+    return brandColorPack($id)['hex'];
+}
+
+function brandColorRgb(?string $id = null): string
+{
+    return brandColorPack($id)['rgb'];
+}
+
+/**
+ * Super Admin brand fonts (Admin + User + Rider). Sizes stay unchanged.
+ * outfit = current, z17_strength = custom TTF, rubik = alternate Google font.
+ */
+function brandFontPacks(): array
+{
+    return [
+        'outfit' => [
+            'id' => 'outfit',
+            'name' => 'Outfit (Current)',
+            'family' => "'Outfit', 'Noto Sans Myanmar', system-ui, sans-serif",
+            'google' => 'Outfit:wght@400;500;600;700;800',
+            'flutter' => 'Outfit',
+            'flutter_source' => 'google',
+            'size_scale' => 1.0,
+        ],
+        'z17_strength' => [
+            'id' => 'z17_strength',
+            'name' => 'Z17 Strength',
+            // CSS aliases must match @font-face + TTF name table (Z17-Strength / Z17Strength).
+            'family' => "'Z17Strength', 'Z17-Strength', 'Z17 Strength', 'Noto Sans Myanmar', system-ui, sans-serif",
+            'google' => null,
+            'flutter' => 'Z17Strength',
+            'flutter_source' => 'asset',
+            // Compact glyphs — bump size so it reads like Outfit/Rubik.
+            'size_scale' => 1.2,
+        ],
+        'rubik' => [
+            'id' => 'rubik',
+            'name' => 'Rubik',
+            'family' => "'Rubik', 'Noto Sans Myanmar', system-ui, sans-serif",
+            'google' => 'Rubik:wght@400;500;600;700;800',
+            'flutter' => 'Rubik',
+            'flutter_source' => 'google',
+            'size_scale' => 1.0,
+        ],
+    ];
+}
+
+function brandFontId(): string
+{
+    $id = (string) (SettingData('APP_THEME', 'BRAND_FONT') ?: 'outfit');
+    $packs = brandFontPacks();
+
+    return isset($packs[$id]) ? $id : 'outfit';
+}
+
+function brandFontPack(?string $id = null): array
+{
+    $packs = brandFontPacks();
+    $key = $id ?: brandFontId();
+
+    return $packs[$key] ?? $packs['outfit'];
+}
+
+function brandFontCssFamily(?string $id = null): string
+{
+    return brandFontPack($id)['family'];
+}
+
+function brandFontSizeScale(?string $id = null): float
+{
+    $scale = brandFontPack($id)['size_scale'] ?? 1.0;
+
+    return is_numeric($scale) ? (float) $scale : 1.0;
+}
+
 function SettingData($type, $key = null)
 {
     $setting = Setting::where('type', $type);
@@ -1688,6 +1944,49 @@ function SettingData($type, $key = null)
 
     $setting_data = $setting->pluck('value')->first();
     return $setting_data;
+}
+
+/**
+ * Play / App Store force-update payload for User or Rider apps.
+ * Prefers USER_APP_VERSION / RIDER_APP_VERSION, falls back to legacy APP_VERSION.
+ *
+ * @param  'user'|'rider'  $app
+ * @return array{android_force_update: mixed, android_version_code: mixed, appstore_url: mixed, ios_force_update: mixed, ios_version: mixed, playstore_url: mixed}
+ */
+function appVersionPayload(string $app = 'user'): array
+{
+    $app = $app === 'rider' ? 'rider' : 'user';
+    $type = $app === 'rider' ? 'RIDER_APP_VERSION' : 'USER_APP_VERSION';
+    $fields = [
+        'android_force_update' => 'ANDROID_FORCE_UPDATE',
+        'android_version_code' => 'ANDROID_VERSION_CODE',
+        'appstore_url' => 'APPSTORE_URL',
+        'ios_force_update' => 'IOS_FORCE_UPDATE',
+        'ios_version' => 'IOS_VERSION',
+        'playstore_url' => 'PLAYSTORE_URL',
+    ];
+    $defaults = [
+        'user' => [
+            'playstore_url' => 'https://play.google.com/store/apps/details?id=com.pointuser.com',
+        ],
+        'rider' => [
+            'playstore_url' => 'https://play.google.com/store/apps/details?id=com.pointdelivery.com',
+        ],
+    ];
+
+    $out = [];
+    foreach ($fields as $jsonKey => $suffix) {
+        $val = SettingData($type, $type.'_'.$suffix);
+        if ($val === null || $val === '') {
+            $val = SettingData('APP_VERSION', 'APP_VERSION_'.$suffix);
+        }
+        if (($val === null || $val === '') && isset($defaults[$app][$jsonKey])) {
+            $val = $defaults[$app][$jsonKey];
+        }
+        $out[$jsonKey] = $val;
+    }
+
+    return $out;
 }
 
 function registrationSettingValue(string $group, string $key)

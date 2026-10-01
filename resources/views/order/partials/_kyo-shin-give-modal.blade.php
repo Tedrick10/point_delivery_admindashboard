@@ -1,14 +1,14 @@
 <style>
-    .pds-assign-action-btn--kyo-shin { background: #fff7ed !important; border: 1px solid #fdba74; box-shadow: none; color: #c2410c; }
+    .pds-assign-action-btn--kyo-shin { background: rgba(var(--brand-rgb), 0.08) !important; border: 1px solid rgba(var(--brand-rgb), 0.45); box-shadow: none; color: var(--site-color); }
     .pds-assign-action-btn--kyo-shin:disabled { opacity: .45; }
     body.pds-admin .pds-assign-action-btn--kyo-shin,
     body.pds-admin .pds-assign-action-btn--kyo-shin .pds-assign-action-btn__icon,
-    body.pds-admin .pds-assign-action-btn--kyo-shin .pds-assign-action-btn__label { color: #c2410c !important; }
-    body.pds-admin .pds-assign-action-btn--kyo-shin .pds-assign-action-btn__icon { background: #ffedd5; }
+    body.pds-admin .pds-assign-action-btn--kyo-shin .pds-assign-action-btn__label { color: var(--site-color) !important; }
+    body.pds-admin .pds-assign-action-btn--kyo-shin .pds-assign-action-btn__icon { background: rgba(var(--brand-rgb), 0.16); }
     .pds-kyo-shin-row-badge {
         display: inline-flex; align-items: center; margin-left: 6px;
         padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
-        background: #ffedd5; color: #c2410c; letter-spacing: 0;
+        background: rgba(var(--brand-rgb), 0.16); color: var(--site-color); letter-spacing: 0;
     }
     .pds-kyo-shin-modal {
         border: 0;
@@ -24,19 +24,19 @@
         justify-content: space-between;
         gap: 12px;
         padding: 22px 22px 16px;
-        background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
-        border-bottom: 1px solid #ffedd5;
+        background: linear-gradient(180deg, rgba(var(--brand-rgb), 0.08) 0%, #ffffff 100%);
+        border-bottom: 1px solid rgba(var(--brand-rgb), 0.16);
     }
     .pds-kyo-shin-modal__heading { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
     .pds-kyo-shin-modal__icon {
         width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
-        background: linear-gradient(135deg, #FE6F07, #ff8f3d); color: #fff;
-        box-shadow: 0 10px 20px rgba(254, 111, 7, .28); flex-shrink: 0;
+        background: linear-gradient(135deg, var(--site-color), var(--site-color)); color: #fff;
+        box-shadow: 0 10px 20px rgba(var(--brand-rgb), .28); flex-shrink: 0;
     }
     .pds-kyo-shin-modal__title { margin: 0; font-size: 1.15rem; font-weight: 800; color: #1c1917; line-height: 1.35; letter-spacing: 0; word-spacing: normal; }
     .pds-kyo-shin-modal__count {
         display: inline-flex; margin-top: 6px; padding: 3px 10px; border-radius: 999px;
-        background: #ffedd5; color: #c2410c !important; font-size: 12px; font-weight: 700;
+        background: rgba(var(--brand-rgb), 0.16); color: var(--site-color) !important; font-size: 12px; font-weight: 700;
         letter-spacing: 0; word-spacing: normal;
     }
     .pds-kyo-shin-modal__close {
@@ -68,7 +68,7 @@
     .pds-kyo-shin-modal__date input { padding-left: 42px; }
     .pds-kyo-shin-modal__date input:focus,
     .pds-kyo-shin-modal__text:focus {
-        outline: none; border-color: #fb923c; box-shadow: 0 0 0 4px rgba(254, 111, 7, .12);
+        outline: none; border-color: var(--site-color); box-shadow: 0 0 0 4px rgba(var(--brand-rgb), .12);
     }
     .pds-kyo-shin-modal__text.is-readonly,
     .pds-kyo-shin-modal__text[readonly] {
@@ -134,12 +134,12 @@
         min-height: 84px;
         margin: 0;
         padding: 12px 14px;
-        border: 1px dashed #fdba74;
+        border: 1px dashed rgba(var(--brand-rgb), 0.45);
         border-radius: 16px;
         background: #fffaf5;
         cursor: pointer;
     }
-    .pds-kyo-shin-modal__upload:hover { border-color: #fb923c; background: #fff7ed; }
+    .pds-kyo-shin-modal__upload:hover { border-color: var(--site-color); background: rgba(var(--brand-rgb), 0.08); }
     .pds-kyo-shin-modal__upload-icon {
         width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0;
         background: linear-gradient(135deg, #f97316, #ea580c); color: #fff;
@@ -149,12 +149,12 @@
     body.pds-admin .pds-kyo-shin-modal__upload-title,
     .pds-kyo-shin-modal__upload-title {
         display: block; margin: 0 0 2px; font-size: 14px !important; font-weight: 800 !important;
-        color: #9a3412 !important; letter-spacing: 0; word-spacing: normal;
+        color: var(--site-color) !important; letter-spacing: 0; word-spacing: normal;
     }
     body.pds-admin .pds-kyo-shin-modal__upload-hint,
     .pds-kyo-shin-modal__upload-hint {
         display: block; margin: 0; font-size: 12px !important; font-weight: 600 !important;
-        color: #c2410c !important; letter-spacing: 0; word-spacing: normal;
+        color: var(--site-color) !important; letter-spacing: 0; word-spacing: normal;
     }
     .pds-kyo-shin-modal__upload input { display: none; }
     .pds-kyo-shin-modal__previews {
@@ -165,7 +165,7 @@
     }
     .pds-kyo-shin-modal__preview-item img {
         width: 72px; height: 72px; object-fit: cover; border-radius: 10px;
-        border: 1px solid #fed7aa; display: block;
+        border: 1px solid rgba(var(--brand-rgb), 0.28); display: block;
     }
     .pds-kyo-shin-modal__preview-remove {
         position: absolute; top: -6px; right: -6px; width: 22px; height: 22px;
@@ -182,16 +182,16 @@
     .pds-kyo-shin-modal__btn--ghost { background: #f5f5f4; color: #44403c; }
     .pds-kyo-shin-modal__btn--ghost:hover { background: #e7e5e4; }
     .pds-kyo-shin-modal__btn--primary {
-        background: linear-gradient(135deg, #FE6F07, #ff8f3d); color: #fff;
-        box-shadow: 0 10px 18px rgba(254, 111, 7, .24);
+        background: linear-gradient(135deg, var(--site-color), var(--site-color)); color: #fff;
+        box-shadow: 0 10px 18px rgba(var(--brand-rgb), .24);
     }
     .pds-kyo-shin-modal__btn--primary:disabled { opacity: .5; box-shadow: none; }
     .pds-kyo-shin-modal__amount {
         margin: 0 0 16px;
         padding: 14px 16px 12px;
         border-radius: 16px;
-        border: 1px solid #fdba74;
-        background: linear-gradient(180deg, #fff7ed 0%, #fff 100%);
+        border: 1px solid rgba(var(--brand-rgb), 0.45);
+        background: linear-gradient(180deg, rgba(var(--brand-rgb), 0.08) 0%, #fff 100%);
     }
     body.pds-admin .pds-kyo-shin-modal__amount-label,
     .pds-kyo-shin-modal__amount-label {
@@ -199,7 +199,7 @@
         margin: 0 0 4px;
         font-size: 12px !important;
         font-weight: 700 !important;
-        color: #c2410c !important;
+        color: var(--site-color) !important;
         letter-spacing: 0;
     }
     body.pds-admin .pds-kyo-shin-modal__amount-total,
@@ -210,7 +210,7 @@
         margin: 0;
         font-size: 26px !important;
         font-weight: 800 !important;
-        color: #9a3412 !important;
+        color: var(--site-color) !important;
         letter-spacing: 0;
         line-height: 1.15;
     }
@@ -218,13 +218,13 @@
         font-size: 13px;
         font-style: normal;
         font-weight: 700;
-        color: #c2410c;
+        color: var(--site-color);
     }
     .pds-kyo-shin-modal__amount-list {
         list-style: none;
         margin: 10px 0 0;
         padding: 8px 0 0;
-        border-top: 1px dashed #fed7aa;
+        border-top: 1px dashed rgba(var(--brand-rgb), 0.28);
     }
     .pds-kyo-shin-modal__amount-list:empty { display: none; }
     .pds-kyo-shin-modal__amount-list li {
@@ -236,7 +236,7 @@
         font-weight: 700;
         color: #44403c;
     }
-    .pds-kyo-shin-modal__amount-list strong { color: #9a3412; }
+    .pds-kyo-shin-modal__amount-list strong { color: var(--site-color); }
 </style>
 
 @php

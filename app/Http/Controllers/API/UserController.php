@@ -792,6 +792,12 @@ class UserController extends Controller
         $data['privacy_policy_rider'] = SettingData('privacy_policy_rider', 'privacy_policy_rider');
         $data['terms_condition'] = SettingData('terms_condition', 'terms_condition');
         $data['terms_condition_rider'] = SettingData('terms_condition_rider', 'terms_condition_rider');
+        $data['express_phone'] = expressServicePhone();
+        $data['company_hotline'] = companyHotlinePhone();
+        $slip = slipCompanyInfo();
+        $data['company_contact_number'] = $slip['phone'] ?? null;
+        $data['company_address'] = $slip['address'] ?? null;
+        $data['company_email'] = $slip['email'] ?? null;
 
         return json_custom_response($data);
     }
@@ -1252,14 +1258,10 @@ class UserController extends Controller
         $dashboard_data['monthly_payment_cancelled_report'] = $monthly_payment_cancelled_order_data;
 
         $dashboard_data['country_city_data'] = Country::with('cities')->get();
-        $dashboard_data['deliver_man_version'] = [
-            'android_force_update' => SettingData('APP_VERSION', 'APP_VERSION_ANDROID_FORCE_UPDATE'),
-            'android_version_code' => SettingData('APP_VERSION', 'APP_VERSION_ANDROID_VERSION_CODE'),
-            'appstore_url' => SettingData('APP_VERSION', 'APP_VERSION_APPSTORE_URL'),
-            'ios_force_update' => SettingData('APP_VERSION', 'APP_VERSION_IOS_FORCE_UPDATE'),
-            'ios_version' => SettingData('APP_VERSION', 'APP_VERSION_IOS_VERSION'),
-            'playstore_url' => SettingData('APP_VERSION', 'APP_VERSION_PLAYSTORE_URL'),
-        ];
+        $dashboard_data['user_app_version'] = appVersionPayload('user');
+        $dashboard_data['rider_app_version'] = appVersionPayload('rider');
+        // Legacy key kept for Rider / older clients
+        $dashboard_data['deliver_man_version'] = $dashboard_data['rider_app_version'];
 
         $dashboard_data['crisp_data'] = [
             'crisp_chat_website_id' => SettingData('CRISP_CHAT_CONFIGURATION', 'CRISP_CHAT_CONFIGURATION_WEBSITE_ID') ?? null,
