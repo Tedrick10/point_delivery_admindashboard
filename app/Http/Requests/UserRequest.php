@@ -102,12 +102,17 @@ class UserRequest extends FormRequest
 
     protected function prepareForValidation()
     {
-        if ($this->has('contact_number')) {
-            $raw = $this->input('contact_number');
-            // intlTelInput can submit duplicate fields as an array.
-            if (is_array($raw)) {
-                $raw = collect($raw)->filter()->last();
-            }
+        $raw = $this->input('contact_number');
+        // Create form posts national digits on `phone` when JS sync did not fill contact_number.
+        if ((!$this->filled('contact_number') || $raw === '' || $raw === null) && $this->filled('phone')) {
+            $raw = $this->input('phone');
+        }
+        // intlTelInput can submit duplicate fields as an array.
+        if (is_array($raw)) {
+            $raw = collect($raw)->filter()->last();
+        }
+
+        if ($raw !== null && $raw !== '') {
             $contactNumber = normalizeContactNumber((string) $raw);
             // Dial-code-only leftovers from intlTelInput when the field is left empty.
             if ($contactNumber === '' || preg_match('/^\+\d{1,4}$/', $contactNumber)) {
@@ -122,6 +127,7 @@ class UserRequest extends FormRequest
         return [
             'userProfile.dob.*'  =>'DOB is required.',
             'email.unique' => 'This email is already registered.',
+            'contact_number.required' => __('message.please_enter_contact_number'),
             'contact_number.unique' => __('message.contact_number_already_taken'),
             'username.unique' => __('message.username_taken'),
             'username.regex' => __('message.username_invalid'),

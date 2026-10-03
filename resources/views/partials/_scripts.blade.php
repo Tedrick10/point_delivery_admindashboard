@@ -113,6 +113,12 @@ if (window.PDS_MYANMAR_NRC_DATA_URL) {
     </script>
 @endif
 
+{{-- Phone widgets must load before page bottom scripts that initialize them. --}}
+@if ((isset($assets) && in_array('phone', $assets)) || in_array('contact_nbr', $assets))
+    <script src="{{ asset('vendor/intlTelInput/js/intlTelInput-jquery.min.js') }}"></script>
+    <script src="{{ asset('vendor/intlTelInput/js/intlTelInput.min.js') }}"></script>
+@endif
+
 @yield('bottom_script')
 @stack('bottom_script')
 
@@ -146,10 +152,6 @@ if (window.PDS_MYANMAR_NRC_DATA_URL) {
 @endif
 
 <!-- app JavaScript -->
-@if ((isset($assets) && in_array('phone', $assets)) || in_array('contact_nbr', $assets))
-    <script src="{{ asset('vendor/intlTelInput/js/intlTelInput-jquery.min.js') }}"></script>
-    <script src="{{ asset('vendor/intlTelInput/js/intlTelInput.min.js') }}"></script>
-@endif
 
 <script src="{{ public_asset_ver('js/app.js') }}" defer></script>
 <script src="{{ public_asset_ver('js/admin-animations.js') }}"></script>

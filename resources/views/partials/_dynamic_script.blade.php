@@ -604,10 +604,33 @@
                     action: function () {
 
                         if(ajaxtype == 'true') {
-                            let url = _this;
+                            var $trigger = $(_this);
+                            var $form = $(document).find('form[data--submit="'+form+'"]');
+                            if (!$form.length) {
+                                $form = $trigger.closest('form');
+                            }
+                            var url = $trigger.attr('href') || $form.attr('action');
+                            if (!url || url === 'javascript:void(0)' || url.indexOf('javascript:') === 0) {
+                                url = $form.attr('action');
+                            }
+                            var method = String($trigger.attr('data-method') || $form.find('input[name="_method"]').val() || $form.attr('method') || 'POST').toUpperCase();
+                            var data = $form.serializeArray();
+                            if (method !== 'GET' && method !== 'POST') {
+                                // Laravel method spoofing for PUT/PATCH/DELETE over AJAX POST.
+                                if (!data.some(function (item) { return item.name === '_method'; })) {
+                                    data.push({ name: '_method', value: method });
+                                }
+                                method = 'POST';
+                            }
 
-                            let data = $('[data--submit="'+form+'"]').serializeArray();
-                            $.post(url, data).then(response => {
+                            $.ajax({
+                                url: url,
+                                type: method,
+                                data: data,
+                                headers: {
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                }
+                            }).done(function (response) {
                                 if(response.status) {
                                     if(response.event == 'norefresh') {
                                         getAssignList(response.type);
@@ -636,13 +659,20 @@
                                         showMessage(response.message)
                                         return true;
                                     }
-                                    $('.dataTable').DataTable().ajax.reload( null, false );
+                                    if ($.fn.DataTable && $('.dataTable').length) {
+                                        $('.dataTable').DataTable().ajax.reload( null, false );
+                                    }
                                     showMessage(response.message)
                                 }
                                 if(response.status == false){
                                     errorMessage(response.message)
                                 }
-                            })
+                            }).fail(function (xhr) {
+                                var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                                    ? xhr.responseJSON.message
+                                    : "{{ __('message.something_went_wrong') }}";
+                                errorMessage(msg);
+                            });
                         } else {
                             if (form !== undefined && form){
                                 $(document).find('[data--submit="'+form+'"]').submit();

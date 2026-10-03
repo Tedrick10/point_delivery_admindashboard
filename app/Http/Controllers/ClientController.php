@@ -63,7 +63,10 @@ class ClientController extends Controller
         $country = Country::pluck('name', 'id')->prepend(__('message.select_name', ['select' => __('message.country')]), '')->toArray();
 
         [$selectedBranchId, $branchFilter, $branchTabs] = resolveDestinationBranchFilter(request());
-        $osCountQuery = User::query()->where('user_type', 'client')->withTrashed();
+        $osCountQuery = User::query()
+            ->where('user_type', 'client')
+            ->where('name', 'not like', 'Deleted % client')
+            ->where('name', 'not like', 'Deleted % Client');
         applyClientBranchScope($osCountQuery, auth()->user(), $selectedBranchId);
         $approvalCounts = [
             'pending' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_PENDING)->count(),
@@ -327,58 +330,73 @@ class ClientController extends Controller
      */
     public function store(UserRequest $request)
     {
-        $is_email_verification = registrationSettingValue('user_registration_setting', 'email_verification');
-        $is_mobile_verification = registrationSettingValue('user_registration_setting', 'mobile_verification');
+        try {
+            $is_email_verification = registrationSettingValue('user_registration_setting', 'email_verification');
+            $is_mobile_verification = registrationSettingValue('user_registration_setting', 'mobile_verification');
 
-        $osProfile = prepareUserOsProfileFromRequest($request);
-        $address = buildUserAddressFromProfile($osProfile);
-        $username = sanitizeRegistrationUsername((string) $request->username);
-        if ($username === '') {
-            $username = registrationUsernameFromPhone($request->contact_number);
+            $osProfile = prepareUserOsProfileFromRequest($request);
+            $address = buildUserAddressFromProfile($osProfile);
+            $username = sanitizeRegistrationUsername((string) $request->username);
+            if ($username === '') {
+                $username = registrationUsernameFromPhone($request->contact_number);
+            }
+            $email = registrationEmailFromPhone($request->contact_number);
+            if (User::withTrashed()->where('email', $email)->exists()) {
+                $digits = preg_replace('/\D+/', '', (string) $request->contact_number) ?: 'user';
+                $email = $digits.'.'.uniqid('os', false).'@pointdelivery.local';
+            }
+
+            $payload = $request->only(['name', 'contact_number']);
+            $payload['password'] = bcrypt($request->password);
+            $payload['username'] = $username;
+            $payload['email'] = $email;
+            $payload['address'] = $address;
+            $payload['os_profile'] = $osProfile;
+            $payload['display_name'] = $request->name;
+            $payload['user_type'] = 'client';
+            $payload['referral_code'] = generateRandomCode();
+            $payload['created_by_admin'] = $request->created_by_admin ?? 1;
+            $payload['is_temp_password'] = $request->is_temp_password ?? 1;
+            $payload['is_vip'] = 0;
+
+            $approvalStatus = $request->input('approval_status', User::APPROVAL_APPROVED);
+            if (! in_array($approvalStatus, User::approvalStatuses(), true)) {
+                $approvalStatus = User::APPROVAL_APPROVED;
+            }
+            $payload['approval_status'] = $approvalStatus;
+            $payload['status'] = $approvalStatus === User::APPROVAL_APPROVED ? 1 : 0;
+
+            if ($is_email_verification == 0) {
+                $payload['email_verified_at'] = now();
+            }
+
+            if ($is_mobile_verification == 0) {
+                $payload['otp_verify_at'] = now();
+            }
+
+            $payload['branch_id'] = $payload['branch_id']
+                ?? defaultDestinationBranchId()
+                ?: forcedBranchId();
+
+            $result = User::create($payload);
+            uploadMediaFile($result, $request->profile_image, 'profile_image');
+            if (! $result->hasRole('client')) {
+                $result->assignRole('client');
+            }
+            createDefaultUserAddressFromRegistration($result, $request->contact_number);
+            $message = __('message.save_form', ['form' => __('message.online_shop')]);
+            if ($request->is('api/*')) {
+                return json_message_response($message);
+            }
+            return redirect()->route('users.index')->withSuccess($message);
+        } catch (\Throwable $e) {
+            report($e);
+            $message = __('message.something_went_wrong') ?: 'Unable to create online shop. Please try again.';
+            if ($request->is('api/*') || $request->ajax()) {
+                return response()->json(['status' => false, 'message' => $message], 500);
+            }
+            return redirect()->back()->withInput()->withErrors($message);
         }
-        $email = registrationEmailFromPhone($request->contact_number);
-
-        $payload = $request->only(['name', 'contact_number']);
-        $payload['password'] = bcrypt($request->password);
-        $payload['username'] = $username;
-        $payload['email'] = $email;
-        $payload['address'] = $address;
-        $payload['os_profile'] = $osProfile;
-        $payload['display_name'] = $request->name;
-        $payload['user_type'] = 'client';
-        $payload['referral_code'] = generateRandomCode();
-        $payload['created_by_admin'] = $request->created_by_admin ?? 1;
-        $payload['is_temp_password'] = $request->is_temp_password ?? 1;
-        $payload['is_vip'] = 0;
-
-        $approvalStatus = $request->input('approval_status', User::APPROVAL_APPROVED);
-        if (! in_array($approvalStatus, User::approvalStatuses(), true)) {
-            $approvalStatus = User::APPROVAL_APPROVED;
-        }
-        $payload['approval_status'] = $approvalStatus;
-        $payload['status'] = $approvalStatus === User::APPROVAL_APPROVED ? 1 : 0;
-
-        if ($is_email_verification == 0) {
-            $payload['email_verified_at'] = now();
-        }
-
-        if ($is_mobile_verification == 0) {
-            $payload['otp_verify_at'] = now();
-        }
-
-        $payload['branch_id'] = $payload['branch_id']
-            ?? defaultDestinationBranchId()
-            ?: forcedBranchId();
-
-        $result = User::create($payload);
-        uploadMediaFile($result, $request->profile_image, 'profile_image');
-        $result->assignRole('client');
-        createDefaultUserAddressFromRegistration($result, $request->contact_number);
-        $message = __('message.save_form', ['form' => __('message.online_shop')]);
-        if ($request->is('api/*')) {
-            return json_message_response($message);
-        }
-        return redirect()->route('users.index')->withSuccess($message);
     }
 
     /**
@@ -620,22 +638,54 @@ class ClientController extends Controller
             }
             return redirect()->route('users.index')->withErrors($message);
         }
-        $user = User::find($id);
+        $user = User::where('user_type', 'client')->find($id);
         if ($user == null) {
             $message = __('message.not_found_entry', ['name' => __('message.online_shop')]);
-            return json_custom_response(['status' => false, 'message' => $message]);
-        }
-        if ($user != '') {
-            $user->delete();
-            $status = 'success';
-            $message = __('message.delete_form', ['form' => __('message.online_shop')]);
+            if (request()->ajax()) {
+                return response()->json(['status' => false, 'message' => $message]);
+            }
+            return redirect()->back()->withErrors($message);
         }
 
+        $this->scrubAndHideOnlineShop($user);
+        $message = __('message.delete_form', ['form' => __('message.online_shop')]);
+
         if (request()->ajax()) {
-            return json_message_response($message);
+            return response()->json(['status' => true, 'message' => $message]);
         }
-        return redirect()->route('users.index')->withSuccess($message);
+
+        return redirect()->back()->withSuccess($message);
     }
+
+    /**
+     * Anonymize PII and soft-delete so the shop disappears from every active list.
+     * Keeping deleted_at=null after rename was leaving "Deleted X Client" rows visible.
+     */
+    private function scrubAndHideOnlineShop(User $user): void
+    {
+        $now = now();
+        $userId = $user->id;
+        $stamp = $now->format('YmdHis');
+
+        $user->forceFill([
+            'name' => 'Deleted '.$userId.' client',
+            'username' => 'deleted_'.$userId.'_'.$stamp,
+            'address' => null,
+            'email' => $stamp.$userId.'@deleted.com',
+            'contact_number' => $now->format('ymdHis').$userId,
+            'os_profile' => null,
+            'status' => 0,
+            'approval_status' => User::APPROVAL_REJECTED,
+        ])->save();
+
+        $user->userBankAccount()->delete();
+        $user->userAddress()->delete();
+
+        if (! $user->trashed()) {
+            $user->delete();
+        }
+    }
+
     public function action(Request $request)
     {
         $id = $request->id;
@@ -643,8 +693,13 @@ class ClientController extends Controller
 
         $message = __('message.not_found_entry', ['name' => __('message.online_shop')]);
         if ($request->type === 'restore') {
-            $users->restore();
-            $message = __('message.msg_restored', ['name' => __('message.online_shop')]);
+            // Restoring scrubbed shops is not supported — they stay hidden.
+            if ($users && preg_match('/^Deleted\s+\d+\s+client$/i', (string) $users->name)) {
+                $message = __('message.not_found_entry', ['name' => __('message.online_shop')]);
+            } else {
+                $users->restore();
+                $message = __('message.msg_restored', ['name' => __('message.online_shop')]);
+            }
         }
 
         if ($request->type === 'forcedelete') {
@@ -659,29 +714,19 @@ class ClientController extends Controller
                 return redirect()->route('users.index')->withErrors($message);
             }
             if ($users) {
-                $now = now();
-                $usersId = $users->id;
-                $systemTime = $now->format('YmdHis');
-
-                $users->forceFill([
-                    'name' => 'Deleted ' . $usersId . ' client',
-                    'username' => 'Deleted ' . $usersId . ' client',
-                    'address' => null,
-                    'email' => $systemTime . $usersId . '@deleted.com',
-                    'contact_number' => $now->format('ymdHis') . $usersId,
-                    'deleted_at' => null,
-                ])->save();
-
-                $users->userBankAccount()->delete();
-                $users->userAddress()->delete();
-                $message = __('message.update_form',['form' => __('message.online_shop')] );
+                $this->scrubAndHideOnlineShop($users);
+                $message = __('message.delete_form', ['form' => __('message.online_shop')]);
             }
         }
         if (request()->is('api/*')) {
             return json_custom_response(['message' => $message, 'status' => true]);
         }
 
-        return redirect()->route('users.index')->withSuccess($message);
+        if (request()->ajax()) {
+            return response()->json(['status' => true, 'message' => $message]);
+        }
+
+        return redirect()->back()->withSuccess($message);
     }
 
     public function userdelete(Request $request){

@@ -89,10 +89,12 @@
 
             @if($auth_user->can('users-delete'))
                 {!! html()->form('DELETE', route('users.destroy', $id))->attribute('data--submit', 'users' . $id)->class('d-inline')->open() !!}
-                    {!! html()->a('javascript:void(0)')
+                    {!! html()->a(route('users.destroy', $id))
                         ->class('pds-os-row-action is-delete')
                         ->attribute('data--submit', 'users' . $id)
                         ->attribute('data--confirmation', 'true')
+                        ->attribute('data--ajax', 'true')
+                        ->attribute('data-method', 'DELETE')
                         ->attribute('data-title', __('message.delete_form_title', ['form' => __('message.online_shop')]))
                         ->attribute('title', __('message.delete_form_title', ['form' => __('message.online_shop')]))
                         ->attribute('data-message', __('message.delete_msg'))

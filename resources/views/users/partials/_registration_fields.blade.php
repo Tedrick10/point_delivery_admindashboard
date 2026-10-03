@@ -9,6 +9,22 @@
     $phoneNational = preg_replace('/^\+?95\s*/', '', trim((string) $phoneValue));
     $phoneStored = trim((string) (optional($data ?? null)->contact_number ?? $phoneValue));
     $usernameValue = old('username', optional($data ?? null)->username ?? '');
+
+    $selectedState = trim((string) old('os_profile.state_division', $profile['state_division'] ?? ''));
+    $selectedTownship = trim((string) old('os_profile.township', $profile['township'] ?? ''));
+    $myanmarNrcData = json_decode(@file_get_contents(public_path('data/myanmar-nrc.json')) ?: '[]', true) ?: [];
+    $mmStates = $myanmarNrcData['states'] ?? [];
+    $selectedStateTownships = [];
+    foreach ($mmStates as $state) {
+        $stateNameMm = (string) ($state['name_mm'] ?? '');
+        $stateNameEn = (string) ($state['name_en'] ?? '');
+        if ($selectedState !== '' && ($selectedState === $stateNameMm || $selectedState === $stateNameEn)) {
+            $selectedStateTownships = $state['townships'] ?? [];
+            // Normalize stored edit/old value to name_mm for the select value.
+            $selectedState = $stateNameMm !== '' ? $stateNameMm : $selectedState;
+            break;
+        }
+    }
 @endphp
 
 <div class="pds-user-reg-form">
@@ -95,12 +111,23 @@
                            data-user-reg-phone="1"
                            placeholder="{{ __('message.reg_placeholder_phone') }}"
                            value="{{ $phoneNational }}"
-                           @if($isEdit) readonly tabindex="-1" @else required @endif>
+                           @if($isEdit)
+                               readonly tabindex="-1"
+                           @else
+                               name="phone"
+                               required
+                           @endif>
                 </div>
-                @if($isEdit)
-                    <input type="hidden" name="contact_number" id="contact_number_hidden" value="{{ $phoneStored }}">
-                @endif
+                {{-- Edit posts stored E.164; create prefers hidden when JS syncs, else falls back to name=phone. --}}
+                <input type="hidden"
+                       name="contact_number"
+                       id="contact_number_hidden"
+                       value="{{ $phoneStored }}"
+                       @unless($isEdit) data-os-create-phone="1" @endunless>
                 <small class="pds-field-hint">{{ __('message.phone_country_hint') }}</small>
+                @error('contact_number')
+                    <span class="help-block error">{{ $message }}</span>
+                @enderror
             </div>
         </div>
     </div>
@@ -125,21 +152,64 @@
             <i class="fas fa-map-marker-alt"></i>
             <span>{{ __('message.region') }} / {{ __('message.township') }}</span>
         </h6>
-        <div class="pds-dispatch-grid pds-dispatch-grid-2">
+        <div class="pds-dispatch-grid pds-dispatch-grid-2"
+             id="reg_location_box"
+             data-selected-state="{{ $selectedState }}"
+             data-selected-township="{{ $selectedTownship }}"
+             data-placeholder-state="{{ __('message.reg_placeholder_state_division') }}"
+             data-placeholder-township="{{ __('message.reg_placeholder_township') }}"
+             data-placeholder-township-locked="{{ __('message.nrc_placeholder_town_locked') }}">
             <div class="pds-dispatch-field">
                 <label for="reg_state">{{ __('message.region') }} <span class="text-danger">*</span></label>
-                <input type="text" name="os_profile[state_division]" id="reg_state" class="pds-dispatch-input"
-                       placeholder="{{ __('message.reg_placeholder_state_division') }}"
-                       value="{{ old('os_profile.state_division', $profile['state_division'] ?? '') }}" required>
+                <select name="os_profile[state_division]" id="reg_state" class="pds-dispatch-input pds-dispatch-select" required>
+                    <option value="">{{ __('message.reg_placeholder_state_division') }}</option>
+                    @foreach($mmStates as $state)
+                        @php
+                            $stateValue = (string) ($state['name_mm'] ?? $state['name_en'] ?? '');
+                            $stateLabel = trim(($state['name_mm'] ?? '').(($state['name_en'] ?? '') !== '' ? ' ('.$state['name_en'].')' : ''));
+                        @endphp
+                        <option value="{{ $stateValue }}"
+                                data-name-en="{{ $state['name_en'] ?? '' }}"
+                                @selected($selectedState === $stateValue || $selectedState === ($state['name_en'] ?? ''))>
+                            {{ $stateLabel !== '' ? $stateLabel : $stateValue }}
+                        </option>
+                    @endforeach
+                </select>
             </div>
 
             <div class="pds-dispatch-field">
                 <label for="reg_township">{{ __('message.township') }} <span class="text-danger">*</span></label>
-                <input type="text" name="os_profile[township]" id="reg_township" class="pds-dispatch-input"
-                       placeholder="{{ __('message.reg_placeholder_township') }}"
-                       value="{{ old('os_profile.township', $profile['township'] ?? '') }}" required>
+                <select name="os_profile[township]" id="reg_township" class="pds-dispatch-input pds-dispatch-select" required @disabled($selectedState === '')>
+                    <option value="">
+                        {{ $selectedState === '' ? __('message.nrc_placeholder_town_locked') : __('message.reg_placeholder_township') }}
+                    </option>
+                    @foreach($selectedStateTownships as $town)
+                        @php
+                            $townValue = (string) ($town['name_mm'] ?? $town['name_en'] ?? '');
+                            $townLabel = trim(($town['name_mm'] ?? '').(($town['name_en'] ?? '') !== '' ? ' ('.$town['name_en'].')' : ''));
+                            $townMatches = $selectedTownship !== '' && (
+                                $selectedTownship === $townValue
+                                || $selectedTownship === ($town['name_en'] ?? '')
+                                || $selectedTownship === ($town['name_mm'] ?? '')
+                            );
+                            if ($townMatches) {
+                                $selectedTownship = $townValue;
+                            }
+                        @endphp
+                        <option value="{{ $townValue }}" @selected($townMatches)>
+                            {{ $townLabel !== '' ? $townLabel : $townValue }}
+                        </option>
+                    @endforeach
+                    @if($selectedTownship !== '' && collect($selectedStateTownships)->every(function ($town) use ($selectedTownship) {
+                        return $selectedTownship !== ($town['name_mm'] ?? '')
+                            && $selectedTownship !== ($town['name_en'] ?? '');
+                    }))
+                        <option value="{{ $selectedTownship }}" selected>{{ $selectedTownship }}</option>
+                    @endif
+                </select>
             </div>
         </div>
+        <script type="application/json" id="reg_mm_location_data">@json($mmStates)</script>
     </div>
 
     <div class="pds-user-reg-section">

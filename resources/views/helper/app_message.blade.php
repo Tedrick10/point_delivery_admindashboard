@@ -29,14 +29,18 @@
     @if(isset($errors) && $errors->any())
         @php $flashError = $errors->first(); @endphp
         @if($flashError)
-        Snackbar.show({
-            text: @json($flashError),
-            pos: 'bottom-center',
-            backgroundColor: '#dc3545',
-            textColor: '#ffffff',
-            showAction: false,
-            duration: 4000
-        });
+        if (typeof Snackbar !== 'undefined' && typeof Snackbar.show === 'function') {
+            Snackbar.show({
+                text: @json($flashError),
+                pos: 'bottom-center',
+                backgroundColor: '#dc3545',
+                textColor: '#ffffff',
+                showAction: false,
+                duration: 5000
+            });
+        } else if (window.alert) {
+            window.alert(@json($flashError));
+        }
         @endif
     @endif
 })(jQuery);

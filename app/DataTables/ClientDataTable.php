@@ -150,7 +150,10 @@ class ClientDataTable extends DataTable
      */
     public function query(User $model)
     {
-        $model = User::whereIn('user_type', ['client']);
+        $model = User::whereIn('user_type', ['client'])
+            // Legacy force-delete renamed rows without soft-deleting; keep them out of the UI.
+            ->where('name', 'not like', 'Deleted % client')
+            ->where('name', 'not like', 'Deleted % Client');
         applyClientBranchScope($model, auth()->user(), (int) ($this->branch_id ?? request('branch_id', 0)));
         $city = request()->input('city_id');
         $country = request()->input('country_id');
@@ -190,12 +193,14 @@ class ClientDataTable extends DataTable
                 $model->where('last_actived_at', '<', now()->subDays(6))
                       ->where('last_actived_at', '>', now()->subDays(15));
             } elseif ($lastActive === 'inactive_user') {
-                $model->where('last_actived_at', '<=', now()->subDays(15))
-                ->orWhereNull('last_actived_at');
+                $model->where(function ($query) {
+                    $query->where('last_actived_at', '<=', now()->subDays(15))
+                        ->orWhereNull('last_actived_at');
+                });
             }
         }
 
-        return $model->withTrashed();
+        return $model;
     }
 
     /**

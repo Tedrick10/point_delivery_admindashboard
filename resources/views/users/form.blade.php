@@ -26,6 +26,11 @@
             </div>
 
             <div class="card-body pds-page-body pds-user-reg-body">
+                @if(isset($errors) && $errors->any())
+                    <div class="alert alert-danger pds-user-reg-alert" role="alert">
+                        <strong>{{ $errors->first() }}</strong>
+                    </div>
+                @endif
                 <div class="pds-user-reg-layout">
                     <aside class="pds-user-reg-aside">
                         @include('partials._profile_upload', [
@@ -52,7 +57,7 @@
 
         {!! html()->form()->close() !!}
     </div>
-    @section('bottom_script')
+    @push('bottom_script')
     <script>
         $(document).ready(function() {
             $('.pds-os-password-toggle').on('click', function() {
@@ -78,7 +83,7 @@
             };
 
             @if(!isset($id))
-            formRules.contact_number = { required: true };
+            formRules.phone = { required: true };
             formRules.password = { required: true, minlength: 6 };
             formRules.password_confirmation = { required: true, equalTo: '#reg_password' };
             @else
@@ -105,23 +110,110 @@
             };
             @endif
 
-            formValidation("#user_form", formRules, {
-                name: { required: "{{ __('message.please_enter_name') }}" },
-                username: { required: "{{ __('message.please_enter_username') }}" },
-                contact_number: { required: "{{ __('message.please_enter_contact_number') }}" },
-                password: {
-                    required: "{{ __('message.please_enter_password') }}",
-                    minlength: "{{ __('message.please_enter_new_password') }}"
+            $("#user_form").validate({
+                ignore: [],
+                rules: formRules,
+                messages: {
+                    name: { required: "{{ __('message.please_enter_name') }}" },
+                    username: { required: "{{ __('message.please_enter_username') }}" },
+                    phone: { required: "{{ __('message.please_enter_contact_number') }}" },
+                    password: {
+                        required: "{{ __('message.please_enter_password') }}",
+                        minlength: "{{ __('message.please_enter_new_password') }}"
+                    },
+                    password_confirmation: {
+                        required: "{{ __('message.please_enter_confirm_password') }}",
+                        equalTo: "{{ __('message.password_does_not_match') }}"
+                    },
                 },
-                password_confirmation: {
-                    required: "{{ __('message.please_enter_confirm_password') }}",
-                    equalTo: "{{ __('message.password_does_not_match') }}"
+                errorClass: "help-block error",
+                highlight: function(element) {
+                    $(element).closest(".form-group.row").addClass("has-error");
                 },
+                unhighlight: function(element) {
+                    $(element).closest(".form-group.row").removeClass("has-error");
+                },
+                errorPlacement: function(error, element) {
+                    if (element.attr('id') === 'phone') {
+                        error.appendTo(element.closest('.pds-dispatch-field'));
+                        return;
+                    }
+                    if (element.hasClass('select2js')) {
+                        error.insertAfter(element.next('.select2-container'));
+                    } else {
+                        error.insertAfter(element);
+                    }
+                },
+                submitHandler: function (form) {
+                    if (typeof window.syncUserRegPhoneField === 'function') {
+                        window.syncUserRegPhoneField();
+                    }
+                    // Avoid jquery-validate re-entry; native submit after phone sync.
+                    form.submit();
+                }
             });
 
             @if(isset($id))
             $('#user_form [type="submit"]').prop('disabled', false).removeClass('disabled');
             @endif
+
+            function toE164Mm(value) {
+                var digits = String(value || '').replace(/\D/g, '');
+                while (digits.indexOf('95') === 0 && digits.length >= 12) {
+                    var rest = digits.slice(2);
+                    if (/^9\d{7,9}$/.test(rest) || (rest.indexOf('95') === 0 && rest.length >= 10)) {
+                        digits = rest;
+                        continue;
+                    }
+                    break;
+                }
+                if (/^0\d+/.test(digits)) {
+                    digits = digits.replace(/^0+/, '');
+                }
+                if (/^9\d{7,9}$/.test(digits)) {
+                    return '+95' + digits;
+                }
+                if (!digits) {
+                    return '';
+                }
+                return digits.indexOf('95') === 0 ? '+' + digits : '+95' + digits;
+            }
+
+            function isPlausiblyMmMobile(value) {
+                var digits = String(value || '').replace(/\D/g, '');
+                while (digits.indexOf('95') === 0 && digits.length > 10) {
+                    digits = digits.slice(2);
+                }
+                digits = digits.replace(/^0+/, '');
+                return /^9\d{7,9}$/.test(digits);
+            }
+
+            window.syncUserRegPhoneField = function () {
+                var input = document.querySelector('#phone[data-user-reg-phone]');
+                if (!input || input.hasAttribute('readonly')) {
+                    return true;
+                }
+
+                var iti = window.userRegPhoneIti;
+                var e164 = '';
+                try {
+                    if (iti && typeof iti.getNumber === 'function') {
+                        e164 = iti.getNumber() || '';
+                    }
+                } catch (err) {
+                    e164 = '';
+                }
+                if (!e164) {
+                    e164 = toE164Mm(input.value);
+                }
+
+                if (isPlausiblyMmMobile(e164) || isPlausiblyMmMobile(input.value)) {
+                    $('#contact_number_hidden').val(e164 || toE164Mm(input.value));
+                    return true;
+                }
+
+                return false;
+            };
 
             function initUserRegPhone() {
                 var input = document.querySelector('#phone[data-user-reg-phone]');
@@ -145,32 +237,10 @@
                     nationalMode: true,
                     autoPlaceholder: 'aggressive',
                     utilsScript: "{{ asset('vendor/intlTelInput/js/utils.js') }}",
-                    hiddenInput: isReadonly ? null : 'contact_number'
+                    hiddenInput: null
                 });
 
                 window.userRegPhoneIti = iti;
-
-                function toE164Mm(value) {
-                    var digits = String(value || '').replace(/\D/g, '');
-                    while (digits.indexOf('95') === 0 && digits.length >= 12) {
-                        var rest = digits.slice(2);
-                        if (/^9\d{7,9}$/.test(rest) || (rest.indexOf('95') === 0 && rest.length >= 10)) {
-                            digits = rest;
-                            continue;
-                        }
-                        break;
-                    }
-                    if (/^0\d+/.test(digits)) {
-                        digits = digits.replace(/^0+/, '');
-                    }
-                    if (/^9\d{7,9}$/.test(digits)) {
-                        return '+95' + digits;
-                    }
-                    if (!digits) {
-                        return '';
-                    }
-                    return digits.indexOf('95') === 0 ? '+' + digits : '+95' + digits;
-                }
 
                 function applyStoredNumber() {
                     if (!isReadonly) {
@@ -193,22 +263,99 @@
                     return;
                 }
 
-                $('#user_form').on('submit.userRegPhone', function (e) {
-                    if (!iti.isValidNumber()) {
-                        e.preventDefault();
-                        var $field = $(input).closest('.pds-dispatch-field');
-                        $field.find('.pds-phone-error').remove();
-                        $field.append('<span class="help-block error pds-phone-error">{{ __('message.please_enter_contact_number') }}</span>');
-                    }
-                });
-
                 $(input).on('input change countrychange', function () {
                     $(input).closest('.pds-dispatch-field').find('.pds-phone-error').remove();
+                    window.syncUserRegPhoneField();
                 });
             }
 
             initUserRegPhone();
+
+            function initUserRegLocation() {
+                var $box = $('#reg_location_box');
+                var $state = $('#reg_state');
+                var $township = $('#reg_township');
+                if (!$box.length || !$state.length || !$township.length) {
+                    return;
+                }
+
+                var states = [];
+                try {
+                    var raw = $('#reg_mm_location_data').text();
+                    states = raw ? JSON.parse(raw) : [];
+                } catch (err) {
+                    states = (window.PDS_MYANMAR_NRC_DATA && window.PDS_MYANMAR_NRC_DATA.states) || [];
+                }
+
+                var placeholderTownship = $box.data('placeholder-township') || '';
+                var placeholderLocked = $box.data('placeholder-township-locked') || placeholderTownship;
+
+                function findState(value) {
+                    value = String(value || '');
+                    return states.find(function (state) {
+                        return state.name_mm === value || state.name_en === value;
+                    }) || null;
+                }
+
+                function townLabel(town) {
+                    var mm = town.name_mm || '';
+                    var en = town.name_en || '';
+                    if (mm && en) {
+                        return mm + ' (' + en + ')';
+                    }
+                    return mm || en;
+                }
+
+                function rebuildTownships(selectedTown, keepDisabledEmpty) {
+                    var state = findState($state.val());
+                    var towns = (state && state.townships) ? state.townships : [];
+                    var current = selectedTown != null ? String(selectedTown) : String($township.val() || '');
+                    var matched = false;
+
+                    $township.empty().append(
+                        $('<option>', {
+                            value: '',
+                            text: !$state.val() ? placeholderLocked : placeholderTownship
+                        })
+                    );
+
+                    towns.forEach(function (town) {
+                        var value = town.name_mm || town.name_en || '';
+                        if (!value) {
+                            return;
+                        }
+                        var isSelected = !!(current && (current === value || current === town.name_en || current === town.name_mm));
+                        if (isSelected) {
+                            matched = true;
+                        }
+                        $township.append($('<option>', {
+                            value: value,
+                            text: townLabel(town),
+                            selected: isSelected
+                        }));
+                    });
+
+                    if (current && !matched) {
+                        $township.append($('<option>', {
+                            value: current,
+                            text: current,
+                            selected: true
+                        }));
+                    }
+
+                    $township.prop('disabled', !!(keepDisabledEmpty && !$state.val()));
+                }
+
+                $state.on('change', function () {
+                    rebuildTownships('', true);
+                });
+
+                // Ensure township options match the selected region on first paint / edit.
+                rebuildTownships($box.data('selected-township') || $township.val() || '', true);
+            }
+
+            initUserRegLocation();
         });
     </script>
-    @endsection
+    @endpush
 </x-master-layout>
