@@ -1,5 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
-    <style>
+    
+<div id="adminLiveRoot" data-live-page="auto">
+<style>
         .pds-kyo-shin-row-badge {
             display: inline-flex; align-items: center; margin-left: 6px;
             padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
@@ -453,6 +455,8 @@
     @if(! empty($canReassignRider))
         @include('order.partials._rider_assign_modal')
     @endif
+</div>
+
 
     @section('bottom_script')
         <script src="{{ asset('js/pds-photo-zoom.js') }}?v=3"></script>
@@ -462,7 +466,7 @@
             $(document).ready(function () {
                 // Static table (not DataTables): refresh the page after Admin item edits.
                 window.reloadDispatchItemsTable = function () {
-                    window.location.reload();
+                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                 };
 
                 if (typeof flatpickr !== 'undefined') {
@@ -502,7 +506,7 @@
                                 : @json(__('message.return_retry_cleared'));
                             var msg = (res && res.message) ? res.message : fallback;
                             notify(msg, 'success', function () {
-                                window.location.reload();
+                                typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                             });
                         },
                         error: function (xhr) {
@@ -550,7 +554,7 @@
                                 if (res && res.message) {
                                     SnackBar({ message: res.message, status: 'success' });
                                 }
-                                window.location.reload();
+                                typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                             },
                             error: function (xhr) {
                                 var msg = (xhr.responseJSON && xhr.responseJSON.message)
@@ -705,10 +709,10 @@
                         success: function (res) {
                             if (res && res.message) {
                                 notify(res.message, 'success', function () {
-                                    window.location.reload();
+                                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                                 });
                             } else {
-                                window.location.reload();
+                                typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                             }
                         },
                         error: function (xhr) {
@@ -993,10 +997,10 @@
                             $('#riderAssignModal').modal('hide');
                             if (res && res.message) {
                                 notify(res.message, 'success', function () {
-                                    window.location.reload();
+                                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                                 });
                             } else {
-                                window.location.reload();
+                                typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                             }
                         },
                         error: function (xhr) {

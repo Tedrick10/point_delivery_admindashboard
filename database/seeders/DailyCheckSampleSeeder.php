@@ -22,7 +22,7 @@ use Illuminate\Support\Str;
  */
 class DailyCheckSampleSeeder extends Seeder
 {
-    public const TARGET_OS_COUNT = 20;
+    public const TARGET_OS_COUNT = 30;
 
     public function run(): void
     {
@@ -198,9 +198,9 @@ class DailyCheckSampleSeeder extends Seeder
             ->get();
 
         $i = 1;
-        while ($clients->count() < $need) {
+        while ($clients->unique('id')->count() < $need) {
             $email = 'demo.os.'.str_pad((string) $i, 2, '0', STR_PAD_LEFT).'@point.demo';
-            $existing = User::query()->where('email', $email)->first();
+            $existing = User::withTrashed()->where('email', $email)->first();
             if ($existing) {
                 if ($existing->trashed()) {
                     $existing->restore();
@@ -213,7 +213,9 @@ class DailyCheckSampleSeeder extends Seeder
                     'branch_id' => $branchId,
                     'contact_number' => '09'.str_pad((string) (200000000 + $i), 9, '0', STR_PAD_LEFT),
                 ])->save();
-                $clients->push($existing);
+                if (! $clients->contains(fn (User $u) => (int) $u->id === (int) $existing->id)) {
+                    $clients->push($existing);
+                }
                 $i++;
                 continue;
             }
@@ -241,7 +243,7 @@ class DailyCheckSampleSeeder extends Seeder
             $i++;
         }
 
-        return $clients->take($need)->values();
+        return $clients->unique('id')->take($need)->values();
     }
 
     protected function cleanupPreviousSamples(string $listDay): void

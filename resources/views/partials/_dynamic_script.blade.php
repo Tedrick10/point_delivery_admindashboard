@@ -70,19 +70,26 @@
 
         function toggleDeleteButton() {
             const btn = $('#deleteSelectedBtn');
+            const bulk = btn.closest('.pds-os-list-bulk, .mb-3');
+            if (!btn.length) {
+                bulk.hide();
+                return;
+            }
             if ($('.select-table-row-checked-values:checked').length > 0) {
-                btn.show();
+                btn.addClass('is-visible').removeAttr('hidden').show();
                 btn.prop('disabled', false);
                 btn.removeClass('bg-gray text-white');
                 btn.addClass('bg-danger text-white');
+                bulk.show();
             } else {
-                btn.hide();
+                btn.removeClass('is-visible').attr('hidden', true).hide();
                 btn.prop('disabled', true);
-                btn.removeClass('bg-primary text-white');
+                btn.removeClass('bg-primary text-white bg-danger');
                 btn.addClass('bg-gray text-white');
-
+                bulk.hide();
             }
         }
+        window.toggleDeleteButton = toggleDeleteButton;
 
         window.dataTableRowCheck = function(id) {
             if ($('.select-table-row-checked-values:checked').length !== $('.select-table-row-checked-values').length) {
@@ -93,7 +100,8 @@
             toggleDeleteButton();
         }
 
-        $('#select-all-table').click(function() {
+        // Delegated: survives admin-spa content swaps (Online Shop / lists).
+        $(document).off('click.pdsSelectAll', '#select-all-table').on('click.pdsSelectAll', '#select-all-table', function() {
             if ($(this).is(':checked')) {
                 $('.select-table-row-checked-values').prop('checked', true);
             } else {
@@ -103,6 +111,12 @@
         });
 
         toggleDeleteButton();
+        $(document).off('admin-spa:navigated.pdsDeleteBtn').on('admin-spa:navigated.pdsDeleteBtn', function () {
+            toggleDeleteButton();
+        });
+        $(document).off('draw.dt.pdsDeleteBtn').on('draw.dt.pdsDeleteBtn', function () {
+            toggleDeleteButton();
+        });
 
 
         if (typeof Snackbar !== 'undefined' && typeof Snackbar.close === 'function') {
@@ -255,12 +269,24 @@
                         }
                         if(e.event == 'refresh'){
                             showMessage(e.message);
-                            window.location.reload();
+                            if (window.AdminSpa && typeof window.AdminSpa.reload === 'function') {
+                                window.AdminSpa.reload();
+                            } else if (typeof window.adminLiveReloadPage === 'function') {
+                                window.adminLiveReloadPage();
+                            } else {
+                                window.location.reload();
+                            }
                         }
                         if(e.event == "callback"){
                             showMessage(e.message);
                             $(".modal").modal('hide');
-                            location.reload();
+                            if (window.AdminSpa && typeof window.AdminSpa.reload === 'function') {
+                                window.AdminSpa.reload();
+                            } else if (typeof window.adminLiveReloadPage === 'function') {
+                                window.adminLiveReloadPage();
+                            } else {
+                                location.reload();
+                            }
                         }
                     }
                     if (e.status == false) {
@@ -379,13 +405,25 @@
                         if (e.event === 'refresh') {
                             showMessage(e.message);
                             setTimeout(function() {
-                                location.reload();
+                                if (window.AdminSpa && typeof window.AdminSpa.reload === 'function') {
+                                    window.AdminSpa.reload();
+                                } else if (typeof window.adminLiveReloadPage === 'function') {
+                                    window.adminLiveReloadPage();
+                                } else {
+                                    location.reload();
+                                }
                             }, 1000);
                         }
                         if(e.event == "callback"){
                             showMessage(e.message);
                             $(".modal").modal('hide');
-                            location.reload();
+                            if (window.AdminSpa && typeof window.AdminSpa.reload === 'function') {
+                                window.AdminSpa.reload();
+                            } else if (typeof window.adminLiveReloadPage === 'function') {
+                                window.adminLiveReloadPage();
+                            } else {
+                                location.reload();
+                            }
                         }
                         if(e.event == 'norefresh') {
                             showMessage(e.message);
@@ -530,8 +568,8 @@
             $('th:has(.select-all-table)').removeAttr('title');
         });
 
-        //datatble chacked data delete
-        $('#deleteSelectedBtn').on('click', function(e) {
+        // datatable checked data delete (delegated for SPA)
+        $(document).off('click.pdsDeleteSelected', '#deleteSelectedBtn').on('click.pdsDeleteSelected', '#deleteSelectedBtn', function(e) {
             e.preventDefault();
 
             var button_title = $(this).attr('checked-title');
@@ -557,11 +595,11 @@
                     },
                     success: function(response) {
                         if (response.success) {
-                            const btn = $('#deleteSelectedBtn');
                             $('#select-all-table').prop('checked', false);
-                            btn.prop('disabled', true);
-                            btn.removeClass('bg-primary text-white');
-                            btn.addClass('bg-gray text-white');
+                            $('.select-table-row-checked-values').prop('checked', false);
+                            if (typeof window.toggleDeleteButton === 'function') {
+                                window.toggleDeleteButton();
+                            }
                             showMessage(response.message);
                             $('.dataTable').DataTable().ajax.reload( null, false );
                             // location.reload();
@@ -846,13 +884,53 @@
 
         getNotificationCounts();
 
-        setInterval(getNotificationCounts, 30000);
-
         function setNotification(count){
             if(Number(count) >= 100){
                 $('.notify_count').text('99+');
             }
         }
+
+        // Global admin live polling (sidebar badges + notifications + page content)
+        (function bootPdsAdminLive() {
+            if (typeof window.bootAdminGlobalLive !== 'function') return;
+            var pageName = @json(optional(request()->route())->getName() ?? '');
+            var includeDashboard = pageName === 'home';
+            var query = {};
+            @foreach (['from_date', 'to_date', 'city_id', 'country_id'] as $qKey)
+                @if (request()->filled($qKey))
+                    query[@json($qKey)] = @json(request($qKey));
+                @endif
+            @endforeach
+
+            var path = (window.location.pathname || '');
+            var isFormPage = /\/(create|edit)(\/|$)/.test(path)
+                || $('form#userForm, form#orderForm, .pds-disable-live-reload, form.pds-form-no-live-reload').length > 0;
+
+            // One poller updates badges/notifications/dashboard and refreshes lists when version changes.
+            window.bootAdminGlobalLive({
+                stateUrl: @json(route('admin.live.state')),
+                intervalMs: 4000,
+                page: pageName || 'global',
+                includeDashboard: includeDashboard,
+                data: query,
+                // Dashboard cards update from JSON only — never flash/replace the home shell.
+                refreshContent: includeDashboard ? false : !isFormPage,
+                onReload: includeDashboard ? function () {} : undefined,
+                hardReloadFallback: false
+            });
+
+            // Dedicated fingerprint poll for order list / detail (existing endpoints).
+            if (!window.__pdsPageLiveBooted && typeof window.bootAdminPageLiveRefresh === 'function') {
+                if (pageName === 'order.index' || (pageName || '').indexOf('order.') === 0) {
+                    // Keep using generic page-version unless a view already booted a specific URL.
+                    window.bootAdminPageLiveRefresh({
+                        url: @json(route('admin.live.page-version')),
+                        intervalMs: 4000,
+                        data: $.extend({ page: pageName || 'global' }, query)
+                    });
+                }
+            }
+        })();
 
         $(document).on('change', '.custom-file-input', function() {
             readURL(this);

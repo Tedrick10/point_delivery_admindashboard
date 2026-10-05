@@ -1,5 +1,7 @@
 <!-- Backend Bundle JavaScript -->
 <script src="{{ public_asset_ver('js/backend-bundle.min.js') }}"></script>
+{{-- Load before @yield('bottom_script') so page live boots can call these helpers. --}}
+<script src="{{ public_asset_ver('js/admin-live.js') }}"></script>
 <script src="{{ public_asset_ver('js/rabbit.js') }}"></script>
 <script src="{{ public_asset_ver('js/myanmar-text.js') }}"></script>
 <script>window.PDS_MYANMAR_NRC_DATA_URL = @json(asset('data/myanmar-nrc.json'));</script>
@@ -119,11 +121,12 @@ if (window.PDS_MYANMAR_NRC_DATA_URL) {
     <script src="{{ asset('vendor/intlTelInput/js/intlTelInput.min.js') }}"></script>
 @endif
 
+{{-- Page-specific scripts: swapped by admin-spa.js without full reload. --}}
+<div id="adminSpaPageScripts">
 @yield('bottom_script')
 @stack('bottom_script')
-
-<!-- Masonary Gallery Javascript -->
-<script src="{{ asset('js/masonry.pkgd.min.js') }}"></script>
+</div>
+<script src="{{ public_asset_ver('js/admin-spa.js') }}"></script>
 <script src="{{ asset('js/imagesloaded.pkgd.min.js') }}"></script>
 
 <!-- Vectoe Map JavaScript -->

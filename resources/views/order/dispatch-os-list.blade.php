@@ -1,5 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
-    <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-os-list-page">
+    
+<div id="adminLiveRoot" data-live-page="auto">
+<div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-os-list-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
             <div class="pds-rider-hero">
                 <div class="pds-rider-hero__copy">
@@ -271,6 +273,8 @@
     </div>
 
     <div id="osSettlementSlipModalHost"></div>
+</div>
+
 
     @section('bottom_script')
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -674,7 +678,7 @@
                             });
                             if (res.message) notify(res.message, 'success');
                             // Reload so badges / empty tabs stay accurate after Finish All.
-                            setTimeout(function () { window.location.reload(); }, 400);
+                            setTimeout(function () { typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload(); }, 400);
                         },
                         error: function (xhr) {
                             var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : @json(__('message.something_went_wrong'));

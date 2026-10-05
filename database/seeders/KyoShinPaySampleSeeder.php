@@ -19,7 +19,7 @@ use Illuminate\Support\Str;
  */
 class KyoShinPaySampleSeeder extends Seeder
 {
-    public const TARGET_OS_COUNT = 20;
+    public const TARGET_OS_COUNT = 30;
 
     public function run(): void
     {
@@ -176,7 +176,7 @@ class KyoShinPaySampleSeeder extends Seeder
             ->get();
 
         $i = 1;
-        while ($clients->count() < $need) {
+        while ($clients->unique('id')->count() < $need) {
             $email = 'demo.os.'.str_pad((string) $i, 2, '0', STR_PAD_LEFT).'@point.demo';
             $existing = User::withTrashed()->where('email', $email)->first();
             if ($existing) {
@@ -192,7 +192,9 @@ class KyoShinPaySampleSeeder extends Seeder
                     'is_kyo_shin' => 1,
                     'contact_number' => '09'.str_pad((string) (200000000 + $i), 9, '0', STR_PAD_LEFT),
                 ])->save();
-                $clients->push($existing);
+                if (! $clients->contains(fn (User $u) => (int) $u->id === (int) $existing->id)) {
+                    $clients->push($existing);
+                }
                 $i++;
                 continue;
             }
@@ -219,7 +221,7 @@ class KyoShinPaySampleSeeder extends Seeder
             $i++;
         }
 
-        return $clients->take($need)->values();
+        return $clients->unique('id')->take($need)->values();
     }
 
     protected function cleanupPreviousSamples(): void

@@ -64,12 +64,6 @@
                 </a>
             @endif
 
-            @if($auth_user->can('deliveryman-show'))
-                <a class="pds-deliveryman-row-action is-view" href="{{ route('deliveryman.show',$id) }}" title="{{ __('message.view') }}">
-                    <i class="fas fa-eye" aria-hidden="true"></i>
-                </a>
-            @endif
-
             @if($auth_user->can('deliveryman-delete'))
                 {{ html()->form('DELETE', route('deliveryman.destroy', $id))->attribute('data--submit', 'deliveryman'.$id)->open() }}
                     <a class="pds-deliveryman-row-action is-delete" href="javascript:void(0)" data--submit="deliveryman{{$id}}"

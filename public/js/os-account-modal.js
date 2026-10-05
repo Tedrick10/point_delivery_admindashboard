@@ -19,7 +19,7 @@
         if (!$.fn.select2) {
             return;
         }
-        $('#os_city_id, #os_nrc_region, #os_nrc_town, #os_nrc_type').each(function () {
+        $('#os_city_id, #os_nrc_region, #os_nrc_town, #os_nrc_type, #reg_state, #reg_township').each(function () {
             var $field = $(this);
             if ($field.hasClass('select2-hidden-accessible')) {
                 try {
@@ -99,13 +99,40 @@
         return ($field.val() || '').toString().trim();
     }
 
+    function syncOsRegPhone() {
+        var $phone = getForm().find('#phone[data-user-reg-phone]');
+        var $hidden = getForm().find('#contact_number_hidden');
+        if (!$phone.length || !$hidden.length) {
+            return;
+        }
+        var digits = String($phone.val() || '').replace(/\D/g, '');
+        while (digits.indexOf('95') === 0 && digits.length >= 12) {
+            digits = digits.slice(2);
+        }
+        if (/^0\d+/.test(digits)) {
+            digits = digits.replace(/^0+/, '');
+        }
+        if (/^9\d{7,9}$/.test(digits)) {
+            $hidden.val('+95' + digits);
+            return;
+        }
+        if (digits) {
+            $hidden.val(digits.indexOf('95') === 0 ? '+' + digits : digits);
+        }
+    }
+
     function validateOsAccountForm($form) {
         var checks = [
-            { selector: '#os_city_id', message: $form.attr('data-msg-branch') },
-            { selector: '#os_profile_name', message: $form.attr('data-msg-os-name') },
-            { selector: '#os_username', message: $form.attr('data-msg-login') },
-            { selector: '#os_password', message: $form.attr('data-msg-password') },
-            { selector: '#os_account_phone', message: $form.attr('data-msg-phone') }
+            { selector: '#reg_username', message: $form.attr('data-msg-login') },
+            { selector: '#reg_password', message: $form.attr('data-msg-password') },
+            { selector: '#reg_password_confirmation', message: $form.attr('data-msg-password-confirm') },
+            { selector: '#reg_name', message: $form.attr('data-msg-os-name') },
+            { selector: '#phone', message: $form.attr('data-msg-phone') },
+            { selector: '#reg_address_unit', message: $form.attr('data-msg-address') },
+            { selector: '#reg_state', message: $form.attr('data-msg-state') },
+            { selector: '#reg_township', message: $form.attr('data-msg-township') },
+            { selector: '#reg_kpay_name', message: $form.attr('data-msg-kpay-name') },
+            { selector: '#reg_kpay_no', message: $form.attr('data-msg-kpay-no') }
         ];
 
         for (var i = 0; i < checks.length; i++) {
@@ -117,13 +144,19 @@
             }
         }
 
-        if (fieldValue($form.find('#os_password')).length < 6) {
-            var passwordMessage = $form.attr('data-msg-password-length') || 'Password must be at least 6 characters';
-            showOsFormError(passwordMessage);
-            scrollToInvalidField($form, $form.find('#os_password'));
+        if (fieldValue($form.find('#reg_password')).length < 6) {
+            showOsFormError($form.attr('data-msg-password-length') || 'Password must be at least 6 characters');
+            scrollToInvalidField($form, $form.find('#reg_password'));
             return false;
         }
 
+        if (fieldValue($form.find('#reg_password')) !== fieldValue($form.find('#reg_password_confirmation'))) {
+            showOsFormError($form.attr('data-msg-password-match') || 'Passwords do not match');
+            scrollToInvalidField($form, $form.find('#reg_password_confirmation'));
+            return false;
+        }
+
+        syncOsRegPhone();
         showOsFormError('');
         return true;
     }
@@ -219,31 +252,85 @@
             }
         } catch (e) {}
 
-        var $modalContent = getModalRoot();
-        var dropdownParent = $modalContent.length ? $modalContent : $('#remoteModelData');
+        initOsRegLocation($form);
+        $form.find('#phone[data-user-reg-phone]').off('input.osReg change.osReg').on('input.osReg change.osReg', syncOsRegPhone);
+    }
 
+    function initOsRegLocation($form) {
+        var $box = $form.find('#reg_location_box');
+        var $state = $form.find('#reg_state');
+        var $township = $form.find('#reg_township');
+        if (!$box.length || !$state.length || !$township.length) {
+            return;
+        }
+
+        var states = [];
         try {
-            if (window.PdsMyanmarNrc && $('#os_nrc_box').length) {
-                delete window.PdsMyanmarNrc.instances.os_nrc;
-                window.PdsMyanmarNrc.init('os_nrc', {
-                    dropdownParent: dropdownParent,
-                    values: { region: '', town: '', type: '', number: '' }
-                });
+            var raw = $form.find('#reg_mm_location_data').text();
+            states = raw ? JSON.parse(raw) : [];
+        } catch (err) {
+            states = (window.PDS_MYANMAR_NRC_DATA && window.PDS_MYANMAR_NRC_DATA.states) || [];
+        }
+
+        var placeholderTownship = $box.data('placeholder-township') || '';
+        var placeholderLocked = $box.data('placeholder-township-locked') || placeholderTownship;
+
+        function findState(value) {
+            value = String(value || '');
+            return states.find(function (state) {
+                return state.name_mm === value || state.name_en === value;
+            }) || null;
+        }
+
+        function townLabel(town) {
+            var mm = town.name_mm || '';
+            var en = town.name_en || '';
+            if (mm && en) {
+                return mm + ' (' + en + ')';
             }
-        } catch (e) {}
+            return mm || en;
+        }
 
-        try {
-            if ($.fn.select2 && $('#os_city_id').length) {
-                if ($('#os_city_id').hasClass('select2-hidden-accessible')) {
-                    $('#os_city_id').select2('destroy');
+        function rebuildTownships(selectedTown) {
+            var state = findState($state.val());
+            var towns = (state && state.townships) ? state.townships : [];
+            var current = selectedTown != null ? String(selectedTown) : String($township.val() || '');
+            var matched = false;
+
+            $township.empty().append(
+                $('<option>', {
+                    value: '',
+                    text: !$state.val() ? placeholderLocked : placeholderTownship
+                })
+            );
+
+            towns.forEach(function (town) {
+                var value = town.name_mm || town.name_en || '';
+                if (!value) {
+                    return;
                 }
-                $('#os_city_id').select2({
-                    width: '100%',
-                    dropdownParent: dropdownParent,
-                    minimumResultsForSearch: Infinity
-                });
+                var isSelected = !!(current && (current === value || current === town.name_en || current === town.name_mm));
+                if (isSelected) {
+                    matched = true;
+                }
+                $township.append($('<option>', {
+                    value: value,
+                    text: townLabel(town),
+                    selected: isSelected
+                }));
+            });
+
+            if (current && !matched) {
+                $township.append($('<option>', { value: current, text: current, selected: true }));
             }
-        } catch (e) {}
+
+            $township.prop('disabled', !$state.val());
+        }
+
+        $state.off('change.osReg').on('change.osReg', function () {
+            rebuildTownships('');
+        });
+        rebuildTownships($box.data('selected-township') || $township.val() || '');
     }
 
     $(document).on('click', '#os_account_save_btn', function (e) {
@@ -257,8 +344,8 @@
         submitOsAccountForm();
     });
 
-    $(document).on('click', '.pds-os-password-toggle', function () {
-        var $input = $('#os_password');
+    $(document).on('click', '#os_account_form .pds-os-password-toggle', function () {
+        var $input = $(this).siblings('input');
         if (!$input.length) {
             return;
         }

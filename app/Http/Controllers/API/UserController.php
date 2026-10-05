@@ -240,6 +240,16 @@ class UserController extends Controller
             unset($input['branch_id']);
         }
 
+        if ($isClient) {
+            $mappedBranch = destinationBranchIdFromOsLocation(
+                $input['os_profile']['state_division'] ?? ($decryptedData['state_division'] ?? null),
+                $input['os_profile']['township'] ?? ($decryptedData['township'] ?? null)
+            );
+            if ($mappedBranch) {
+                $input['branch_id'] = $mappedBranch;
+            }
+        }
+
         unset(
             $input['date_of_birth'],
             $input['address_unit'],
@@ -798,6 +808,7 @@ class UserController extends Controller
         $data['company_contact_number'] = $slip['phone'] ?? null;
         $data['company_address'] = $slip['address'] ?? null;
         $data['company_email'] = $slip['email'] ?? null;
+        $data['app_copy'] = appCopyBundle(appCopyClientApp());
 
         return json_custom_response($data);
     }

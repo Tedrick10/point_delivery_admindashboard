@@ -134,6 +134,14 @@ class PrePickUpSampleSeeder extends Seeder
             ],
         ];
 
+        $baseCount = count($scenarios);
+        while (count($scenarios) < 30) {
+            $n = count($scenarios);
+            $row = $scenarios[$n % $baseCount];
+            $row['address'] = rtrim((string) $row['address'], '၊ ').'၊ Demo #'.($n + 1);
+            $scenarios[] = $row;
+        }
+
         $created = 0;
         foreach ($scenarios as $i => $s) {
             /** @var User $client */

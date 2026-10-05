@@ -27,6 +27,8 @@ trait DataTableTrait {
             'lengthMenu'   => [[10, 50, 100, 500, -1], [10, 50, 100, 500, "All"]],
             'scrollX'      => true,
             'autoWidth'    => false,
+            'ordering'     => false,
+            'order'        => [],
            'sDom'          => '<"row align-items-center"<"col-md-2"><"col-md-6" B><"col-md-4"f>><"table-responsive my-3" rt><"d-flex" <"flex-grow-1" l><"p-2" i><"mt-4" p>><"clear">',
             'buttons' => [
                 [

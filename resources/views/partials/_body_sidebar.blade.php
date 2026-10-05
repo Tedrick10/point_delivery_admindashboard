@@ -53,14 +53,12 @@
                 ->link->attr(['class' => '']);
 
             $preOrderCount = app(\App\Services\DispatchOrderWorkflowService::class)->preOrderCount();
-            $preOrderLabel = '<span>' . __('message.pre_order_list') . '</span>';
-            if ($preOrderCount > 0) {
-                $preOrderLabel =
-                    '<span>' . __('message.pre_order_list') . ' ' .
-                    '<span class="badge badge-pill badge-info p-1 animate__animated animate__flash">' .
-                    $preOrderCount .
-                    '</span></span>';
-            }
+            $preOrderBadgeClass = 'badge badge-pill badge-info p-1 animate__animated animate__flash' . ($preOrderCount > 0 ? '' : ' d-none');
+            $preOrderLabel =
+                '<span>' . __('message.pre_order_list') . ' ' .
+                '<span class="' . $preOrderBadgeClass . '" id="preOrderCount" data-live-badge="preOrderCount">' .
+                ($preOrderCount > 0 ? $preOrderCount : '') .
+                '</span></span>';
             $menu->order
                 ->add($preOrderLabel, [
                     'class' => 'sidebar-layout',
@@ -87,14 +85,12 @@
             $authUser = Auth::user();
             $isHubUser = isDispatchHub($authUser);
             $assign100Count = $hubService->poolCount($isHubUser ? (int) $authUser->id : null);
-            $assign100Label = '<span>' . __('message.assign_100') . '</span>';
-            if ($assign100Count > 0) {
-                $assign100Label =
-                    '<span>' . __('message.assign_100') . ' ' .
-                    '<span class="badge badge-pill badge-warning p-1 animate__animated animate__flash" id="assign100Count">' .
-                    $assign100Count .
-                    '</span></span>';
-            }
+            $assign100BadgeClass = 'badge badge-pill badge-warning p-1 animate__animated animate__flash' . ($assign100Count > 0 ? '' : ' d-none');
+            $assign100Label =
+                '<span>' . __('message.assign_100') . ' ' .
+                '<span class="' . $assign100BadgeClass . '" id="assign100Count" data-live-badge="assign100Count">' .
+                ($assign100Count > 0 ? $assign100Count : '') .
+                '</span></span>';
 
             $menu
                 ->add($assign100Label, ['class' => ''])
@@ -117,14 +113,12 @@
 
             if ($isHubUser) {
                 $hubInboxCount = $hubService->inboxCount((int) $authUser->id);
-                $hubInboxLabel = '<span>' . __('message.from_mdy_to_ygn') . '</span>';
-                if ($hubInboxCount > 0) {
-                    $hubInboxLabel =
-                        '<span>' . __('message.from_mdy_to_ygn') . ' ' .
-                        '<span class="badge badge-pill badge-info p-1">' .
-                        $hubInboxCount .
-                        '</span></span>';
-                }
+                $hubInboxBadgeClass = 'badge badge-pill badge-info p-1' . ($hubInboxCount > 0 ? '' : ' d-none');
+                $hubInboxLabel =
+                    '<span>' . __('message.from_mdy_to_ygn') . ' ' .
+                    '<span class="' . $hubInboxBadgeClass . '" id="hubInboxCount" data-live-badge="hubInboxCount">' .
+                    ($hubInboxCount > 0 ? $hubInboxCount : '') .
+                    '</span></span>';
                 $menu->assign100
                     ->add($hubInboxLabel, [
                         'class' => 'sidebar-layout',
@@ -139,14 +133,12 @@
                 foreach ($hubService->accounts() as $hubAccount) {
                     $inboundCount = $hubService->inboundCount((int) $hubAccount->id);
                     $hubLabelText = $hubService->inboundMenuLabel($hubAccount);
-                    $hubLabel = '<span>' . e($hubLabelText) . '</span>';
-                    if ($inboundCount > 0) {
-                        $hubLabel =
-                            '<span>' . e($hubLabelText) . ' ' .
-                            '<span class="badge badge-pill badge-info p-1">' .
-                            $inboundCount .
-                            '</span></span>';
-                    }
+                    $hubInboundBadgeClass = 'badge badge-pill badge-info p-1' . ($inboundCount > 0 ? '' : ' d-none');
+                    $hubLabel =
+                        '<span>' . e($hubLabelText) . ' ' .
+                        '<span class="' . $hubInboundBadgeClass . '" id="hubInboundCount-' . (int) $hubAccount->id . '" data-live-badge="hubInboundCount-' . (int) $hubAccount->id . '">' .
+                        ($inboundCount > 0 ? $inboundCount : '') .
+                        '</span></span>';
                     $menu->assign100
                         ->add($hubLabel, [
                             'class' => 'sidebar-layout',
@@ -163,21 +155,12 @@
                     $q->where('sender_type', 'client')->whereNull('read_at');
                 })
                 ->count();
-            if ($assignedItemCount == 0) {
-                $menu->order
-                    ->add('<span>' . __('message.assigned_item_list') . '</span>', [
-                        'class' => 'sidebar-layout',
-                        'route' => 'order.dispatch.assigned-items',
-                    ])
-                    ->data('permission', 'order-list')
-                    ->prepend('<i class="fas fa-clipboard-check"></i>')
-                    ->link->attr(['class' => '']);
-            } else {
-                $assignedBadge =
-                    '<span class="badge badge-pill badge-info p-1" id="assignedItemListCount">' .
-                    $assignedItemCount .
-                    '</span>';
-                $menu->order
+            $assignedBadgeClass = 'badge badge-pill badge-info p-1' . ($assignedItemCount > 0 ? '' : ' d-none');
+            $assignedBadge =
+                '<span class="' . $assignedBadgeClass . '" id="assignedItemListCount" data-live-badge="assignedItemListCount">' .
+                ($assignedItemCount > 0 ? $assignedItemCount : '') .
+                '</span>';
+            $menu->order
                 ->add('<span>' . __('message.assigned_item_list') . ' ' . $assignedBadge . '</span>', [
                     'class' => 'sidebar-layout',
                     'route' => 'order.dispatch.assigned-items',
@@ -185,7 +168,6 @@
                 ->data('permission', 'order-list')
                 ->prepend('<i class="fas fa-clipboard-check"></i>')
                 ->link->attr(['class' => '']);
-            }
 
             $workflow = app(\App\Services\DispatchOrderWorkflowService::class);
             $workflow->healPickupErrorChoicesToCancelled();
@@ -197,14 +179,12 @@
                         ->orWhereNotIn('pickup_error_choice', ['cancel', 'express']);
                 })
                 ->count();
-            $pickupErrorLabel = '<span>' . __('message.pickup_error_order_list') . '</span>';
-            if ($pickupErrorCount > 0) {
-                $pickupErrorLabel =
-                    '<span>' . __('message.pickup_error_order_list') . ' ' .
-                    '<span class="badge badge-pill badge-danger p-1 animate__animated animate__flash">' .
-                    $pickupErrorCount .
-                    '</span></span>';
-            }
+            $pickupErrorBadgeClass = 'badge badge-pill badge-danger p-1 animate__animated animate__flash' . ($pickupErrorCount > 0 ? '' : ' d-none');
+            $pickupErrorLabel =
+                '<span>' . __('message.pickup_error_order_list') . ' ' .
+                '<span class="' . $pickupErrorBadgeClass . '" id="pickupErrorCount" data-live-badge="pickupErrorCount">' .
+                ($pickupErrorCount > 0 ? $pickupErrorCount : '') .
+                '</span></span>';
             $menu->order
                 ->add($pickupErrorLabel, [
                     'class' => 'sidebar-layout',
@@ -228,14 +208,12 @@
                         ->orWhere('reason', 'like', '%User chose express after pickup error%');
                 })
                 ->count();
-            $pickupCancelledLabel = '<span>' . __('message.pickup_cancelled_order_list') . '</span>';
-            if ($pickupCancelledCount > 0) {
-                $pickupCancelledLabel =
-                    '<span>' . __('message.pickup_cancelled_order_list') . ' ' .
-                    '<span class="badge badge-pill badge-danger p-1 animate__animated animate__flash">' .
-                    $pickupCancelledCount .
-                    '</span></span>';
-            }
+            $pickupCancelledBadgeClass = 'badge badge-pill badge-danger p-1 animate__animated animate__flash' . ($pickupCancelledCount > 0 ? '' : ' d-none');
+            $pickupCancelledLabel =
+                '<span>' . __('message.pickup_cancelled_order_list') . ' ' .
+                '<span class="' . $pickupCancelledBadgeClass . '" id="pickupCancelledCount" data-live-badge="pickupCancelledCount">' .
+                ($pickupCancelledCount > 0 ? $pickupCancelledCount : '') .
+                '</span></span>';
             $menu->order
                 ->add($pickupCancelledLabel, [
                     'class' => 'sidebar-layout',

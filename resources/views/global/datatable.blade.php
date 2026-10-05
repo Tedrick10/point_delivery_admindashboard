@@ -1,5 +1,5 @@
 <x-master-layout :assets="$assets ?? []">
-    <div class="container-fluid pds-page-wrap pds-motion-enter">
+    <div class="container-fluid pds-page-wrap pds-motion-enter" id="adminLiveRoot" data-live-page="{{ $livePageKey ?? (optional(request()->route())->getName() ?? 'global') }}">
         <div class="row">
             <div class="col-lg-12">
                 <div class="card card-block card-stretch card-height pds-page-card">
@@ -33,5 +33,18 @@
     </div>
     @section('bottom_script')
        {{ $dataTable->scripts() }}
+       <script>
+           (function () {
+               // Global poller already refreshes DataTables; keep a page-version backup.
+               if (typeof window.bootAdminPageLiveRefresh !== 'function') return;
+               if (window.__pdsPageLiveBooted) return;
+               window.bootAdminPageLiveRefresh({
+                   url: @json(route('admin.live.page-version')),
+                   intervalMs: 4000,
+                   data: { page: @json($livePageKey ?? (optional(request()->route())->getName() ?? 'global')) },
+                   tableSelector: '.pds-datatable'
+               });
+           })();
+       </script>
     @endsection
 </x-master-layout>

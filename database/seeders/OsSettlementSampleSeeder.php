@@ -9,7 +9,9 @@ use App\Models\User;
 use App\Services\OsSettlementService;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * Demo unfinished completed parcels for ငွေရှင်းတမ်း Pay / Receive tabs.
@@ -47,12 +49,7 @@ class OsSettlementSampleSeeder extends Seeder
         $mdy = $branches->firstWhere('name', 'မန္တလေး') ?? $branches->first();
         $mdyId = (int) $mdy->id;
 
-        $clients = User::query()
-            ->where('user_type', 'client')
-            ->where('status', 1)
-            ->orderBy('id')
-            ->limit(8)
-            ->get();
+        $clients = $this->ensureDemoClients(30, $mdyId);
 
         if ($clients->isEmpty()) {
             $this->command?->warn('No active OS clients found.');
@@ -87,11 +84,7 @@ class OsSettlementSampleSeeder extends Seeder
 
         foreach ($clients as $i => $client) {
             $dest = $destCycle[$i % $destCycle->count()];
-            $toBranchId = (int) $dest->id;
-            // Keep most on မန္တလေး so default tab is populated.
-            if ($i < 5) {
-                $toBranchId = $mdyId;
-            }
+            $toBranchId = $mdyId;
 
             $order = $this->makeOrder(
                 $templateOrder,
@@ -168,6 +161,61 @@ class OsSettlementSampleSeeder extends Seeder
             $payOs,
             $recvOs
         ));
+    }
+
+    protected function ensureDemoClients(int $need, int $branchId)
+    {
+        $clients = User::query()
+            ->where('user_type', 'client')
+            ->where('status', 1)
+            ->orderBy('id')
+            ->get();
+
+        $i = 1;
+        while ($clients->unique('id')->count() < $need) {
+            $email = 'demo.os.'.str_pad((string) $i, 2, '0', STR_PAD_LEFT).'@point.demo';
+            $existing = User::withTrashed()->where('email', $email)->first();
+            if ($existing) {
+                if ($existing->trashed()) {
+                    $existing->restore();
+                }
+                $existing->fill([
+                    'name' => 'Demo OS '.$i,
+                    'user_type' => 'client',
+                    'status' => 1,
+                    'approval_status' => 'approved',
+                    'branch_id' => $branchId,
+                    'contact_number' => '09'.str_pad((string) (200000000 + $i), 9, '0', STR_PAD_LEFT),
+                ])->save();
+                if (! $clients->contains(fn (User $u) => (int) $u->id === (int) $existing->id)) {
+                    $clients->push($existing);
+                }
+                $i++;
+                continue;
+            }
+
+            $user = User::query()->create([
+                'name' => 'Demo OS '.$i,
+                'email' => $email,
+                'username' => 'demo_os_'.$i.'_'.Str::lower(Str::random(4)),
+                'password' => Hash::make('password'),
+                'user_type' => 'client',
+                'status' => 1,
+                'approval_status' => 'approved',
+                'branch_id' => $branchId,
+                'contact_number' => '09'.str_pad((string) (200000000 + $i), 9, '0', STR_PAD_LEFT),
+                'created_by_admin' => 1,
+            ]);
+            try {
+                $user->assignRole('client');
+            } catch (\Throwable $e) {
+                // ignore
+            }
+            $clients->push($user);
+            $i++;
+        }
+
+        return $clients->unique('id')->take($need)->values();
     }
 
     protected function cleanupPreviousSamples(): void

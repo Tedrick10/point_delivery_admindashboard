@@ -247,6 +247,8 @@ class OrderListSampleSeeder extends Seeder
             ];
         }
 
+        $scenarios = $this->expandScenariosPerTab($scenarios, 30);
+
         $created = 0;
         foreach ($scenarios as $i => $s) {
             /** @var User $client */
@@ -303,6 +305,35 @@ class OrderListSampleSeeder extends Seeder
             $today,
             self::MARKER
         ));
+    }
+
+    /**
+     * Repeat each tab's templates until that tab has at least $perTab orders.
+     *
+     * @param  array<int, array<string, mixed>>  $scenarios
+     * @return array<int, array<string, mixed>>
+     */
+    protected function expandScenariosPerTab(array $scenarios, int $perTab): array
+    {
+        $grouped = [];
+        foreach ($scenarios as $scenario) {
+            $grouped[(string) ($scenario['tab'] ?? 'other')][] = $scenario;
+        }
+
+        $out = [];
+        foreach ($grouped as $rows) {
+            $count = count($rows);
+            if ($count === 0) {
+                continue;
+            }
+            for ($i = 0; $i < $perTab; $i++) {
+                $row = $rows[$i % $count];
+                $row['address'] = rtrim((string) $row['address'], '၊ ').'၊ Demo #'.($i + 1);
+                $out[] = $row;
+            }
+        }
+
+        return $out;
     }
 
     protected function cleanupPreviousSamples(): void

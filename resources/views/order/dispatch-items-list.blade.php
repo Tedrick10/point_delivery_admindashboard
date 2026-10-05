@@ -54,6 +54,118 @@
             margin: 0 1.35rem 0.85rem;
             width: auto;
         }
+        .pds-dispatch-items-datatable thead th.sorting,
+        .pds-dispatch-items-datatable thead th.sorting_asc,
+        .pds-dispatch-items-datatable thead th.sorting_desc,
+        .pds-dispatch-items-datatable thead th.sorting_asc_disabled,
+        .pds-dispatch-items-datatable thead th.sorting_desc_disabled {
+            background-image: none !important;
+            cursor: default !important;
+            padding-right: 10px !important;
+        }
+        .pds-dispatch-items-datatable thead th.sorting:before,
+        .pds-dispatch-items-datatable thead th.sorting:after,
+        .pds-dispatch-items-datatable thead th.sorting_asc:before,
+        .pds-dispatch-items-datatable thead th.sorting_asc:after,
+        .pds-dispatch-items-datatable thead th.sorting_desc:before,
+        .pds-dispatch-items-datatable thead th.sorting_desc:after {
+            display: none !important;
+            content: none !important;
+        }
+        .pds-dispatch-items-table-shell .dataTables_wrapper,
+        .pds-dispatch-items-table-shell .dataTables_scroll {
+            overflow: visible !important;
+        }
+        .pds-dispatch-items-table-shell {
+            overflow-x: auto;
+            overflow-y: visible;
+            border-bottom-left-radius: 0 !important;
+            border-bottom-right-radius: 0 !important;
+        }
+        .pds-items-dock {
+            display: flex;
+            align-items: stretch;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            padding: 0.85rem 1rem;
+            background:
+                linear-gradient(180deg, #fffdfb 0%, #fff7ed 100%);
+            border: 1px solid #f0d9c4;
+            border-top: 0;
+            border-radius: 0 0 14px 14px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        }
+        .pds-items-dock__meta {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0.15rem;
+            min-width: 8rem;
+        }
+        .pds-items-dock__kicker {
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--site-color, #FE6F07);
+        }
+        .pds-items-dock__count {
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: #334155;
+        }
+        .pds-items-dock__metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-left: auto;
+        }
+        .pds-items-metric {
+            min-width: 7.25rem;
+            padding: 0.55rem 0.8rem 0.6rem;
+            border-radius: 12px;
+            background: #fff;
+            border: 1px solid #f3e4d6;
+            box-shadow: 0 1px 2px rgba(154, 52, 18, 0.04);
+        }
+        .pds-items-metric span {
+            display: block;
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 0.2rem;
+        }
+        .pds-items-metric strong {
+            display: block;
+            font-size: 1.02rem;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            color: #0f172a;
+            line-height: 1.2;
+        }
+        .pds-items-metric--pay {
+            background: #fff7ed;
+            border-color: rgba(var(--brand-rgb), 0.35);
+        }
+        .pds-items-metric--pay strong {
+            color: var(--site-color, #FE6F07);
+        }
+        .pds-items-metric.is-negative {
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+        .pds-items-metric.is-negative strong {
+            color: #dc2626;
+        }
+        .pds-dispatch-items-datatable tfoot {
+            display: none !important;
+        }
+        .pds-dispatch-items-dt-footer {
+            display: none !important;
+        }
     </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-items-page" data-active-to-branch="{{ (int) ($activeToBranchId ?? 0) }}">
         <div class="pds-dispatch-items-screen">
@@ -140,6 +252,34 @@
                 <div class="pds-dispatch-items-table-shell pds-table-shell">
                     {{ $dataTable->table(['class' => 'table w-100 pds-datatable pds-dispatch-items-datatable'], false) }}
                 </div>
+                <div class="pds-items-dock" id="dispatchItemsDock">
+                    <div class="pds-items-dock__meta">
+                        <span class="pds-items-dock__kicker">{{ __('message.total_amount') }}</span>
+                        <span class="pds-items-dock__count" id="dispatchItemsCount">0 {{ __('message.item_count') }}</span>
+                    </div>
+                    <div class="pds-items-dock__metrics">
+                        <div class="pds-items-metric">
+                            <span>{{ __('message.advance_paid') }}</span>
+                            <strong data-total-key="advance_paid">0</strong>
+                        </div>
+                        <div class="pds-items-metric">
+                            <span>{{ __('message.item_value') }}</span>
+                            <strong data-total-key="item_value">0</strong>
+                        </div>
+                        <div class="pds-items-metric">
+                            <span>{{ __('message.deli_amount') }}</span>
+                            <strong data-total-key="deli_amount">0</strong>
+                        </div>
+                        <div class="pds-items-metric">
+                            <span>{{ __('message.cust_get') }}</span>
+                            <strong data-total-key="cust_get">0</strong>
+                        </div>
+                        <div class="pds-items-metric pds-items-metric--pay">
+                            <span>{{ __('message.os_to_pay') }}</span>
+                            <strong data-total-key="os_to_pay">0</strong>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -157,7 +297,7 @@
         {{ $dataTable->scripts() }}
         <script src="{{ asset('js/pds-photo-zoom.js') }}?v=3"></script>
         <script src="{{ asset('js/dispatch-item-form.js') }}?v=35"></script>
-        <script src="{{ asset('js/admin-order-list-live.js') }}?v=3"></script>
+        {{-- admin-live.js is loaded globally from _scripts --}}
         <script>
             (function () {
                 if (typeof Snackbar !== 'undefined' && typeof Snackbar.close === 'function') {
@@ -173,6 +313,59 @@
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             (function () {
+                function formatAmount(value) {
+                    var amount = Math.round(Number(value) || 0);
+                    return amount.toLocaleString('en-US');
+                }
+
+                window.pdsFillDispatchItemsTotals = function (dt) {
+                    var api = (dt && typeof dt.rows === 'function')
+                        ? dt
+                        : (dt && dt.api ? dt.api() : (window.LaravelDataTables && window.LaravelDataTables['dataTableBuilder']));
+                    if (!api || !api.columns) return;
+
+                    function colIdx(name) {
+                        var found = -1;
+                        api.columns().every(function (index) {
+                            if (this.dataSrc() === name) {
+                                found = index;
+                            }
+                        });
+                        return found;
+                    }
+
+                    var json = typeof api.ajax.json === 'function' ? (api.ajax.json() || {}) : {};
+                    var totals = json.pds_totals || {};
+                    var keys = ['advance_paid', 'item_value', 'deli_amount', 'cust_get', 'os_to_pay'];
+
+                    keys.forEach(function (key) {
+                        if (typeof totals[key] === 'number') return;
+                        var idx = colIdx(key);
+                        if (idx < 0) return;
+                        var sum = 0;
+                        api.column(idx, { page: 'all' }).nodes().to$().each(function () {
+                            var raw = $(this).find('[data-amount]').attr('data-amount');
+                            if (raw == null) {
+                                raw = String($(this).text()).replace(/,/g, '');
+                            }
+                            sum += parseFloat(raw) || 0;
+                        });
+                        totals[key] = sum;
+                    });
+
+                    $('#dispatchItemsDock [data-total-key]').each(function () {
+                        var key = this.getAttribute('data-total-key');
+                        var value = Number(totals[key] || 0);
+                        $(this).text(formatAmount(value));
+                        $(this).closest('.pds-items-metric').toggleClass('is-negative', key === 'os_to_pay' && value < 0);
+                    });
+
+                    var count = api.rows({ filter: 'applied' }).count();
+                    $('#dispatchItemsCount').text(count + ' ' + @json(__('message.item_count')));
+
+                    $(api.table().node()).children('tfoot').remove();
+                };
+
                 function ensureDispatchItemsSelectAll() {
                     var $th = $('#dataTableBuilder thead th:first');
                     if ($th.length && !$th.find('#dispatchItemsSelectAll').length) {
@@ -217,6 +410,7 @@
                     $('.pds-dispatch-items-table-shell').toggleClass('is-empty', count === 0);
                     $('.pds-dispatch-items-screen').toggleClass('has-rows', count > 0);
                     syncDispatchItemsSelectAll();
+                    window.pdsFillDispatchItemsTotals(api);
                 });
 
                 setTimeout(function () {
@@ -239,11 +433,13 @@
                 }
 
                 if (typeof window.bootAdminOrderListLiveRefresh === 'function') {
+                    window.__pdsPageLiveBooted = true;
                     window.bootAdminOrderListLiveRefresh({
                         url: @json(route('order.dispatch.items.live-version', $order->id)),
                         intervalMs: 5000,
                         useItemsReload: true,
-                        tableSelector: '.pds-dispatch-items-datatable'
+                        tableSelector: '.pds-dispatch-items-datatable',
+                        data: { order_id: {{ (int) $order->id }} }
                     });
                 }
 

@@ -19,40 +19,42 @@
     $branchCols = !empty($branchRows) ? array_keys($branchRows[0]['cols'] ?? []) : [];
 @endphp
 
+@php
+    $initials = function (string $name): string {
+        $parts = preg_split('/\s+/u', trim($name)) ?: [];
+        $chars = [];
+        foreach ($parts as $part) {
+            if ($part === '') {
+                continue;
+            }
+            $chars[] = mb_strtoupper(mb_substr($part, 0, 1));
+            if (count($chars) >= 2) {
+                break;
+            }
+        }
+
+        return implode('', $chars) ?: '?';
+    };
+@endphp
 <div class="sa-module-page">
-    <a href="{{ route('super-admin.screens.hub') }}" class="sa-module-page__back">
-        <i class="fas fa-arrow-left"></i> {{ __('message.sa_all_screens') }}
-    </a>
-
-    <header class="sa-module-hero">
-        <div class="sa-module-hero__icon"><i class="fas {{ $screen['icon'] }}"></i></div>
-        <div class="sa-module-hero__copy">
-            <h2>{{ $screenTitle }}</h2>
-            <p>{{ $screenSub }}</p>
-        </div>
-        @if($primaryLink)
-            <a href="{{ $primaryHref }}"
-               class="sa-module-hero__btn"
-               @if($primaryIsExternal) target="_blank" rel="noopener" @endif>
-                <i class="fas {{ $primaryIsExternal ? 'fa-external-link-alt' : 'fa-arrow-right' }}" aria-hidden="true"></i>
-                <span>{{ __('message.sa_open') }} {{ $primaryLabel }}</span>
-            </a>
-        @endif
-    </header>
-
-    @if(count($screen['links'] ?? []) > 1)
-        <div class="sa-module-links">
-            @foreach($screen['links'] as $link)
-                @php
-                    $linkExternal = ! str_starts_with((string) ($link['route'] ?? ''), 'super-admin.');
-                @endphp
-                <a href="{{ route($link['route'], $link['params'] ?? []) }}"
-                   class="sa-module-links__item"
-                   @if($linkExternal) target="_blank" rel="noopener" @endif>
-                    {{ __('message.'.($link['label_key'] ?? '')) }}
-                </a>
-            @endforeach
-        </div>
+    @if(!empty($screen['links']))
+        <nav class="sa-screen-bar">
+            <div class="sa-screen-bar__links">
+                @foreach($screen['links'] as $i => $link)
+                    @php
+                        $linkExternal = ! str_starts_with((string) ($link['route'] ?? ''), 'super-admin.');
+                    @endphp
+                    <a href="{{ route($link['route'], $link['params'] ?? []) }}"
+                       class="{{ $i === 0 ? 'sa-btn sa-btn-primary sa-btn-sm' : 'sa-screen-bar__chip' }}"
+                       @if($linkExternal) target="_blank" rel="noopener" @endif>
+                        @if($i === 0)
+                            <i class="fas {{ $linkExternal ? 'fa-external-link-alt' : 'fa-arrow-right' }}" aria-hidden="true"></i>
+                        @endif
+                        {{ $i === 0 ? __('message.sa_open').' ' : '' }}{{ __('message.'.($link['label_key'] ?? '')) }}
+                    </a>
+                @endforeach
+            </div>
+        </nav>
     @endif
 
     @if(($screenKey ?? '') === 'delivery-route' && !empty($deliveryRoute))
@@ -98,87 +100,6 @@
                 @endif
             </div>
         </section>
-        <style>
-            .sa-delivery-route-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }
-            .sa-delivery-route-tabs__item {
-                display: inline-flex; align-items: center; gap: 8px;
-                padding: 0.55rem 0.9rem; border-radius: 999px;
-                background: #f1f5f9; color: #334155; font-weight: 700; text-decoration: none;
-            }
-            .sa-delivery-route-tabs__item em {
-                font-style: normal; background: #fff; border-radius: 999px;
-                padding: 0.1rem 0.45rem; font-size: 0.75rem; color: #64748b;
-            }
-            .sa-delivery-route-tabs__item.is-active { background: #0f766e; color: #fff; }
-            .sa-delivery-route-tabs__item.is-active em { color: #0f766e; }
-            .sa-delivery-route-body .pds-route-form {
-                display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;
-                background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
-                padding: 14px 16px; margin-bottom: 16px;
-            }
-            .sa-delivery-route-body .pds-route-form__field { min-width: 180px; flex: 1; }
-            .sa-delivery-route-body .pds-route-form__field label { display: block; font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 6px; }
-            .sa-delivery-route-body .pds-route-form__field input,
-            .sa-delivery-route-body .pds-route-form__field select {
-                width: 100%; border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px 12px;
-            }
-            .sa-delivery-route-body .pds-route-table-wrap { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; }
-            .sa-delivery-route-body .pds-route-table { width: 100%; border-collapse: collapse; }
-            .sa-delivery-route-body .pds-route-table th,
-            .sa-delivery-route-body .pds-route-table td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; text-align: left; }
-            .sa-delivery-route-body .pds-route-table th { font-size: 12px; letter-spacing: .04em; color: #64748b; background: #f8fafc; }
-            .sa-delivery-route-body .pds-route-empty { padding: 36px 16px; text-align: center; color: #94a3b8; }
-            .sa-delivery-route-body .pds-daily-check-search-btn,
-            .sa-delivery-route-body .pds-cash-payout-btn {
-                display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 10px;
-                padding: 9px 14px; font-weight: 700; cursor: pointer; text-decoration: none;
-            }
-            .sa-delivery-route-body .pds-daily-check-search-btn { background: #0f766e; color: #fff; }
-            .sa-delivery-route-body .pds-cash-payout-btn--ok { background: #15803d; color: #fff; }
-            .sa-delivery-route-body .pds-cash-payout-btn--warn {
-                background: #fff; color: var(--site-color); border: 1px solid rgba(var(--brand-rgb), 0.45);
-            }
-            .sa-delivery-route-body .pds-route-inline-form { display: flex; gap: 8px; align-items: center; }
-            .sa-delivery-route-body .pds-route-inline-form input[type="text"] {
-                flex: 1; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 10px;
-            }
-            .sa-delivery-route-body .pds-route-settlement-select {
-                width: 100%; min-width: 180px; border: 1px solid #e2e8f0; border-radius: 10px;
-                padding: 8px 10px; background: #fff; font-weight: 600;
-            }
-            .sa-delivery-route-body .pds-route-settlement-checks {
-                display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch;
-            }
-            .sa-delivery-route-body .pds-route-settlement-check {
-                display: inline-flex; align-items: center; gap: 8px;
-                margin: 0; padding: 8px 12px; border-radius: 12px;
-                border: 1px solid #e2e8f0; background: #fff; cursor: pointer;
-            }
-            .sa-delivery-route-body .pds-route-settlement-check input {
-                position: absolute; opacity: 0; pointer-events: none;
-            }
-            .sa-delivery-route-body .pds-route-settlement-check__box {
-                width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
-                border: 2px solid #cbd5e1; background: #fff; color: transparent;
-                display: inline-flex; align-items: center; justify-content: center; font-size: 11px;
-            }
-            .sa-delivery-route-body .pds-route-settlement-check__label {
-                font-size: 13px; font-weight: 700; color: #334155; line-height: 1.2;
-            }
-            .sa-delivery-route-body .pds-route-settlement-check.is-active,
-            .sa-delivery-route-body .pds-route-settlement-check:has(input:checked) {
-                border-color: #0f766e; background: #ecfdf5; box-shadow: 0 0 0 1px #0f766e inset;
-            }
-            .sa-delivery-route-body .pds-route-settlement-check.is-active .pds-route-settlement-check__box,
-            .sa-delivery-route-body .pds-route-settlement-check:has(input:checked) .pds-route-settlement-check__box {
-                border-color: #0f766e; background: #0f766e; color: #fff;
-            }
-            .sa-delivery-route-body .pds-route-settlement-check.is-active .pds-route-settlement-check__label,
-            .sa-delivery-route-body .pds-route-settlement-check:has(input:checked) .pds-route-settlement-check__label {
-                color: #0f766e;
-            }
-            .sa-delivery-route-body .pds-route-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
-        </style>
     @endif
 
     @if(($screenKey ?? '') === 'rider-remit')
@@ -681,7 +602,7 @@
                 border-radius: 999px; padding: 0.5rem 0.9rem; font-weight: 700;
                 text-decoration: none; border: 1px solid transparent; cursor: pointer;
             }
-            .sa-roles-embed .btn-primary { background: #0f766e; color: #fff; border-color: #0f766e; }
+            .sa-roles-embed .btn-primary { background: #FE6F07; color: #fff; border-color: #FE6F07; }
             .sa-roles-embed .btn-outline-danger { background: #fff; color: #b91c1c; border-color: #fecaca; }
             .sa-roles-embed .pds-roles-hero { display: none; }
         </style>
@@ -731,23 +652,7 @@
     @endif
 
     @if(($screenKey ?? '') === 'app-store-update' && !empty($appStoreUpdate))
-        <section class="sa-module-panel sa-system-settings-panel">
-            <header class="sa-module-panel__head">
-                <div>
-                    <h3>{{ __('message.sa_screen_app_store_update') }}</h3>
-                    <p class="mb-0 text-muted">{{ __('message.sa_screen_app_store_update_sub') }}</p>
-                </div>
-            </header>
-            @if(session('success'))
-                <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
-            @endif
-            @if(session('error'))
-                <p class="sa-fuel-default-panel__err">{{ session('error') }}</p>
-            @endif
-            <div class="sa-system-settings-embed">
-                @include('setting.app-store-update', $appStoreUpdate)
-            </div>
-        </section>
+        @include('super-admin.screens.partials.app-store-board')
     @endif
 
     @if(($screenKey ?? '') === 'api-server-setting' && !empty($apiServerSetting))
@@ -774,6 +679,10 @@
         @include('super-admin.screens.partials.ui-theme-board')
     @endif
 
+    @if(($screenKey ?? '') === 'app-copy' && !empty($appCopy))
+        @include('super-admin.screens.partials.app-copy-board')
+    @endif
+
     @if(($screenKey ?? '') === 'network' && !empty($networkControl))
         @php
             $nc = $networkControl;
@@ -783,169 +692,174 @@
                 \App\Models\Branch::SETTLEMENT_HALF_DELI => __('message.branch_settlement_half_deli'),
             ];
         @endphp
-        <section class="sa-module-panel sa-network-alerts">
-            <header class="sa-module-panel__head">
-                <h3>{{ __('message.sa_network_alerts') }}</h3>
-                <span>{{ count($nc['missingAdmins'] ?? []) }} {{ __('message.sa_missing') }}</span>
-            </header>
+        <section class="sa-home-card sa-home-card--table">
             @if(!empty($nc['missingAdmins']))
-                <div class="sa-network-alert-list">
-                    @foreach($nc['missingAdmins'] as $row)
-                        <div class="sa-network-alert-list__item">
-                            <strong>{{ $row['name'] }}</strong>
-                            <span>{{ __('message.sa_no_admin_assigned') }}</span>
-                            <a href="{{ route('super-admin.branch-admins.create', ['branch_id' => $row['id']]) }}" class="sa-btn sa-btn-primary">
-                                {{ __('message.sa_create_admin') }}
-                            </a>
-                        </div>
-                    @endforeach
+                <header>
+                    <div>
+                        <h2>{{ __('message.sa_network_alerts') }}</h2>
+                        <p>{{ count($nc['missingAdmins']) }} {{ __('message.sa_missing') }}</p>
+                    </div>
+                </header>
+                <div class="sa-home-table-wrap">
+                    <table class="sa-home-table">
+                        <tbody>
+                            @foreach($nc['missingAdmins'] as $row)
+                                <tr class="is-open">
+                                    <td>
+                                        <div class="sa-person">
+                                            <span class="sa-avatar">{{ $initials((string) $row['name']) }}</span>
+                                            <div>
+                                                <strong>{{ $row['name'] }}</strong>
+                                                <small>{{ __('message.sa_unassigned') }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="sa-table-actions">
+                                        <a href="{{ route('super-admin.branch-admins.create', ['branch_id' => $row['id']]) }}" class="sa-btn sa-btn-primary sa-btn-sm">
+                                            {{ __('message.sa_create_admin') }}
+                                        </a>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
             @else
-                <p class="sa-fuel-default-panel__ok">{{ __('message.sa_network_admins_ok') }}</p>
+                <p class="sa-fuel-default-panel__ok" style="margin:1rem">{{ __('message.sa_network_admins_ok') }}</p>
             @endif
         </section>
 
-        <section class="sa-module-panel">
-            <header class="sa-module-panel__head">
-                <h3>{{ __('message.sa_network_defaults') }}</h3>
-            </header>
-            <div class="sa-network-defaults">
-                <div class="sa-network-defaults__card">
-                    <span>{{ __('message.sa_fuel_default_title') }}</span>
-                    <strong>{{ number_format((float) ($nc['defaultFuel'] ?? 0), 0) }} Ks</strong>
-                    <a href="{{ route('super-admin.screens.show', 'rider-remit') }}">{{ __('message.edit') }}</a>
-                </div>
-                <div class="sa-network-defaults__card">
-                    <span>{{ __('message.sa_office_salary_default_title') }}</span>
-                    <strong>{{ number_format((float) ($nc['defaultOfficeSalary'] ?? 0), 0) }} Ks</strong>
-                    <a href="{{ route('super-admin.screens.show', 'office-salary') }}">{{ __('message.edit') }}</a>
-                </div>
-                <div class="sa-network-defaults__card">
-                    <span>{{ __('message.sa_yangon_hubs') }}</span>
-                    <strong>{{ count($nc['hubs'] ?? []) }}</strong>
-                    <em>{{ collect($nc['hubs'] ?? [])->pluck('name')->implode(' · ') }}</em>
-                </div>
-            </div>
+        <section class="sa-kpi">
+            <article>
+                <p>{{ __('message.sa_fuel_default_title') }}</p>
+                <strong>{{ number_format((float) ($nc['defaultFuel'] ?? 0), 0) }} Ks</strong>
+                <span><a href="{{ route('super-admin.screens.show', 'rider-remit') }}">{{ __('message.edit') }}</a></span>
+            </article>
+            <article>
+                <p>{{ __('message.sa_office_salary_default_title') }}</p>
+                <strong>{{ number_format((float) ($nc['defaultOfficeSalary'] ?? 0), 0) }} Ks</strong>
+                <span><a href="{{ route('super-admin.screens.show', 'office-salary') }}">{{ __('message.edit') }}</a></span>
+            </article>
+            <article>
+                <p>{{ __('message.sa_yangon_hubs') }}</p>
+                <strong>{{ count($nc['hubs'] ?? []) }}</strong>
+                <span>{{ collect($nc['hubs'] ?? [])->pluck('name')->implode(' · ') }}</span>
+            </article>
+            @foreach($modeLabels as $key => $label)
+                <article>
+                    <p>{{ $label }}</p>
+                    <strong>{{ (int) ($nc['settlementCounts'][$key] ?? 0) }}</strong>
+                    <span>{{ __('message.branch_settlement_mode') }}</span>
+                </article>
+            @endforeach
         </section>
 
-        <section class="sa-module-panel">
-            <header class="sa-module-panel__head">
-                <h3>{{ __('message.branch_settlement_mode') }}</h3>
-                <a href="{{ route('super-admin.screens.show', ['screen' => 'delivery-route', 'tab' => 'from_to']) }}" class="sa-module-panel__link">
+        <section class="sa-home-card sa-home-card--table">
+            <header>
+                <div>
+                    <h2>{{ __('message.sa_branches_title') }}</h2>
+                    <p>{{ count($nc['modeRows'] ?? []) }} {{ __('message.sa_branches') }}</p>
+                </div>
+                <a href="{{ route('super-admin.screens.show', ['screen' => 'delivery-route', 'tab' => 'from_to']) }}" class="sa-btn sa-btn-ghost sa-btn-sm">
                     {{ __('message.sa_manage_settlement_modes') }}
                 </a>
             </header>
-            <div class="sa-network-mode-chips">
-                @foreach($modeLabels as $key => $label)
-                    <div class="sa-network-mode-chips__item">
-                        <strong>{{ (int) ($nc['settlementCounts'][$key] ?? 0) }}</strong>
-                        <span>{{ $label }}</span>
-                    </div>
-                @endforeach
-            </div>
-            <div class="sa-module-table-wrap" style="margin-top:1rem">
-                <table class="sa-module-table">
+            <div class="sa-home-table-wrap">
+                <table class="sa-home-table">
                     <thead>
                         <tr>
                             <th>{{ __('message.name') }}</th>
                             <th>{{ __('message.branch_settlement_mode') }}</th>
-                            <th>{{ __('message.sa_branch_admins') }}</th>
-                            <th>{{ __('message.sa_riders') }}</th>
+                            <th>{{ __('message.sa_admin') }}</th>
+                            <th class="sa-num">{{ __('message.sa_riders') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach(($nc['modeRows'] ?? []) as $row)
-                            <tr>
-                                <td><strong>{{ $row['name'] }}</strong></td>
+                            <tr class="{{ empty($row['admin']) ? 'is-open' : '' }}">
+                                <td>
+                                    <div class="sa-person">
+                                        <span class="sa-avatar">{{ $initials((string) $row['name']) }}</span>
+                                        <strong>{{ $row['name'] }}</strong>
+                                    </div>
+                                </td>
                                 <td><span class="sa-mode-badge sa-mode-badge--{{ $row['mode'] }}">{{ $row['label'] }}</span></td>
-                                <td>{{ $row['admin'] ?: __('message.sa_no_admin_assigned') }}</td>
-                                <td>{{ number_format((int) $row['riders']) }}</td>
+                                <td>
+                                    @if(!empty($row['admin']))
+                                        {{ $row['admin'] }}
+                                    @else
+                                        <span class="sa-badge sa-badge-warn">{{ __('message.sa_unassigned') }}</span>
+                                    @endif
+                                </td>
+                                <td class="sa-num">{{ number_format((int) $row['riders']) }}</td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
             </div>
         </section>
-        <style>
-            .sa-network-alert-list { display: grid; gap: 10px; }
-            .sa-network-alert-list__item {
-                display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-                padding: 12px 14px; border-radius: 12px; background: rgba(var(--brand-rgb), 0.08); border: 1px solid rgba(var(--brand-rgb), 0.28);
-            }
-            .sa-network-alert-list__item span { color: var(--site-color); flex: 1; }
-            .sa-network-defaults { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; }
-            .sa-network-defaults__card {
-                background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 16px;
-                display: grid; gap: 6px;
-            }
-            .sa-network-defaults__card span { font-size: 12px; color: #64748b; font-weight: 700; }
-            .sa-network-defaults__card strong { font-size: 1.25rem; color: #0f172a; }
-            .sa-network-defaults__card a { color: #0f766e; font-weight: 700; text-decoration: none; }
-            .sa-network-defaults__card em { font-style: normal; font-size: 12px; color: #64748b; }
-            .sa-network-mode-chips { display: flex; flex-wrap: wrap; gap: 10px; }
-            .sa-network-mode-chips__item {
-                min-width: 140px; background: #ecfdf5; border: 1px solid #99f6e4; border-radius: 12px;
-                padding: 12px 14px; display: grid; gap: 4px;
-            }
-            .sa-network-mode-chips__item strong { font-size: 1.35rem; color: #0f766e; }
-            .sa-mode-badge {
-                display: inline-flex; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
-                background: #f1f5f9; color: #334155;
-            }
-            .sa-mode-badge--half_deli { background: #ecfdf5; color: #0f766e; }
-            .sa-mode-badge--manual_half_deli { background: #eff6ff; color: #1d4ed8; }
-            .sa-module-panel__link { color: #0f766e; font-weight: 700; text-decoration: none; font-size: 13px; }
-        </style>
     @endif
 
-    <div class="sa-module-page__grid">
+    @php
+        $saHasOwnBoard = in_array((string) ($screenKey ?? ''), [
+            'delivery-route', 'rider-remit', 'late-fine', 'rider-salary', 'office-salary', 'kyo-shin',
+            'expense-summary', 'welcome-promotion', 'account-creation', 'roles-permissions',
+            'general-setting', 'company-contact', 'app-store-update', 'api-server-setting', 'ui-theme', 'app-copy', 'network',
+        ], true);
+    @endphp
+    @if(! $saHasOwnBoard)
+    <div class="sa-screen-stack">
         @if(!empty($metrics))
-        <section class="sa-module-panel">
-            <header class="sa-module-panel__head">
-                <h3>{{ __('message.sa_tab_overview') }}</h3>
-                <span>{{ $monthLabel }}</span>
-            </header>
-            <div class="sa-module-metrics">
-                @foreach($metrics as $m)
-                    <div class="sa-module-metric">
-                        <span class="sa-module-metric__label">{{ $m['label'] }}</span>
-                        <strong class="sa-module-metric__value">
-                            @if(!empty($m['raw']))
-                                {{ $m['value'] }}
-                            @elseif(!empty($m['money']))
-                                {{ $money($m['value']) }}
-                            @else
-                                {{ number_format((float) $m['value']) }}
-                            @endif
-                        </strong>
-                    </div>
-                @endforeach
-            </div>
+        <section class="sa-kpi">
+            @foreach($metrics as $m)
+                <article>
+                    <p>{{ $m['label'] }}</p>
+                    <strong>
+                        @if(!empty($m['raw']))
+                            {{ $m['value'] }}
+                        @elseif(!empty($m['money']))
+                            {{ $money($m['value']) }}
+                        @else
+                            {{ number_format((float) $m['value']) }}
+                        @endif
+                    </strong>
+                    @if(!empty($m['money']))
+                        <span>{{ $monthLabel }}</span>
+                    @endif
+                </article>
+            @endforeach
         </section>
         @endif
 
         @if(!empty($branchRows) && !empty($branchCols))
-            <section class="sa-module-panel sa-module-panel--branch">
-                <header class="sa-module-panel__head">
-                    <h3>{{ __('message.sa_by_branch') }}</h3>
-                    <span>{{ count($branchRows) }} {{ __('message.sa_branches') }}</span>
+            <section class="sa-home-card sa-home-card--table">
+                <header>
+                    <div>
+                        <h2>{{ __('message.sa_by_branch') }}</h2>
+                        <p>{{ count($branchRows) }} {{ __('message.sa_branches') }}</p>
+                    </div>
                 </header>
-                <div class="sa-module-table-wrap">
-                    <table class="sa-module-table">
+                <div class="sa-home-table-wrap">
+                    <table class="sa-home-table">
                         <thead>
                             <tr>
                                 <th>{{ __('message.branch') }}</th>
                                 @foreach($branchCols as $col)
-                                    <th>{{ $col }}</th>
+                                    <th class="sa-num">{{ $col }}</th>
                                 @endforeach
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($branchRows as $row)
                                 <tr>
-                                    <td><strong>{{ $row['name'] }}</strong></td>
+                                    <td>
+                                        <div class="sa-person">
+                                            <span class="sa-avatar">{{ $initials((string) $row['name']) }}</span>
+                                            <strong>{{ $row['name'] }}</strong>
+                                        </div>
+                                    </td>
                                     @foreach($branchCols as $col)
-                                        <td>{{ $row['cols'][$col] ?? '—' }}</td>
+                                        <td class="sa-num">{{ $row['cols'][$col] ?? '—' }}</td>
                                     @endforeach
                                 </tr>
                             @endforeach
@@ -955,12 +869,13 @@
             </section>
         @endif
     </div>
+    @endif
 </div>
 @endsection
 
-@if(($screenKey ?? '') === 'late-fine' || ($screenKey ?? '') === 'rider-salary' || ($screenKey ?? '') === 'office-salary' || ($screenKey ?? '') === 'rider-remit' || ($screenKey ?? '') === 'account-creation' || ($screenKey ?? '') === 'roles-permissions' || ($screenKey ?? '') === 'general-setting' || ($screenKey ?? '') === 'api-server-setting' || ($screenKey ?? '') === 'company-contact' || ($screenKey ?? '') === 'app-store-update')
+@if(($screenKey ?? '') === 'late-fine' || ($screenKey ?? '') === 'rider-salary' || ($screenKey ?? '') === 'office-salary' || ($screenKey ?? '') === 'rider-remit' || ($screenKey ?? '') === 'account-creation' || ($screenKey ?? '') === 'roles-permissions' || ($screenKey ?? '') === 'general-setting' || ($screenKey ?? '') === 'api-server-setting' || ($screenKey ?? '') === 'company-contact')
 @push('scripts')
-@if(in_array(($screenKey ?? ''), ['late-fine', 'rider-salary', 'office-salary', 'roles-permissions', 'general-setting', 'api-server-setting', 'company-contact', 'app-store-update'], true))
+@if(in_array(($screenKey ?? ''), ['late-fine', 'rider-salary', 'office-salary', 'roles-permissions', 'general-setting', 'api-server-setting', 'company-contact'], true))
 <script src="{{ asset('frontend-website/assets/js/jquery.min.js') }}"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/izitoast/1.4.0/css/iziToast.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/izitoast/1.4.0/js/iziToast.min.js"></script>

@@ -86,10 +86,14 @@
                        approval_status: value
                    }
                }).done(function (res) {
+                   var msg = res.message || 'Updated';
+                   if (res.username && res.password) {
+                       msg += '  Username: ' + res.username + '  Password: ' + res.password;
+                   }
                    if (typeof SnackBar === 'function') {
-                       SnackBar({ message: res.message || 'Updated', status: 'success' });
+                       SnackBar({ message: msg, status: 'success' });
                    } else if (window.toastr) {
-                       toastr.success(res.message || 'Updated');
+                       toastr.success(msg);
                    }
                    if ($.fn.DataTable && $.fn.DataTable.isDataTable('.dataTable')) {
                        $('.dataTable').DataTable().ajax.reload(null, false);

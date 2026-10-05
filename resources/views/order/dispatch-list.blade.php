@@ -190,7 +190,7 @@
     @section('bottom_script')
         {{ $dataTable->scripts() }}
         <script src="{{ asset('js/dispatch-pickup-rider-list.js') }}?v=9"></script>
-        <script src="{{ asset('js/admin-order-list-live.js') }}?v=3"></script>
+        {{-- admin-live.js is loaded globally from _scripts --}}
         <script>
             (function bindDeliAuditLog() {
                 if (!window.jQuery) {
@@ -331,6 +331,7 @@
                 }
 
                 if (typeof window.bootAdminOrderListLiveRefresh === 'function') {
+                    window.__pdsPageLiveBooted = true;
                     window.bootAdminOrderListLiveRefresh({
                         url: @json(route('order.live-version')),
                         intervalMs: 5000

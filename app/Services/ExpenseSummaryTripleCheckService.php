@@ -43,14 +43,23 @@ class ExpenseSummaryTripleCheckService
             return ExpenseSummaryTripleCheck::KEY_SUPER_ADMIN;
         }
 
-        // Roles & Permissions ACC (Super Admin grants these).
-        if ($user->can('expense-summary-check-nn')) {
+        // Name wins over overlapping ACC flags. Manager currently has both
+        // expense-summary-check-nn and expense-summary-check-ss, which used to
+        // mark Ma Shwe Sin as Ma Noe Noe (already confirmed).
+        $named = $this->namedCheckerSlot($user);
+        if ($named) {
+            return $named;
+        }
+
+        $canNn = $user->can('expense-summary-check-nn');
+        $canSs = $user->can('expense-summary-check-ss');
+        if ($canNn && ! $canSs) {
             return ExpenseSummaryTripleCheck::KEY_MA_NOE_NOE;
         }
-        if ($user->can('expense-summary-check-ss')) {
+        if ($canSs && ! $canNn) {
             return ExpenseSummaryTripleCheck::KEY_MA_PHYU_SIN;
         }
-        // Generic calendar Confirm ACC — slot from name when possible.
+
         if ($user->can('expense-summary-check')) {
             return $this->namedCheckerSlot($user);
         }

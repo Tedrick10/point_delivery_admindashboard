@@ -26,7 +26,7 @@ return [
     'kyo-shin' => [
         'title_key' => 'sa_screen_kyo_shin',
         'subtitle_key' => 'sa_screen_kyo_shin_sub',
-        'icon' => 'fa-coins',
+        'icon' => 'fa-wallet',
         'workspace' => 'order.kyo-shin',
         'links' => [
             ['route' => 'order.kyo-shin', 'label_key' => 'sa_link_kyo_shin'],
@@ -178,6 +178,13 @@ return [
         'title_key' => 'sa_screen_ui_theme',
         'subtitle_key' => 'sa_screen_ui_theme_sub',
         'icon' => 'fa-palette',
+        'workspace' => null,
+        'links' => [],
+    ],
+    'app-copy' => [
+        'title_key' => 'sa_screen_app_copy',
+        'subtitle_key' => 'sa_screen_app_copy_sub',
+        'icon' => 'fa-font',
         'workspace' => null,
         'links' => [],
     ],

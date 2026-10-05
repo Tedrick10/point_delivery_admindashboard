@@ -181,9 +181,15 @@ class Assign100SampleSeeder extends Seeder
         ];
 
         $createdItems = 0;
+        $seq = 0;
+        while ($createdItems < 30) {
         foreach ($scenarios as $i => $s) {
-            $dest = $destBranches[$i % $destBranches->count()];
-            $client = $clients[$i % $clients->count()];
+            if ($createdItems >= 30) {
+                break 2;
+            }
+            $seq++;
+            $dest = $destBranches[$seq % $destBranches->count()];
+            $client = $clients[$seq % $clients->count()];
 
             $order = $this->makeOrder(
                 $templateOrder,
@@ -193,9 +199,9 @@ class Assign100SampleSeeder extends Seeder
                 $s['flags'],
                 (int) $s['parcel'],
                 (int) $s['deli'],
-                (string) $s['address'],
+                (string) $s['address'].'၊ Demo #'.$seq,
                 (string) $s['type'],
-                $i + 1
+                $seq
             );
 
             $itemCount = max(1, (int) $s['parcel']);
@@ -212,7 +218,7 @@ class Assign100SampleSeeder extends Seeder
                     (string) $s['address'].'၊ '.$dest->name,
                     (string) $s['customer'],
                     (string) $s['phone'],
-                    $s['type'].' #'.($i + 1).'-'.$n
+                    $s['type'].' #'.$seq.'-'.$n
                 );
                 $createdItems++;
             }
@@ -224,6 +230,7 @@ class Assign100SampleSeeder extends Seeder
                 $dest->name,
                 $s['customer']
             ));
+        }
         }
 
         $this->command?->info(sprintf(

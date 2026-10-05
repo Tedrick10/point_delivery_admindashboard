@@ -653,8 +653,12 @@
                             approval_status: $el.val()
                         }
                     }).done(function (res) {
+                        var msg = res.message || 'Updated';
+                        if (res.username && res.password) {
+                            msg += '  Username: ' + res.username + '  Password: ' + res.password;
+                        }
                         if (typeof SnackBar === 'function') {
-                            SnackBar({ message: res.message || 'Updated', status: 'success' });
+                            SnackBar({ message: msg, status: 'success' });
                         }
                         var tone = res.approval_status || $el.val();
                         $('.pds-os-approval-pill')

@@ -47,7 +47,8 @@
                 }
             }).done(function (res) {
                 notify(true, res && res.message ? res.message : '');
-                window.location.reload();
+                if (typeof window.pdsAdminReload === 'function') window.pdsAdminReload();
+                else window.location.reload();
             }).fail(function (xhr) {
                 $input.val(prev);
                 var msg = (xhr.responseJSON && xhr.responseJSON.message)

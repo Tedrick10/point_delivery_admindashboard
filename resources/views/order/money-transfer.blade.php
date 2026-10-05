@@ -1,5 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
-    <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-daily-check-page pds-money-transfer-page">
+    
+<div id="adminLiveRoot" data-live-page="auto">
+<div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-daily-check-page pds-money-transfer-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
             <div class="pds-rider-hero">
                 <div class="pds-rider-hero__copy">
@@ -491,10 +493,12 @@
                 }).done(function (res) {
                     if (window.toastr && res.message) toastr.success(res.message);
                     $('#mtSwitchKpayModal').modal('hide');
-                    window.location.href = @json(route('order.money-transfer')) + '?method=kpay'
+                    var mtUrl = @json(route('order.money-transfer')) + '?method=kpay'
                         + '&from_date=' + encodeURIComponent(fromDate)
                         + '&to_date=' + encodeURIComponent(toDate)
                         + '&branch_id=' + encodeURIComponent(branchId);
+                    if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(mtUrl);
+                    else window.location.href = mtUrl;
                 }).fail(function (xhr) {
                     var msg = (xhr.responseJSON && xhr.responseJSON.message)
                         || (xhr.responseJSON && xhr.responseJSON.errors && xhr.responseJSON.errors.kpay_slip && xhr.responseJSON.errors.kpay_slip[0])
@@ -529,7 +533,7 @@
                     headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }
                 }).done(function (res) {
                     if (window.toastr && res.message) toastr.success(res.message);
-                    window.location.reload();
+                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                 }).fail(function (xhr) {
                     var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Failed';
                     if (window.toastr) toastr.error(msg);
@@ -546,4 +550,6 @@
             }
         })();
     </script>
+
+</div>
 </x-master-layout>

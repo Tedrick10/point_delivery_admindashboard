@@ -233,6 +233,7 @@
         </div>
     </div>
 
+    @unless($hideApprovalStatus ?? false)
     <div class="pds-user-reg-section">
         <h6 class="pds-user-reg-section__title">
             <i class="fas fa-clipboard-check"></i>
@@ -255,4 +256,5 @@
             </div>
         </div>
     </div>
+    @endunless
 </div>

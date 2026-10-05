@@ -15,7 +15,9 @@ use App\Http\Resources\UserDetailResource;
 use App\Models\User;
 use App\Models\Order;
 use App\Models\Wallet;
+use App\Models\Branch;
 use App\Models\City;
+use App\Services\AppPushService;
 use App\Models\Claims;
 use App\Models\Country;
 use App\Models\UserAddress;
@@ -63,13 +65,16 @@ class ClientController extends Controller
         $country = Country::pluck('name', 'id')->prepend(__('message.select_name', ['select' => __('message.country')]), '')->toArray();
 
         [$selectedBranchId, $branchFilter, $branchTabs] = resolveDestinationBranchFilter(request());
-        $osCountQuery = User::query()
-            ->where('user_type', 'client')
-            ->where('name', 'not like', 'Deleted % client')
-            ->where('name', 'not like', 'Deleted % Client');
+        $osCountQuery = User::query()->where('user_type', 'client');
+        excludeScrubbedOnlineShops($osCountQuery);
         applyClientBranchScope($osCountQuery, auth()->user(), $selectedBranchId);
+
+        $pendingCountQuery = User::query()->where('user_type', 'client');
+        excludeScrubbedOnlineShops($pendingCountQuery);
+        applyOnlineShopListBranchScope($pendingCountQuery, auth()->user(), $selectedBranchId, 'pending');
+
         $approvalCounts = [
-            'pending' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_PENDING)->count(),
+            'pending' => applyOnlineShopApprovalTab(clone $pendingCountQuery, 'pending')->count(),
             'approved' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_APPROVED)->count(),
             'rejected' => (clone $osCountQuery)->where('approval_status', User::APPROVAL_REJECTED)->count(),
             'kyo_shin' => (clone $osCountQuery)->where('is_kyo_shin', true)->count(),
@@ -97,7 +102,9 @@ class ClientController extends Controller
 
         $reset_file_button = '<a href="' . route('users.index', ['status' => $approvalTab]) . '" class="btn btn-sm btn-outline-primary"><i class="ri-repeat-line"></i> ' . __('message.reset_filter') . '</a>';
         $button = $auth_user->can('users-add') ? '<a href="' . route('users.create') . '" class="btn btn-sm btn-primary pds-os-list-add"><i class="fa fa-plus"></i> ' . __('message.add_form_title', ['form' => __('message.online_shop')]) . '</a>' : '';
-        $multi_checkbox_delete = $auth_user->can('users-delete') ? '<button id="deleteSelectedBtn" checked-title = "users-checked" class="btn btn-sm btn-outline-danger">' . __('message.delete_selected') . '</button>' : '';
+        $multi_checkbox_delete = $auth_user->can('users-delete')
+            ? '<button id="deleteSelectedBtn" checked-title="users-checked" class="btn btn-sm btn-outline-danger" style="display:none" hidden>' . __('message.delete_selected') . '</button>'
+            : '';
         $export = $auth_user->can('users-add') ? '<a href="'.route('user.excel').'" class="btn btn-sm btn-outline-success loadRemoteModel"><i class="fa fa-download"></i> '. __('message.export').'</a>' : '';
         return $dataTable->with([
             'branch_id' => $selectedBranchId,
@@ -170,23 +177,7 @@ class ClientController extends Controller
             return response()->json(['status' => false, 'message' => $message], 403);
         }
 
-        $cities = City::where('status', 1)->orderBy('name')->get(['id', 'name']);
-        $defaultCityId = auth()->user()->city_id;
-        $panelBranchId = defaultDestinationBranchId();
-        if ($panelBranchId) {
-            $branchCity = \App\Models\Branch::query()->where('id', $panelBranchId)->value('city_name');
-            if ($branchCity) {
-                $matchedCityId = (int) (City::query()
-                    ->where('status', 1)
-                    ->where('name', $branchCity)
-                    ->value('id') ?? 0);
-                if ($matchedCityId > 0) {
-                    $defaultCityId = $matchedCityId;
-                }
-            }
-        }
-
-        return view('users.os-account-modal', compact('cities', 'defaultCityId'));
+        return view('users.os-account-modal');
     }
 
     public function storeOsAccount(Request $request)
@@ -195,38 +186,73 @@ class ClientController extends Controller
             return response()->json(['status' => false, 'message' => __('message.demo_permission_denied')], 403);
         }
 
-        if ($request->filled('contact_number')) {
-            $request->merge([
-                'contact_number' => normalizeContactNumber($request->contact_number),
-            ]);
+        $rawPhone = $request->input('contact_number');
+        if ((! $request->filled('contact_number') || $rawPhone === '' || $rawPhone === null) && $request->filled('phone')) {
+            $rawPhone = $request->input('phone');
+        }
+        if (is_array($rawPhone)) {
+            $rawPhone = collect($rawPhone)->filter()->last();
+        }
+        if ($rawPhone !== null && $rawPhone !== '') {
+            $contactNumber = normalizeContactNumber((string) $rawPhone);
+            if ($contactNumber === '' || preg_match('/^\+\d{1,4}$/', $contactNumber)) {
+                $contactNumber = null;
+            }
+            $request->merge(['contact_number' => $contactNumber]);
+        }
+
+        $osProfile = prepareUserOsProfileFromRequest($request);
+        $address = buildUserAddressFromProfile($osProfile);
+        $username = sanitizeRegistrationUsername((string) $request->username);
+        if ($username === '') {
+            $username = registrationUsernameFromPhone((string) ($request->contact_number ?? ''));
+        }
+
+        $branchId = destinationBranchIdFromOsLocation(
+            $osProfile['state_division'] ?? null,
+            $osProfile['township'] ?? null
+        ) ?: defaultDestinationBranchId() ?: forcedBranchId();
+
+        $city = null;
+        if ($request->filled('city_id')) {
+            $city = City::find($request->city_id);
+        }
+        if (! $city && $branchId) {
+            $branchCity = (string) (Branch::query()->where('id', $branchId)->value('city_name') ?? '');
+            if ($branchCity !== '') {
+                $city = City::query()->where('status', 1)->where('name', $branchCity)->first();
+            }
         }
 
         if ($request->boolean('from_dispatch')) {
             $existingUser = User::where('user_type', 'client')
-                ->where(function ($query) use ($request) {
-                    $query->where('contact_number', $request->contact_number);
-                    if ($request->filled('username')) {
-                        $query->orWhere('username', $request->username);
+                ->where(function ($query) use ($request, $username) {
+                    if ($request->filled('contact_number')) {
+                        $query->where('contact_number', $request->contact_number);
+                    }
+                    if ($username !== '') {
+                        $query->orWhere('username', $username);
                     }
                 })
                 ->first();
 
             if ($existingUser) {
-                $city = City::findOrFail($request->city_id ?? $existingUser->city_id);
-                $osProfile = $this->prepareOsProfileFromRequest($request);
-
                 $existingUser->update([
                     'name' => $request->name,
-                    'contact_number' => $request->contact_number,
-                    'address' => $request->address,
-                    'city_id' => $city->id,
-                    'country_id' => $city->country_id,
-                    'branch_id' => $existingUser->branch_id ?: (defaultDestinationBranchId() ?: forcedBranchId()),
+                    'username' => $username !== '' ? $username : $existingUser->username,
+                    'contact_number' => $request->contact_number ?: $existingUser->contact_number,
+                    'address' => $address !== '' ? $address : $existingUser->address,
+                    'city_id' => $city?->id ?? $existingUser->city_id,
+                    'country_id' => $city?->country_id ?? $existingUser->country_id,
+                    'branch_id' => $existingUser->branch_id ?: $branchId,
                     'os_profile' => array_merge(
                         is_array($existingUser->os_profile) ? $existingUser->os_profile : [],
                         $osProfile
                     ),
                 ]);
+                if ($request->hasFile('profile_image')) {
+                    uploadMediaFile($existingUser, $request->profile_image, 'profile_image');
+                }
 
                 return response()->json([
                     'status' => true,
@@ -237,28 +263,34 @@ class ClientController extends Controller
         }
 
         $request->validate([
-            'city_id' => 'required|exists:cities,id',
             'name' => 'required|string|max:255',
-            'username' => 'required|string|max:255|unique:users,username',
-            'password' => 'required|string|min:6',
-            'contact_number' => 'required|string|max:20|unique:users,contact_number',
-            'address' => 'nullable|string|max:1000',
+            'username' => 'required|string|min:3|max:50|unique:users,username',
+            'password' => 'required|string|min:6|confirmed',
+            'contact_number' => 'required|string|max:30|unique:users,contact_number',
+            'os_profile.address_unit' => 'required|string|max:255',
+            'os_profile.state_division' => 'required|string|max:255',
+            'os_profile.township' => 'required|string|max:255',
+            'os_profile.kpay_name' => 'required|string|max:255',
+            'os_profile.kpay_no' => 'required|string|max:50',
+            'profile_image' => 'nullable|image|mimes:jpg,jpeg,png,gif',
         ]);
 
-        $city = City::findOrFail($request->city_id);
-        $email = registrationEmailFromPhone($request->contact_number);
-        $osProfile = $this->prepareOsProfileFromRequest($request);
+        $email = registrationEmailFromPhone((string) $request->contact_number);
+        if (User::withTrashed()->where('email', $email)->exists()) {
+            $digits = preg_replace('/\D+/', '', (string) $request->contact_number) ?: 'user';
+            $email = $digits.'.'.uniqid('os', false).'@pointdelivery.local';
+        }
 
         $user = User::create([
             'name' => $request->name,
-            'username' => $request->username,
+            'username' => $username,
             'email' => $email,
             'password' => bcrypt($request->password),
             'contact_number' => $request->contact_number,
-            'address' => $request->address,
-            'city_id' => $city->id,
-            'country_id' => $city->country_id,
-            'branch_id' => defaultDestinationBranchId() ?: forcedBranchId(),
+            'address' => $address,
+            'city_id' => $city?->id,
+            'country_id' => $city?->country_id,
+            'branch_id' => $branchId,
             'user_type' => 'client',
             'status' => 1,
             'approval_status' => User::APPROVAL_APPROVED,
@@ -271,17 +303,10 @@ class ClientController extends Controller
         ]);
 
         $user->assignRole('client');
-
-        $bank = $request->input('user_bank_account', []);
-        if (!empty($bank['bank_name']) || !empty($bank['account_number'])) {
-            $user->userBankAccount()->create([
-                'bank_name' => $bank['bank_name'] ?? null,
-                'account_number' => $bank['account_number'] ?? null,
-                'account_holder_name' => $request->name,
-            ]);
+        if ($request->hasFile('profile_image')) {
+            uploadMediaFile($user, $request->profile_image, 'profile_image');
         }
-
-        $displayName = $request->name . ($city->name ? ' (' . $city->name . ')' : '');
+        createDefaultUserAddressFromRegistration($user, $request->contact_number);
 
         return response()->json([
             'status' => true,
@@ -569,8 +594,32 @@ class ClientController extends Controller
             ], 404);
         }
 
+        $previous = (string) ($user->approval_status ?? '');
         $user->applyApprovalStatus($request->approval_status);
+
+        $plainPassword = null;
+        $username = sanitizeRegistrationUsername((string) ($user->username ?? ''));
+        if ($user->approval_status === User::APPROVAL_APPROVED && $previous !== User::APPROVAL_APPROVED) {
+            if ($username === '') {
+                $username = registrationUsernameFromPhone((string) ($user->contact_number ?? ''));
+                if ($username !== '') {
+                    $user->username = $username;
+                }
+            }
+            $plainPassword = generateOsLoginPassword();
+            $user->password = bcrypt($plainPassword);
+            $user->is_temp_password = 1;
+        }
+
         $user->save();
+
+        if ($plainPassword && $username !== '') {
+            try {
+                app(AppPushService::class)->notifyOsAccountApproved($user->fresh(), $username, $plainPassword);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         return response()->json([
             'status' => true,
@@ -580,6 +629,8 @@ class ClientController extends Controller
             ]),
             'approval_status' => $user->approval_status,
             'label' => __('message.'.$user->approval_status),
+            'username' => $plainPassword ? $username : null,
+            'password' => $plainPassword,
         ]);
     }
 

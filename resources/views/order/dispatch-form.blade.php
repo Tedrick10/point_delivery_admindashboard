@@ -689,7 +689,8 @@
                 function resetDispatchForm() {
                     hideDispatchSaveAlert();
                     if (dispatchConfig.orderId || window.location.search.indexOf('order_id=') !== -1) {
-                        window.location.href = dispatchConfig.createUrl;
+                        if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(dispatchConfig.createUrl);
+                        else window.location.href = dispatchConfig.createUrl;
                         return;
                     }
                     exitDispatchCreateMode();
@@ -714,7 +715,8 @@
                                 var detail = msg + (orderId ? ' #' + orderId : '');
                                 dispatchToast(detail, false);
                                 window.setTimeout(function () {
-                                    window.location.href = dispatchConfig.createUrl;
+                                    if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(dispatchConfig.createUrl);
+                                    else window.location.href = dispatchConfig.createUrl;
                                 }, 350);
                             }
                         });

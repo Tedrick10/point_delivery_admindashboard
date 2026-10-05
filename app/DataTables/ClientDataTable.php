@@ -150,34 +150,14 @@ class ClientDataTable extends DataTable
      */
     public function query(User $model)
     {
-        $model = User::whereIn('user_type', ['client'])
-            // Legacy force-delete renamed rows without soft-deleting; keep them out of the UI.
-            ->where('name', 'not like', 'Deleted % client')
-            ->where('name', 'not like', 'Deleted % Client');
-        applyClientBranchScope($model, auth()->user(), (int) ($this->branch_id ?? request('branch_id', 0)));
+        $model = User::whereIn('user_type', ['client']);
+        excludeScrubbedOnlineShops($model);
+        $status = request('status');
+        applyOnlineShopListBranchScope($model, auth()->user(), (int) ($this->branch_id ?? request('branch_id', 0)), $status);
         $city = request()->input('city_id');
         $country = request()->input('country_id');
         $lastActive = request()->input('last_actived_at');
-        $status = request('status');
-        switch ($status) {
-            case 'active':
-            case 'approved':
-                $model = $model->where('approval_status', User::APPROVAL_APPROVED);
-                break;
-            case 'inactive':
-            case 'rejected':
-                $model = $model->where('approval_status', User::APPROVAL_REJECTED);
-                break;
-            case 'kyo_shin':
-                $model = $model->where('is_kyo_shin', true);
-                break;
-            case 'pending':
-                $model = $model->where('approval_status', User::APPROVAL_PENDING);
-                break;
-            default:
-                $model = $model->where('approval_status', User::APPROVAL_PENDING);
-                break;
-        }
+        applyOnlineShopApprovalTab($model, $status);
 
         if ($city) {
             $model->where('city_id', $city);

@@ -1,5 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
-    <style>
+    
+<div id="adminLiveRoot" data-live-page="auto">
+<style>
         .pds-kyo-shin-row-badge {
             display: inline-flex; align-items: center; margin-left: 6px;
             padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
@@ -224,6 +226,8 @@
             </div>
         </div>
     </div>
+</div>
+
 
     @section('bottom_script')
         <script>
@@ -249,7 +253,7 @@
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
                         success: function (res) {
                             if (typeof showMessage === 'function') showMessage(res.message || 'OK');
-                            window.location.reload();
+                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                         },
                         error: function (xhr) {
                             $sel.val(prev).prop('disabled', false);
@@ -324,7 +328,7 @@
                         success: function (res) {
                             $('#cashPayoutStatusModal').modal('hide');
                             if (typeof showMessage === 'function') showMessage(res.message || 'OK');
-                            window.location.reload();
+                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                         },
                         error: function (xhr) {
                             var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : @json(__('message.something_went_wrong'));

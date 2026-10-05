@@ -148,12 +148,9 @@ class DispatchOrderItemDataTable extends DataTable
                 return $this->formatDispatchAmount($row->item_value);
             })
             ->editColumn('deli_amount', function ($row) {
-                $amount = $this->formatDispatchAmount($row->deli_amount);
-                if ($amount === '') {
-                    return '';
-                }
+                $raw = (float) ($row->deli_amount ?? 0);
 
-                return formatDispatchDeliAmountHtml($row);
+                return '<span class="pds-dt-amount" data-amount="'.$raw.'">'.formatDispatchDeliAmountHtml($row).'</span>';
             })
             ->editColumn('cust_get', function ($row) {
                 return $this->formatDispatchAmount($row->cust_get);
@@ -167,7 +164,28 @@ class DispatchOrderItemDataTable extends DataTable
                     'hideGate' => true,
                 ])->render();
             })
-            ->rawColumns(['checkbox', 'code', 'status', 'customer_address', 'photo_id', 'deli_amount', 'action']);
+            ->rawColumns([
+                'checkbox', 'code', 'status', 'customer_address', 'photo_id',
+                'advance_paid', 'item_value', 'deli_amount', 'cust_get', 'os_to_pay', 'action',
+            ])
+            ->with('pds_totals', $this->totalsForQuery($query));
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return array<string, float>
+     */
+    protected function totalsForQuery($query): array
+    {
+        $items = (clone $query)->get();
+
+        return [
+            'advance_paid' => round((float) $items->sum('advance_paid'), 2),
+            'item_value' => round((float) $items->sum('item_value'), 2),
+            'deli_amount' => round((float) $items->sum('deli_amount'), 2),
+            'cust_get' => round((float) $items->sum('cust_get'), 2),
+            'os_to_pay' => round((float) $items->sum(fn ($item) => $item->displayOsToPay()), 2),
+        ];
     }
 
     public function query(DispatchOrderItem $model)
@@ -199,48 +217,52 @@ class DispatchOrderItemDataTable extends DataTable
             ],
             ['data' => 'DT_RowIndex', 'name' => 'DT_RowIndex', 'title' => __('message.no'), 'orderable' => false, 'searchable' => false, 'width' => 40],
             ['data' => 'photo_id', 'name' => 'photo_id', 'title' => __('message.photo_order_images'), 'orderable' => false, 'searchable' => false, 'width' => 70],
-            ['data' => 'id', 'name' => 'id', 'title' => __('message.item_id')],
-            ['data' => 'received_date', 'name' => 'received_date', 'title' => __('message.received_date')],
-            ['data' => 'updated_at', 'name' => 'updated_at', 'title' => __('message.modified_date')],
-            ['data' => 'code', 'name' => 'code', 'title' => __('message.code')],
-            ['data' => 'status', 'name' => 'status', 'title' => __('message.status')],
+            ['data' => 'id', 'name' => 'id', 'title' => __('message.item_id'), 'orderable' => false],
+            ['data' => 'received_date', 'name' => 'received_date', 'title' => __('message.received_date'), 'orderable' => false],
+            ['data' => 'updated_at', 'name' => 'updated_at', 'title' => __('message.modified_date'), 'orderable' => false],
+            ['data' => 'code', 'name' => 'code', 'title' => __('message.code'), 'orderable' => false],
+            ['data' => 'status', 'name' => 'status', 'title' => __('message.status'), 'orderable' => false],
             ['data' => 'to_branch_id', 'name' => 'to_branch_id', 'title' => __('message.to'), 'orderable' => false],
-            ['data' => 'customer_name', 'name' => 'customer_name', 'title' => __('message.name')],
-            ['data' => 'customer_phone', 'name' => 'customer_phone', 'title' => __('message.phone')],
-            ['data' => 'customer_address', 'name' => 'customer_address', 'title' => __('message.address')],
-            ['data' => 'township', 'name' => 'township', 'title' => __('message.township')],
-            ['data' => 'item_name', 'name' => 'item_name', 'title' => __('message.item_name')],
-            ['data' => 'remark', 'name' => 'remark', 'title' => __('message.remark_label')],
-            ['data' => 'weight', 'name' => 'weight', 'title' => __('message.size')],
-            ['data' => 'advance_paid', 'name' => 'advance_paid', 'title' => __('message.advance_paid')],
-            ['data' => 'item_value', 'name' => 'item_value', 'title' => __('message.item_value')],
-            ['data' => 'deli_amount', 'name' => 'deli_amount', 'title' => __('message.deli_amount'), 'width' => 140, 'className' => 'text-right'],
-            ['data' => 'cust_get', 'name' => 'cust_get', 'title' => __('message.cust_get')],
-            ['data' => 'os_to_pay', 'name' => 'os_to_pay', 'title' => __('message.os_to_pay')],
+            ['data' => 'customer_name', 'name' => 'customer_name', 'title' => __('message.name'), 'orderable' => false],
+            ['data' => 'customer_phone', 'name' => 'customer_phone', 'title' => __('message.phone'), 'orderable' => false],
+            ['data' => 'customer_address', 'name' => 'customer_address', 'title' => __('message.address'), 'orderable' => false],
+            ['data' => 'township', 'name' => 'township', 'title' => __('message.township'), 'orderable' => false],
+            ['data' => 'item_name', 'name' => 'item_name', 'title' => __('message.item_name'), 'orderable' => false],
+            ['data' => 'remark', 'name' => 'remark', 'title' => __('message.remark_label'), 'orderable' => false],
+            ['data' => 'weight', 'name' => 'weight', 'title' => __('message.size'), 'orderable' => false, 'footer' => __('message.total_amount')],
+            ['data' => 'advance_paid', 'name' => 'advance_paid', 'title' => __('message.advance_paid'), 'orderable' => false, 'className' => 'text-right', 'footer' => '0'],
+            ['data' => 'item_value', 'name' => 'item_value', 'title' => __('message.item_value'), 'orderable' => false, 'className' => 'text-right', 'footer' => '0'],
+            ['data' => 'deli_amount', 'name' => 'deli_amount', 'title' => __('message.deli_amount'), 'orderable' => false, 'width' => 140, 'className' => 'text-right', 'footer' => '0'],
+            ['data' => 'cust_get', 'name' => 'cust_get', 'title' => __('message.cust_get'), 'orderable' => false, 'className' => 'text-right', 'footer' => '0'],
+            ['data' => 'os_to_pay', 'name' => 'os_to_pay', 'title' => __('message.os_to_pay'), 'orderable' => false, 'className' => 'text-right', 'footer' => '0'],
             Column::computed('action')
                 ->title(__('message.action'))
                 ->exportable(false)
                 ->printable(false)
                 ->width(90)
-                ->addClass('text-center'),
+                ->addClass('text-center')
+                ->footer(''),
         ];
     }
 
     public function getBuilderParameters(): array
     {
         $params = parent::getBuilderParameters();
-        $params['dom'] = 'rt<"pds-dispatch-items-dt-footer" <"pds-dispatch-items-dt-info" i><"pds-dispatch-items-dt-length" l>><"clear">';
+        $params['dom'] = 't';
         $params['searching'] = false;
-        $params['paging'] = true;
-        $params['pageLength'] = 25;
-        $params['scrollX'] = true;
+        $params['paging'] = false;
+        $params['ordering'] = false;
+        $params['order'] = [];
+        $params['scrollX'] = false;
+        $params['autoWidth'] = false;
+        $params['info'] = false;
+        $params['lengthChange'] = false;
         $params['buttons'] = [];
         $params['language'] = array_merge($params['language'] ?? [], [
             'emptyTable' => __('message.no_record_found'),
             'zeroRecords' => __('message.no_record_found'),
-            'info' => __('message.datatable_info'),
-            'infoEmpty' => '',
         ]);
+        $params['footerCallback'] = 'function () { if (typeof window.pdsFillDispatchItemsTotals === "function") { window.pdsFillDispatchItemsTotals(this); } }';
 
         return $params;
     }
@@ -253,6 +275,8 @@ class DispatchOrderItemDataTable extends DataTable
             return '';
         }
 
-        return number_format($amount);
+        $text = ($blankWhenZero && $amount == 0.0) ? '' : number_format($amount);
+
+        return '<span class="pds-dt-amount" data-amount="'.$amount.'">'.$text.'</span>';
     }
 }

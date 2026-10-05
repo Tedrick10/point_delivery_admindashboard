@@ -7,6 +7,7 @@ use App\Models\HrStaff;
 use App\Services\HrPayrollService;
 use App\Services\KyoShinService;
 use App\Services\NetworkControlService;
+use App\Services\AppTextService;
 use App\Services\RiderRemitService;
 use App\Services\SuperAdminDashboardService;
 use Illuminate\Http\Request;
@@ -57,6 +58,7 @@ class ScreenController extends Controller
         $companyContact = null;
         $appStoreUpdate = null;
         $uiTheme = null;
+        $appCopy = null;
         if ($screen === 'late-fine') {
             $payroll = app(HrPayrollService::class);
             $payroll->syncStaffFromAccounts();
@@ -217,6 +219,14 @@ class ScreenController extends Controller
             $appStoreUpdate = SystemSettingsController::appStorePayload();
         } elseif ($screen === 'ui-theme') {
             $uiTheme = UiThemeController::screenPayload();
+        } elseif ($screen === 'app-copy') {
+            $appCopy = AppTextService::screenPayload(
+                (string) $request->get('app', 'admin'),
+                $request->get('q'),
+                $request->get('screen_id'),
+                max(1, (int) $request->get('page', 1)),
+                40
+            );
         }
 
         return view('super-admin.screens.show', [
@@ -253,6 +263,7 @@ class ScreenController extends Controller
             'companyContact' => $companyContact,
             'appStoreUpdate' => $appStoreUpdate,
             'uiTheme' => $uiTheme,
+            'appCopy' => $appCopy,
         ]);
     }
 }

@@ -60,6 +60,7 @@ class DashboardController extends Controller
             ])
             ->values()
             ->all();
+        $data['app_copy'] = appCopyBundle(appCopyClientApp());
 
         return json_custom_response($data);
     }
@@ -80,11 +81,33 @@ class DashboardController extends Controller
     protected function resolvedApiBaseUrl(): string
     {
         $configured = trim((string) (SettingData('API_SERVER', 'API_SERVER_BASE_URL') ?? ''));
-        if ($configured !== '') {
-            return rtrim($configured, '/');
+        $configured = rtrim($configured, '/');
+
+        // Never hand local/dev URLs to the mobile apps in production.
+        if ($configured !== '' && ! $this->isLocalDevApiBaseUrl($configured)) {
+            return $configured;
         }
 
-        return detectMachineLanBaseUrl();
+        $appUrl = rtrim((string) config('app.url', ''), '/');
+        if ($appUrl !== '' && ! $this->isLocalDevApiBaseUrl($appUrl)) {
+            return $appUrl;
+        }
+
+        return 'https://pointdelivery.worldwidemyanmar.com';
+    }
+
+    protected function isLocalDevApiBaseUrl(string $url): bool
+    {
+        $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?: ''));
+
+        return $host === ''
+            || $host === 'localhost'
+            || $host === '127.0.0.1'
+            || $host === '0.0.0.0'
+            || $host === '::1'
+            || str_starts_with($host, '10.')
+            || str_starts_with($host, '192.168.')
+            || (bool) preg_match('/^172\.(1[6-9]|2\d|3[0-1])\./', $host);
     }
 
 

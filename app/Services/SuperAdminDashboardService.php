@@ -143,8 +143,7 @@ class SuperAdminDashboardService
                 ['label' => __('message.sa_in_progress'), 'value' => $s['in_progress'], 'money' => false],
                 ['label' => __('message.delivered'), 'value' => $s['delivered_ui'], 'money' => false],
                 ['label' => __('message.sa_unassigned'), 'value' => $s['unassigned'], 'money' => false],
-                ['label' => __('message.sa_cod_pending'), 'value' => $s['cod_pending'], 'money' => true],
-                ['label' => __('message.sa_deli')." ({$periodTag})", 'value' => $s['deli_month'], 'money' => true],
+                ['label' => __('message.deli_amount'), 'value' => $s['deli_month'], 'money' => true],
             ],
             'daily-check' => [
                 ['label' => __('message.sa_pending_remit'), 'value' => $s['daily_check_pending'], 'money' => false],
@@ -265,7 +264,7 @@ class SuperAdminDashboardService
                     $colItems => number_format($r['items_total']),
                     $colActive => number_format($r['in_progress']),
                     $colDone => number_format($r['delivered']),
-                    $colCod => number_format($r['cod'], 0).' Ks',
+                    $colDeli => number_format($r['deli_month'], 0).' Ks',
                 ],
             ])->all(),
             'daily-check', 'money-transfer', 'rider-remit', 'expenses', 'expense-summary' => collect($byBranch)->map(fn ($r) => [
@@ -322,10 +321,26 @@ class SuperAdminDashboardService
         $monthItemsQuery = fn () => (clone $itemBase)
             ->whereBetween(DB::raw('DATE(created_at)'), [$monthStart, $monthEnd]);
 
-        $statusCounts = (clone $itemBase)
-            ->select('status', DB::raw('COUNT(*) as total'))
-            ->groupBy('status')
-            ->pluck('total', 'status');
+        $hasFinishedAt = Schema::hasColumn('dispatch_order_items', 'admin_finished_at');
+        $finishedExpr = $hasFinishedAt ? 'admin_finished_at' : 'NULL';
+        $statusRow = (clone $itemBase)
+            ->selectRaw("
+                SUM(CASE WHEN status IN ('collected', 'assigned', 'courier_assigned', 'courier_departed') AND {$finishedExpr} IS NULL THEN 1 ELSE 0 END) AS assigned_total,
+                SUM(CASE WHEN status = 'pending' AND {$finishedExpr} IS NULL THEN 1 ELSE 0 END) AS pending_total,
+                SUM(CASE WHEN status = 'completed' AND admin_completed_at IS NULL AND {$finishedExpr} IS NULL THEN 1 ELSE 0 END) AS delivered_total,
+                SUM(CASE WHEN status = 'completed' AND admin_completed_at IS NOT NULL AND {$finishedExpr} IS NULL THEN 1 ELSE 0 END) AS completed_total,
+                SUM(CASE WHEN {$finishedExpr} IS NOT NULL THEN 1 ELSE 0 END) AS finished_total,
+                SUM(CASE WHEN status IN ('return', 'returned', 'os_returned') AND {$finishedExpr} IS NULL THEN 1 ELSE 0 END) AS returned_total
+            ")
+            ->first();
+        $statusCounts = collect([
+            'assigned' => (int) ($statusRow->assigned_total ?? 0),
+            'pending' => (int) ($statusRow->pending_total ?? 0),
+            'delivered' => (int) ($statusRow->delivered_total ?? 0),
+            'completed' => (int) ($statusRow->completed_total ?? 0),
+            'finished' => (int) ($statusRow->finished_total ?? 0),
+            'returned' => (int) ($statusRow->returned_total ?? 0),
+        ]);
 
         $terminalStatuses = ['completed', 'cancelled', 'return', 'returned'];
 
@@ -744,6 +759,21 @@ class SuperAdminDashboardService
                     ->whereNull('admin_completed_at')
                     ->sum(DB::raw('COALESCE(cust_get, 0)')),
                 'deli_month' => (float) (clone $monthBranchItems)
+                    ->where(function ($q) {
+                        $q->where('status', 'completed')
+                            ->orWhere(function ($r) {
+                                $r->where('status', 'return')
+                                    ->where(function ($fee) {
+                                        $fee->where(function ($delivery) {
+                                            $delivery->where('return_type', 'delivery')
+                                                ->where('deli_amount', '>', 0);
+                                        })->orWhere(function ($legacy) {
+                                            $legacy->whereNull('return_type')
+                                                ->where('deli_amount', '>', 0);
+                                        });
+                                    });
+                            });
+                    })
                     ->sum(DB::raw('COALESCE(deli_amount, 0)')),
                 'remit_month' => (float) RiderRemit::query()
                     ->where('branch_id', $bid)

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\SettingRequest;
 use App\Models\AppSetting;
 use App\Models\Setting;
+use App\Services\AppCopyService;
+use App\Services\AppTextService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -286,5 +288,31 @@ class SystemSettingsController extends Controller
         return redirect()
             ->route('super-admin.screens.show', 'api-server-setting')
             ->with('success', __('message.updated'));
+    }
+
+    public function updateAppCopy(Request $request): RedirectResponse
+    {
+        $app = (string) $request->input('app', 'admin');
+        if (! in_array($app, AppTextService::APPS, true)) {
+            $app = 'admin';
+        }
+
+        $request->validate([
+            'app' => 'required|in:admin,user,rider',
+            'texts' => 'nullable|array',
+            'copy' => 'nullable|array',
+        ]);
+
+        AppTextService::save($request->all());
+
+        return redirect()
+            ->route('super-admin.screens.show', [
+                'screen' => 'app-copy',
+                'app' => $app,
+                'q' => $request->input('q'),
+                'screen_id' => $request->input('screen_id'),
+                'page' => $request->input('page'),
+            ])
+            ->with('success', __('message.sa_copy_saved'));
     }
 }

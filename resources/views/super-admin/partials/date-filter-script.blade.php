@@ -1,5 +1,3 @@
-@once
-@push('scripts')
 <script>
 (function () {
     function initSaDateFilter() {
@@ -76,5 +74,3 @@
     }
 })();
 </script>
-@endpush
-@endonce

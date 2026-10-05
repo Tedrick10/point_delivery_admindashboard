@@ -24,7 +24,7 @@ class OsSettlementService
     /**
      * Unfinished Completed items for ငွေရှင်းတမ်း within a date range.
      * Delivered-only (no admin_completed_at) never appears — Completed first.
-     * List day: every Completed on Yangon day C → C−1 (one sheet for the rider batch).
+     * List day: first Completed on Yangon day C → C−1; later Completeds that rider on C → C.
      * Pass null for $osId to include all Online Shops.
      */
     public function completedItemsQuery(?int $osId, string $fromDay, string $toDay, ?int $branchId = null)

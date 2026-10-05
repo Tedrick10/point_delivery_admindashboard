@@ -267,7 +267,8 @@
                     if (typeof window.reloadDispatchItemsTable === 'function') {
                         window.reloadDispatchItemsTable();
                     } else {
-                        window.location.reload();
+                        if (typeof window.pdsAdminReload === 'function') window.pdsAdminReload();
+                        else window.location.reload();
                     }
                     $('#confirmKyoShinGiveBtn').prop('disabled', false);
                     updateKyoShinButtonState();

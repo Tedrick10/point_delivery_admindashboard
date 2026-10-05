@@ -91,25 +91,55 @@ class SampleEmployeeSeeder extends Seeder
             ],
         ];
 
+        for ($i = 11; $i <= 30; $i++) {
+            $employees[] = [
+                'name' => 'Demo Staff '.$i,
+                'username' => 'demo.staff.'.$i,
+                'email' => 'demo.staff.'.$i.'@pds.local',
+                'contact_number' => '09110000'.str_pad((string) $i, 3, '0', STR_PAD_LEFT),
+                'user_type' => 'staff',
+            ];
+        }
+
         foreach ($employees as $data) {
             if (! Role::where('name', $data['user_type'])->exists()) {
                 $this->command?->warn("Role [{$data['user_type']}] missing — skipped {$data['username']}");
                 continue;
             }
 
-            $user = User::withTrashed()->updateOrCreate(
-                ['email' => $data['email']],
-                [
+            $user = User::withTrashed()
+                ->where(function ($q) use ($data) {
+                    $q->where('email', $data['email'])
+                        ->orWhere('username', $data['username']);
+                })
+                ->first();
+
+            if ($user) {
+                if ($user->trashed()) {
+                    $user->restore();
+                }
+                $user->fill([
                     'name' => $data['name'],
+                    'email' => $data['email'],
                     'username' => $data['username'],
                     'contact_number' => $data['contact_number'],
                     'password' => $password,
                     'user_type' => $data['user_type'],
                     'status' => 1,
                     'email_verified_at' => now(),
-                    'deleted_at' => null,
-                ]
-            );
+                ])->save();
+            } else {
+                $user = User::query()->create([
+                    'name' => $data['name'],
+                    'email' => $data['email'],
+                    'username' => $data['username'],
+                    'contact_number' => $data['contact_number'],
+                    'password' => $password,
+                    'user_type' => $data['user_type'],
+                    'status' => 1,
+                    'email_verified_at' => now(),
+                ]);
+            }
 
             if (method_exists($user, 'syncRoles')) {
                 $user->syncRoles([$data['user_type']]);

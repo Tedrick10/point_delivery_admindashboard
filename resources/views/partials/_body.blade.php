@@ -15,7 +15,11 @@
 
 <div id="remoteModelData" class="modal fade" role="dialog"></div>
 
-<div class="content-page pds-content-shell">
+<div
+    class="content-page pds-content-shell"
+    id="adminSpaContent"
+    data-page="{{ optional(request()->route())->getName() ?? '' }}"
+>
     {{ $slot }}
 </div>
 

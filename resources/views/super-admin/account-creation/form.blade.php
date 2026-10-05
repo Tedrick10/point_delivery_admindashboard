@@ -17,7 +17,7 @@
         <i class="fas fa-arrow-left"></i> {{ __('message.sa_screen_account_creation') }}
     </a>
 
-    <div class="sa-card" style="max-width: 820px;">
+    <div class="sa-module-panel sa-form-panel">
         <form method="POST"
               action="{{ $isEdit ? route('super-admin.account-creation.update', $user->id) : route('super-admin.account-creation.store') }}">
             @csrf

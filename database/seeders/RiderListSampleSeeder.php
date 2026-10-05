@@ -98,7 +98,7 @@ class RiderListSampleSeeder extends Seeder
 
         foreach ($hubs as $i => $hub) {
             // MDY panel Yangon tab: Assign 100 pool counted on the hub.
-            for ($n = 1; $n <= 2; $n++) {
+            for ($n = 1; $n <= 15; $n++) {
                 $this->createSampleItem(
                     $src,
                     $order,
@@ -236,7 +236,7 @@ class RiderListSampleSeeder extends Seeder
                 }
             })
             ->orderBy('name')
-            ->limit(3)
+            ->limit(30)
             ->get();
 
         foreach ($riders as $i => $rider) {

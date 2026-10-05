@@ -8,6 +8,7 @@ use App\Models\LanguageVersionDetail;
 use App\Http\Resources\LanguageTableResource;
 use App\Models\LanguageList;
 use App\Models\SMSSetting;
+use App\Services\AppTextService;
 
 class LanguageTableController extends Controller
 {
@@ -15,6 +16,7 @@ class LanguageTableController extends Controller
     {
         $allowDeliverymanSetting = SettingData('allow_deliveryman', 'allow_deliveryman');
         $is_allow_deliveryman = $allowDeliverymanSetting === null || $allowDeliverymanSetting === '' || (int) $allowDeliverymanSetting === 1;
+        AppTextService::ensureMobileLocales();
         $version_data = LanguageVersionDetail::where('version_no',request('version_no'))->first();
 
         if (isset($version_data) && !empty($version_data)) {
@@ -25,6 +27,7 @@ class LanguageTableController extends Controller
                 'ui_theme' => uiThemePackId(),
                 'brand_font' => brandFontId(),
                 'brand_color' => brandColorId(),
+                'app_copy' => appCopyBundle(appCopyClientApp()),
             ]);
         }
 
@@ -44,7 +47,8 @@ class LanguageTableController extends Controller
             'ui_theme' => uiThemePackId(),
             'brand_font' => brandFontId(),
             'brand_color' => brandColorId(),
-            'twilio_sms' => $is_twilio_active
+            'twilio_sms' => $is_twilio_active,
+            'app_copy' => appCopyBundle(appCopyClientApp()),
         ];
 
         return json_custom_response($response);

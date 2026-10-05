@@ -27,6 +27,7 @@ class AppPushService
     public const TYPE_DELIVERY_ASSIGNED = 'delivery_assigned';
     public const TYPE_KYO_SHIN_OVERDUE = 'kyo_shin_overdue';
     public const TYPE_KYO_SHIN_GIVEN = 'kyo_shin';
+    public const TYPE_OS_APPROVED = 'os_account_approved';
 
     public function notifyUser(User $user, string $type, string $subject, string $message, array $extra = [], bool $persistDatabase = true): void
     {
@@ -154,6 +155,31 @@ class AppPushService
                 'item_id' => (string) $item->id,
                 'screen' => 'item_message',
                 'app' => 'os',
+            ]
+        );
+    }
+
+    public function notifyOsAccountApproved(User $client, string $username, string $password): void
+    {
+        if (($client->user_type ?? '') !== 'client') {
+            return;
+        }
+
+        $this->notifyUser(
+            $client,
+            self::TYPE_OS_APPROVED,
+            trans('message.push_os_approved_title', [], 'my'),
+            trans('message.push_os_approved_body', [
+                'username' => $username,
+                'password' => $password,
+            ], 'my'),
+            [
+                'id' => 'OS_'.$client->id,
+                'order_id' => '',
+                'item_id' => '',
+                'screen' => 'login',
+                'app' => 'os',
+                'username' => $username,
             ]
         );
     }

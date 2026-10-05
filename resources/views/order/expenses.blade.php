@@ -1,5 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
-    <div class="container-fluid pds-page-wrap pds-motion-enter pds-expenses-page">
+    
+<div id="adminLiveRoot" data-live-page="auto">
+<div class="container-fluid pds-page-wrap pds-motion-enter pds-expenses-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
             <div class="pds-rider-hero">
                 <div class="pds-rider-hero__copy">
@@ -887,7 +889,7 @@
                     if (!res.ok) {
                         throw new Error(json.message || Object.values(json.errors || {})[0]?.[0] || 'Save failed');
                     }
-                    window.location.reload();
+                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                 } catch (err) {
                     showNotice(err.message || 'Save failed', i18n.noticeError);
                 } finally {
@@ -946,7 +948,7 @@
                     });
                     const json = await res.json().catch(() => ({}));
                     if (!res.ok) throw new Error(json.message || 'Delete failed');
-                    window.location.reload();
+                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                 } catch (err) {
                     showNotice(err.message || 'Delete failed', i18n.noticeError);
                 } finally {
@@ -1068,4 +1070,6 @@
             });
         })();
     </script>
+
+</div>
 </x-master-layout>

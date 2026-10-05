@@ -1,4 +1,5 @@
 {{-- Office salary sheet scripts; needs jQuery (+ optional iziToast) --}}
+<script>
             (function () {
                 var csrf = $('meta[name="csrf-token"]').attr('content') || '{{ csrf_token() }}';
                 var rowUrlBase = '/hr/office-salary/row';

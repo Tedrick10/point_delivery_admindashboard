@@ -21,6 +21,14 @@ class LanguageTableResource extends JsonResource
                 'keyword_value' => $item->keyword_value,
             ];
         });
+        $clientApp = appCopyClientApp();
+        if (in_array($clientApp, ['user', 'rider'], true)) {
+            $get_content_data = \App\Services\AppTextService::overlayAllKeywords(
+                $clientApp,
+                appCopyNormalizeLocale($this->language_code),
+                $get_content_data
+            );
+        }
         return [
             'id'                    => $this->id,
             'default_language_name' => optional($this->LanguageDefaultList)->languageName,

@@ -346,6 +346,8 @@ class DispatchOrderDataTable extends OrderDataTable
         $params['pageLength'] = -1;
         $params['lengthChange'] = false;
         $params['info'] = false;
+        $params['ordering'] = false;
+        $params['order'] = [];
         $params['dom'] = '<"pds-dispatch-dt-top" f>rt<"clear">';
         $params['searching'] = false;
         $params['order'] = [[1, 'desc']];

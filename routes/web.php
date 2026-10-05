@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminLiveController;
 use App\Http\Controllers\AdminLoginDeviceController;
 use App\Http\Controllers\AdminLoginHistoryController;
 use App\Http\Controllers\PaymentGatewayController;
@@ -154,6 +155,9 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('/', [HomeController::class, 'index']);
     Route::get('/home', [HomeController::class, 'index'])->name('home');
     Route::get('/high_demanding_areas', [HomeController::class, 'highDemanding_areas'])->name('high_demanding_areas');
+
+    Route::get('admin/live/state', [AdminLiveController::class, 'state'])->name('admin.live.state');
+    Route::get('admin/live/page-version', [AdminLiveController::class, 'pageVersion'])->name('admin.live.page-version');
     Route::resource('admin_login_history', AdminLoginHistoryController::class);
     Route::resource('admin-login-device', AdminLoginDeviceController::class);
     Route::get('admin/device/logout/{id}',[ AdminLoginDeviceController::class, 'logoutDevice' ])->name('admin.device.logout');
@@ -710,6 +714,8 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
             ->name('system-settings.company-contact');
         Route::post('system-settings/app-store-update', [\App\Http\Controllers\SuperAdmin\SystemSettingsController::class, 'updateAppStore'])
             ->name('system-settings.app-store-update');
+        Route::post('system-settings/app-copy', [\App\Http\Controllers\SuperAdmin\SystemSettingsController::class, 'updateAppCopy'])
+            ->name('system-settings.app-copy');
         Route::post('ui-theme', [\App\Http\Controllers\SuperAdmin\UiThemeController::class, 'update'])
             ->name('ui-theme.update');
     });

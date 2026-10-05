@@ -40,13 +40,26 @@
         return /(^|\s)(pds-rider-col-no|pds-money-transfer-no)(\s|$)/.test(cell.className);
     }
 
-    function syncWidths(headTable, bodyTable) {
+    function applyColgroupWidths(table, n, widths, total) {
+        if (!table) return;
+        var cg = ensureColgroup(table, n);
+        table.style.width = total + 'px';
+        table.style.minWidth = total + 'px';
+        table.style.tableLayout = 'fixed';
+        for (var j = 0; j < n; j++) {
+            if (cg.children[j]) {
+                cg.children[j].style.width = widths[j] + 'px';
+            }
+        }
+    }
+
+    function syncWidths(headTable, bodyTable, footTable) {
         var headRow = headTable.tHead && headTable.tHead.rows[0];
         if (!headRow) return;
         var bodyRow = firstDataRow(bodyTable);
         var n = headRow.cells.length;
-        var headCg = ensureColgroup(headTable, n);
-        var bodyCg = ensureColgroup(bodyTable, n);
+        ensureColgroup(headTable, n);
+        ensureColgroup(bodyTable, n);
 
         headTable.style.tableLayout = 'auto';
         bodyTable.style.tableLayout = 'auto';
@@ -73,14 +86,9 @@
             total += w;
         }
 
-        headTable.style.width = total + 'px';
-        bodyTable.style.width = total + 'px';
-        headTable.style.tableLayout = 'fixed';
-        bodyTable.style.tableLayout = 'fixed';
-        for (var j = 0; j < n; j++) {
-            headCg.children[j].style.width = widths[j] + 'px';
-            bodyCg.children[j].style.width = widths[j] + 'px';
-        }
+        applyColgroupWidths(headTable, n, widths, total);
+        applyColgroupWidths(bodyTable, n, widths, total);
+        applyColgroupWidths(footTable, n, widths, total);
     }
 
     function freezeShell(shell) {
@@ -92,9 +100,11 @@
         if (
             shell.classList.contains('pds-no-freeze')
             || shell.classList.contains('pds-os-settlement-shell')
+            || shell.classList.contains('pds-dispatch-items-table-shell')
             || shell.closest('.pds-dispatch-rider-list-page')
             || shell.closest('.dataTables_wrapper')
             || shell.closest('.pds-rider-remit-shell')
+            || shell.querySelector('.dataTables_wrapper, table.dataTable')
         ) {
             return;
         }
@@ -129,14 +139,35 @@
         table.parentNode.insertBefore(bodyWrap, table);
         bodyWrap.appendChild(table);
 
+        var footWrap = null;
+        var footTable = null;
+        if (table.tFoot) {
+            footWrap = document.createElement('div');
+            footWrap.className = 'pds-frozen-table__foot';
+            footTable = document.createElement('table');
+            footTable.className = table.className;
+            footTable.appendChild(table.tFoot.cloneNode(true));
+            table.tFoot.style.display = 'none';
+            if (bodyWrap.parentNode) {
+                bodyWrap.parentNode.insertBefore(footWrap, bodyWrap.nextSibling);
+            }
+            footWrap.appendChild(footTable);
+        }
+
         function runSync() {
-            syncWidths(headTable, table);
+            syncWidths(headTable, table, footTable);
             headWrap.scrollLeft = bodyWrap.scrollLeft;
+            if (footWrap) {
+                footWrap.scrollLeft = bodyWrap.scrollLeft;
+            }
         }
 
         shell._pdsFrozenSync = runSync;
         bodyWrap.addEventListener('scroll', function () {
             headWrap.scrollLeft = bodyWrap.scrollLeft;
+            if (footWrap) {
+                footWrap.scrollLeft = bodyWrap.scrollLeft;
+            }
         });
         window.addEventListener('resize', runSync);
         runSync();
@@ -152,8 +183,7 @@
         // splitting thead/tbody there misaligns columns under the wrong headers.
         document.querySelectorAll([
             '.pds-rider-table-shell',
-            '.pds-dispatch-to-assign-table-shell',
-            '.pds-dispatch-items-table-shell'
+            '.pds-dispatch-to-assign-table-shell'
         ].join(',')).forEach(freezeShell);
     }
 
@@ -172,4 +202,12 @@
         boot();
     }
     window.addEventListener('load', boot);
+    document.addEventListener('admin-spa:navigated', function () {
+        boot();
+        window.pdsResyncFrozenTables();
+    });
+    document.addEventListener('admin-live:replaced', function () {
+        boot();
+        window.pdsResyncFrozenTables();
+    });
 })();

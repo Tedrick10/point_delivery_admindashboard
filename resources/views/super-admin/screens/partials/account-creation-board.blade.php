@@ -97,7 +97,7 @@
     .sa-work-switch {
         display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 13px;
     }
-    .sa-work-switch.is-on { color: #0f766e; }
+    .sa-work-switch.is-on { color: #FE6F07; }
     .sa-work-switch.is-off { color: #64748b; }
     .sa-account-pager { margin-top: 14px; }
 </style>

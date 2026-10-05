@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ __('message.sa_super_admin') }} — {{ SettingData('app_content', 'app_name') ?? config('app.name') }}</title>
+    <title>{{ __('message.sa_super_admin') }} — {{ appCopy('admin', 'title') }}</title>
     <link rel="icon" type="image/x-icon" href="{{ getSingleMedia(appSettingData('get'), 'site_favicon', null) }}">
     <link href="{{ asset('frontend-website/assets/css/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('vendor/@fortawesome/fontawesome-free/css/all.min.css') }}"/>
@@ -12,14 +12,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+Myanmar:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --sa-ink: #0c1222;
-            --sa-accent: #0d9488;
-            --sa-accent-dark: #0f766e;
-            --sa-accent-light: #14b8a6;
-            --sa-glow: rgba(13, 148, 136, 0.22);
-            --sa-soft: rgba(13, 148, 136, 0.1);
-            --sa-muted: #6b7280;
-            --sa-line: rgba(15, 23, 42, 0.1);
+            --sa-ink: #14110F;
+            --sa-accent: #FE6F07;
+            --sa-accent-dark: #E05F00;
+            --sa-accent-light: #FF8A3D;
+            --sa-glow: rgba(254, 111, 7, 0.22);
+            --sa-soft: rgba(254, 111, 7, 0.1);
+            --sa-muted: rgba(20, 17, 15, 0.55);
+            --sa-line: rgba(20, 17, 15, 0.1);
         }
         * { box-sizing: border-box; }
         body.sa-login {
@@ -28,10 +28,9 @@
             font-family: 'Outfit', 'Noto Sans Myanmar', system-ui, sans-serif;
             color: var(--sa-ink);
             background:
-                radial-gradient(ellipse 90% 70% at 50% -10%, rgba(20, 184, 166, 0.35), transparent 55%),
-                radial-gradient(ellipse 45% 40% at 100% 100%, rgba(var(--brand-rgb), 0.12), transparent 50%),
-                radial-gradient(ellipse 40% 35% at 0% 85%, rgba(255, 255, 255, 0.05), transparent 50%),
-                linear-gradient(160deg, #07141a 0%, #0c2a2a 45%, #134e4a 100%);
+                radial-gradient(ellipse 90% 70% at 50% -10%, rgba(254, 111, 7, 0.18), transparent 55%),
+                radial-gradient(ellipse 45% 40% at 100% 100%, rgba(254, 111, 7, 0.08), transparent 50%),
+                linear-gradient(180deg, #F7F4F0 0%, #FFFFFF 55%, #F3F0EB 100%);
             display: grid;
             place-items: center;
             padding: 1.5rem;
@@ -52,14 +51,14 @@
             height: 380px;
             top: -100px;
             left: -60px;
-            background: rgba(20, 184, 166, 0.22);
+            background: rgba(254, 111, 7, 0.18);
         }
         body.sa-login::after {
             width: 300px;
             height: 300px;
             bottom: -80px;
             right: -40px;
-            background: rgba(13, 148, 136, 0.18);
+            background: rgba(254, 111, 7, 0.12);
         }
 
         .sa-shell {
@@ -81,7 +80,7 @@
             padding: 2rem 1.75rem 1.5rem;
             box-shadow:
                 0 1px 0 rgba(255, 255, 255, 0.65) inset,
-                0 24px 56px rgba(0, 0, 0, 0.35);
+                0 24px 56px rgba(20, 17, 15, 0.08);
             position: relative;
             overflow: hidden;
         }
@@ -109,7 +108,7 @@
             border-radius: 16px;
             display: grid;
             place-items: center;
-            background: linear-gradient(145deg, var(--sa-accent-light) 0%, var(--sa-accent-dark) 100%);
+            background: #FE6F07;
             color: #fff;
             font-size: 1.15rem;
             box-shadow: 0 10px 24px var(--sa-glow);
@@ -220,15 +219,14 @@
             height: 52px;
             border: 0;
             border-radius: 14px;
-            background: linear-gradient(135deg, var(--sa-accent-light) 0%, var(--sa-accent) 50%, var(--sa-accent-dark) 100%);
+            background: #FE6F07;
             color: #fff;
             font-weight: 700;
             font-size: 0.95rem;
             letter-spacing: 0.01em;
             transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
             box-shadow:
-                0 10px 26px var(--sa-glow),
-                inset 0 1px 0 rgba(255, 255, 255, 0.25);
+                0 10px 26px var(--sa-glow);
         }
         .sa-btn:hover {
             transform: translateY(-2px);
@@ -260,7 +258,7 @@
             transition: background 0.15s ease, transform 0.15s ease;
         }
         .sa-foot a:hover {
-            background: rgba(13, 148, 136, 0.16);
+            background: rgba(254, 111, 7, 0.16);
             transform: translateY(-1px);
         }
 

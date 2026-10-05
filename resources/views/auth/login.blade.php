@@ -9,8 +9,9 @@
                             <img src="{{ getSingleMedia(appSettingData('get'),'site_logo',null) }}" class="img-fluid mode light-img rounded-normal" alt="logo">
                             <img src="{{ getSingleMedia(appSettingData('get'),'site_dark_logo',null) }}" class="img-fluid mode dark-img rounded-normal darkmode-logo site_dark_logo_preview" alt="dark-logo">
                         </div>
-                        <h2 class="mb-2 text-center">{{ __('message.sign_in') }}</h2>
-                        <p class="text-center">{{ __('message.login_with_your_personal_info') }}</p>
+                        <h2 class="mb-2 text-center">{{ appCopy('admin', 'title') }}</h2>
+                        <p class="text-center">{{ appCopy('admin', 'text') }}</p>
+                        <p class="text-center text-muted small mb-3">{{ appCopy('admin', 'description') }}</p>
                         <!-- Session Status -->
                         <x-auth-session-status class="mb-4" :status="session('status')" />
 

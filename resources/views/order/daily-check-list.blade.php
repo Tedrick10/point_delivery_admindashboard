@@ -1,5 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
-    <style>
+    
+<div id="adminLiveRoot" data-live-page="auto">
+<style>
         .pds-kyo-shin-row-badge {
             display: inline-flex;
             align-items: center;
@@ -577,4 +579,6 @@
             });
         })();
     </script>
+
+</div>
 </x-master-layout>

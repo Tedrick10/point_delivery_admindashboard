@@ -1,5 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
-    <style>
+    
+<div id="adminLiveRoot" data-live-page="auto">
+<style>
         .pds-kyo-shin-row-badge {
             display: inline-flex; align-items: center; margin-left: 6px;
             padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
@@ -198,6 +200,8 @@
             </div>
         </div>
     </div>
+</div>
+
 
     @section('bottom_script')
         <script src="{{ asset('js/dispatch-os-fields.js') }}?v=5"></script>
@@ -206,7 +210,7 @@
                 var osSearchRoute = "{{ route('ajax-list', ['type' => 'os_dispatch_search']) }}";
 
                 window.reloadDispatchItemsTable = function () {
-                    window.location.reload();
+                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                 };
 
                 function renderOsRows(rows) {
@@ -362,7 +366,7 @@
                                             if (res && res.message && typeof showMessage === 'function') {
                                                 showMessage(res.message);
                                             }
-                                            window.location.reload();
+                                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                                         },
                                         error: function (xhr) {
                                             var msg = (xhr.responseJSON && xhr.responseJSON.message)

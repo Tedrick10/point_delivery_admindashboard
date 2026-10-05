@@ -1,5 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
-    <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-os-receive-page">
+    
+<div id="adminLiveRoot" data-live-page="auto">
+<div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-os-receive-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
             <div class="pds-rider-hero">
                 <div class="pds-rider-hero__copy">
@@ -224,6 +226,8 @@
             </footer>
         </div>
     </div>
+</div>
+
 
     @section('bottom_script')
         <script>
@@ -287,7 +291,9 @@
                         data: { _token: csrf },
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
                         success: function (res) {
-                            window.location.href = res.redirect || @json(route('order.os-receive', ['tab' => 'received']));
+                            var osReceiveUrl = res.redirect || @json(route('order.os-receive', ['tab' => 'received']));
+                            if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(osReceiveUrl);
+                            else window.location.href = osReceiveUrl;
                         },
                         error: function (xhr) {
                             notify((xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : @json(__('message.something_went_wrong')));
@@ -311,7 +317,7 @@
                         data: { _token: csrf, remark: remark },
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
                         success: function () {
-                            window.location.reload();
+                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                         },
                         error: function (xhr) {
                             notify((xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : @json(__('message.something_went_wrong')));

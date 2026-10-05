@@ -1,5 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
-    <style>
+    
+<div id="adminLiveRoot" data-live-page="auto">
+<style>
         .pds-assign-action-btn--kyo-shin { background: rgba(var(--brand-rgb), 0.08); border-color: rgba(var(--brand-rgb), 0.45); color: var(--site-color); }
         .pds-assign-action-btn--kyo-shin:disabled { opacity: .45; }
         .pds-kyo-shin-row-badge {
@@ -442,6 +444,8 @@
         </div>
     </div>
     @endif
+</div>
+
 
     @section('bottom_script')
         <script src="{{ asset('js/dispatch-os-fields.js') }}?v=5"></script>
@@ -462,7 +466,7 @@
                 var kyoShinActionUrl = @json($kyoShinActionUrl ?? route('order.dispatch.give-kyo-shin'));
 
                 window.reloadDispatchItemsTable = function () {
-                    window.location.reload();
+                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                 };
 
                 function renderOsRows(rows) {
@@ -700,10 +704,11 @@
                                 showMessage(res.message);
                             }
                             if (res && res.redirect) {
-                                window.location.href = res.redirect;
+                                if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(res.redirect);
+                                else window.location.href = res.redirect;
                                 return;
                             }
-                            window.location.reload();
+                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                         },
                         error: function (xhr) {
                             updateAssignRiderButtonState();
@@ -833,7 +838,7 @@
                             if (res && res.message && typeof showMessage === 'function') {
                                 showMessage(res.message);
                             }
-                            window.location.reload();
+                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                         },
                         error: function (xhr) {
                             $('#confirmKyoShinGiveBtn').prop('disabled', false);
@@ -890,10 +895,11 @@
                                 showMessage(res.message);
                             }
                             if (res && res.redirect) {
-                                window.location.href = res.redirect;
+                                if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(res.redirect);
+                                else window.location.href = res.redirect;
                                 return;
                             }
-                            window.location.reload();
+                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                         },
                         error: function (xhr) {
                             updateAssignRiderButtonState();
@@ -946,7 +952,7 @@
                                             if (res && res.message && typeof showMessage === 'function') {
                                                 showMessage(res.message);
                                             }
-                                            window.location.reload();
+                                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                                         },
                                         error: function (xhr) {
                                             var msg = (xhr.responseJSON && xhr.responseJSON.message)

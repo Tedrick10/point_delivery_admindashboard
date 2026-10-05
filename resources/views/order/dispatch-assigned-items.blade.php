@@ -1,5 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
-    <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-assigned-items-page">
+    
+<div id="adminLiveRoot" data-live-page="auto">
+<div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-assigned-items-page">
         <div class="pds-dispatch-to-assign-screen">
             <div class="pds-dispatch-to-assign-topbar">
                 <div class="pds-dispatch-to-assign-topbar-copy">
@@ -130,13 +132,15 @@
     </div>
 
     @include('order.partials._dispatch-item-message-modal')
+</div>
+
 
     @section('bottom_script')
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(document).ready(function () {
                 window.reloadDispatchItemsTable = function () {
-                    window.location.reload();
+                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                 };
 
                 var allowedMsgTabs = ['unread', 'unanswered', 'answered'];

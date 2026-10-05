@@ -1,5 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
-    <div class="container-fluid pds-page-wrap pds-motion-enter pds-kyo-shin-page">
+    
+<div id="adminLiveRoot" data-live-page="auto">
+<div class="container-fluid pds-page-wrap pds-motion-enter pds-kyo-shin-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
             <div class="pds-rider-hero pds-rider-hero--details">
                 <div class="pds-rider-hero__copy">
@@ -350,4 +352,6 @@
         </script>
         @endif
     @endpush
+
+</div>
 </x-master-layout>

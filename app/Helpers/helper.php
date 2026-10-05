@@ -467,23 +467,13 @@ function dailyCheckListItemInPeriod($item, string $fromDay, string $toDay): bool
 }
 
 /**
- * ငွေရှင်းတမ်း invoice day (Asia/Yangon).
- * Every Completed (and ကြိုရှင်း Return) on Yangon day C lands on C − 1,
- * so the whole rider Completed batch appears on one sheet.
+ * ငွေရှင်းတမ်း invoice day (Asia/Yangon) — same rule as Daily Check:
+ * a rider's first Completed on Yangon day C lands on C − 1;
+ * later Completeds that same rider on C land on C.
  */
 function osSettlementListDateForItem($item, ?Carbon $at = null): Carbon
 {
-    $tz = 'Asia/Yangon';
-    $stamp = $at;
-    if (! $stamp && ! empty($item?->admin_completed_at)) {
-        $stamp = Carbon::parse($item->admin_completed_at);
-    } elseif (! $stamp && (string) ($item?->status ?? '') === 'return' && ! empty($item?->admin_updated_at)) {
-        $stamp = Carbon::parse($item->admin_updated_at);
-    }
-
-    $stamp = ($stamp ?? Carbon::now($tz))->copy()->timezone($tz);
-
-    return $stamp->copy()->subDay()->startOfDay();
+    return dailyCheckListDateForItem($item, $at);
 }
 
 function osSettlementItemInPeriod($item, string $fromDay, string $toDay): bool
@@ -769,7 +759,15 @@ function DummyData($key)
 
 function updateLanguageVersion()
 {
-    $language_version_data = LanguageVersionDetail::find(1);
+    $language_version_data = LanguageVersionDetail::query()->find(1);
+    if (! $language_version_data) {
+        $language_version_data = LanguageVersionDetail::query()->create([
+            'id' => 1,
+            'default_language_id' => optional(LanguageList::query()->where('is_default', 1)->first())->id,
+            'version_no' => 1,
+        ]);
+    }
+
     return $language_version_data->increment('version_no', 1);
 }
 
@@ -1946,6 +1944,40 @@ function SettingData($type, $key = null)
     return $setting_data;
 }
 
+function appCopyNormalizeLocale(?string $locale = null): string
+{
+    $locale = strtolower(str_replace('_', '-', (string) ($locale ?: app()->getLocale())));
+    $short = explode('-', $locale)[0] ?? 'en';
+    if (in_array($short, ['my', 'mm', 'bur'], true) || str_starts_with($locale, 'my')) {
+        return 'my';
+    }
+
+    return 'en';
+}
+
+function appCopyClientApp(?string $hint = null): string
+{
+    $raw = strtolower(trim((string) ($hint ?? request()?->input('app') ?? request()?->header('X-App-Client') ?? '')));
+    if (in_array($raw, ['rider', 'delivery', 'delivery_man', 'deliveryman', 'delivery-man'], true)) {
+        return 'rider';
+    }
+    if (in_array($raw, ['admin', 'admin_panel', 'admin-panel'], true)) {
+        return 'admin';
+    }
+
+    return 'user';
+}
+
+function appCopy(string $app, string $field, ?string $locale = null): string
+{
+    return \App\Services\AppCopyService::get($app, $field, $locale);
+}
+
+function appCopyBundle(?string $app = null): array
+{
+    return \App\Services\AppCopyService::bundle($app ?: appCopyClientApp());
+}
+
 /**
  * Play / App Store force-update payload for User or Rider apps.
  * Prefers USER_APP_VERSION / RIDER_APP_VERSION, falls back to legacy APP_VERSION.
@@ -2288,6 +2320,131 @@ function applyClientBranchScope($query, ?User $user = null, ?int $branchId = nul
     }
 
     return $query;
+}
+
+/**
+ * App self-signup OS often have no branch_id. Keep them visible on the Pending
+ * tab of the selected destination instead of hiding them behind Mandalay-only scope.
+ */
+function applyOnlineShopListBranchScope($query, ?User $user = null, ?int $branchId = null, ?string $status = null)
+{
+    $user = $user ?? auth()->user();
+    $forced = forcedBranchId($user);
+    $selected = $branchId ?? (int) request('branch_id', 0);
+
+    if ($forced && $selected > 0 && $selected !== $forced) {
+        return $query->whereRaw('0 = 1');
+    }
+
+    $scopeId = $forced ?: ($selected > 0 ? $selected : defaultDestinationBranchId(null, $user));
+    if (! $scopeId) {
+        return $query;
+    }
+
+    $status = $status ?? (string) request('status', 'pending');
+    $includeUnassignedPending = in_array($status, ['pending', ''], true)
+        || $status === null;
+
+    $query->where(function ($q) use ($scopeId, $includeUnassignedPending) {
+        $q->where('branch_id', $scopeId);
+        if ($includeUnassignedPending) {
+            $q->orWhere(function ($pending) {
+                $pending->where(function ($branch) {
+                    $branch->whereNull('branch_id')->orWhere('branch_id', 0);
+                })->where(function ($approval) {
+                    $approval->whereNull('approval_status')
+                        ->orWhere('approval_status', '')
+                        ->orWhere('approval_status', \App\Models\User::APPROVAL_PENDING);
+                });
+            });
+        }
+    });
+
+    return $query;
+}
+
+function excludeScrubbedOnlineShops($query)
+{
+    return $query->where(function ($q) {
+        $q->whereNull('name')
+            ->orWhere(function ($name) {
+                $name->where('name', 'not like', 'Deleted % client')
+                    ->where('name', 'not like', 'Deleted % Client');
+            });
+    });
+}
+
+function applyOnlineShopApprovalTab($query, ?string $status = null)
+{
+    $status = $status ?? (string) request('status', 'pending');
+
+    switch ($status) {
+        case 'active':
+        case 'approved':
+            return $query->where('approval_status', \App\Models\User::APPROVAL_APPROVED);
+        case 'inactive':
+        case 'rejected':
+            return $query->where('approval_status', \App\Models\User::APPROVAL_REJECTED);
+        case 'kyo_shin':
+            return $query->where('is_kyo_shin', true);
+        case 'pending':
+        default:
+            return $query->where(function ($q) {
+                $q->where('approval_status', \App\Models\User::APPROVAL_PENDING)
+                    ->orWhereNull('approval_status')
+                    ->orWhere('approval_status', '');
+            });
+    }
+}
+
+function destinationBranchIdFromOsLocation(?string $stateDivision, ?string $township = null): ?int
+{
+    $haystack = mb_strtolower(trim(implode(' ', array_filter([
+        (string) $stateDivision,
+        (string) $township,
+    ]))));
+
+    if ($haystack === '') {
+        return null;
+    }
+
+    $named = [
+        'ပြင်ဦးလွင်' => ['ပြင်ဦးလွင်', 'pyin oo lwin', 'pyinoolwin', 'maymyo'],
+        'လားရှိုး' => ['လားရှိုး', 'lashio'],
+        'တောင်ကြီး' => ['တောင်ကြီး', 'taunggyi', 'taung gyi'],
+    ];
+    foreach ($named as $branchName => $needles) {
+        foreach ($needles as $needle) {
+            if ($needle !== '' && str_contains($haystack, mb_strtolower($needle))) {
+                $id = (int) (\App\Models\Branch::query()
+                    ->where('status', 1)
+                    ->where('name', $branchName)
+                    ->value('id') ?? 0);
+
+                return $id > 0 ? $id : null;
+            }
+        }
+    }
+
+    if (str_contains($haystack, 'ရန်ကုန်') || str_contains($haystack, 'yangon') || str_contains($haystack, 'rangoon')) {
+        $yangonIds = yangonBranchIds();
+        if ($yangonIds !== []) {
+            return (int) $yangonIds[0];
+        }
+        $id = (int) (\App\Models\Branch::query()
+            ->where('status', 1)
+            ->where('name', 'like', 'Yangon%')
+            ->orderBy('id')
+            ->value('id') ?? 0);
+
+        return $id > 0 ? $id : null;
+    }
+
+    if (str_contains($haystack, 'မန္တလေး') || str_contains($haystack, 'mandalay') || str_contains($haystack, 'mdy')) {
+        return mandalayBranchId();
+    }
+
+    return null;
 }
 
 function yangonBranchIds(): array
@@ -5917,6 +6074,22 @@ function registrationUsernameFromPhone(string $phone): string
 function sanitizeRegistrationUsername(string $username): string
 {
     return preg_replace('/\s+/', '', trim($username));
+}
+
+/**
+ * Readable one-time password for OS Approve notifications (never stored in plaintext).
+ */
+function generateOsLoginPassword(int $length = 8): string
+{
+    $length = max(6, $length);
+    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    $max = strlen($alphabet) - 1;
+    $password = '';
+    for ($i = 0; $i < $length; $i++) {
+        $password .= $alphabet[random_int(0, $max)];
+    }
+
+    return $password;
 }
 
 function buildUserOsProfileFromArray(array $data): array

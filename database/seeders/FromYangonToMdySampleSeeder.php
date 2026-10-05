@@ -141,6 +141,15 @@ class FromYangonToMdySampleSeeder extends Seeder
             ],
         ];
 
+        $baseCount = count($scenarios);
+        while (count($scenarios) < 30) {
+            $n = count($scenarios);
+            $row = $scenarios[$n % $baseCount];
+            $row['address'] = rtrim((string) $row['address'], '၊ ').'၊ Demo #'.($n + 1);
+            $row['customer'] = $row['customer'].' '.($n + 1);
+            $scenarios[] = $row;
+        }
+
         $created = 0;
         foreach ($scenarios as $i => $s) {
             $hub = $hubs->first(fn (User $u) => strcasecmp((string) $u->email, $s['hub_email']) === 0)

@@ -39,7 +39,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.total_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_order_today'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_order_today">{{ $data['dashboard']['total_order_today'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-box-seam" viewBox="0 0 16 16">
@@ -57,7 +57,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.pending_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_order_today_peding'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_order_today_peding">{{ $data['dashboard']['total_order_today_peding'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-clock-history" viewBox="0 0 16 16">
@@ -77,7 +77,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.inprogress_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_order_today_inprogress'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_order_today_inprogress">{{ $data['dashboard']['total_order_today_inprogress'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-arrow-repeat" viewBox="0 0 16 16">
@@ -96,7 +96,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.completed_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_order_today_completed'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_order_today_completed">{{ $data['dashboard']['total_order_today_completed'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-cart-check" viewBox="0 0 16 16">
@@ -115,7 +115,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.cancel_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_order_today_cancelled'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_order_today_cancelled">{{ $data['dashboard']['total_order_today_cancelled'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-calendar2-x" viewBox="0 0 16 16">
@@ -148,7 +148,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.total_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_order'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_order">{{ $data['dashboard']['total_order'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-ui-checks-grid" viewBox="0 0 16 16">
@@ -166,7 +166,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.created_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_create_order'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_create_order">{{ $data['dashboard']['total_create_order'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-file-earmark-plus" viewBox="0 0 16 16">
@@ -185,7 +185,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.assigned_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_assigned_order'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_assigned_order">{{ $data['dashboard']['total_assigned_order'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-person-check" viewBox="0 0 16 16">
@@ -204,7 +204,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.accepted_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_accepetd_order'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_accepetd_order">{{ $data['dashboard']['total_accepetd_order'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-file-check" viewBox="0 0 16 16">
@@ -223,7 +223,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.arrived_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_arrived_order'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_arrived_order">{{ $data['dashboard']['total_arrived_order'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-file-arrow-down" viewBox="0 0 16 16">
@@ -242,7 +242,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.picked_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_pickup_order'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_pickup_order">{{ $data['dashboard']['total_pickup_order'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-truck" viewBox="0 0 16 16">
@@ -260,7 +260,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.departed_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_departed_order'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_departed_order">{{ $data['dashboard']['total_departed_order'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-send" viewBox="0 0 16 16">
@@ -278,7 +278,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.delivered_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_delivered_order'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_delivered_order">{{ $data['dashboard']['total_delivered_order'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-bag-check" viewBox="0 0 16 16">
@@ -297,7 +297,7 @@
                                             <div class="mm-cart-text">
                                                 <p class="mb-0">{{ __('message.cancel_order') }}</p>
                                                 <br>
-                                                <h5 class="font-weight-700">{{ $data['dashboard']['total_cancelled_order'] }}</h5>
+                                                <h5 class="font-weight-700" data-live-stat="total_cancelled_order">{{ $data['dashboard']['total_cancelled_order'] }}</h5>
                                             </div>
                                             <div class="mm-cart-image text-primary">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="42" fill="currentColor" class="bi bi-file-earmark-excel" viewBox="0 0 16 16">

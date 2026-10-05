@@ -1005,13 +1005,15 @@
 
                     if (res && res.moved_to_assign_100 && res.redirect) {
                         window.setTimeout(function () {
-                            window.location.href = res.redirect;
+                            if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(res.redirect);
+                            else window.location.href = res.redirect;
                         }, 600);
                         return;
                     }
                     if (res && res.moved_to_admin_done && res.redirect) {
                         window.setTimeout(function () {
-                            window.location.href = res.redirect;
+                            if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(res.redirect);
+                            else window.location.href = res.redirect;
                         }, 600);
                         return;
                     }
@@ -1022,7 +1024,8 @@
                         if (nextBranch && currentBranch && nextBranch !== currentBranch) {
                             var nextUrl = new URL(window.location.href);
                             nextUrl.searchParams.set('to_branch_id', nextBranch);
-                            window.location.href = nextUrl.toString();
+                            if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(nextUrl.toString());
+                            else window.location.href = nextUrl.toString();
                             return;
                         }
                     }

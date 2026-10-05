@@ -1,5 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
-    <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-os-items-page">
+    
+<div id="adminLiveRoot" data-live-page="auto">
+<div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-os-items-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
             <div class="pds-rider-hero pds-rider-hero--details">
                 <div class="pds-rider-hero__copy">
@@ -233,6 +235,8 @@
     @include('order.partials._dispatch-item-message-modal')
     @include('order.partials._dispatch-item-gate-modal')
     @include('order.partials._pending-remark-history-modal')
+</div>
+
 
     @section('bottom_script')
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -242,7 +246,7 @@
         <script>
             $(document).ready(function () {
                 window.reloadDispatchItemsTable = function () {
-                    window.location.reload();
+                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                 };
 
                 if (typeof flatpickr !== 'undefined') {
@@ -325,7 +329,7 @@
                                 if (res && res.message) {
                                     SnackBar({ message: res.message, status: 'success' });
                                 }
-                                window.location.reload();
+                                typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                             },
                             error: function (xhr) {
                                 var msg = (xhr.responseJSON && xhr.responseJSON.message)
@@ -434,10 +438,10 @@
                         success: function (res) {
                             if (res && res.message) {
                                 notify(res.message, 'success', function () {
-                                    window.location.reload();
+                                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                                 });
                             } else {
-                                window.location.reload();
+                                typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                             }
                         },
                         error: function (xhr) {

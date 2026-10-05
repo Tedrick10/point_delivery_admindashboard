@@ -290,6 +290,29 @@
         }, 900);
     }
 
+    function revealContentNow() {
+        forceVisible('.pds-dashboard-panel.pds-panel-animate', 'pds-panel-visible');
+        forceVisible('.pds-stats-grid > [class*="col-"]', 'pds-stat-visible');
+        forceVisible('.pds-admin-reveal', 'pds-admin-visible');
+        forceVisible('.pds-order-detail .pds-order-animate', 'pds-order-visible');
+    }
+
+    /**
+     * Re-bind motion after Admin SPA content swaps.
+     * Without this, dashboard panels stay opacity:0 (js-motion-ready + missing pds-panel-visible).
+     */
+    function refreshPageMotion() {
+        initDashboardAnimations();
+        initCardReveal();
+        initOrderDetailAnimations();
+        initStatCountUp();
+        initLegacyPageEnhancements();
+        initTableRows();
+        // SPA: show immediately — do not wait for IntersectionObserver / 900ms failsafe.
+        revealContentNow();
+        window.setTimeout(revealContentNow, 50);
+    }
+
     function boot() {
         initLoader();
         initSidebar();
@@ -322,9 +345,11 @@
     // Back/forward cache restore — re-hide loader and force content visible.
     window.addEventListener('pageshow', function () {
         hideLoader();
-        forceVisible('.pds-dashboard-panel.pds-panel-animate', 'pds-panel-visible');
-        forceVisible('.pds-stats-grid > [class*="col-"].pds-stat-animate', 'pds-stat-visible');
-        forceVisible('.pds-admin-reveal', 'pds-admin-visible');
-        forceVisible('.pds-order-detail .pds-order-animate', 'pds-order-visible');
+        revealContentNow();
     });
+
+    document.addEventListener('admin-spa:navigated', refreshPageMotion);
+    document.addEventListener('admin-live:replaced', refreshPageMotion);
+
+    window.pdsAdminAnimationsRefresh = refreshPageMotion;
 })();

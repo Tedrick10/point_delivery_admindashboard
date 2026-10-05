@@ -8620,11 +8620,37 @@ body.pds-admin #remoteModelData.modal {
 }
 
 body.pds-admin #remoteModelData .pds-os-account-modal-wrap {
-    max-width: 920px;
+    max-width: 1080px;
     margin: 1rem auto;
     max-height: none;
     height: auto;
     pointer-events: auto;
+}
+
+body.pds-admin .pds-os-account-modal--reg .pds-user-reg-layout {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+    padding: 0.75rem 0.15rem 0.5rem;
+}
+
+body.pds-admin .pds-os-account-modal--reg .pds-user-reg-aside {
+    position: sticky;
+    top: 0;
+}
+
+body.pds-admin .pds-os-account-modal--reg .pds-user-reg-section {
+    margin-bottom: 0.85rem;
+}
+
+@media (max-width: 900px) {
+    body.pds-admin .pds-os-account-modal--reg .pds-user-reg-layout {
+        grid-template-columns: 1fr;
+    }
+    body.pds-admin .pds-os-account-modal--reg .pds-user-reg-aside {
+        position: static;
+    }
 }
 
 body.pds-admin .pds-os-account-modal {
@@ -9621,7 +9647,8 @@ body.pds-admin .pds-dispatch-items-body {
 body.pds-admin .pds-dispatch-items-table-shell {
     background: #fff;
     border: 1px solid #e8ecf1;
-    border-radius: 14px;
+    border-bottom: 0;
+    border-radius: 14px 14px 0 0;
     overflow: hidden;
 }
 
@@ -9673,15 +9700,7 @@ body.pds-admin .pds-dispatch-items-table-shell.is-empty .pds-dispatch-items-dt-i
 }
 
 body.pds-admin .pds-dispatch-items-dt-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.7rem 0.95rem;
-    border-top: 1px solid #eef2f6;
-    background: #fafbfc;
-    font-size: 0.8rem;
-    color: #64748b;
+    display: none !important;
 }
 
 body.pds-admin .pds-dispatch-items-dt-length select {
@@ -20510,6 +20529,18 @@ body.pds-admin .pds-os-list-body {
 body.pds-admin .pds-os-list-bulk {
     margin: 0.75rem 0;
 }
+/* Hidden until rows are checked — avoids SPA flash of Delete Selected */
+body.pds-admin #deleteSelectedBtn:not(.is-visible),
+body.pds-admin #deleteSelectedBtn[hidden] {
+    display: none !important;
+}
+body.pds-admin #deleteSelectedBtn.is-visible {
+    display: inline-flex !important;
+}
+body.pds-admin .pds-os-list-bulk:not(:has(#deleteSelectedBtn.is-visible)) {
+    display: none;
+    margin: 0;
+}
 
 body.pds-admin .pds-os-list-table-shell {
     border: 1px solid #e8edf3;
@@ -25310,3 +25341,368 @@ body.pds-admin th {
     font-family: var(--admin-font);
 }
 
+
+/* Admin SPA navigation — subtle progress, never full splash */
+body.pds-admin.pds-spa-navigating::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    z-index: 200000;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent 0%, var(--site-color, #c45c26) 45%, var(--site-color, #c45c26) 55%, transparent 100%);
+    background-size: 40% 100%;
+    animation: pds-spa-progress 0.8s linear infinite;
+}
+@keyframes pds-spa-progress {
+    0% { background-position: -40% 0; }
+    100% { background-position: 140% 0; }
+}
+body.pds-admin #adminSpaContent.pds-spa-loading {
+    opacity: 0.92;
+    transition: opacity 0.12s ease;
+}
+
+/* Empty live badges must never render as orange dots */
+body.pds-admin .pds-sidebar .badge.d-none,
+body.pds-admin .pds-sidebar .badge-pill.d-none,
+body.pds-admin .pds-sidebar .badge-pill:empty,
+body.pds-admin .pds-sidebar [data-live-badge]:empty {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    box-shadow: none !important;
+}
+
+/* Spreadsheet / ဇယားကွက် grid — match Point Delivery toassign / Google Sheets look */
+body.pds-admin .content-page table.table:not(.pds-os-slip__table):not(.pds-daily-check-slip-table):not(.pds-check-detail-table),
+body.pds-admin .content-page table.dataTable,
+body.pds-admin .pds-dispatch-table,
+body.pds-admin .pds-dispatch-to-assign-table,
+body.pds-admin .pds-dispatch-datatable,
+body.pds-admin .pds-rider-list-table,
+body.pds-admin .pds-rider-items-table,
+body.pds-admin .pds-daily-check-table,
+body.pds-admin .pds-cash-payout-table,
+body.pds-admin .pds-os-settlement-table,
+body.pds-admin .pds-expense-summary-table,
+body.pds-admin .pds-os-list-table,
+body.pds-admin .pds-frozen-table table {
+    border-collapse: collapse !important;
+    border-spacing: 0 !important;
+    background: #fff !important;
+    border: 1px solid #cbbfb3 !important;
+}
+
+/* Orange header — only the visible header (scrollHead / non-scrolled tables).
+   Never style .dataTables_scrollBody thead — DataTables clones it for widths. */
+body.pds-admin .content-page table.table:not(.pds-os-slip__table):not(.pds-daily-check-slip-table) thead th,
+body.pds-admin .content-page .dataTables_scrollHead table.dataTable thead th,
+body.pds-admin .content-page .dataTables_scrollHead table.dataTable thead td,
+body.pds-admin .content-page .table-responsive > table.dataTable thead th,
+body.pds-admin .content-page .table-responsive > table.dataTable thead td,
+body.pds-admin .content-page .pds-table-shell > table.dataTable thead th,
+body.pds-admin .content-page .pds-table-shell > table.dataTable thead td,
+body.pds-admin .pds-dispatch-table thead th,
+body.pds-admin .pds-dispatch-to-assign-table thead th,
+body.pds-admin .pds-dispatch-datatable thead th,
+body.pds-admin .pds-rider-list-table thead th,
+body.pds-admin .pds-rider-items-table thead th,
+body.pds-admin .pds-daily-check-table thead th,
+body.pds-admin .pds-cash-payout-table thead th,
+body.pds-admin .pds-os-settlement-table thead th,
+body.pds-admin .pds-expense-summary-table thead th,
+body.pds-admin .pds-os-list-table thead th,
+body.pds-admin .pds-frozen-table__head th,
+body.pds-admin .pds-dispatch-list-page .pds-dispatch-table-shell .dataTables_wrapper .dataTables_scrollHead table.dataTable thead th {
+    background: var(--site-color, #FE6F07) !important;
+    color: #fff !important;
+    border: 1px solid #e07a28 !important;
+    border-bottom: 0 !important;
+    font-weight: 700 !important;
+    font-size: 0.72rem !important;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    padding: 8px 10px !important;
+    vertical-align: middle !important;
+    white-space: nowrap !important;
+    box-shadow: none !important;
+}
+
+/* Kill the cloned orange bar under DataTables scrollX headers */
+body.pds-admin .content-page .dataTables_scrollBody table.dataTable > thead,
+body.pds-admin .pds-table-shell .dataTables_scrollBody table.dataTable > thead,
+body.pds-admin .content-page .dataTables_scrollBody table.dataTable > thead > tr,
+body.pds-admin .pds-table-shell .dataTables_scrollBody table.dataTable > thead > tr {
+    height: 0 !important;
+    max-height: 0 !important;
+    line-height: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    visibility: collapse !important;
+}
+
+body.pds-admin .content-page .dataTables_scrollBody table.dataTable thead th,
+body.pds-admin .content-page .dataTables_scrollBody table.dataTable thead td,
+body.pds-admin .pds-table-shell .dataTables_scrollBody table.dataTable thead th,
+body.pds-admin .pds-table-shell .dataTables_scrollBody table.dataTable thead td,
+body.pds-admin .pds-dispatch-list-page .dataTables_scrollBody table.dataTable thead th {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    color: transparent !important;
+    border: 0 !important;
+    border-width: 0 !important;
+    box-shadow: none !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    line-height: 0 !important;
+    font-size: 0 !important;
+    overflow: hidden !important;
+    visibility: collapse !important;
+}
+
+body.pds-admin .content-page table.table:not(.pds-os-slip__table):not(.pds-daily-check-slip-table) tbody td,
+body.pds-admin .content-page table.dataTable tbody td,
+body.pds-admin .pds-dispatch-table tbody td,
+body.pds-admin .pds-dispatch-to-assign-table tbody td,
+body.pds-admin .pds-dispatch-datatable tbody td,
+body.pds-admin .pds-rider-list-table tbody td,
+body.pds-admin .pds-rider-items-table tbody td,
+body.pds-admin .pds-daily-check-table tbody td,
+body.pds-admin .pds-cash-payout-table tbody td,
+body.pds-admin .pds-os-settlement-table tbody td,
+body.pds-admin .pds-expense-summary-table tbody td,
+body.pds-admin .pds-os-list-table tbody td,
+body.pds-admin .pds-frozen-table table tbody td {
+    border: 1px solid #d7cfc6 !important;
+    background: #fff !important;
+    color: #1c1917 !important;
+    padding: 6px 8px !important;
+    font-size: 0.8rem !important;
+    line-height: 1.35 !important;
+    vertical-align: middle !important;
+}
+
+body.pds-admin .content-page table.table:not(.pds-os-slip__table) tbody tr:nth-child(even) td,
+body.pds-admin .content-page table.dataTable tbody tr:nth-child(even) td,
+body.pds-admin .pds-dispatch-table tbody tr:nth-child(even) td,
+body.pds-admin .pds-dispatch-to-assign-table tbody tr:nth-child(even) td,
+body.pds-admin .pds-dispatch-datatable tbody tr:nth-child(even) td,
+body.pds-admin .pds-rider-list-table tbody tr:nth-child(even) td,
+body.pds-admin .pds-daily-check-table tbody tr:nth-child(even) td,
+body.pds-admin .pds-os-list-table tbody tr:nth-child(even) td {
+    background: #fffaf5 !important;
+}
+
+body.pds-admin .content-page table.table:not(.pds-os-slip__table) tbody tr:hover td,
+body.pds-admin .content-page table.dataTable tbody tr:hover td,
+body.pds-admin .pds-dispatch-table tbody tr:hover td,
+body.pds-admin .pds-dispatch-to-assign-table tbody tr:hover td,
+body.pds-admin .pds-dispatch-datatable tbody tr:hover td,
+body.pds-admin .pds-rider-list-table tbody tr:hover td,
+body.pds-admin .pds-daily-check-table tbody tr:hover td,
+body.pds-admin .pds-os-list-table tbody tr:hover td {
+    background: #fff1e4 !important;
+}
+
+body.pds-admin .content-page table.dataTable thead .sorting,
+body.pds-admin .content-page table.dataTable thead .sorting_asc,
+body.pds-admin .content-page table.dataTable thead .sorting_desc,
+body.pds-admin .content-page table.dataTable thead .sorting_asc_disabled,
+body.pds-admin .content-page table.dataTable thead .sorting_desc_disabled,
+body.pds-admin table.dataTable thead th.sorting,
+body.pds-admin table.dataTable thead th.sorting_asc,
+body.pds-admin table.dataTable thead th.sorting_desc {
+    background-image: none !important;
+    cursor: default !important;
+    padding-right: 10px !important;
+}
+
+body.pds-admin .content-page table.dataTable thead .sorting:before,
+body.pds-admin .content-page table.dataTable thead .sorting:after,
+body.pds-admin .content-page table.dataTable thead .sorting_asc:before,
+body.pds-admin .content-page table.dataTable thead .sorting_asc:after,
+body.pds-admin .content-page table.dataTable thead .sorting_desc:before,
+body.pds-admin .content-page table.dataTable thead .sorting_desc:after,
+body.pds-admin table.dataTable thead th.sorting:before,
+body.pds-admin table.dataTable thead th.sorting:after,
+body.pds-admin table.dataTable thead th.sorting_asc:before,
+body.pds-admin table.dataTable thead th.sorting_asc:after,
+body.pds-admin table.dataTable thead th.sorting_desc:before,
+body.pds-admin table.dataTable thead th.sorting_desc:after {
+    display: none !important;
+    content: none !important;
+    opacity: 0 !important;
+}
+
+body.pds-admin .pds-table-shell,
+body.pds-admin .pds-dispatch-table-shell,
+body.pds-admin .pds-dispatch-to-assign-table-shell,
+body.pds-admin .pds-rider-table-shell {
+    border: 1px solid #cbbfb3 !important;
+    border-radius: 8px !important;
+    overflow: auto;
+    background: #fff !important;
+}
+
+body.pds-admin .pds-dispatch-items-page .pds-dispatch-items-table-shell {
+    border: 1px solid #cbbfb3 !important;
+    border-bottom: 0 !important;
+    border-radius: 8px 8px 0 0 !important;
+    overflow: auto;
+    background: #fff !important;
+}
+
+body.pds-admin .pds-dispatch-items-page .pds-items-dock {
+    border: 1px solid #cbbfb3;
+    border-top: 1px solid #e7d5c6;
+}
+
+body.pds-admin .pds-dispatch-items-datatable tfoot td,
+body.pds-admin .pds-dispatch-items-datatable tfoot th {
+    background: #fff7ed !important;
+    border: 1px solid #d7cfc6 !important;
+    border-top: 2px solid var(--site-color, #FE6F07) !important;
+    font-weight: 800 !important;
+    font-variant-numeric: tabular-nums;
+    color: #0f172a !important;
+    padding: 8px 10px !important;
+    white-space: nowrap;
+    vertical-align: middle !important;
+}
+
+body.pds-admin .pds-dispatch-items-total-label {
+    text-align: right !important;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.72rem !important;
+    color: var(--site-color, #FE6F07) !important;
+}
+
+body.pds-admin .pds-dispatch-items-datatable thead th.sorting,
+body.pds-admin .pds-dispatch-items-datatable thead th.sorting_asc,
+body.pds-admin .pds-dispatch-items-datatable thead th.sorting_desc,
+body.pds-admin .content-page table.pds-dispatch-items-datatable thead th.sorting,
+body.pds-admin .content-page table.pds-dispatch-items-datatable thead th.sorting_asc,
+body.pds-admin .content-page table.pds-dispatch-items-datatable thead th.sorting_desc {
+    background-image: none !important;
+    cursor: default !important;
+}
+
+body.pds-admin .pds-dispatch-items-datatable thead .sorting:before,
+body.pds-admin .pds-dispatch-items-datatable thead .sorting:after,
+body.pds-admin .pds-dispatch-items-datatable thead .sorting_asc:before,
+body.pds-admin .pds-dispatch-items-datatable thead .sorting_asc:after,
+body.pds-admin .pds-dispatch-items-datatable thead .sorting_desc:before,
+body.pds-admin .pds-dispatch-items-datatable thead .sorting_desc:after,
+body.pds-admin .content-page table.pds-dispatch-items-datatable thead .sorting:before,
+body.pds-admin .content-page table.pds-dispatch-items-datatable thead .sorting:after,
+body.pds-admin .content-page table.pds-dispatch-items-datatable thead .sorting_asc:before,
+body.pds-admin .content-page table.pds-dispatch-items-datatable thead .sorting_asc:after,
+body.pds-admin .content-page table.pds-dispatch-items-datatable thead .sorting_desc:before,
+body.pds-admin .content-page table.pds-dispatch-items-datatable thead .sorting_desc:after {
+    display: none !important;
+    content: none !important;
+}
+
+body.pds-admin .pds-frozen-table__foot {
+    flex: 0 0 auto;
+    overflow: hidden;
+    background: #fff7ed;
+    border-top: 2px solid var(--site-color, #FE6F07);
+}
+
+body.pds-admin .pds-frozen-table__foot table {
+    margin: 0;
+}
+
+body.pds-admin .pds-frozen-table__foot td,
+body.pds-admin .pds-frozen-table__foot th {
+    background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
+    font-weight: 800 !important;
+    font-variant-numeric: tabular-nums;
+    color: #0f172a !important;
+    padding: 8px 10px !important;
+    border: 1px solid #e07a28 !important;
+}
+
+body.pds-admin .pds-frozen-table__body tfoot {
+    display: none;
+}
+
+/*
+ * DataTables scrollX clones thead into scrollBody for column widths.
+ * Orange thead rules are more specific, so this block must beat them or a
+ * second solid orange bar appears under the real header.
+ */
+body.pds-admin .content-page div.dataTables_scrollBody > table.dataTable > thead > tr > th,
+body.pds-admin .content-page div.dataTables_scrollBody > table.dataTable > thead > tr > td,
+body.pds-admin .content-page div.dataTables_scrollBody table.dataTable thead th,
+body.pds-admin .content-page div.dataTables_scrollBody table.dataTable thead td,
+body.pds-admin .pds-table-shell div.dataTables_scrollBody > table.dataTable > thead > tr > th,
+body.pds-admin .pds-table-shell div.dataTables_scrollBody > table.dataTable > thead > tr > td,
+body.pds-admin .pds-table-shell div.dataTables_scrollBody table.dataTable thead th,
+body.pds-admin .pds-table-shell div.dataTables_scrollBody table.dataTable thead td,
+body.pds-admin .content-page div.dataTables_scrollBody table.dataTable thead th.sorting,
+body.pds-admin .content-page div.dataTables_scrollBody table.dataTable thead th.sorting_asc,
+body.pds-admin .content-page div.dataTables_scrollBody table.dataTable thead th.sorting_desc,
+body.pds-admin .pds-table-shell div.dataTables_scrollBody table.dataTable thead th.sorting,
+body.pds-admin .pds-table-shell div.dataTables_scrollBody table.dataTable thead th.sorting_asc,
+body.pds-admin .pds-table-shell div.dataTables_scrollBody table.dataTable thead th.sorting_desc {
+    height: 0 !important;
+    max-height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-width: 0 !important;
+    border-color: transparent !important;
+    background: transparent !important;
+    background-image: none !important;
+    background-color: transparent !important;
+    color: transparent !important;
+    line-height: 0 !important;
+    font-size: 0 !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+}
+
+body.pds-admin .content-page div.dataTables_scrollBody > table.dataTable > thead,
+body.pds-admin .pds-table-shell div.dataTables_scrollBody > table.dataTable > thead {
+    height: 0 !important;
+    max-height: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+}
+
+body.pds-admin .content-page div.dataTables_scrollHead,
+body.pds-admin .pds-table-shell div.dataTables_scrollHead,
+body.pds-admin .dataTables_wrapper .dataTables_scrollHead {
+    border-bottom: 0 !important;
+    background: transparent !important;
+    margin-bottom: 0 !important;
+}
+
+body.pds-admin div.dataTables_scrollFoot,
+body.pds-admin div.dataTables_scrollFootInner {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    border: 0 !important;
+}
+
+body.pds-admin div.dataTables_scroll,
+body.pds-admin div.dataTables_scrollBody {
+    border-top: 0 !important;
+    border-bottom: 0 !important;
+}

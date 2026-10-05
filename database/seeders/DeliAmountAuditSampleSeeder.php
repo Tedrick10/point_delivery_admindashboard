@@ -30,7 +30,7 @@ class DeliAmountAuditSampleSeeder extends Seeder
             ->where('remark', 'Order List sample')
             ->whereNotNull('order_id')
             ->orderByDesc('id')
-            ->limit(8)
+            ->limit(30)
             ->get();
 
         if ($items->isEmpty()) {
@@ -38,7 +38,7 @@ class DeliAmountAuditSampleSeeder extends Seeder
                 ->with('order')
                 ->whereNotNull('order_id')
                 ->orderByDesc('id')
-                ->limit(8)
+                ->limit(30)
                 ->get();
         }
 
@@ -69,14 +69,14 @@ class DeliAmountAuditSampleSeeder extends Seeder
         $created = 0;
         $baseTime = Carbon::now('Asia/Yangon')->setTime(9, 15, 0);
 
-        foreach ($items->take(count($scenarios)) as $i => $item) {
+        foreach ($items as $i => $item) {
             /** @var DispatchOrderItem $item */
             $order = $item->order;
             if (! $order instanceof Order) {
                 continue;
             }
 
-            [$from, $to] = $scenarios[$i];
+            [$from, $to] = $scenarios[$i % count($scenarios)];
             $at = $baseTime->copy()->addMinutes($i * 37)->utc();
 
             // Simulate a real change so Audit Log accepts it (from > 0).

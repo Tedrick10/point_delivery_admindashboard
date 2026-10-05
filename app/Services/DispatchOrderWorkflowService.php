@@ -40,6 +40,22 @@ class DispatchOrderWorkflowService
         return ['assigned', 'courier_assigned', 'courier_departed', 'pending', 'completed'];
     }
 
+    /**
+     * Parcel already left pickup / Assign 100 pool (on a delivery rider).
+     * Remaining collected siblings must not bounce back to Admin Done.
+     */
+    public function lastMileItemStatuses(): array
+    {
+        return ['courier_assigned', 'courier_departed', 'pending', 'completed', 'return', 'os_returned'];
+    }
+
+    public function hasLastMileItems(Order $order): bool
+    {
+        return $order->dispatchItems()
+            ->whereIn('status', $this->lastMileItemStatuses())
+            ->exists();
+    }
+
     public function hasAdvancedAdminItems(Order $order): bool
     {
         return $order->dispatchItems()
@@ -270,7 +286,7 @@ class DispatchOrderWorkflowService
         // Both Admin Done and Rider Pick Up Completed are required.
         // Do not treat "already assigned" pool rows as proof of Admin Done —
         // that made premature Assign 100 sticky on server.
-        if (! $this->hasPhysicalPickupCompleted($order)) {
+        if (! $this->hasPhysicalPickupCompleted($order) && ! $this->hasLastMileItems($order)) {
             return false;
         }
 
@@ -398,6 +414,10 @@ class DispatchOrderWorkflowService
             return false;
         }
 
+        if ($this->hasLastMileItems($order)) {
+            return false;
+        }
+
         return $this->isAdminDone($order);
     }
 
@@ -446,6 +466,8 @@ class DispatchOrderWorkflowService
                 $item->where('status', 'collected')->whereNull('admin_updated_at');
             }),
             // Admin Done only: item info complete, rider has not finished pick-up yet.
+            // Once any parcel is on a delivery rider (Delivered / Completed / Finished),
+            // the order must leave this tab — leftover collected rows are not Admin Done.
             'admin_completed' => $query->whereNotNull('delivery_man_id')
                 ->whereNotIn('status', ['courier_picked_up', 'courier_departed', 'completed', 'pickup_error', 'cancelled'])
                 ->whereHas('dispatchItems', function ($item) {
@@ -453,6 +475,9 @@ class DispatchOrderWorkflowService
                 })
                 ->whereDoesntHave('dispatchItems', function ($item) {
                     $item->where('status', 'collected')->whereNull('admin_updated_at');
+                })
+                ->whereDoesntHave('dispatchItems', function ($item) {
+                    $item->whereIn('status', $this->lastMileItemStatuses());
                 }),
             'rider_pick_up_unassigned' => $query->whereNull('delivery_man_id'),
             // Pick Up Rider only: rider assigned, Admin Done not yet, Rider Done not yet.
@@ -552,6 +577,9 @@ class DispatchOrderWorkflowService
                                 })
                                 ->whereDoesntHave('dispatchItems', function ($item) {
                                     $item->where('status', 'collected')->whereNull('admin_updated_at');
+                                })
+                                ->whereDoesntHave('dispatchItems', function ($item) {
+                                    $item->whereIn('status', $this->lastMileItemStatuses());
                                 });
                         });
                     });
@@ -956,7 +984,12 @@ class DispatchOrderWorkflowService
         $orderIds = Order::query()
             ->whereNull('deleted_at')
             ->whereNotNull('delivery_man_id')
-            ->whereIn('status', ['courier_picked_up', 'courier_departed', 'completed'])
+            ->where(function ($q) {
+                $q->whereIn('status', ['courier_picked_up', 'courier_departed', 'completed'])
+                    ->orWhereHas('dispatchItems', function ($item) {
+                        $item->whereIn('status', $this->lastMileItemStatuses());
+                    });
+            })
             ->whereHas('dispatchItems', function ($item) {
                 $item->where('status', 'collected');
             })
@@ -997,12 +1030,16 @@ class DispatchOrderWorkflowService
             $payload['hub_accepted_at'] = null;
         }
 
-        // Rider not done yet — always premature.
+        // Rider not done yet — premature, unless a sibling parcel is already
+        // Delivered / Completed / Finished (do not yank the rest back to Admin Done).
         $reclaimed = DispatchOrderItem::query()
             ->where('status', 'assigned')
             ->whereNull('delivery_man_id')
             ->whereHas('order', function ($q) {
                 $q->whereNotIn('status', ['courier_picked_up', 'courier_departed', 'completed']);
+            })
+            ->whereDoesntHave('order.dispatchItems', function ($item) {
+                $item->whereIn('status', $this->lastMileItemStatuses());
             })
             ->update($payload);
 

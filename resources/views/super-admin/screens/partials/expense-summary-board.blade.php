@@ -40,21 +40,39 @@
     };
 @endphp
 
-<section class="sa-module-panel sa-expense-summary-panel">
-    <header class="sa-module-panel__head">
-        <h3>{{ __('message.expense_summary_title') }}</h3>
-        <span>{{ __('message.expense_summary_subtitle') }}</span>
+<section class="sa-module-panel sa-expense-summary-panel" data-sa-expense-summary>
+    <header class="sa-expense-summary-head">
+        <div class="sa-expense-summary-head__copy">
+            <h3>{{ __('message.expense_summary_title') }}</h3>
+            <p>{{ __('message.expense_summary_subtitle') }}</p>
+        </div>
+        <div class="sa-expense-summary-metrics" aria-label="{{ __('message.expense_summary_title') }}">
+            <div class="sa-expense-summary-metric is-income">
+                <span>{{ __('message.expense_summary_income') }}</span>
+                <strong>{{ number_format($totalIncome) }}</strong>
+            </div>
+            <div class="sa-expense-summary-metric is-expense">
+                <span>{{ __('message.expense_summary_expense') }}</span>
+                <strong>{{ number_format($totalExpense) }}</strong>
+            </div>
+            <div class="sa-expense-summary-metric is-ako {{ $totalAko < 0 ? 'is-neg' : '' }}">
+                <span>{{ __('message.expense_summary_ako_given') }}</span>
+                <strong>{{ number_format($totalAko) }}</strong>
+            </div>
+        </div>
     </header>
 
-    @include('partials._branch-tabs', [
-        'branchTabs' => $expenseSummary['branchTabs'] ?? collect(),
-        'selectedBranchId' => $expenseSummary['selectedBranchId'] ?? null,
-        'branchTabCounts' => $expenseSummary['branchTabCounts'] ?? [],
-        'allCount' => $expenseSummary['allBranchCount'] ?? null,
-        'includeAll' => false,
-        'routeName' => 'super-admin.screens.show',
-        'routeQuery' => $periodQuery,
-    ])
+    <div class="sa-expense-summary-branches">
+        @include('partials._branch-tabs', [
+            'branchTabs' => $expenseSummary['branchTabs'] ?? collect(),
+            'selectedBranchId' => $expenseSummary['selectedBranchId'] ?? null,
+            'branchTabCounts' => $expenseSummary['branchTabCounts'] ?? [],
+            'allCount' => $expenseSummary['allBranchCount'] ?? null,
+            'includeAll' => false,
+            'routeName' => 'super-admin.screens.show',
+            'routeQuery' => $periodQuery,
+        ])
+    </div>
 
     <div class="pds-expense-summary-split sa-expense-summary-split{{ empty($expenseSummary['tripleCanView'] ?? false) ? ' is-no-calendar' : '' }}">
         @if(! empty($expenseSummary['tripleCanView'] ?? false))
@@ -64,7 +82,7 @@
         ])
         @endif
 
-        <div class="pds-expense-summary-split__main">
+        <div class="pds-expense-summary-split__main sa-expense-summary-main">
             <form method="GET" action="{{ route('super-admin.screens.show', 'expense-summary') }}" class="sa-expense-summary-filter">
                 @foreach($periodQuery as $key => $value)
                     @if($key !== 'from_date' && $key !== 'to_date')
@@ -75,93 +93,97 @@
                 <input type="hidden" name="branch_id" value="{{ $expenseSummary['branchFilter'] ?? '' }}">
                 <label>
                     {{ __('message.from_date') }}
-                    <input type="text" name="from_date" value="{{ $expenseSummary['filterFrom'] ?? '' }}" class="sa-expense-summary-date">
+                    <input type="text" name="from_date" value="{{ $expenseSummary['filterFrom'] ?? '' }}" class="sa-expense-summary-date" autocomplete="off" placeholder="dd-mm-yyyy">
                 </label>
                 <label>
                     {{ __('message.to_date') }}
-                    <input type="text" name="to_date" value="{{ $expenseSummary['filterTo'] ?? '' }}" class="sa-expense-summary-date">
+                    <input type="text" name="to_date" value="{{ $expenseSummary['filterTo'] ?? '' }}" class="sa-expense-summary-date" autocomplete="off" placeholder="dd-mm-yyyy">
                 </label>
-                <button type="submit">{{ __('message.check') }}</button>
+                <button type="submit">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <span>{{ __('message.check') }}</span>
+                </button>
             </form>
-    <div class="sa-expense-summary-table-wrap">
-        <table class="sa-module-table sa-expense-summary-table">
-            <thead>
-                <tr>
-                    <th>{{ __('message.expense_summary_no') }}</th>
-                    <th>{{ __('message.date') }}</th>
-                    <th>{{ __('message.expense_summary_income') }}</th>
-                    <th>{{ __('message.expense_summary_expense') }}</th>
-                    <th>{{ __('message.expense_summary_ako_given') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($rows as $index => $row)
-                    @php
-                        $card = $row->expenseCard;
-                        $cardItems = $card?->items?->map(fn ($i) => [
-                            'subject' => $i->subject,
-                            'amount' => (float) $i->amount,
-                            'image' => $i->hasUploadedImage() ? $i->image : null,
-                            'image_url' => $i->imageUrl(),
-                            'locked' => $i->isLockedSource(),
-                        ])->values() ?? collect();
-                        $cardDate = $card?->expense_date?->format('Y-m-d')
-                            ?? $row->summary_date?->format('Y-m-d');
-                        $dayKey = $row->summary_date?->format('Y-m-d');
-                        $incomeItems = $incomeItemsByDate[$dayKey] ?? [];
-                        $hasIncomeCard = count($incomeItems) > 0 || (float) $row->income > 0;
-                    @endphp
-                    <tr>
-                        <td>{{ $index + 1 }}</td>
-                        <td>{{ $row->summary_date->format('d-m-Y') }}</td>
-                        <td class="is-income">
-                            <span class="sa-expense-summary-amt-cell">
-                                <span>{{ number_format($row->income) }}</span>
-                                <button type="button"
-                                        class="sa-expense-summary-view js-summary-view-card"
-                                        title="{{ __('message.expenses_view_income_card') }}"
-                                        data-card-type="income"
-                                        data-date="{{ $dayKey }}"
-                                        data-items='@json($incomeItems)'
-                                        @disabled(! $hasIncomeCard)>
-                                    <i class="fas fa-eye" aria-hidden="true"></i>
-                                </button>
-                            </span>
-                        </td>
-                        <td class="is-expense">
-                            <span class="sa-expense-summary-amt-cell">
-                                <span>{{ number_format($row->expense) }}</span>
-                                <button type="button"
-                                        class="sa-expense-summary-view js-summary-view-card"
-                                        title="{{ __('message.expenses_view_card') }}"
-                                        data-card-type="expense"
-                                        data-date="{{ $cardDate }}"
-                                        data-items='@json($cardItems)'
-                                        @disabled(! $card)>
-                                    <i class="fas fa-eye" aria-hidden="true"></i>
-                                </button>
-                            </span>
-                        </td>
-                        <td class="is-ako {{ $row->ako_given < 0 ? 'is-neg' : '' }}">{{ number_format($row->ako_given) }}</td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="5" class="is-empty">{{ __('message.expense_summary_empty') }}</td>
-                    </tr>
-                @endforelse
-            </tbody>
-            @if($rows->isNotEmpty())
-                <tfoot>
-                    <tr>
-                        <td colspan="2">{{ __('message.total') }}</td>
-                        <td class="is-income">{{ number_format($totalIncome) }}</td>
-                        <td class="is-expense">{{ number_format($totalExpense) }}</td>
-                        <td class="is-ako {{ $totalAko < 0 ? 'is-neg' : '' }}">{{ number_format($totalAko) }}</td>
-                    </tr>
-                </tfoot>
-            @endif
-        </table>
-    </div>
+
+            <div class="sa-expense-summary-table-wrap">
+                <table class="sa-module-table sa-expense-summary-table">
+                    <thead>
+                        <tr>
+                            <th>{{ __('message.expense_summary_no') }}</th>
+                            <th>{{ __('message.date') }}</th>
+                            <th>{{ __('message.expense_summary_income') }}</th>
+                            <th>{{ __('message.expense_summary_expense') }}</th>
+                            <th>{{ __('message.expense_summary_ako_given') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($rows as $index => $row)
+                            @php
+                                $card = $row->expenseCard;
+                                $cardItems = $card?->items?->map(fn ($i) => [
+                                    'subject' => $i->subject,
+                                    'amount' => (float) $i->amount,
+                                    'image' => $i->hasUploadedImage() ? $i->image : null,
+                                    'image_url' => $i->imageUrl(),
+                                    'locked' => $i->isLockedSource(),
+                                ])->values() ?? collect();
+                                $cardDate = $card?->expense_date?->format('Y-m-d')
+                                    ?? $row->summary_date?->format('Y-m-d');
+                                $dayKey = $row->summary_date?->format('Y-m-d');
+                                $incomeItems = $incomeItemsByDate[$dayKey] ?? [];
+                                $hasIncomeCard = count($incomeItems) > 0 || (float) $row->income > 0;
+                            @endphp
+                            <tr>
+                                <td class="is-no">{{ $index + 1 }}</td>
+                                <td class="is-date">{{ $row->summary_date->format('d-m-Y') }}</td>
+                                <td class="is-income">
+                                    <span class="sa-expense-summary-amt-cell">
+                                        <span>{{ number_format($row->income) }}</span>
+                                        <button type="button"
+                                                class="sa-expense-summary-view js-summary-view-card"
+                                                title="{{ __('message.expenses_view_income_card') }}"
+                                                data-card-type="income"
+                                                data-date="{{ $dayKey }}"
+                                                data-items='@json($incomeItems)'
+                                                @disabled(! $hasIncomeCard)>
+                                            <i class="fas fa-eye" aria-hidden="true"></i>
+                                        </button>
+                                    </span>
+                                </td>
+                                <td class="is-expense">
+                                    <span class="sa-expense-summary-amt-cell">
+                                        <span>{{ number_format($row->expense) }}</span>
+                                        <button type="button"
+                                                class="sa-expense-summary-view js-summary-view-card"
+                                                title="{{ __('message.expenses_view_card') }}"
+                                                data-card-type="expense"
+                                                data-date="{{ $cardDate }}"
+                                                data-items='@json($cardItems)'
+                                                @disabled(! $card)>
+                                            <i class="fas fa-eye" aria-hidden="true"></i>
+                                        </button>
+                                    </span>
+                                </td>
+                                <td class="is-ako {{ $row->ako_given < 0 ? 'is-neg' : '' }}">{{ number_format($row->ako_given) }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="5" class="is-empty">{{ __('message.expense_summary_empty') }}</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                    @if($rows->isNotEmpty())
+                        <tfoot>
+                            <tr>
+                                <td colspan="2">{{ __('message.total') }}</td>
+                                <td class="is-income">{{ number_format($totalIncome) }}</td>
+                                <td class="is-expense">{{ number_format($totalExpense) }}</td>
+                                <td class="is-ako {{ $totalAko < 0 ? 'is-neg' : '' }}">{{ number_format($totalAko) }}</td>
+                            </tr>
+                        </tfoot>
+                    @endif
+                </table>
+            </div>
         </div>
     </div>
 </section>
@@ -209,22 +231,6 @@
 </div>
 
 <style>
-    .sa-expense-summary-table-wrap { overflow-x: auto; }
-    .sa-expense-summary-table td.is-income { color: #0369a1; font-weight: 700; }
-    .sa-expense-summary-table td.is-expense { color: #b91c1c; font-weight: 700; }
-    .sa-expense-summary-table td.is-ako { color: #047857; font-weight: 800; }
-    .sa-expense-summary-table td.is-ako.is-neg { color: #b91c1c; }
-    .sa-expense-summary-table td.is-empty { text-align: center; color: #94a3b8; padding: 28px 14px; }
-    .sa-expense-summary-table tfoot td { background: #0f172a; color: #fff; font-weight: 700; }
-    .sa-expense-summary-table tfoot td.is-ako.is-neg { color: #fecaca; }
-    .sa-expense-summary-amt-cell { display: inline-flex; align-items: center; gap: 0.55rem; }
-    .sa-expense-summary-view {
-        width: 32px; height: 32px; border: 0; border-radius: 8px;
-        background: #e0f2fe; color: #0369a1; cursor: pointer;
-        display: inline-flex; align-items: center; justify-content: center;
-    }
-    .sa-expense-summary-view:hover { background: #bae6fd; }
-    .sa-expense-summary-view:disabled { opacity: 0.4; cursor: not-allowed; }
     .sa-expense-modal[hidden] { display: none !important; }
     .sa-expense-modal {
         position: fixed; inset: 0; z-index: 1080;
