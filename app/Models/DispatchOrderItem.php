@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -88,7 +89,7 @@ class DispatchOrderItem extends Model
         'admin_finished_at' => 'datetime',
         'delivered_at' => 'datetime',
         'rider_remit_at' => 'datetime',
-        'rider_remit_date' => 'date',
+        // Keep as Y-m-d string — Laravel `date` cast + app.timezone=UTC shifts the calendar day.
         'from_branch_id' => 'integer',
         'to_branch_id' => 'integer',
         'city_id' => 'integer',
@@ -124,9 +125,7 @@ class DispatchOrderItem extends Model
                 }
                 $item->rider_remit_date = resolveRiderRemitDate(
                     (int) ($item->delivery_man_id ?? 0),
-                    $item->delivered_at instanceof \Carbon\Carbon
-                        ? $item->delivered_at
-                        : null
+                    $item->delivered_at instanceof \DateTimeInterface ? $item->delivered_at : null
                 );
             }
         });

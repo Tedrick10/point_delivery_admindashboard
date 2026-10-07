@@ -41,7 +41,7 @@ class UiThemeController extends Controller
         }
 
         return redirect()
-            ->route('super-admin.screens.show', 'ui-theme')
+            ->route('super-admin.screens.show', 'general-setting')
             ->with('success', __('message.updated'));
     }
 }

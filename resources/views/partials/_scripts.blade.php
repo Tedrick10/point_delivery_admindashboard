@@ -4,6 +4,8 @@
 <script src="{{ public_asset_ver('js/admin-live.js') }}"></script>
 <script src="{{ public_asset_ver('js/rabbit.js') }}"></script>
 <script src="{{ public_asset_ver('js/myanmar-text.js') }}"></script>
+<script>window.PDS_IMAGE_DROP_LABEL = @json(__('message.image_drop_hint'));</script>
+<script src="{{ public_asset_ver('js/image-drop-upload.js') }}"></script>
 <script>window.PDS_MYANMAR_NRC_DATA_URL = @json(asset('data/myanmar-nrc.json'));</script>
 <script src="{{ public_asset_ver('js/myanmar-nrc-box.js') }}"></script>
 <script src="{{ public_asset_ver('js/os-account-modal.js') }}"></script>

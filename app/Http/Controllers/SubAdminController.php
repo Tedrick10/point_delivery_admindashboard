@@ -123,6 +123,15 @@ class SubAdminController extends Controller
 
             uploadMediaFile($result, $request->file('profile_image'), 'profile_image');
             $result->assignRole($data['user_type']);
+
+            try {
+                app(\App\Services\HrPayrollService::class)->salaryForUser($result);
+            } catch (\Throwable $payrollError) {
+                \Log::warning('payroll sync failed after sub-admin create', [
+                    'user_id' => $result->id,
+                    'error' => $payrollError->getMessage(),
+                ]);
+            }
         } catch (\Throwable $e) {
             report($e);
 
@@ -216,6 +225,15 @@ class SubAdminController extends Controller
         }
 
         $user->assignRole($data['user_type']);
+
+        try {
+            app(\App\Services\HrPayrollService::class)->salaryForUser($user->fresh());
+        } catch (\Throwable $payrollError) {
+            \Log::warning('payroll sync failed after sub-admin update', [
+                'user_id' => $user->id,
+                'error' => $payrollError->getMessage(),
+            ]);
+        }
 
         $message = __('message.update_form', ['form' => __('message.sub_admin')]);
 

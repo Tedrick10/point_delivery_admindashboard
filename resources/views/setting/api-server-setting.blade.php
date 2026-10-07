@@ -2,14 +2,6 @@
 {!! html()->hidden('page', $page)->class('form-control') !!}
 
 <section class="sa-gs-block">
-    <div class="sa-settings-hero sa-settings-hero--quiet">
-        <div class="sa-settings-hero__icon"><i class="fas fa-network-wired" aria-hidden="true"></i></div>
-        <div>
-            <h4 class="sa-settings-hero__title">{{ __('message.api_server_settings') }}</h4>
-            <p class="sa-settings-hero__text">{{ __('message.api_server_settings_help') }}</p>
-        </div>
-    </div>
-
     <div class="sa-settings-field sa-settings-field--full">
         <label class="sa-settings-label" for="API_SERVER_BASE_URL">
             <i class="fas fa-link" aria-hidden="true"></i>
@@ -57,7 +49,7 @@
     </div>
 
     <div class="sa-settings-actions">
-        {!! html()->submit(__('message.save'))->class('sa-settings-save') !!}
+        {!! html()->submit(__('message.save'))->class('sa-module-hero__btn sa-settings-save') !!}
     </div>
 </section>
 {!! html()->form()->close() !!}

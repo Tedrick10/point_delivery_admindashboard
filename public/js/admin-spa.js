@@ -7,6 +7,7 @@
     var PAGE_SCRIPTS = '#adminSpaPageScripts';
     var navigating = false;
     var loadedScriptSrc = {};
+    var visitWatchdog = null;
 
     function absUrl(href) {
         try {
@@ -57,8 +58,29 @@
         return false;
     }
 
+    function hideSplash() {
+        var splash = document.getElementById('loading');
+        if (splash) {
+            splash.style.setProperty('display', 'none', 'important');
+            splash.style.setProperty('pointer-events', 'none', 'important');
+            splash.style.setProperty('visibility', 'hidden', 'important');
+            splash.style.setProperty('opacity', '0', 'important');
+        }
+        var loader = document.getElementById('loader');
+        if (loader) {
+            loader.style.setProperty('display', 'none', 'important');
+            loader.style.setProperty('visibility', 'hidden', 'important');
+            loader.style.setProperty('opacity', '0', 'important');
+        }
+        var load = document.getElementById('load');
+        if (load) load.style.display = 'none';
+        // After first paint, CSS keeps splash locked so SPA nav never looks like a hard reload.
+        if (document.body) document.body.classList.add('pds-splash-done');
+    }
+
     function showLoading(on) {
         // Never reuse #loading splash — it looks like a full browser reload.
+        hideSplash();
         var root = document.body;
         var content = document.querySelector(CONTENT);
         if (on) {
@@ -68,6 +90,14 @@
             if (root) root.classList.remove('pds-spa-navigating');
             if (content) content.classList.remove('pds-spa-loading');
         }
+    }
+
+    function isSpaNavLink(el) {
+        if (!el || !el.closest) return false;
+        // Header dropdowns are portaled to body (#pdsMainNavPortal) — must be in scope.
+        return !!el.closest(
+            '#mm-sidebar-toggle, .pds-sidebar, .pds-topbar, #adminSpaContent, #pdsMainNavPortal, .pds-main-nav-portal'
+        );
     }
 
     var hardReload = window.location.reload.bind(window.location);
@@ -245,46 +275,166 @@
         return chain;
     }
 
-    function updateSidebarActive(url) {
-        var path;
+    function normalizePath(pathname) {
+        var p = (pathname || '/').replace(/\/+$/, '') || '/';
+        if (p === '/index.php') return '/';
+        return p;
+    }
+
+    function pathMatches(linkPath, currentPath) {
+        if (linkPath === currentPath) return true;
+        // Avoid treating "/" or very short roots as a prefix match for everything.
+        if (linkPath === '/' || linkPath === '/home') {
+            return currentPath === '/' || currentPath === '/home';
+        }
+        return currentPath.indexOf(linkPath + '/') === 0;
+    }
+
+    function scoreNavLink(anchor, loc, path, currentStatus, dedicated) {
+        var href = anchor.getAttribute('href') || '';
+        if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0) return -1;
+        if (anchor.getAttribute('data-toggle') || anchor.getAttribute('data-dismiss')) return -1;
+
+        var h;
         try {
-            path = new URL(url, window.location.href).pathname.replace(/\/+$/, '') || '/';
+            h = new URL(href, window.location.href);
+        } catch (e) {
+            return -1;
+        }
+        if (h.origin !== loc.origin) return -1;
+
+        var p = normalizePath(h.pathname);
+        if (!pathMatches(p, path)) return -1;
+
+        var hrefStatus = h.searchParams.get('dispatch_status') || '';
+        if (dedicated) {
+            if (hrefStatus !== currentStatus) return -1;
+        } else if (hrefStatus) {
+            return -1;
+        }
+
+        var score = p.length * 100;
+        // Exact path beats prefix matches (e.g. /users wins over /users/create candidate).
+        if (p === path) score += 50;
+        h.searchParams.forEach(function (value, key) {
+            if (loc.searchParams.get(key) === value) score += 10;
+        });
+        return score;
+    }
+
+    function findBestNavAnchor(root, loc, path, currentStatus, dedicated) {
+        if (!root) return null;
+        var best = null;
+        var bestScore = -1;
+        var anchors = root.querySelectorAll('a[href]');
+        for (var i = 0; i < anchors.length; i++) {
+            var score = scoreNavLink(anchors[i], loc, path, currentStatus, dedicated);
+            if (score > bestScore) {
+                bestScore = score;
+                best = anchors[i];
+            }
+        }
+        return best;
+    }
+
+    function updateSidebarActive(url) {
+        var loc;
+        try {
+            loc = new URL(url, window.location.href);
         } catch (e) {
             return;
         }
+        var path = normalizePath(loc.pathname);
+        var currentStatus = loc.searchParams.get('dispatch_status') || '';
+        var dedicated = currentStatus !== '' && currentStatus !== 'all';
 
-        var $menu = $('#mm-sidebar-toggle');
-        if (!$menu.length) return;
-
-        $menu.find('li').removeClass('active');
-
-        var best = null;
-        var bestLen = -1;
-
-        $menu.find('a').each(function () {
-            var href = this.getAttribute('href') || '';
-            if (!href || href.charAt(0) === '#' || this.getAttribute('data-toggle')) return;
-            var p;
-            try {
-                p = new URL(href, window.location.href).pathname.replace(/\/+$/, '') || '/';
-            } catch (e) {
-                return;
+        // Legacy left sidebar (hidden in header-nav mode)
+        var sidebar = document.getElementById('mm-sidebar-toggle');
+        if (sidebar) {
+            $(sidebar).find('li').removeClass('active');
+            var bestSidebar = findBestNavAnchor(sidebar, loc, path, currentStatus, dedicated);
+            if (bestSidebar) {
+                var $li = $(bestSidebar).closest('li');
+                $li.addClass('active');
+                $li.parents('li').addClass('active');
+                $li.parents('ul.submenu').addClass('show');
+                $li.parents('li').children('a[data-toggle="collapse"]').attr('aria-expanded', 'true');
             }
-            if (p === path || (p !== '/' && path.indexOf(p + '/') === 0)) {
-                if (p.length > bestLen) {
-                    bestLen = p.length;
-                    best = this;
-                }
+        }
+
+        // Header main nav — this drives the orange underline.
+        var headerNav = document.querySelector('.pds-main-nav');
+        if (!headerNav) return;
+
+        headerNav.querySelectorAll('.pds-main-nav__item.is-active, .pds-main-nav__link.is-active, .pds-main-nav__sublink.is-active')
+            .forEach(function (el) { el.classList.remove('is-active'); });
+
+        // Include portaled More/dropdown links outside .pds-main-nav.
+        var portal = document.getElementById('pdsMainNavPortal');
+        if (portal) {
+            portal.querySelectorAll('.pds-main-nav__sublink.is-active')
+                .forEach(function (el) { el.classList.remove('is-active'); });
+        }
+
+        var searchRoots = [headerNav];
+        if (portal) searchRoots.push(portal);
+
+        var bestHeader = null;
+        var bestHeaderScore = -1;
+        searchRoots.forEach(function (root) {
+            var candidate = findBestNavAnchor(root, loc, path, currentStatus, dedicated);
+            if (!candidate) return;
+            var score = scoreNavLink(candidate, loc, path, currentStatus, dedicated);
+            if (score > bestHeaderScore) {
+                bestHeaderScore = score;
+                bestHeader = candidate;
             }
         });
 
-        if (!best) return;
-        var $a = $(best);
-        var $li = $a.closest('li');
-        $li.addClass('active');
-        $li.parents('li').addClass('active');
-        $li.parents('ul.submenu').addClass('show');
-        $li.parents('li').children('a[data-toggle="collapse"]').attr('aria-expanded', 'true');
+        if (!bestHeader) return;
+
+        bestHeader.classList.add('is-active');
+
+        var item = bestHeader.closest('.pds-main-nav__item');
+        if (item) {
+            item.classList.add('is-active');
+            var topLink = item.querySelector(':scope > .pds-main-nav__link');
+            if (topLink) topLink.classList.add('is-active');
+        }
+
+        // If active link is a sublink (dropdown / More), mark its parent item too.
+        if (bestHeader.classList.contains('pds-main-nav__sublink')) {
+            var parentItem = bestHeader.closest('.pds-main-nav__item');
+            if (!parentItem) {
+                // Portaled More group: find original item by matching href in primary list.
+                var href = bestHeader.getAttribute('href');
+                if (href) {
+                    var original = headerNav.querySelector('a.pds-main-nav__sublink[href="' + href.replace(/"/g, '\\"') + '"], a.pds-main-nav__link[href="' + href.replace(/"/g, '\\"') + '"]');
+                    if (original) {
+                        parentItem = original.closest('.pds-main-nav__item');
+                        original.classList.add('is-active');
+                    }
+                }
+            }
+            if (parentItem) {
+                parentItem.classList.add('is-active');
+                var parentLink = parentItem.querySelector(':scope > .pds-main-nav__link');
+                if (parentLink) parentLink.classList.add('is-active');
+            }
+
+            // Keep More item underlined when the active link lives in More overflow.
+            var moreItem = document.getElementById('pdsMainNavMore');
+            if (moreItem && bestHeader.closest('#pdsMainNavMore, #pdsMainNavMoreInner, #pdsMainNavPortal')) {
+                var inMore = bestHeader.closest('#pdsMainNavMore, #pdsMainNavMoreInner')
+                    || (portal && portal.contains(bestHeader) && bestHeader.closest('.pds-main-nav__dropdown'));
+                // Only mark More when the source item is overflow-hidden.
+                if (parentItem && parentItem.classList.contains('is-overflow-hidden') && moreItem) {
+                    moreItem.classList.add('is-active');
+                    var moreLink = moreItem.querySelector(':scope > .pds-main-nav__link');
+                    if (moreLink) moreLink.classList.add('is-active');
+                }
+            }
+        }
     }
 
     function syncLiveOptionsFromDom() {
@@ -296,6 +446,9 @@
         var includeDashboard = page === 'home';
 
         if (typeof window.adminLiveUpdateOptions === 'function') {
+            var liveData = (typeof window.adminLiveCollectPageData === 'function')
+                ? window.adminLiveCollectPageData()
+                : {};
             window.adminLiveUpdateOptions({
                 page: page || 'global',
                 includeDashboard: includeDashboard,
@@ -303,7 +456,7 @@
                 refreshContent: includeDashboard ? false : !isFormPage,
                 onReload: includeDashboard ? function () {} : undefined,
                 hardReloadFallback: false,
-                data: {}
+                data: liveData
             });
         }
     }
@@ -346,6 +499,10 @@
 
     function finishVisit() {
         navigating = false;
+        if (visitWatchdog) {
+            clearTimeout(visitWatchdog);
+            visitWatchdog = null;
+        }
         showLoading(false);
         activeVisitXhr = null;
         $(CONTENT).removeClass('pds-spa-loading');
@@ -388,6 +545,14 @@
 
         navigating = true;
         showLoading(true);
+        if (visitWatchdog) clearTimeout(visitWatchdog);
+        visitWatchdog = setTimeout(function () {
+            if (activeVisitXhr && typeof activeVisitXhr.abort === 'function') {
+                try { activeVisitXhr.abort(); } catch (e) {}
+            } else {
+                finishVisit();
+            }
+        }, 12000);
 
         var request = $.ajax({
             url: url,
@@ -417,6 +582,7 @@
                 if (window.console && console.warn) {
                     console.warn('[admin-spa] missing content shell', finalUrl);
                 }
+                window.location.assign(finalUrl);
                 return;
             }
 
@@ -481,14 +647,14 @@
     }
 
     function onClick(event) {
-        if (event.defaultPrevented) return;
         var el = event.target.closest ? event.target.closest('a') : null;
         if (!el) return;
-        if (!el.closest || !el.closest('#mm-sidebar-toggle, .pds-topbar, #adminSpaContent')) return;
+        if (!isSpaNavLink(el)) return;
         if (shouldIgnoreLink(el, event)) return;
 
         event.preventDefault();
         event.stopPropagation();
+        hideSplash();
         visit(el.href);
     }
 
@@ -512,6 +678,7 @@
 
     rememberExistingScripts();
     patchDataTableReinit();
+    hideSplash();
 
     // Capture phase so SPA wins before other menu handlers / default navigation.
     document.addEventListener('click', onClick, true);
@@ -528,6 +695,7 @@
     // Note: browsers keep Location#reload as native; call sites must use pdsAdminReload().
 
     syncLiveOptionsFromDom();
+    updateSidebarActive(window.location.href);
 
     window.AdminSpa = {
         visit: visit,

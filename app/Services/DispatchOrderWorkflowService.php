@@ -14,6 +14,10 @@ class DispatchOrderWorkflowService
 {
     public function collectedItems(Order $order): Collection
     {
+        if ($order->relationLoaded('dispatchItems')) {
+            return $order->dispatchItems->where('status', 'collected')->values();
+        }
+
         return $order->dispatchItems()
             ->where('status', 'collected')
             ->get();
@@ -628,7 +632,7 @@ class DispatchOrderWorkflowService
      *
      * @return array<string, int>
      */
-    public function orderListTabCounts(?string $fromDateRaw = null, ?string $toDateRaw = null, ?string $searchTerm = null): array
+    public function orderListTabCounts(?string $fromDateRaw = null, ?string $toDateRaw = null, ?string $searchTerm = null, bool $runSideEffects = true): array
     {
         $tabs = [
             'all',
@@ -639,10 +643,12 @@ class DispatchOrderWorkflowService
             'kyo_shin',
         ];
 
-        // Keep counts in sync with the table (Admin Done may reclaim premature Assign 100 rows).
-        $this->reclaimPrematureAssign100Items();
-        $this->promoteReadyOrdersToAssign100();
-        $this->healUtcRolloverReceivedDates();
+        if ($runSideEffects) {
+            // Keep counts in sync with the table (Admin Done may reclaim premature Assign 100 rows).
+            $this->reclaimPrematureAssign100Items();
+            $this->promoteReadyOrdersToAssign100();
+            $this->healUtcRolloverReceivedDates();
+        }
 
         $yangonToday = Carbon::now('Asia/Yangon');
         $fromRaw = $fromDateRaw ?: $yangonToday->format('d-m-Y');
@@ -1032,7 +1038,9 @@ class DispatchOrderWorkflowService
 
         // Rider not done yet — premature, unless a sibling parcel is already
         // Delivered / Completed / Finished (do not yank the rest back to Admin Done).
-        $reclaimed = DispatchOrderItem::query()
+        // MySQL 1093: cannot UPDATE dispatch_order_items while the same table is
+        // in a WHERE EXISTS subquery — select ids first, then update by id.
+        $prematureIds = DispatchOrderItem::query()
             ->where('status', 'assigned')
             ->whereNull('delivery_man_id')
             ->whereHas('order', function ($q) {
@@ -1041,7 +1049,14 @@ class DispatchOrderWorkflowService
             ->whereDoesntHave('order.dispatchItems', function ($item) {
                 $item->whereIn('status', $this->lastMileItemStatuses());
             })
-            ->update($payload);
+            ->pluck('id');
+
+        $reclaimed = 0;
+        foreach ($prematureIds->chunk(500) as $chunk) {
+            $reclaimed += DispatchOrderItem::query()
+                ->whereIn('id', $chunk->all())
+                ->update($payload);
+        }
 
         // Rider done but Admin never stamped Item Info — also premature.
         // (Old shortcut treated "status=assigned" as Admin Done and left these stuck.)
@@ -1102,6 +1117,17 @@ class DispatchOrderWorkflowService
         // No collected rows left — Admin Done only if every advanced parcel
         // was actually stamped by Admin Item Info (not merely moved to assigned).
         $advancedStatuses = $this->advancedAdminItemStatuses();
+        if ($order->relationLoaded('dispatchItems')) {
+            $advanced = $order->dispatchItems->filter(function ($item) use ($advancedStatuses) {
+                return in_array((string) $item->status, $advancedStatuses, true);
+            });
+            if ($advanced->isEmpty()) {
+                return false;
+            }
+
+            return $advanced->whereNull('admin_updated_at')->isEmpty();
+        }
+
         $advancedQuery = $order->dispatchItems()->whereIn('status', $advancedStatuses);
 
         if (! $advancedQuery->exists()) {
@@ -1205,12 +1231,62 @@ class DispatchOrderWorkflowService
     }
 
     /**
+     * Admin Rider List Item Details — forward + rollback status moves.
+     * On Way / Pending / Delivered may return to earlier stages.
+     */
+    public function allowedAdminRiderListStatusActions(DispatchOrderItem $item): array
+    {
+        $status = (string) ($item->status ?? '');
+
+        if ($status === 'os_returned') {
+            return [];
+        }
+
+        // Delivered (not yet Completed / Finished) may roll back.
+        if ($status === 'completed') {
+            if (! empty($item->admin_completed_at) || ! empty($item->admin_finished_at)) {
+                return [];
+            }
+
+            return ['courier_assigned', 'courier_departed', 'pending'];
+        }
+
+        if ($item->isNoFeeOsReturnCycle()) {
+            return match ($status) {
+                'assigned', 'courier_assigned' => ['pending', 'os_returned'],
+                'pending' => ['courier_assigned', 'os_returned'],
+                default => [],
+            };
+        }
+
+        if ($item->isReturnReassigned() && in_array($status, ['assigned', 'courier_assigned'], true)) {
+            return ['return'];
+        }
+
+        return match ($status) {
+            'assigned' => ! empty($item->hub_user_id)
+                ? ['courier_assigned', 'courier_departed', 'pending', 'completed']
+                : [],
+            'courier_assigned' => ['courier_departed', 'pending', 'completed'],
+            'courier_departed' => ['courier_assigned', 'pending', 'completed'],
+            'pending' => ['courier_assigned', 'courier_departed', 'completed', 'return'],
+            default => [],
+        };
+    }
+
+    /**
      * @throws \InvalidArgumentException
      */
-    public function assertDeliveryStatusTransition(DispatchOrderItem $item, string $toStatus, ?string $remark = null): void
-    {
+    public function assertDeliveryStatusTransition(
+        DispatchOrderItem $item,
+        string $toStatus,
+        ?string $remark = null,
+        bool $adminRiderList = false
+    ): void {
         $toStatus = trim($toStatus);
-        $allowed = $this->allowedDeliveryStatusActions($item);
+        $allowed = $adminRiderList
+            ? $this->allowedAdminRiderListStatusActions($item)
+            : $this->allowedDeliveryStatusActions($item);
 
         if (! in_array($toStatus, $allowed, true)) {
             throw new \InvalidArgumentException(__('message.delivery_item_status_not_allowed'));
@@ -1335,6 +1411,14 @@ class DispatchOrderWorkflowService
         }
 
         return 'pick_up';
+    }
+
+    /**
+     * Follow Up may reassign delivery rider for every status except terminal ones.
+     */
+    public function canReassignFollowUpRider(DispatchOrderItem $item): bool
+    {
+        return ! in_array($this->followUpStatusKey($item), ['delivered', 'completed', 'finished', 'cancelled'], true);
     }
 
     public function followUpItemStatusLabel(DispatchOrderItem $item): string

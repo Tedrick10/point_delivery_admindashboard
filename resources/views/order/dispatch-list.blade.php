@@ -95,7 +95,7 @@
                                            role="tab"
                                            aria-selected="{{ $activePickupTab === $tabKey ? 'true' : 'false' }}">
                                             <span class="pds-dispatch-tab-label">{{ $tabLabel }}</span>
-                                            <span class="pds-dispatch-tab-count" aria-label="{{ $tabCount }}">{{ $tabCount }}</span>
+                                            <span class="pds-dispatch-tab-count" data-live-tab="{{ $tabKey }}" aria-label="{{ $tabCount }}">{{ $tabCount }}</span>
                                         </a>
                                     @endforeach
                                 </div>

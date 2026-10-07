@@ -65,6 +65,7 @@
                             <i class="fas fa-upload" aria-hidden="true"></i>
                             Upload
                         </label>
+                        <span class="sa-gs-upload-hint">{{ __('message.image_drop_hint') }}</span>
                         <input type="file"
                                name="{{ $asset['key'] }}"
                                id="{{ $asset['key'] }}"
@@ -81,30 +82,24 @@
 <section class="sa-gs-block">
     <header class="sa-gs-block__head">
         <h4>{{ __('message.site_name') }}</h4>
-        <p>{{ __('message.sa_screen_ui_theme') }}</p>
     </header>
     <div class="sa-gs-fields">
         <div class="sa-gs-field sa-gs-field--full">
             {!! html()->label(__('message.site_name'))->for('site_name')->class('sa-settings-label') !!}
             {!! html()->text('site_name', null)->class('sa-settings-input')->placeholder(__('message.site_name')) !!}
         </div>
-        <div class="sa-gs-field sa-gs-field--full">
-            <div class="sa-gs-theme-banner">
-                <div>
-                    <span class="sa-settings-label">{{ __('message.sa_screen_ui_theme') }}</span>
-                    <p class="sa-gs-theme-banner__name">
-                        <strong>{{ uiThemePack()['name'] ?? 'Classic Point' }}</strong>
-                        <code>{{ uiThemePackId() }}</code>
-                    </p>
-                    <p class="sa-settings-hint mb-0">{{ __('message.sa_ui_theme_managed_hint') }}</p>
-                </div>
-                <a href="{{ route('super-admin.screens.show', 'ui-theme') }}" class="sa-settings-chip sa-settings-chip--primary">
-                    <i class="fas fa-swatchbook" aria-hidden="true"></i>
-                    {{ __('message.sa_screen_ui_theme') }}
-                </a>
-            </div>
-        </div>
     </div>
+</section>
+
+<section class="sa-gs-block">
+    <header class="sa-gs-block__head">
+        <h4>{{ __('message.sa_screen_ui_theme') }}</h4>
+        <p>{{ __('message.sa_ui_theme_applies_all') }}</p>
+    </header>
+    @include('super-admin.screens.partials._ui-theme-cards', [
+        'themePacks' => $themePacks ?? array_values(uiThemePacks()),
+        'activeTheme' => $activeTheme ?? uiThemePackId(),
+    ])
 </section>
 
 <section class="sa-gs-block">
@@ -255,7 +250,7 @@
 </section>
 
 <div class="sa-settings-actions sa-gs-actions">
-    {!! html()->submit(__('message.save'))->class('btn btn-md btn-primary sa-settings-save') !!}
+    {!! html()->submit(__('message.save'))->class('sa-module-hero__btn sa-settings-save') !!}
 </div>
 {!! html()->form()->close() !!}
 
@@ -297,7 +292,7 @@
     function syncChoiceActive(input) {
         var name = input.getAttribute('name');
         document.querySelectorAll('input[name="' + name + '"]').forEach(function (el) {
-            var label = el.closest('.sa-gs-choice');
+            var label = el.closest('.sa-gs-choice, .sa-ui-theme-card');
             if (label) label.classList.toggle('is-active', el.checked);
         });
         if (name === 'brand_color' && input.checked) {
@@ -314,7 +309,7 @@
         if (logo) logo.addEventListener('change', function () { readURL(this, 'site_logo'); });
         if (favicon) favicon.addEventListener('change', function () { readURL(this, 'site_favicon'); });
 
-        document.querySelectorAll('input[name="brand_color"], input[name="brand_font"]').forEach(function (input) {
+        document.querySelectorAll('input[name="brand_color"], input[name="brand_font"], input[name="ui_theme"]').forEach(function (input) {
             input.addEventListener('change', function () { syncChoiceActive(input); });
             input.addEventListener('click', function () { syncChoiceActive(input); });
         });

@@ -10,7 +10,7 @@
         ['label' => __('message.sa_operations'), 'keys' => ['delivery-route']],
         ['label' => __('message.sa_nav_finance'), 'keys' => ['kyo-shin', 'rider-remit', 'expense-summary']],
         ['label' => __('message.sa_nav_people'), 'keys' => ['account-creation', 'roles-permissions', 'office-salary', 'rider-salary', 'late-fine', 'welcome-promotion']],
-        ['label' => __('message.sa_nav_settings'), 'keys' => ['general-setting', 'company-contact', 'api-server-setting', 'app-store-update', 'ui-theme', 'app-copy']],
+        ['label' => __('message.sa_nav_settings'), 'keys' => ['general-setting', 'company-contact', 'api-server-setting', 'app-store-update', 'app-copy']],
     ];
 @endphp
 <div class="sa-modules">

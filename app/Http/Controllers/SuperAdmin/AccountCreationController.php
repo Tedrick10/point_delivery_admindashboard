@@ -92,6 +92,16 @@ class AccountCreationController extends Controller
         ]);
         $user->assignRole($data['user_type']);
 
+        // Seed payroll staff + current-month salary so My Salary is ready immediately.
+        try {
+            app(HrPayrollService::class)->salaryForUser($user);
+        } catch (\Throwable $e) {
+            \Log::warning('payroll sync failed after account create', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         return redirect()
             ->route('super-admin.screens.show', ['screen' => 'account-creation'])
             ->withSuccess(__('message.save_form', ['form' => __('message.sub_admin')]));
@@ -154,6 +164,15 @@ class AccountCreationController extends Controller
         }
         $user->fill($payload)->update();
         $user->assignRole($data['user_type']);
+
+        try {
+            app(HrPayrollService::class)->salaryForUser($user->fresh());
+        } catch (\Throwable $e) {
+            \Log::warning('payroll sync failed after account update', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return redirect()
             ->route('super-admin.screens.show', ['screen' => 'account-creation'])

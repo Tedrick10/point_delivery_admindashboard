@@ -1,0 +1,92 @@
+.sa-gs-brand-tile.pds-image-dropzone,
+.pds-vehicle-upload.pds-image-dropzone,
+.pds-vehicle-upload__frame.pds-image-dropzone,
+.pds-profile-upload.pds-image-dropzone,
+.pds-profile-upload__ring.pds-image-dropzone,
+.pds-expense-modal__image-wrap.pds-image-dropzone,
+.sa-expense-modal__image-wrap.pds-image-dropzone,
+.pds-shop-product-cover.pds-image-dropzone,
+.pds-daily-check-photo-preview.pds-image-dropzone,
+.pds-ard-upload.pds-image-dropzone,
+.pds-ard-upload-wrap.pds-image-dropzone,
+.custom-file.pds-image-dropzone,
+input[type="file"].pds-image-dropzone {
+    position: relative;
+}
+.pds-image-dropzone.is-dragover,
+.pds-image-dropzone.is-paste-ready,
+.pds-image-dropzone.is-paste-flash {
+    outline: 2px dashed #FE6F07;
+    outline-offset: 3px;
+    background-color: rgba(254, 111, 7, 0.08);
+}
+.pds-image-dropzone.is-paste-ready {
+    cursor: copy;
+}
+.pds-image-dropzone.is-paste-flash {
+    outline-style: solid;
+    transition: outline-color 0.2s ease, background-color 0.2s ease;
+}
+.sa-gs-brand-tile.pds-image-dropzone.is-dragover::after,
+.sa-gs-brand-tile.pds-image-dropzone.is-paste-flash::after,
+.pds-vehicle-upload.pds-image-dropzone.is-dragover::after,
+.pds-vehicle-upload.pds-image-dropzone.is-paste-flash::after,
+.pds-vehicle-upload__frame.pds-image-dropzone.is-dragover::after,
+.pds-vehicle-upload__frame.pds-image-dropzone.is-paste-flash::after,
+.pds-profile-upload.pds-image-dropzone.is-dragover::after,
+.pds-profile-upload.pds-image-dropzone.is-paste-flash::after,
+.pds-profile-upload__ring.pds-image-dropzone.is-dragover::after,
+.pds-profile-upload__ring.pds-image-dropzone.is-paste-flash::after,
+.pds-expense-modal__image-wrap.pds-image-dropzone.is-dragover::after,
+.pds-expense-modal__image-wrap.pds-image-dropzone.is-paste-flash::after,
+.sa-expense-modal__image-wrap.pds-image-dropzone.is-dragover::after,
+.sa-expense-modal__image-wrap.pds-image-dropzone.is-paste-flash::after,
+.pds-shop-product-cover.pds-image-dropzone.is-dragover::after,
+.pds-shop-product-cover.pds-image-dropzone.is-paste-flash::after,
+.pds-daily-check-photo-preview.pds-image-dropzone.is-dragover::after,
+.pds-daily-check-photo-preview.pds-image-dropzone.is-paste-flash::after,
+.pds-ard-upload.pds-image-dropzone.is-dragover::after,
+.pds-ard-upload.pds-image-dropzone.is-paste-flash::after,
+.pds-ard-upload-wrap.pds-image-dropzone.is-dragover::after,
+.pds-ard-upload-wrap.pds-image-dropzone.is-paste-flash::after,
+.custom-file.pds-image-dropzone.is-dragover::after,
+.custom-file.pds-image-dropzone.is-paste-flash::after {
+    content: attr(data-drop-label);
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 4;
+    pointer-events: none;
+    border-radius: inherit;
+    background: rgba(255, 255, 255, 0.82);
+    color: #FE6F07;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-align: center;
+    padding: 0.5rem;
+}
+.sa-gs-brand-tile.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.pds-vehicle-upload.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.pds-vehicle-upload__frame.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.pds-profile-upload.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.pds-profile-upload__ring.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.pds-expense-modal__image-wrap.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.sa-expense-modal__image-wrap.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.pds-shop-product-cover.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.pds-daily-check-photo-preview.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.pds-ard-upload.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.pds-ard-upload-wrap.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.custom-file.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after {
+    content: attr(data-paste-label);
+}
+.sa-gs-brand-tile.pds-image-dropzone {
+    cursor: copy;
+}
+.pds-expense-modal__image-wrap.pds-image-dropzone,
+.sa-expense-modal__image-wrap.pds-image-dropzone {
+    min-width: 44px;
+    min-height: 44px;
+}

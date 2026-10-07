@@ -10,6 +10,7 @@ use App\Services\NetworkControlService;
 use App\Services\AppTextService;
 use App\Services\RiderRemitService;
 use App\Services\SuperAdminDashboardService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -238,6 +239,9 @@ class ScreenController extends Controller
             'saPeriod' => $period,
             'defaultFuel' => $screen === 'rider-remit'
                 ? app(RiderRemitService::class)->defaultFuelAmount()
+                : null,
+            'fuelMinWays' => $screen === 'rider-remit'
+                ? app(RiderRemitService::class)->fuelMinWays()
                 : null,
             'defaultOfficeSalary' => in_array($screen, ['office-salary', 'network'], true)
                 ? app(HrPayrollService::class)->defaultOfficeMonthlySalary()

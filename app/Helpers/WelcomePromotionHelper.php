@@ -23,8 +23,9 @@ class WelcomePromotionHelper
             return ['discount' => 0, 'eligible' => false, 'remaining' => 0];
         }
 
+        $maxOrders = self::maxOrdersForUser($user, $promo);
         $used = (int) ($user->welcome_orders_used ?? 0);
-        $remaining = max(0, (int) $promo->max_orders - $used);
+        $remaining = max(0, $maxOrders - $used);
 
         if ($remaining <= 0) {
             return ['discount' => 0, 'eligible' => false, 'remaining' => 0];
@@ -44,9 +45,19 @@ class WelcomePromotionHelper
             'remaining' => $remaining,
             'discount_type' => $discountType,
             'discount_value' => $discountValue,
-            'max_orders' => $promo->max_orders,
+            'max_orders' => $maxOrders,
             'title' => $promo->title,
         ];
+    }
+
+    public static function maxOrdersForUser(User $user, WelcomePromotion $promo): int
+    {
+        $shopMax = $user->welcome_max_orders;
+        if ($shopMax !== null && (int) $shopMax > 0) {
+            return (int) $shopMax;
+        }
+
+        return max(1, (int) $promo->max_orders);
     }
 
     public static function applyAfterOrder(User $user): void
@@ -58,7 +69,7 @@ class WelcomePromotionHelper
         if (! (bool) ($user->welcome_promo_enabled ?? true)) {
             return;
         }
-        if (($user->welcome_orders_used ?? 0) < $promo->max_orders) {
+        if (($user->welcome_orders_used ?? 0) < self::maxOrdersForUser($user, $promo)) {
             $user->increment('welcome_orders_used');
         }
     }

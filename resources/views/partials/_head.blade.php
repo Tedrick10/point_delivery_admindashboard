@@ -113,6 +113,7 @@
     <link rel="stylesheet" href="{{ public_asset_ver('css/admin-themes.css') }}">
     <link rel="stylesheet" href="{{ public_asset_ver('css/pds-layout.css') }}">
 @endif
+<link rel="stylesheet" href="{{ public_asset_ver('css/image-drop-upload.css') }}">
 {{-- MUST load AFTER theme CSS so brand color/font win over Outfit / FE6F07 defaults. --}}
 <style id="pds-brand-live">
 :root,
@@ -181,6 +182,49 @@ body.pds-admin .pds-daily-check-search-btn {
     background-color: {{ $liveBrandHex }} !important;
     background-image: none !important;
     border-color: {{ $liveBrandHex }} !important;
+    color: #fff !important;
+}
+body.pds-admin .btn-primary,
+body.pds-admin .btn-primary span,
+body.pds-admin .btn-primary i,
+body.pds-admin .btn-warning,
+body.pds-admin .btn-warning span,
+body.pds-admin .btn-warning i,
+body.pds-admin .btn-info,
+body.pds-admin .btn-info span,
+body.pds-admin .btn-info i,
+body.pds-admin .bg-primary,
+body.pds-admin .bg-primary span,
+body.pds-admin .badge-primary,
+body.pds-admin .badge.bg-primary,
+body.pds-admin .pds-dispatch-filter-action-primary,
+body.pds-admin .pds-dispatch-filter-action-primary span,
+body.pds-admin .pds-dispatch-filter-action-primary i,
+body.pds-admin .pds-daily-check-search-btn,
+body.pds-admin .pds-daily-check-search-btn span,
+body.pds-admin .pds-daily-check-search-btn i,
+body.pds-admin .pds-rider-check-btn,
+body.pds-admin .pds-rider-check-btn span,
+body.pds-admin .pds-rider-check-btn i,
+body.pds-admin .pds-rider-of-month-btn,
+body.pds-admin .pds-rider-of-month-btn span,
+body.pds-admin .pds-rider-of-month-btn i,
+body.pds-admin .pds-dispatch-btn-primary,
+body.pds-admin .pds-dispatch-btn-primary span,
+body.pds-admin .pds-dispatch-btn-primary .pds-dispatch-btn-label,
+body.pds-admin .pds-assign-action-btn:not(.pds-assign-action-btn--kyo-shin),
+body.pds-admin .pds-assign-action-btn:not(.pds-assign-action-btn--kyo-shin) span,
+body.pds-admin .pds-assign-action-btn:not(.pds-assign-action-btn--kyo-shin) i,
+body.pds-admin .pds-assign-action-btn:not(.pds-assign-action-btn--kyo-shin) .pds-assign-action-btn__label,
+body.pds-admin .pds-hr-stat:not(.pds-hr-stat--soft),
+body.pds-admin .pds-hr-stat:not(.pds-hr-stat--soft) span,
+body.pds-admin .pds-os-settlement-tab.is-active,
+body.pds-admin .pds-os-settlement-tab.is-active span,
+body.pds-admin .pds-os-settlement-tab.is-active i {
+    color: #fff !important;
+}
+body.pds-admin .pds-os-settlement-tab.is-active em {
+    color: var(--site-color, {{ $liveBrandHex }}) !important;
 }
 body.pds-admin .text-primary,
 body.pds-admin a.text-primary,
@@ -235,6 +279,68 @@ window.pdsBrandFontFamily = @json($liveFontFamily);
 window.pdsBrandFontId = @json($liveFontPack['id'] ?? brandFontId());
 document.documentElement.setAttribute('data-brand-font', window.pdsBrandFontId || '');
 </script>
+<style id="pds-hide-scrollbars">
+    /* Force-hide scrollbar chrome on every admin screen (wheel/trackpad still scroll). */
+    html.pds-admin-root {
+        overflow-x: hidden !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+    }
+    html.pds-admin-root,
+    html.pds-admin-root body,
+    body.pds-admin,
+    body.pds-admin * {
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+    }
+    html.pds-admin-root::-webkit-scrollbar,
+    html.pds-admin-root::-webkit-scrollbar-thumb,
+    html.pds-admin-root::-webkit-scrollbar-track,
+    html.pds-admin-root body::-webkit-scrollbar,
+    body.pds-admin::-webkit-scrollbar,
+    body.pds-admin *::-webkit-scrollbar,
+    body.pds-admin *::-webkit-scrollbar-thumb,
+    body.pds-admin *::-webkit-scrollbar-track {
+        width: 0 !important;
+        height: 0 !important;
+        display: none !important;
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        background: transparent !important;
+        border: 0 !important;
+    }
+    /* Shells must not scroll — that draws a track under pagination. */
+    body.pds-admin .pds-table-shell,
+    body.pds-admin .pds-os-list-table-shell,
+    body.pds-admin .pds-deliveryman-table-shell,
+    body.pds-admin [class*="-table-shell"] {
+        overflow: hidden !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+    }
+    /* Wide tables may scroll inside scrollBody only (above pagination), chrome hidden */
+    body.pds-admin .dataTables_wrapper,
+    body.pds-admin .dataTables_scroll,
+    body.pds-admin .dataTables_scrollBody,
+    body.pds-admin .table-responsive {
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+    }
+    body.pds-admin .dataTables_scrollBody::-webkit-scrollbar,
+    body.pds-admin .table-responsive::-webkit-scrollbar {
+        width: 0 !important;
+        height: 0 !important;
+        display: none !important;
+    }
+    /* List pages: fit table to card width */
+    body.pds-admin .pds-deliveryman-list-page table.dataTable,
+    body.pds-admin .pds-os-list-page table.dataTable,
+    body.pds-admin .pds-user-reg-page table.dataTable {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+</style>
 <style>
     /* Keep page content visible if enter-animations glitch. */
     body.pds-admin .pds-page-wrap,

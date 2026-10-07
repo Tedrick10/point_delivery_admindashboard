@@ -47,14 +47,17 @@ class HrPayrollService
     }
 
     /**
-     * Pull Account Creation (office) + Delivery Man (rider) accounts into hr_staff.
+     * Pull Account Creation (office) + branch admins + Delivery Man (rider)
+     * accounts into hr_staff so My Salary / payroll sheets cover each account.
      */
     public function syncStaffFromAccounts(): int
     {
         $synced = 0;
 
+        // Include branch admins (`admin`) + Account Creation roles so each
+        // account gets My Salary. Keep Super Admin / demo / client / rider out.
         $officeUsers = User::query()
-            ->whereNotIn('user_type', ['admin', 'client', 'delivery_man', 'super_admin', 'demo_admin'])
+            ->whereNotIn('user_type', ['client', 'delivery_man', 'super_admin', 'demo_admin'])
             ->where(function ($q) {
                 $q->whereNull('status')->orWhere('status', 1);
             })

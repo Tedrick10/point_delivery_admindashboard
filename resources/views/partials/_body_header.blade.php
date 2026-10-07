@@ -5,11 +5,17 @@
                 <button type="button" class="pds-topbar-menu-btn wrapper-menu" aria-label="Toggle menu">
                     <i class="fas fa-bars"></i>
                 </button>
-                <a href="{{ route('home') }}" class="header-logo pds-topbar-logo-link d-none d-md-inline-flex">
-                    <img src="{{ getSingleMedia(appSettingData('get'),'site_logo',null) }}" class="img-fluid mode light-img rounded-normal site_logo_preview pds-topbar-logo" alt="logo">
-                    <img src="{{ getSingleMedia(appSettingData('get'),'site_dark_logo',null) }}" class="img-fluid mode dark-img rounded-normal darkmode-logo site_dark_logo_preview pds-topbar-logo" alt="dark-logo">
+                <a href="{{ route('home') }}" class="header-logo pds-topbar-logo-link d-inline-flex align-items-center" title="POINT Delivery Service">
+                    <img src="{{ getSingleMedia(appSettingData('get'),'site_logo',null) }}" class="img-fluid mode light-img rounded-normal site_logo_preview pds-topbar-logo" alt="POINT">
+                    <img src="{{ getSingleMedia(appSettingData('get'),'site_dark_logo',null) }}" class="img-fluid mode dark-img rounded-normal darkmode-logo site_dark_logo_preview pds-topbar-logo" alt="POINT">
+                    <span class="pds-topbar-brand-copy">
+                        <span class="pds-topbar-brand-copy__name">POINT</span>
+                        <span class="pds-topbar-brand-copy__tag">Delivery</span>
+                    </span>
                 </a>
             </div>
+
+            @include('partials._header_main_nav')
 
             <div class="mm-search-bar device-search m-auto"></div>
             <div class="d-flex align-items-center pds-topbar-actions">

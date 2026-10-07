@@ -312,6 +312,7 @@ class DeliverymanDataTable extends DataTable
     {
         $params = parent::getBuilderParameters();
         $params['scrollX'] = false;
+        $params['autoWidth'] = false;
 
         return $params;
     }

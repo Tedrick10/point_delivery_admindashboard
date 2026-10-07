@@ -27,6 +27,8 @@ class SystemSettingsController extends Controller
             'brandFonts' => array_values(brandFontPacks()),
             'activeBrandColor' => brandColorId(),
             'activeBrandFont' => brandFontId(),
+            'themePacks' => array_values(uiThemePacks()),
+            'activeTheme' => uiThemePackId(),
         ];
     }
 
@@ -231,6 +233,12 @@ class SystemSettingsController extends Controller
             ['type' => 'APP_THEME', 'key' => 'BRAND_FONT'],
             ['value' => $brandFontId]
         );
+        if ($request->filled('ui_theme')) {
+            Setting::updateOrCreate(
+                ['type' => 'APP_THEME', 'key' => 'UI_THEME_PACK'],
+                ['value' => (string) $request->input('ui_theme')]
+            );
+        }
 
         $payload = [
             'color' => $brandHex,

@@ -64,6 +64,15 @@
             </li>
         @empty
         @endforelse
+        <li class="pds-main-nav__item has-dropdown pds-main-nav__item--more is-empty" id="pdsMainNavMore" hidden>
+            <button type="button" class="pds-main-nav__link pds-main-nav__link--dropdown" aria-expanded="false">
+                <span class="pds-main-nav__label">More</span>
+                <i class="fas fa-chevron-down pds-main-nav__caret" aria-hidden="true"></i>
+            </button>
+            <div class="pds-main-nav__dropdown" role="menu">
+                <div class="pds-main-nav__dropdown-inner" id="pdsMainNavMoreInner"></div>
+            </div>
+        </li>
     </ul>
 </div>
 
@@ -77,47 +86,134 @@
 
         var toggle = document.getElementById('pdsMainNavToggle');
         var list = document.getElementById('pdsMainNavList');
+        var moreItem = document.getElementById('pdsMainNavMore');
+        var moreInner = document.getElementById('pdsMainNavMoreInner');
         var portalHost = null;
+        var topbar = document.querySelector('.mm-top-navbar.pds-topbar');
+        var overflowTimer = null;
 
-        // Horizontal scroll: trackpad/mouse wheel + click-drag
-        if (list) {
-            list.addEventListener('wheel', function (e) {
-                if (list.scrollWidth <= list.clientWidth + 1) return;
-                var delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-                if (delta === 0) return;
-                var atStart = list.scrollLeft <= 0 && delta < 0;
-                var atEnd = list.scrollLeft + list.clientWidth >= list.scrollWidth - 1 && delta > 0;
-                if (atStart || atEnd) return;
-                list.scrollLeft += delta;
-                e.preventDefault();
-            }, { passive: false });
-
-            var drag = { active: false, startX: 0, startScroll: 0, moved: false };
-            list.addEventListener('pointerdown', function (e) {
-                if (e.pointerType === 'mouse' && e.button !== 0) return;
-                if (e.target.closest('a, button, input, label')) return;
-                drag.active = true;
-                drag.moved = false;
-                drag.startX = e.clientX;
-                drag.startScroll = list.scrollLeft;
-                list.setPointerCapture(e.pointerId);
-            });
-            list.addEventListener('pointermove', function (e) {
-                if (!drag.active) return;
-                var dx = e.clientX - drag.startX;
-                if (Math.abs(dx) > 4) drag.moved = true;
-                list.scrollLeft = drag.startScroll - dx;
-            });
-            list.addEventListener('pointerup', function () { drag.active = false; });
-            list.addEventListener('pointercancel', function () { drag.active = false; });
-            list.addEventListener('click', function (e) {
-                if (drag.moved) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    drag.moved = false;
-                }
-            }, true);
+        function syncTopbarHeight() {
+            if (!topbar || !document.body.classList.contains('pds-header-nav')) return;
+            var h = Math.ceil(topbar.getBoundingClientRect().height);
+            if (h > 0) {
+                document.body.style.setProperty('--pds-topbar-h', h + 'px');
+            }
         }
+
+        function primaryItems() {
+            if (!list) return [];
+            return Array.prototype.slice.call(list.querySelectorAll(':scope > .pds-main-nav__item:not(.pds-main-nav__item--more)'));
+        }
+
+        function resetOverflow() {
+            if (!moreInner || !moreItem) return;
+            moreInner.innerHTML = '';
+            primaryItems().forEach(function (item) {
+                item.classList.remove('is-overflow-hidden');
+            });
+            moreItem.classList.add('is-empty');
+            moreItem.hidden = true;
+        }
+
+        function moveItemToMore(item) {
+            if (!item || !moreInner) return;
+            item.classList.add('is-overflow-hidden');
+
+            var labelEl = item.querySelector('.pds-main-nav__label');
+            var labelText = 'Item';
+            if (labelEl) {
+                var labelClone = labelEl.cloneNode(true);
+                labelClone.querySelectorAll('.badge').forEach(function (b) { b.remove(); });
+                labelText = (labelClone.textContent || '').replace(/\s+/g, ' ').trim() || 'Item';
+            }
+            var badge = item.querySelector('.pds-main-nav__label .badge, .pds-main-nav__link > .badge');
+            var badgeHtml = badge ? badge.outerHTML : '';
+
+            if (item.classList.contains('has-dropdown')) {
+                var children = item.querySelectorAll('.pds-main-nav__sublink');
+                if (children.length) {
+                    var group = document.createElement('div');
+                    group.className = 'pds-main-nav__more-group';
+                    var title = document.createElement('div');
+                    title.className = 'pds-main-nav__more-title';
+                    title.textContent = labelText;
+                    group.appendChild(title);
+                    children.forEach(function (child) {
+                        group.appendChild(child.cloneNode(true));
+                    });
+                    // Keep original menu order: overflow from the end, insert at top.
+                    moreInner.insertBefore(group, moreInner.firstChild);
+                } else {
+                    var stub = document.createElement('span');
+                    stub.className = 'pds-main-nav__sublink';
+                    stub.textContent = labelText;
+                    moreInner.insertBefore(stub, moreInner.firstChild);
+                }
+                return;
+            }
+
+            var link = item.querySelector('a.pds-main-nav__link');
+            var a = document.createElement('a');
+            a.className = 'pds-main-nav__sublink' + (item.classList.contains('is-active') || (link && link.classList.contains('is-active')) ? ' is-active' : '');
+            a.href = link ? link.getAttribute('href') : 'javascript:void(0)';
+            var name = document.createElement('span');
+            name.textContent = labelText;
+            a.appendChild(name);
+            if (badgeHtml) {
+                a.insertAdjacentHTML('beforeend', badgeHtml);
+            }
+            moreInner.insertBefore(a, moreInner.firstChild);
+        }
+
+        function fitNavOverflow() {
+            if (!list || !moreItem || !moreInner || isMobileNav()) {
+                resetOverflow();
+                syncTopbarHeight();
+                return;
+            }
+
+            // 1) Show every primary item first (More hidden) so we measure true available width.
+            resetOverflow();
+
+            if (list.scrollWidth <= list.clientWidth + 1) {
+                syncTopbarHeight();
+                return;
+            }
+
+            // 2) Only then enable More and spill from the end.
+            moreItem.hidden = false;
+            moreItem.classList.remove('is-empty');
+
+            var items = primaryItems();
+            var safety = 0;
+            while (list.scrollWidth > list.clientWidth + 1 && items.length > 1 && safety < 40) {
+                safety += 1;
+                moveItemToMore(items.pop());
+            }
+
+            if (!moreInner.childElementCount) {
+                moreItem.classList.add('is-empty');
+                moreItem.hidden = true;
+            }
+
+            syncTopbarHeight();
+        }
+
+        function scheduleOverflowFit() {
+            if (overflowTimer) window.clearTimeout(overflowTimer);
+            overflowTimer = window.setTimeout(fitNavOverflow, 40);
+        }
+
+        syncTopbarHeight();
+        scheduleOverflowFit();
+        if (window.ResizeObserver) {
+            var ro = new ResizeObserver(function () {
+                scheduleOverflowFit();
+            });
+            if (topbar) ro.observe(topbar);
+            if (list) ro.observe(list);
+        }
+        window.addEventListener('resize', scheduleOverflowFit);
 
         function ensurePortal() {
             if (portalHost && document.body.contains(portalHost)) return portalHost;
@@ -129,8 +225,27 @@
         }
 
         function isMobileNav() {
-            return window.matchMedia('(max-width: 1199.98px)').matches;
+            return window.matchMedia('(max-width: 767.98px)').matches;
         }
+
+        // Only one header dropdown open at a time (notify / language / profile / menu).
+        document.addEventListener('show.bs.dropdown', function (e) {
+            var open = document.querySelectorAll('.pds-topbar .dropdown-menu.show, .pds-topbar .dropdown.show > .dropdown-menu');
+            open.forEach(function (menu) {
+                if (e.target && menu.contains(e.target)) return;
+                var toggle = menu.parentElement && menu.parentElement.querySelector('[data-toggle="dropdown"], [data-bs-toggle="dropdown"]');
+                if (toggle && window.jQuery) {
+                    try { window.jQuery(toggle).dropdown('hide'); } catch (err) {}
+                } else {
+                    menu.classList.remove('show');
+                    if (menu.parentElement) menu.parentElement.classList.remove('show');
+                }
+            });
+            if (nav.classList.contains('is-open')) {
+                nav.classList.remove('is-open');
+                if (toggle) toggle.setAttribute('aria-expanded', 'false');
+            }
+        });
 
         function restoreDropdown(item) {
             var dropdown = item._pdsDropdownEl || item.querySelector('.pds-main-nav__dropdown');

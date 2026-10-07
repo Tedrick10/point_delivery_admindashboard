@@ -306,17 +306,24 @@ class DailyCheckListService
 
     protected function baseItemsQuery(string $fromDay, string $toDay, ?int $branchId)
     {
-        // Completed onwards. Invoice day matches Rider ငွေအပ်:
-        // first Completed on C → C−1; later Completed that day → C.
-        // No-fee Os Return / Return tab parcels are excluded from Daily Check & Summary.
+        // Completed onwards. Invoice day matches Rider ငွေအပ် (10:00 AM Yangon cutoff /
+        // stamped rider_remit_date). No-fee Os Return / Return tab parcels are excluded.
         $boundsStart = dailyCheckListDayBounds($fromDay)['start'];
         $boundsEnd = dailyCheckListDayBounds($toDay)['end'];
 
         return DispatchOrderItem::query()
             ->where('status', 'completed')
             ->whereNotNull('admin_completed_at')
-            ->where('admin_completed_at', '>=', $boundsStart)
-            ->where('admin_completed_at', '<', $boundsEnd)
+            ->where(function ($q) use ($fromDay, $toDay, $boundsStart, $boundsEnd) {
+                $q->where(function ($byCompleted) use ($boundsStart, $boundsEnd) {
+                    $byCompleted->where('admin_completed_at', '>=', $boundsStart)
+                        ->where('admin_completed_at', '<', $boundsEnd);
+                })->orWhere(function ($byRemit) use ($fromDay, $toDay) {
+                    $byRemit->whereNotNull('rider_remit_date')
+                        ->whereDate('rider_remit_date', '>=', $fromDay)
+                        ->whereDate('rider_remit_date', '<=', $toDay);
+                });
+            })
             ->when($branchId && $branchId > 0, function ($q) use ($branchId) {
                 applyDestinationBranchFilter($q, $branchId);
             });

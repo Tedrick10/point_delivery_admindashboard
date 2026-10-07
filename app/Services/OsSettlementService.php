@@ -69,8 +69,16 @@ class OsSettlementService
         $query->whereNull('admin_finished_at')
             ->where('status', 'completed')
             ->whereNotNull('admin_completed_at')
-            ->where('admin_completed_at', '>=', $boundsStart)
-            ->where('admin_completed_at', '<', $boundsEnd);
+            ->where(function ($q) use ($fromDay, $toDay, $boundsStart, $boundsEnd) {
+                $q->where(function ($byCompleted) use ($boundsStart, $boundsEnd) {
+                    $byCompleted->where('admin_completed_at', '>=', $boundsStart)
+                        ->where('admin_completed_at', '<', $boundsEnd);
+                })->orWhere(function ($byRemit) use ($fromDay, $toDay) {
+                    $byRemit->whereNotNull('rider_remit_date')
+                        ->whereDate('rider_remit_date', '>=', $fromDay)
+                        ->whereDate('rider_remit_date', '<=', $toDay);
+                });
+            });
     }
 
     /**
@@ -101,8 +109,16 @@ class OsSettlementService
             ->where('status', 'completed')
             ->whereHas('kyoShinItem')
             ->whereNotNull('admin_completed_at')
-            ->where('admin_completed_at', '>=', $boundsStart)
-            ->where('admin_completed_at', '<', $boundsEnd);
+            ->where(function ($q) use ($fromDay, $toDay, $boundsStart, $boundsEnd) {
+                $q->where(function ($byCompleted) use ($boundsStart, $boundsEnd) {
+                    $byCompleted->where('admin_completed_at', '>=', $boundsStart)
+                        ->where('admin_completed_at', '<', $boundsEnd);
+                })->orWhere(function ($byRemit) use ($fromDay, $toDay) {
+                    $byRemit->whereNotNull('rider_remit_date')
+                        ->whereDate('rider_remit_date', '>=', $fromDay)
+                        ->whereDate('rider_remit_date', '<=', $toDay);
+                });
+            });
 
         applyForcedItemOwnership($query);
         if ($branchId !== null && $branchId > 0) {
@@ -131,8 +147,16 @@ class OsSettlementService
             ->where('status', 'completed')
             ->whereHas('kyoShinItem')
             ->whereNotNull('admin_completed_at')
-            ->where('admin_completed_at', '>=', $boundsStart)
-            ->where('admin_completed_at', '<', $boundsEnd)
+            ->where(function ($q) use ($fromDay, $toDay, $boundsStart, $boundsEnd) {
+                $q->where(function ($byCompleted) use ($boundsStart, $boundsEnd) {
+                    $byCompleted->where('admin_completed_at', '>=', $boundsStart)
+                        ->where('admin_completed_at', '<', $boundsEnd);
+                })->orWhere(function ($byRemit) use ($fromDay, $toDay) {
+                    $byRemit->whereNotNull('rider_remit_date')
+                        ->whereDate('rider_remit_date', '>=', $fromDay)
+                        ->whereDate('rider_remit_date', '<=', $toDay);
+                });
+            })
             ->whereHas('order', function ($q) use ($osId) {
                 if ($osId > 0) {
                     $q->where('client_id', $osId);
@@ -157,7 +181,7 @@ class OsSettlementService
 
     /**
      * Settlement / Money Transfer period from each item's list day
-     * (Completed Yangon calendar day − 1).
+     * (10:00 AM Yangon cutoff / stamped rider_remit_date).
      *
      * @param  \Illuminate\Support\Collection<int, DispatchOrderItem>  $items
      * @return array{0: string, 1: string}
@@ -464,7 +488,7 @@ class OsSettlementService
             throw new \RuntimeException(__('message.os_settlement_kpay_slip_required'));
         }
 
-        // Money Transfer / batch period = items' list day (Completed → yesterday),
+        // Money Transfer / batch period = items' list day (10:00 AM Yangon cutoff),
         // not the filter day when unfinished rows were carried into "today".
         [$batchFromDay, $batchToDay] = $this->listDayRangeFromItems($items, $fromDay, $toDay);
 

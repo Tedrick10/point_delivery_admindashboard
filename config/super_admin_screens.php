@@ -27,10 +27,8 @@ return [
         'title_key' => 'sa_screen_kyo_shin',
         'subtitle_key' => 'sa_screen_kyo_shin_sub',
         'icon' => 'fa-wallet',
-        'workspace' => 'order.kyo-shin',
-        'links' => [
-            ['route' => 'order.kyo-shin', 'label_key' => 'sa_link_kyo_shin'],
-        ],
+        'workspace' => null,
+        'links' => [],
     ],
     'money-transfer' => [
         'title_key' => 'sa_screen_money_transfer',
@@ -45,10 +43,8 @@ return [
         'title_key' => 'sa_screen_rider_remit',
         'subtitle_key' => 'sa_screen_rider_remit_sub',
         'icon' => 'fa-motorcycle',
-        'workspace' => 'order.rider-remit',
-        'links' => [
-            ['route' => 'order.rider-remit', 'label_key' => 'sa_link_rider_remit_sheet'],
-        ],
+        'workspace' => null,
+        'links' => [],
     ],
     'delivery-route' => [
         'title_key' => 'sa_screen_delivery_route',

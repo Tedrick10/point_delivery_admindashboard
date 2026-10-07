@@ -1,144 +1,123 @@
 @php
-    $promo = $welcomePromotion['promo'] ?? null;
     $shops = $welcomePromotion['shops'] ?? collect();
     $search = $welcomePromotion['search'] ?? '';
     $enabledCount = $welcomePromotion['enabledCount'] ?? 0;
     $shopCount = $welcomePromotion['shopCount'] ?? 0;
 @endphp
 
-@if($promo)
-<section class="sa-module-panel sa-fuel-default-panel">
-    <header class="sa-module-panel__head">
-        <h3>{{ __('message.sa_welcome_promo_global_title') }}</h3>
-        <span>{{ __('message.sa_welcome_promo_global_badge') }}</span>
-    </header>
-    <p class="sa-fuel-default-panel__hint">{{ __('message.sa_welcome_promo_global_hint') }}</p>
-
-    <form method="POST" action="{{ route('super-admin.welcome-promotion.settings') }}" class="sa-late-fine-defaults-form">
-        @csrf
-        <div class="sa-late-fine-defaults-form__grid">
-            <div>
-                <label class="form-control-label">{{ __('message.title') }}</label>
-                <input type="text" name="title" value="{{ old('title', $promo->title) }}" class="form-control" required>
-            </div>
-            <div>
-                <label class="form-control-label">{{ __('message.max_orders') }}</label>
-                <input type="number" name="max_orders" min="1" max="1000" value="{{ old('max_orders', $promo->max_orders) }}" class="form-control" required>
-            </div>
-            <div>
-                <label class="form-control-label">{{ __('message.discount_type') }}</label>
-                <select name="discount_type" class="form-control">
-                    <option value="percentage" @selected(old('discount_type', $promo->discount_type) === 'percentage')>{{ __('message.percentage') }}</option>
-                    <option value="fixed" @selected(old('discount_type', $promo->discount_type) === 'fixed')>{{ __('message.fixed') }}</option>
-                </select>
-            </div>
-            <div>
-                <label class="form-control-label">{{ __('message.discount_value') }}</label>
-                <input type="number" name="discount_value" step="any" min="0" value="{{ old('discount_value', $promo->discount_value) }}" class="form-control" required>
-            </div>
-            <div>
-                <label class="form-control-label">{{ __('message.status') }}</label>
-                <select name="status" class="form-control">
-                    <option value="1" @selected((string) old('status', $promo->status) === '1')>{{ __('message.enable') }}</option>
-                    <option value="0" @selected((string) old('status', $promo->status) === '0')>{{ __('message.disable') }}</option>
-                </select>
-            </div>
-        </div>
-        <div class="sa-fuel-default-form__row" style="margin-top: 1rem;">
-            <button type="submit" class="sa-module-hero__btn sa-fuel-default-form__btn">
-                <i class="fas fa-save" aria-hidden="true"></i>
-                <span>{{ __('message.save') }}</span>
-            </button>
-        </div>
-    </form>
-
-    @if(session('success'))
-        <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
-    @endif
-    @foreach($errors->all() as $message)
-        <p class="sa-fuel-default-panel__err">{{ $message }}</p>
-    @endforeach
-</section>
-@endif
-
-<section class="sa-module-panel sa-late-fine-staff-panel">
-    <header class="sa-module-panel__head">
-        <h3>{{ __('message.sa_welcome_promo_shops_title') }}</h3>
-        <span>{{ $enabledCount }} / {{ $shopCount }} {{ __('message.enable') }}</span>
-    </header>
-    <p class="sa-fuel-default-panel__hint">{{ __('message.sa_welcome_promo_shops_hint') }}</p>
-
-    <form method="GET" action="{{ route('super-admin.screens.show', 'welcome-promotion') }}" class="sa-expense-summary-filter" style="margin-bottom: 1rem;">
-        <label>
-            {{ __('message.search') }}
-            <input type="text" name="q" value="{{ $search }}" placeholder="Online Shop">
-        </label>
-        <button type="submit" class="sa-module-hero__btn">{{ __('message.search') }}</button>
-    </form>
-
-    <div class="sa-module-table-wrap">
-        <table class="sa-module-table sa-late-fine-staff-table">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>{{ __('message.name') }}</th>
-                    <th>{{ __('message.contact_number') }}</th>
-                    <th>{{ __('message.sa_welcome_promo_shop_control') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($shops as $i => $shop)
+<div class="sa-welcome-page">
+    <section class="sa-module-panel sa-welcome-shops">
+        <header class="sa-module-panel__head">
+            <h3>{{ __('message.sa_welcome_promo_shops_title') }}</h3>
+            <span>{{ $enabledCount }} / {{ $shopCount }} {{ __('message.enable') }}</span>
+        </header>
+        <form method="GET" action="{{ route('super-admin.screens.show', 'welcome-promotion') }}" class="sa-account-filter">
+            <label class="sa-account-filter__search">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input type="search" name="q" value="{{ $search }}" placeholder="{{ __('message.search') }}">
+            </label>
+            <button type="submit" class="sa-module-hero__btn">{{ __('message.search') }}</button>
+        </form>
+        <div class="sa-module-table-wrap">
+            <table class="sa-module-table sa-welcome-table">
+                <thead>
                     <tr>
-                        <td>{{ $i + 1 }}</td>
-                        <td>
-                            <strong>{{ $shop->name }}</strong>
-                            @if($shop->username)
-                                <div class="text-muted" style="font-size: 12px;">{{ $shop->username }}</div>
-                            @endif
-                            <div class="text-muted" style="font-size: 12px;">
-                                {{ __('message.sa_welcome_promo_used') }}: {{ (int) ($shop->welcome_orders_used ?? 0) }}
-                            </div>
-                        </td>
-                        <td>{{ $shop->contact_number }}</td>
-                        <td>
-                            <form method="POST"
-                                  action="{{ route('super-admin.welcome-promotion.shop', $shop->id) }}"
-                                  class="sa-late-fine-allowance-form">
-                                @csrf
-                                @method('PUT')
-                                @if($search !== '')
-                                    <input type="hidden" name="q" value="{{ $search }}">
-                                @endif
-                                <label style="display:flex; align-items:center; gap:6px; margin:0 8px 0 0;">
+                        <th class="sa-welcome-table__num">#</th>
+                        <th>{{ __('message.name') }}</th>
+                        <th>{{ __('message.sa_welcome_promo_give') }}</th>
+                        <th>{{ __('message.max_orders') }}</th>
+                        <th>%</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($shops as $i => $shop)
+                        @php
+                            $shopFormId = 'sa-welcome-shop-'.$shop->id;
+                            $shopOn = (bool) ($shop->welcome_promo_enabled ?? true);
+                        @endphp
+                        <tr>
+                            <td class="sa-welcome-table__num">{{ $i + 1 }}</td>
+                            <td>
+                                <div class="sa-person">
+                                    <span class="sa-avatar">{{ $initials((string) $shop->name) }}</span>
+                                    <div>
+                                        <strong>{{ $shop->name }}</strong>
+                                        @if($shop->username)
+                                            <span class="sa-welcome-meta">{{ $shop->username }}</span>
+                                        @endif
+                                        @if($shop->contact_number)
+                                            <span class="sa-welcome-meta">{{ $shop->contact_number }}</span>
+                                        @endif
+                                        <span class="sa-welcome-meta">{{ __('message.sa_welcome_promo_used') }}: {{ (int) ($shop->welcome_orders_used ?? 0) }}</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <input type="hidden" form="{{ $shopFormId }}" name="welcome_promo_enabled" value="0">
+                                <label class="sa-work-switch {{ $shopOn ? 'is-on' : 'is-off' }}">
                                     <input type="checkbox"
+                                           form="{{ $shopFormId }}"
                                            name="welcome_promo_enabled"
                                            value="1"
-                                           @checked((bool) ($shop->welcome_promo_enabled ?? true))>
+                                           @checked($shopOn)
+                                           onchange="this.closest('.sa-work-switch').classList.toggle('is-on', this.checked); this.closest('.sa-work-switch').classList.toggle('is-off', !this.checked);">
+                                    <span class="sa-work-switch__track" aria-hidden="true"></span>
                                     {{ __('message.sa_welcome_promo_give') }}
                                 </label>
-                                <input type="number"
-                                       name="welcome_discount_percent"
-                                       min="0"
-                                       max="100"
-                                       step="0.01"
-                                       placeholder="{{ __('message.sa_welcome_promo_use_global') }}"
-                                       value="{{ $shop->welcome_discount_percent !== null ? $shop->welcome_discount_percent : '' }}"
-                                       class="sa-late-fine-allowance-input"
-                                       title="{{ __('message.sa_welcome_promo_percent') }}"
-                                       style="width: 110px;">
-                                <span style="font-size:12px; opacity:.7;">%</span>
-                                <button type="submit" class="sa-module-hero__btn sa-late-fine-allowance-btn">
+                            </td>
+                            <td>
+                                <div class="sa-welcome-percent">
+                                    <input type="number"
+                                           form="{{ $shopFormId }}"
+                                           name="welcome_max_orders"
+                                           min="1"
+                                           max="1000"
+                                           step="1"
+                                           placeholder="{{ __('message.sa_welcome_promo_use_global') }}"
+                                           value="{{ $shop->welcome_max_orders !== null ? (int) $shop->welcome_max_orders : '' }}"
+                                           class="sa-no-spin"
+                                           title="{{ __('message.max_orders') }}"
+                                           inputmode="numeric">
+                                </div>
+                            </td>
+                            <td>
+                                <form method="POST"
+                                      action="{{ route('super-admin.welcome-promotion.shop', $shop->id) }}"
+                                      class="sa-welcome-shop-form"
+                                      id="{{ $shopFormId }}">
+                                    @csrf
+                                    @method('PUT')
+                                    @if($search !== '')
+                                        <input type="hidden" name="q" value="{{ $search }}">
+                                    @endif
+                                    <div class="sa-welcome-percent">
+                                        <input type="number"
+                                               name="welcome_discount_percent"
+                                               min="0"
+                                               max="100"
+                                               step="0.01"
+                                               placeholder="{{ __('message.sa_welcome_promo_use_global') }}"
+                                               value="{{ $shop->welcome_discount_percent !== null ? $shop->welcome_discount_percent : '' }}"
+                                               class="sa-no-spin"
+                                               title="{{ __('message.sa_welcome_promo_percent') }}">
+                                        <span>%</span>
+                                    </div>
+                                </form>
+                            </td>
+                            <td>
+                                <button type="submit" form="{{ $shopFormId }}" class="sa-module-hero__btn sa-late-fine-allowance-btn">
                                     {{ __('message.save') }}
                                 </button>
-                            </form>
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="4">{{ __('message.no_record_found') }}</td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-</section>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6">{{ __('message.no_record_found') }}</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>

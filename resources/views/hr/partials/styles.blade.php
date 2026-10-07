@@ -12,18 +12,31 @@
     .pds-hr-hero__subtitle { margin: 6px 0 0; color: var(--hr-muted); max-width: 560px; }
     .pds-hr-hero__stats { display: flex; gap: 10px; flex-wrap: wrap; }
     .pds-hr-stat {
-        min-width: 140px; background: linear-gradient(135deg, var(--site-color), var(--site-color)); color: #fff;
+        min-width: 140px; background: linear-gradient(135deg, var(--site-color), var(--site-color)); color: #fff !important;
         border-radius: 16px; padding: 14px 18px; box-shadow: 0 10px 24px rgba(var(--brand-rgb), .22);
     }
     .pds-hr-stat--soft {
-        background: #fff; color: var(--hr-ink); border: 1px solid var(--hr-line); box-shadow: 0 8px 20px rgba(15, 23, 42, .04);
+        background: #fff; color: var(--hr-ink) !important; border: 1px solid var(--hr-line); box-shadow: 0 8px 20px rgba(15, 23, 42, .04);
     }
     .pds-hr-stat--danger {
         background: linear-gradient(135deg, #dc2626, #ef4444);
         box-shadow: 0 10px 24px rgba(220, 38, 38, .22);
+        color: #fff !important;
     }
     .pds-hr-stat__value { display: block; font-size: 24px; font-weight: 800; line-height: 1.1; }
     .pds-hr-stat__label { display: block; margin-top: 4px; font-size: 12px; opacity: .9; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+    .pds-hr-stat:not(.pds-hr-stat--soft),
+    .pds-hr-stat:not(.pds-hr-stat--soft) .pds-hr-stat__value,
+    .pds-hr-stat:not(.pds-hr-stat--soft) .pds-hr-stat__label,
+    .pds-hr-stat:not(.pds-hr-stat--soft) span {
+        color: #fff !important;
+    }
+    .pds-hr-stat--soft,
+    .pds-hr-stat--soft .pds-hr-stat__value,
+    .pds-hr-stat--soft .pds-hr-stat__label,
+    .pds-hr-stat--soft span {
+        color: var(--hr-ink) !important;
+    }
     .pds-hr-toolbar {
         display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
     }
@@ -35,8 +48,11 @@
     button.pds-hr-tab { cursor: pointer; }
     .pds-hr-tab:hover { border-color: #ffd8b0; color: var(--site-color); text-decoration: none; }
     .pds-hr-tab.is-active {
-        background: linear-gradient(135deg, var(--site-color), var(--site-color)); border-color: transparent; color: #fff;
+        background: linear-gradient(135deg, var(--site-color), var(--site-color)); border-color: transparent; color: #fff !important;
         box-shadow: 0 8px 18px rgba(var(--brand-rgb), .24);
+    }
+    .pds-hr-tab.is-active span {
+        color: #fff !important;
     }
     .pds-hr-month {
         display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--hr-line);

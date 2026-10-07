@@ -1,18 +1,6 @@
-<section class="sa-module-panel sa-ui-theme-panel">
-    <header class="sa-module-panel__head">
-        <h3>{{ __('message.sa_screen_ui_theme') }}</h3>
-        <span>{{ __('message.sa_ui_theme_applies_all') }}</span>
-    </header>
-    <p class="sa-fuel-default-panel__hint">{{ __('message.sa_ui_theme_hint') }}</p>
-
+<section class="sa-ui-theme-page">
     @if ($errors->any())
-        <div class="sa-alert alert alert-danger" style="margin-bottom: 1rem;">
-            <ul style="margin:0;padding-left:1.1rem;">
-                @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
+        <p class="sa-fuel-default-panel__err">{{ $errors->first() }}</p>
     @endif
 
     <div class="sa-ui-theme-grid" id="saUiThemeGrid">
@@ -99,7 +87,7 @@
     transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
 }
 .sa-ui-theme-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(15,23,42,.08); }
-.sa-ui-theme-card.is-active { border-color: var(--site-color); box-shadow: 0 0 0 2px rgba(var(--brand-rgb),.15); }
+.sa-ui-theme-card.is-active { border-color: #FE6F07; box-shadow: 0 0 0 3px rgba(254, 111, 7, 0.16); }
 .sa-ui-theme-card__preview {
     position: relative;
     height: 132px;

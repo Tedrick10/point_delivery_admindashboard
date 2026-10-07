@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ mighty_language_direction() }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ mighty_language_direction() }}" class="pds-admin-root">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,7 +10,7 @@
         @include('partials._head')
 
     </head>
-    <body class="pds-admin pds-theme-{{ uiThemePackId() }}" id="app">
+    <body class="pds-admin pds-header-nav pds-theme-{{ uiThemePackId() }}" id="app">
         <script>
             try {
                 if (localStorage.getItem('dark') === 'true') {

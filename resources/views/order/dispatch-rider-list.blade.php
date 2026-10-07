@@ -30,8 +30,6 @@
                 'includeAll' => false,
                 'routeName' => 'order.dispatch.rider-list',
                 'routeQuery' => array_filter([
-                    'from_date' => $filterFromDate ?? null,
-                    'to_date' => $filterToDate ?? null,
                     'rider_id' => ($riderFilter ?? 'all') !== 'all' ? $riderFilter : null,
                 ]),
             ])
@@ -47,46 +45,6 @@
                                 <option value="{{ $option->id }}" @selected((string) $riderFilter === (string) $option->id)>{{ $option->name }}</option>
                             @endforeach
                         </select>
-                    </div>
-                    <div class="pds-dispatch-field pds-dispatch-field-sm">
-                        <label for="rider_list_from_date">{{ __('message.from') }}</label>
-                        <div class="pds-rider-date-wrap">
-                            <input
-                                type="text"
-                                name="from_date"
-                                id="rider_list_from_date"
-                                class="pds-dispatch-input dispatch-datepicker"
-                                value="{{ $filterFromDate }}"
-                                placeholder="{{ __('message.select_date') }}"
-                                autocomplete="off"
-                                data-lpignore="true"
-                                data-form-type="other"
-                                readonly
-                            >
-                            <button type="button" class="pds-rider-date-clear" data-clear-date="rider_list_from_date" title="{{ __('message.reset') }}" aria-label="{{ __('message.reset') }}">
-                                <i class="fas fa-times" aria-hidden="true"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="pds-dispatch-field pds-dispatch-field-sm">
-                        <label for="rider_list_to_date">{{ __('message.to') }}</label>
-                        <div class="pds-rider-date-wrap">
-                            <input
-                                type="text"
-                                name="to_date"
-                                id="rider_list_to_date"
-                                class="pds-dispatch-input dispatch-datepicker"
-                                value="{{ $filterToDate }}"
-                                placeholder="{{ __('message.select_date') }}"
-                                autocomplete="off"
-                                data-lpignore="true"
-                                data-form-type="other"
-                                readonly
-                            >
-                            <button type="button" class="pds-rider-date-clear" data-clear-date="rider_list_to_date" title="{{ __('message.reset') }}" aria-label="{{ __('message.reset') }}">
-                                <i class="fas fa-times" aria-hidden="true"></i>
-                            </button>
-                        </div>
                     </div>
                 </div>
                 <div class="pds-rider-toolbar__actions">
@@ -146,8 +104,6 @@
                                     @php
                                         $counts = $rider->counts;
                                         $detailParams = array_filter([
-                                            'from_date' => $filterFromDate ?: null,
-                                            'to_date' => $filterToDate ?: null,
                                             'branch_id' => $selectedBranchId ?? null,
                                         ]);
                                         $initial = mb_strtoupper(mb_substr(trim($rider->name) ?: 'R', 0, 1));
@@ -282,69 +238,6 @@
     @section('bottom_script')
         <script>
             $(document).ready(function () {
-                var hasDateFilter = @json((bool) ($hasDateFilter ?? false));
-                var riderDatePickers = {};
-
-                function bindRiderDatePicker(selector) {
-                    var el = document.querySelector(selector);
-                    if (!el || typeof flatpickr === 'undefined') {
-                        return null;
-                    }
-
-                    var picker = flatpickr(el, {
-                        dateFormat: 'd-m-Y',
-                        allowInput: true,
-                        defaultDate: null,
-                        disableMobile: true,
-                        onOpen: function (selectedDates, dateStr, instance) {
-                            instance.input.removeAttribute('readonly');
-                        },
-                        onClose: function (selectedDates, dateStr, instance) {
-                            if (!$.trim(instance.input.value || '')) {
-                                instance.clear();
-                            }
-                            instance.input.setAttribute('readonly', 'readonly');
-                        },
-                    });
-
-                    if (!hasDateFilter) {
-                        picker.clear();
-                        el.value = '';
-                    }
-
-                    riderDatePickers[el.id] = picker;
-                    return picker;
-                }
-
-                bindRiderDatePicker('#rider_list_from_date');
-                bindRiderDatePicker('#rider_list_to_date');
-
-                // Defeat browser autofill that rewrites empty From/To fields.
-                if (!hasDateFilter) {
-                    [0, 50, 200, 500].forEach(function (delay) {
-                        setTimeout(function () {
-                            Object.keys(riderDatePickers).forEach(function (id) {
-                                var picker = riderDatePickers[id];
-                                if (!picker) return;
-                                picker.clear();
-                                picker.input.value = '';
-                            });
-                        }, delay);
-                    });
-                }
-
-                $(document).on('click', '[data-clear-date]', function () {
-                    var id = $(this).attr('data-clear-date');
-                    var picker = riderDatePickers[id];
-                    if (picker) {
-                        picker.clear();
-                        picker.input.value = '';
-                        picker.input.focus();
-                    } else {
-                        $('#' + id).val('').focus();
-                    }
-                });
-
                 var riderOfMonthUrl = @json($riderOfMonthUrl ?? route('deliveryman.rider-of-month'));
                 var reviewsUrlTpl = @json(url('deliveryman/__ID__/reviews'));
                 var $rotmModal = $('#pdsRiderOfMonthModal');

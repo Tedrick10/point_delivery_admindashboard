@@ -9,7 +9,6 @@
 
 @section('title', $title)
 @section('page_title', $title)
-@section('page_sub', __('message.sa_screen_account_creation_sub'))
 
 @section('content')
 <div class="sa-module-page" style="padding-top: 0;">
@@ -82,7 +81,7 @@
                 </div>
             </div>
 
-            <div class="mt-3 d-flex gap-2" style="gap: 10px;">
+            <div class="sa-form-footer">
                 <button type="submit" class="sa-btn sa-btn-primary">
                     {{ $isEdit ? __('message.sa_save_changes') : __('message.save') }}
                 </button>

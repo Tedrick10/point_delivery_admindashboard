@@ -373,8 +373,9 @@ Index Of Script
             // }
         });
         let Scrollbar = window.Scrollbar;
-        if (jQuery('.data-scrollbar').length) {
-            Scrollbar.init(document.querySelector('.data-scrollbar'), { continuousScrolling: false });
+        var firstScroll = document.querySelector('.data-scrollbar:not(.pds-sidebar-scroll)');
+        if (firstScroll && Scrollbar) {
+            Scrollbar.init(firstScroll, { continuousScrolling: false });
         }
         Array.from(jQuery('.board-scrollbar'), function(item, value) {
             // Scrollbar.init(document.querySelector(`.board-scrollbar-${value}`), { continuousScrolling: false });
@@ -464,11 +465,15 @@ Index Of Script
         }).trigger('resize');
 
         jQuery('.data-scrollbar').each(function () {
+            if (this.classList && this.classList.contains('pds-sidebar-scroll')) return;
             var attr = $(this).attr('data-scroll');
             if (typeof attr !== typeof undefined && attr !== false){
             let Scrollbar = window.Scrollbar;
             var a = jQuery(this).data('scroll');
-            Scrollbar.init(document.querySelector('div[data-scroll= "' + a + '"]'));
+            var el = document.querySelector('div[data-scroll="' + a + '"]');
+            if (el && !el.classList.contains('pds-sidebar-scroll')) {
+                Scrollbar.init(el);
+            }
             }
         });
 

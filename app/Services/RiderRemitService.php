@@ -15,6 +15,9 @@ class RiderRemitService
     /** Fallback auto ဆီဖိုး when no setting is saved. */
     public const DEFAULT_FUEL_AMOUNT = 10000.0;
 
+    /** Minimum Delivered ways required before ဆီဖိုး is granted. */
+    public const DEFAULT_FUEL_MIN_WAYS = 1;
+
     public function defaultFuelAmount(): float
     {
         $raw = SettingData('rider_remit', 'default_fuel_amount');
@@ -36,6 +39,75 @@ class RiderRemitService
         );
 
         return $amount;
+    }
+
+    public function fuelMinWays(): int
+    {
+        $raw = SettingData('rider_remit', 'fuel_min_ways');
+        if ($raw === null || $raw === '') {
+            return self::DEFAULT_FUEL_MIN_WAYS;
+        }
+
+        $ways = (int) $raw;
+
+        return $ways >= 1 ? $ways : self::DEFAULT_FUEL_MIN_WAYS;
+    }
+
+    public function setFuelMinWays(int $ways): int
+    {
+        $ways = max(1, $ways);
+        \App\Models\Setting::query()->updateOrCreate(
+            ['type' => 'rider_remit', 'key' => 'fuel_min_ways'],
+            ['value' => (string) $ways]
+        );
+
+        return $ways;
+    }
+
+    /**
+     * Re-apply ဆီဖိုး on unsubmitted remits using the current min-way rule.
+     */
+    public function resyncOpenRemitFuel(?int $userId = null): int
+    {
+        $rows = RiderRemit::query()->whereNull('submitted_at')->get();
+        $updated = 0;
+        $dueCache = [];
+        $touchedDays = [];
+        $actor = $userId ?? auth()->id();
+
+        foreach ($rows as $row) {
+            $day = $row->remit_date instanceof Carbon
+                ? $row->remit_date->toDateString()
+                : (string) $row->remit_date;
+            $branchId = (int) $row->branch_id;
+            $cacheKey = $branchId.'|'.$day;
+            if (! isset($dueCache[$cacheKey])) {
+                $dueCache[$cacheKey] = $this->dueByRider($branchId > 0 ? $branchId : null, $day);
+            }
+            $dues = $dueCache[$cacheKey];
+            $riderId = (int) $row->delivery_man_id;
+            $fuelWayCount = (int) ($dues->get($riderId)?->fuel_way_count ?? 0);
+            $fuel = $this->resolveFuelAmount(
+                $riderId,
+                (float) $row->fuel_amount,
+                $fuelWayCount,
+                $this->isOtherBranchRemit($branchId)
+            );
+            if (abs((float) $row->fuel_amount - $fuel) < 0.001) {
+                continue;
+            }
+            $row->fuel_amount = $fuel;
+            $row->updated_by = $actor;
+            $row->save();
+            $updated++;
+            $touchedDays[$day] = true;
+        }
+
+        foreach (array_keys($touchedDays) as $day) {
+            app(ExpenseRiderFuelSyncService::class)->syncDate($day, $actor);
+        }
+
+        return $updated;
     }
 
     /**
@@ -66,8 +138,42 @@ class RiderRemitService
         );
 
         $this->applyRiderFuelToOpenRemits($riderId, $amount);
+        $this->resyncOpenRemitFuel((int) (auth()->id() ?? 0) ?: null);
 
         return $amount;
+    }
+
+    /**
+     * Minimum Delivered ways for this rider (per-rider override, else global).
+     */
+    public function riderFuelMinWays(int $riderId): int
+    {
+        if ($riderId > 0) {
+            $raw = SettingData('rider_remit', 'rider_fuel_min_'.$riderId);
+            if ($raw !== null && $raw !== '') {
+                $ways = (int) $raw;
+
+                return $ways >= 1 ? $ways : $this->fuelMinWays();
+            }
+        }
+
+        return $this->fuelMinWays();
+    }
+
+    public function setRiderFuelMinWays(int $riderId, int $ways): int
+    {
+        $riderId = (int) $riderId;
+        $ways = max(1, $ways);
+        if ($riderId < 1) {
+            return $this->fuelMinWays();
+        }
+
+        \App\Models\Setting::query()->updateOrCreate(
+            ['type' => 'rider_remit', 'key' => 'rider_fuel_min_'.$riderId],
+            ['value' => (string) $ways]
+        );
+
+        return $ways;
     }
 
     /**
@@ -164,6 +270,7 @@ class RiderRemitService
             'is_hub' => (int) ($user->is_dispatch_hub ?? 0) === 1,
             'hub_parent_id' => (int) ($user->hub_parent_id ?? 0),
             'fuel_amount' => $this->riderFuelAmount((int) $user->id),
+            'fuel_min_ways' => $this->riderFuelMinWays((int) $user->id),
         ];
 
         if ($mdyId > 0) {
@@ -256,8 +363,8 @@ class RiderRemitService
             return 0.0;
         }
 
-        // No paid delivery ways (e.g. only no-fee ကြိုရှင်း Os Returned) → no ဆီဖိုး.
-        if ($itemCount < 1) {
+        // Super Admin min-way rule: below the threshold → no ဆီဖိုး.
+        if ($itemCount < $this->riderFuelMinWays($riderId)) {
             return 0.0;
         }
 
@@ -822,7 +929,7 @@ class RiderRemitService
 
     /**
      * Open Delivered parcels for Rider ငွေအပ် on sheet day $day.
-     * Uses rider_remit_date (Delivered before today’s Completed → yesterday; after → today).
+     * Uses rider_remit_date (before 10:00 AM → yesterday; from 10:00 AM → today).
      */
     protected function remittableItemsQuery(?int $branchId, string $day)
     {
@@ -1095,7 +1202,7 @@ class RiderRemitService
 
     /**
      * Delivered parcels (status=completed) for Rider ငွေအပ် sheet day.
-     * Bucketed by rider_remit_date (Completed lock: before → yesterday, after → today). Does not wait for Finished.
+     * Bucketed by rider_remit_date (before 10:00 AM → yesterday; from 10:00 AM → today). Does not wait for Finished.
      *
      * @return Collection<int, object{delivery_man_id:int, due:float, gate:float, agent:float, item_count:int, fuel_way_count:int}>
      */

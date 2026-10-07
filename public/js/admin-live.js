@@ -3,19 +3,66 @@
 
     var DEFAULT_INTERVAL = 4000;
 
+    function dataTableNode(api) {
+        try {
+            return api && typeof api.table === 'function' ? api.table().node() : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function dataTableIsOnPage(api) {
+        var node = dataTableNode(api);
+        return !!(node && document.contains(node));
+    }
+
+    function dataTableInsideLiveRoot(api) {
+        var root = document.getElementById('adminLiveRoot');
+        var node = dataTableNode(api);
+        return !!(root && node && root.contains(node));
+    }
+
     function resolveDataTable(selector) {
         if (window.LaravelDataTables && window.LaravelDataTables['dataTableBuilder']) {
-            return window.LaravelDataTables['dataTableBuilder'];
+            var builder = window.LaravelDataTables['dataTableBuilder'];
+            if (dataTableIsOnPage(builder)) return builder;
         }
         var keys = window.LaravelDataTables ? Object.keys(window.LaravelDataTables) : [];
-        if (keys.length && window.LaravelDataTables[keys[0]]) {
-            return window.LaravelDataTables[keys[0]];
+        for (var i = 0; i < keys.length; i++) {
+            var api = window.LaravelDataTables[keys[i]];
+            if (api && dataTableIsOnPage(api)) return api;
         }
         var $table = $(selector || '.pds-dispatch-datatable, .pds-dispatch-items-datatable, .pds-datatable, table.dataTable').first();
         if ($table.length && $.fn.DataTable && $.fn.DataTable.isDataTable($table)) {
             return $table.DataTable();
         }
         return null;
+    }
+
+    function collectPageData() {
+        var data = {};
+        var names = ['from_date', 'to_date', 'search_term', 'dispatch_status', 'branch_id', 'os_id', 'rider_id', 'city_id', 'country_id'];
+        names.forEach(function (name) {
+            var $el = $('#' + name);
+            if (!$el.length) $el = $('[name="' + name + '"]').first();
+            if ($el.length) {
+                var val = $el.val();
+                if (val !== undefined && val !== null && String(val) !== '') {
+                    data[name] = val;
+                }
+            }
+        });
+        return data;
+    }
+
+    function applyOrderListTabs(counts) {
+        if (!counts) return;
+        Object.keys(counts).forEach(function (key) {
+            var $n = $('.pds-dispatch-tab-count[data-live-tab="' + key + '"]');
+            if (!$n.length) return;
+            var n = Number(counts[key]) || 0;
+            $n.text(String(n)).attr('aria-label', String(n));
+        });
     }
 
     function setBadge($el, count, classes) {
@@ -157,7 +204,10 @@
             return;
         }
         var table = resolveDataTable(options.tableSelector || '');
-        if (table && table.ajax && typeof table.ajax.reload === 'function') {
+        var hasLiveRoot = !!document.getElementById('adminLiveRoot');
+        var tableOnPage = table && table.ajax && typeof table.ajax.reload === 'function' && dataTableIsOnPage(table);
+        var tableOwnsThisPage = tableOnPage && (!hasLiveRoot || dataTableInsideLiveRoot(table));
+        if (tableOwnsThisPage) {
             if (window.__adminLiveReloading) return;
             window.__adminLiveReloading = true;
             table.ajax.reload(function () {
@@ -165,7 +215,7 @@
             }, false);
             return;
         }
-        if (softReplaceLiveRoot()) return;
+        if (hasLiveRoot && softReplaceLiveRoot()) return;
         if (options.hardReloadFallback) {
             hardNavigateFallback();
         }
@@ -273,7 +323,7 @@
             if (document.hidden || inFlight) return;
             inFlight = true;
             var opts = currentOptions();
-            var data = $.extend({}, opts.data || {});
+            var data = $.extend({}, collectPageData(), opts.data || {});
             if (opts.page) data.page = opts.page;
             if (opts.includeDashboard) data.include_dashboard = 1;
 
@@ -291,6 +341,9 @@
                 }
                 if (res.dashboard) {
                     applyDashboardStats(res.dashboard);
+                }
+                if (res.order_list_tabs) {
+                    applyOrderListTabs(res.order_list_tabs);
                 }
 
                 var version = res.version ? String(res.version) : null;
@@ -351,25 +404,10 @@
     };
 
     window.adminLiveReloadPage = function () {
-        var table = resolveDataTable('');
-        if (table && table.ajax && typeof table.ajax.reload === 'function') {
-            table.ajax.reload(null, false);
-            return;
-        }
-        if (typeof window.reloadDispatchItemsTable === 'function') {
-            window.reloadDispatchItemsTable();
-            return;
-        }
-        if (softReplaceLiveRoot()) return;
-        if (window.AdminSpa && typeof window.AdminSpa.reload === 'function') {
-            window.AdminSpa.reload();
-            return;
-        }
-        if (typeof window.adminLiveRefreshNow === 'function') {
-            window.adminLiveRefreshNow();
-        }
+        reloadPageContent({});
     };
 
+    window.adminLiveCollectPageData = collectPageData;
     window.adminLiveApplyBadges = applySidebarBadges;
     window.adminLiveApplyDashboard = applyDashboardStats;
     window.adminLiveSoftReplace = softReplaceLiveRoot;

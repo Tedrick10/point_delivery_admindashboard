@@ -48,6 +48,7 @@
                     'class' => 'sidebar-layout',
                     'route' => ['order.index', 'orders_type' => 'list'],
                 ])
+                ->nickname('nav_order_list')
                 ->data('permission', 'order-list')
                 ->prepend('<i class="fa fa-list"></i>')
                 ->link->attr(['class' => '']);
@@ -68,6 +69,7 @@
                         'dispatch_status' => 'pre_order',
                     ],
                 ])
+                ->nickname('nav_pre_order')
                 ->data('permission', 'order-list')
                 ->prepend('<i class="fas fa-clock"></i>')
                 ->link->attr(['class' => '']);
@@ -86,7 +88,9 @@
             $isHubUser = isDispatchHub($authUser);
             $assign100Count = $hubService->poolCount($isHubUser ? (int) $authUser->id : null);
             $assign100BadgeClass = 'badge badge-pill badge-warning p-1 animate__animated animate__flash' . ($assign100Count > 0 ? '' : ' d-none');
-            $assign100Label =
+            // Header toggle: label only. Count badge lives on the inner Assign 100 child.
+            $assign100Label = '<span>' . __('message.assign_100') . '</span>';
+            $assign100ChildLabel =
                 '<span>' . __('message.assign_100') . ' ' .
                 '<span class="' . $assign100BadgeClass . '" id="assign100Count" data-live-badge="assign100Count">' .
                 ($assign100Count > 0 ? $assign100Count : '') .
@@ -100,9 +104,9 @@
                 ->link->attr(['class' => ''])
                 ->href('#assign100');
 
-            $addAssign100Child = function () use ($menu) {
+            $addAssign100Child = function () use ($menu, $assign100ChildLabel) {
                 $menu->assign100
-                    ->add('<span>' . __('message.assign_100') . '</span>', [
+                    ->add($assign100ChildLabel, [
                         'class' => 'sidebar-layout',
                         'route' => 'order.dispatch.assign-100',
                     ])
@@ -194,6 +198,7 @@
                         'dispatch_status' => 'rider_pick_up_error',
                     ],
                 ])
+                ->nickname('nav_pickup_error')
                 ->data('permission', 'order-list')
                 ->prepend('<i class="fas fa-exclamation-triangle"></i>')
                 ->link->attr(['class' => '']);
@@ -223,6 +228,7 @@
                         'dispatch_status' => 'rider_pick_up_cancelled',
                     ],
                 ])
+                ->nickname('nav_pickup_cancelled')
                 ->data('permission', 'order-list')
                 ->prepend('<i class="fas fa-ban"></i>')
                 ->link->attr(['class' => '']);
@@ -245,7 +251,6 @@
             // Online Shop List
             $menu
                 ->add('<span>' . __('message.list_form_title', ['form' => __('message.online_shop')]) . '</span>', [
-                    'class' => request()->is('users') || request()->is('users?*') ? 'active' : '',
                     'route' => 'users.index',
                 ])
                 ->data('permission', 'users-list')
@@ -367,6 +372,14 @@
                 ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
 
             // From / To / City — managed only in Super Admin panel (not branch sidebar)
+
+            // My Salary — every office / admin account can open their own payroll slip
+            $menu
+                ->add('<span>' . __('message.hr_my_salary_title') . '</span>', [
+                    'route' => 'hr.my-salary.index',
+                ])
+                ->prepend('<i class="fas fa-money-check-alt"></i>')
+                ->link->attr(['class' => '']);
 
             // HR / Payroll (admin) — Late Time Fine / Extra Fine / ရုံးမှခဏယူငွေ → Super Admin only
             $menu
@@ -665,10 +678,35 @@
     })->filter(function ($item) {
         return checkMenuRoleAndPermission($item);
     });
+
+    if (optional(request()->route())->getName() === 'order.index') {
+        $want = match ((string) request('dispatch_status', '')) {
+            'pre_order' => 'nav_pre_order',
+            'rider_pick_up_error' => 'nav_pickup_error',
+            'rider_pick_up_cancelled' => 'nav_pickup_cancelled',
+            default => 'nav_order_list',
+        };
+        foreach (['nav_order_list', 'nav_pre_order', 'nav_pickup_error', 'nav_pickup_cancelled'] as $nick) {
+            try {
+                $navItem = $MyNavBar->{$nick} ?? null;
+            } catch (\Throwable $e) {
+                $navItem = null;
+            }
+            if (! $navItem) {
+                continue;
+            }
+            $navItem->isActive = $nick === $want;
+            if ($nick === $want && method_exists($navItem, 'activate')) {
+                $navItem->activate();
+            }
+        }
+    }
+
     view()->share('MyNavBar', $MyNavBar);
 @endphp
 
-<div class="mm-sidebar sidebar-default pds-sidebar">
+{{-- Left sidebar shell kept for menu build / fallback; hidden when body.pds-header-nav. --}}
+<div class="mm-sidebar sidebar-default pds-sidebar" aria-hidden="true">
     <div class="mm-sidebar-logo pds-sidebar-brand">
         <a href="{{ route('home') }}" class="header-logo pds-brand-link" title="POINT Delivery Service">
             <img src="{{ getSingleMedia(appSettingData('get'), 'site_logo', null) }}"

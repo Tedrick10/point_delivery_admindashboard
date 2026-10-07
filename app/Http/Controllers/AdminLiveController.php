@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\AdminLiveStateService;
+use App\Services\DispatchOrderWorkflowService;
 use Illuminate\Http\Request;
 
 class AdminLiveController extends Controller
@@ -43,6 +44,16 @@ class AdminLiveController extends Controller
 
         if ($page === 'home' || $page === 'dashboard' || $request->boolean('include_dashboard')) {
             $payload['dashboard'] = $this->live->dashboardStats($request);
+        }
+
+        $pageNorm = strtolower(trim($page));
+        if ($pageNorm === 'order.index' || $pageNorm === 'order') {
+            $payload['order_list_tabs'] = app(DispatchOrderWorkflowService::class)->orderListTabCounts(
+                $request->input('from_date'),
+                $request->input('to_date'),
+                $request->input('search_term'),
+                false
+            );
         }
 
         return response()->json($payload);

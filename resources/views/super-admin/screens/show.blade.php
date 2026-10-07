@@ -7,7 +7,9 @@
 
 @section('title', $screenTitle)
 @section('page_title', $screenTitle)
+@if(! in_array((string) ($screenKey ?? ''), ['kyo-shin', 'rider-remit', 'account-creation', 'roles-permissions', 'office-salary', 'rider-salary', 'late-fine', 'welcome-promotion', 'general-setting', 'company-contact', 'api-server-setting', 'ui-theme', 'delivery-route'], true))
 @section('page_sub', $monthLabel)
+@endif
 
 @section('content')
 @php
@@ -86,170 +88,188 @@
                 </a>
             </div>
 
-            @if(session('success'))
-                <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
-            @endif
-
             <div class="sa-delivery-route-body pds-route-locations-page">
                 @if($tab === 'from_to')
-                    @include('setting.partials._delivery_route_from_to')
+                    @include('super-admin.screens.partials.delivery-route-from-to-board')
                 @elseif($tab === 'city')
-                    @include('setting.partials._delivery_route_cities')
+                    @include('super-admin.screens.partials.delivery-route-cities-board')
                 @else
-                    @include('setting.partials._delivery_route_townships')
+                    @include('super-admin.screens.partials.delivery-route-townships-board')
                 @endif
             </div>
         </section>
     @endif
 
     @if(($screenKey ?? '') === 'rider-remit')
-        <section class="sa-module-panel sa-fuel-default-panel">
-            <header class="sa-module-panel__head">
-                <h3>{{ __('message.sa_fuel_default_title') }}</h3>
-                <span>{{ __('message.sa_fuel_default_badge') }}</span>
-            </header>
-            <p class="sa-fuel-default-panel__hint">{{ __('message.sa_fuel_default_hint') }}</p>
-            <form method="POST" action="{{ route('super-admin.rider-remit.default-fuel') }}" class="sa-fuel-default-form" id="saFuelDefaultForm">
-                @csrf
-                <label for="sa_default_fuel">{{ __('message.sa_fuel_default_label') }}</label>
-                <div class="sa-fuel-default-form__row">
-                    <input type="number"
-                           id="sa_default_fuel"
-                           name="fuel_amount"
-                           min="0"
-                           step="1"
-                           value="{{ (int) ($defaultFuel ?? 10000) }}"
-                           required
-                           inputmode="numeric">
+        <div class="sa-rider-remit-page">
+            <section class="sa-module-panel sa-rider-remit-default">
+                <header class="sa-module-panel__head">
+                    <h3>{{ __('message.sa_fuel_default_title') }}</h3>
+                </header>
+                <form method="POST" action="{{ route('super-admin.rider-remit.default-fuel') }}" class="sa-rider-remit-default__form" id="saFuelDefaultForm">
+                    @csrf
+                    <label class="sa-rider-remit-default__field" for="sa_default_fuel">
+                        <span>{{ __('message.sa_fuel_default_label') }}</span>
+                        <input type="number"
+                               id="sa_default_fuel"
+                               name="fuel_amount"
+                               min="0"
+                               step="1"
+                               value="{{ (int) ($defaultFuel ?? 10000) }}"
+                               required
+                               inputmode="numeric"
+                               class="sa-no-spin">
+                    </label>
+                    <label class="sa-rider-remit-default__field" for="sa_fuel_min_ways">
+                        <span>{{ __('message.sa_fuel_min_ways_label') }}</span>
+                        <input type="number"
+                               id="sa_fuel_min_ways"
+                               name="fuel_min_ways"
+                               min="1"
+                               max="1000"
+                               step="1"
+                               value="{{ (int) ($fuelMinWays ?? 1) }}"
+                               required
+                               inputmode="numeric"
+                               class="sa-no-spin">
+                    </label>
                     <button type="submit" class="sa-module-hero__btn sa-fuel-default-form__btn">
-                        <i class="fas fa-save" aria-hidden="true"></i>
-                        <span>{{ __('message.save') }}</span>
+                        {{ __('message.save') }}
                     </button>
-                </div>
-            </form>
-            @if(session('success'))
-                <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
-            @endif
-            @error('fuel_amount')
-                <p class="sa-fuel-default-panel__err">{{ $message }}</p>
-            @enderror
-        </section>
+                </form>
+                <p class="sa-rider-remit-default__hint">{{ __('message.sa_fuel_min_ways_hint') }}</p>
+                @error('fuel_amount')
+                    <p class="sa-fuel-default-panel__err">{{ $message }}</p>
+                @enderror
+                @error('fuel_min_ways')
+                    <p class="sa-fuel-default-panel__err">{{ $message }}</p>
+                @enderror
+            </section>
 
-        <section class="sa-module-panel sa-late-fine-staff-panel">
-            <header class="sa-module-panel__head">
-                <h3>{{ __('message.sa_rider_fuel_title') }}</h3>
-                <span>
-                    {{ collect($riderFuelGroups ?? [])->sum(fn ($g) => count($g['rows'] ?? [])) }}
-                    {{ __('message.hr_people') }}
-                </span>
-            </header>
-            <p class="sa-fuel-default-panel__hint">{{ __('message.sa_rider_fuel_hint') }}</p>
+            <section class="sa-module-panel sa-rider-remit-list">
+                <header class="sa-module-panel__head">
+                    <h3>{{ __('message.sa_rider_fuel_title') }}</h3>
+                    <span>
+                        {{ collect($riderFuelGroups ?? [])->sum(fn ($g) => count($g['rows'] ?? [])) }}
+                        {{ __('message.hr_people') }}
+                    </span>
+                </header>
 
-            @forelse(($riderFuelGroups ?? []) as $group)
-                <div class="sa-rider-fuel-group">
-                    <div class="sa-rider-fuel-group__head">
-                        <h4>{{ $group['title'] }}</h4>
-                        <span>{{ count($group['rows'] ?? []) }} {{ __('message.hr_people') }}</span>
-                    </div>
-                    <div class="sa-module-table-wrap">
-                        <table class="sa-module-table sa-late-fine-staff-table">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>{{ __('message.name') }}</th>
-                                    <th>{{ __('message.rider_remit_fuel') }}</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse(($group['rows'] ?? collect()) as $i => $member)
-                                    <tr data-rider-id="{{ $member->id }}">
-                                        <td>{{ $i + 1 }}</td>
-                                        <td>
-                                            <strong>{{ $member->name }}</strong>
-                                            @if(!empty($member->is_hub))
-                                                <span class="sa-rider-fuel-hub-tag">{{ __('message.sa_rider_fuel_hub_tag') }}</span>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            <form method="POST"
-                                                  action="{{ route('super-admin.rider-remit.rider.fuel', $member->id) }}"
-                                                  class="sa-late-fine-allowance-form sa-rider-fuel-form">
-                                                @csrf
-                                                @method('PUT')
+                @forelse(($riderFuelGroups ?? []) as $group)
+                    <div class="sa-rider-fuel-group">
+                        <div class="sa-rider-fuel-group__head">
+                            <h4>{{ $group['title'] }}</h4>
+                            <span>{{ count($group['rows'] ?? []) }} {{ __('message.hr_people') }}</span>
+                        </div>
+                        <div class="sa-module-table-wrap">
+                            <table class="sa-module-table sa-late-fine-staff-table sa-rider-remit-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sa-rider-remit-table__num">#</th>
+                                        <th>{{ __('message.name') }}</th>
+                                        <th>{{ __('message.rider_remit_fuel') }}</th>
+                                        <th>{{ __('message.sa_fuel_min_ways_col') }}</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse(($group['rows'] ?? collect()) as $i => $member)
+                                        @php $fuelFormId = 'sa-rider-fuel-'.$member->id; @endphp
+                                        <tr data-rider-id="{{ $member->id }}">
+                                            <td class="sa-rider-remit-table__num">{{ $i + 1 }}</td>
+                                            <td>
+                                                <strong>{{ $member->name }}</strong>
+                                                @if(!empty($member->is_hub))
+                                                    <span class="sa-rider-fuel-hub-tag">{{ __('message.sa_rider_fuel_hub_tag') }}</span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                <form method="POST"
+                                                      action="{{ route('super-admin.rider-remit.rider.fuel', $member->id) }}"
+                                                      class="sa-late-fine-allowance-form sa-rider-fuel-form"
+                                                      id="{{ $fuelFormId }}">
+                                                    @csrf
+                                                    @method('PUT')
+                                                    <input type="number"
+                                                           name="fuel_amount"
+                                                           min="0"
+                                                           step="1"
+                                                           value="{{ (int) ($member->fuel_amount ?: 0) }}"
+                                                           required
+                                                           inputmode="numeric"
+                                                           class="sa-late-fine-allowance-input sa-no-spin">
+                                                </form>
+                                            </td>
+                                            <td>
                                                 <input type="number"
-                                                       name="fuel_amount"
-                                                       min="0"
+                                                       form="{{ $fuelFormId }}"
+                                                       name="fuel_min_ways"
+                                                       min="1"
+                                                       max="1000"
                                                        step="1"
-                                                       value="{{ (int) ($member->fuel_amount ?: 0) }}"
+                                                       value="{{ (int) ($member->fuel_min_ways ?? 1) }}"
                                                        required
                                                        inputmode="numeric"
-                                                       class="sa-late-fine-allowance-input">
-                                                <button type="submit" class="sa-module-hero__btn sa-late-fine-allowance-btn">
+                                                       class="sa-late-fine-allowance-input sa-no-spin"
+                                                       aria-label="{{ __('message.sa_fuel_min_ways_col') }}">
+                                            </td>
+                                            <td>
+                                                <button type="submit" form="{{ $fuelFormId }}" class="sa-module-hero__btn sa-late-fine-allowance-btn">
                                                     {{ __('message.save') }}
                                                 </button>
-                                            </form>
-                                        </td>
-                                        <td class="sa-late-fine-allowance-status" aria-live="polite"></td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="4">{{ __('message.hr_no_rider_accounts_hint') }}</td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="5">{{ __('message.hr_no_rider_accounts_hint') }}</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
-            @empty
-                <p class="sa-fuel-default-panel__hint">{{ __('message.hr_no_rider_accounts_hint') }}</p>
-            @endforelse
-        </section>
+                @empty
+                    <p class="sa-fuel-default-panel__hint">{{ __('message.hr_no_rider_accounts_hint') }}</p>
+                @endforelse
+            </section>
+        </div>
     @endif
 
     @if(($screenKey ?? '') === 'late-fine')
-        <section class="sa-module-panel sa-fuel-default-panel">
+        <div class="sa-late-fine-page sa-hr-salary-page">
+        <section class="sa-module-panel sa-late-fine-default">
             <header class="sa-module-panel__head">
                 <h3>{{ __('message.sa_late_fine_defaults_title') }}</h3>
-                <span>{{ __('message.sa_late_fine_defaults_badge') }}</span>
             </header>
-            <p class="sa-fuel-default-panel__hint">{{ __('message.sa_late_fine_defaults_hint') }}</p>
-            <form method="POST" action="{{ route('super-admin.late-fine.defaults') }}" class="sa-late-fine-defaults-form">
+            <form method="POST" action="{{ route('super-admin.late-fine.defaults') }}" class="sa-late-fine-default__form">
                 @csrf
-                <div class="sa-late-fine-defaults-form__grid">
-                    <div>
-                        <label for="sa_fine_per_minute">{{ __('message.hr_fine_per_minute') }}</label>
-                        <div class="sa-fuel-default-form__row">
-                            <input type="number"
-                                   id="sa_fine_per_minute"
-                                   name="fine_per_minute"
-                                   min="0"
-                                   step="1"
-                                   value="{{ (int) ($lateFineDefaults['fine_per_minute'] ?? 100) }}"
-                                   required
-                                   inputmode="numeric">
-                        </div>
-                    </div>
-                    <div>
-                        <label for="sa_absent_day_rate">{{ __('message.hr_absent_day_rate') }}</label>
-                        <div class="sa-fuel-default-form__row">
-                            <input type="number"
-                                   id="sa_absent_day_rate"
-                                   name="absent_day_rate"
-                                   min="0"
-                                   step="1"
-                                   value="{{ (int) ($lateFineDefaults['absent_day_rate'] ?? 3000) }}"
-                                   required
-                                   inputmode="numeric">
-                        </div>
-                    </div>
-                    <div class="sa-late-fine-defaults-form__action">
-                        <button type="submit" class="sa-module-hero__btn sa-fuel-default-form__btn">
-                            <i class="fas fa-save" aria-hidden="true"></i>
-                            <span>{{ __('message.save') }}</span>
-                        </button>
-                    </div>
+                <div class="sa-late-fine-default__field">
+                    <label for="sa_fine_per_minute">{{ __('message.hr_fine_per_minute') }}</label>
+                    <input type="number"
+                           id="sa_fine_per_minute"
+                           name="fine_per_minute"
+                           min="0"
+                           step="1"
+                           value="{{ (int) ($lateFineDefaults['fine_per_minute'] ?? 100) }}"
+                           required
+                           inputmode="numeric"
+                           class="sa-no-spin">
                 </div>
+                <div class="sa-late-fine-default__field">
+                    <label for="sa_absent_day_rate">{{ __('message.hr_absent_day_rate') }}</label>
+                    <input type="number"
+                           id="sa_absent_day_rate"
+                           name="absent_day_rate"
+                           min="0"
+                           step="1"
+                           value="{{ (int) ($lateFineDefaults['absent_day_rate'] ?? 3000) }}"
+                           required
+                           inputmode="numeric"
+                           class="sa-no-spin">
+                </div>
+                <button type="submit" class="sa-module-hero__btn sa-fuel-default-form__btn">
+                    {{ __('message.save') }}
+                </button>
             </form>
             @error('fine_per_minute')
                 <p class="sa-fuel-default-panel__err">{{ $message }}</p>
@@ -259,33 +279,43 @@
             @enderror
         </section>
 
-        <section class="sa-module-panel sa-late-fine-staff-panel">
+        <section class="sa-module-panel sa-late-fine-staff">
             <header class="sa-module-panel__head">
                 <h3>{{ __('message.sa_rider_fuel_mdy_list') }}</h3>
                 <span>{{ $lateFineStaff->count() }} {{ __('message.hr_people') }}</span>
             </header>
-            <p class="sa-fuel-default-panel__hint">{{ __('message.sa_late_fine_allowance_hint') }}</p>
             <div class="sa-module-table-wrap">
-                <table class="sa-module-table sa-late-fine-staff-table">
+                <table class="sa-module-table sa-late-fine-staff-table sa-late-fine-table">
                     <thead>
                         <tr>
-                            <th>#</th>
+                            <th class="sa-late-fine-table__num">#</th>
                             <th>{{ __('message.name') }}</th>
-                            <th>{{ __('message.hr_staff_group') }}</th>
                             <th>{{ __('message.hr_allowance_minutes') }}</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($lateFineStaff as $i => $member)
+                            @php
+                                $allowFormId = 'sa-late-allow-'.$member->id;
+                                $lateInitial = strtoupper(substr(preg_replace('/\s+/u', '', (string) $member->name), 0, 1));
+                            @endphp
                             <tr data-staff-id="{{ $member->id }}">
-                                <td>{{ $i + 1 }}</td>
-                                <td><strong>{{ $member->name }}</strong></td>
-                                <td>{{ __('message.hr_group_rider') }}</td>
+                                <td class="sa-late-fine-table__num">{{ $i + 1 }}</td>
+                                <td>
+                                    <div class="sa-office-salary-person">
+                                        <span class="sa-office-salary-avatar">{{ $lateInitial }}</span>
+                                        <div>
+                                            <strong>{{ $member->name }}</strong>
+                                            <span class="sa-late-fine-group">{{ __('message.hr_group_rider') }}</span>
+                                        </div>
+                                    </div>
+                                </td>
                                 <td>
                                     <form method="POST"
                                           action="{{ route('super-admin.late-fine.staff.allowance', $member->id) }}"
-                                          class="sa-late-fine-allowance-form">
+                                          class="sa-late-fine-allowance-form"
+                                          id="{{ $allowFormId }}">
                                         @csrf
                                         @method('PUT')
                                         <input type="number"
@@ -296,17 +326,19 @@
                                                value="{{ (int) $member->allowance_minutes }}"
                                                required
                                                inputmode="numeric"
-                                               class="sa-late-fine-allowance-input">
-                                        <button type="submit" class="sa-module-hero__btn sa-late-fine-allowance-btn">
-                                            {{ __('message.save') }}
-                                        </button>
+                                               class="sa-late-fine-allowance-input sa-no-spin">
                                     </form>
                                 </td>
-                                <td class="sa-late-fine-allowance-status" aria-live="polite"></td>
+                                <td>
+                                    <button type="submit" form="{{ $allowFormId }}" class="sa-module-hero__btn sa-late-fine-allowance-btn">
+                                        {{ __('message.save') }}
+                                    </button>
+                                    <span class="sa-late-fine-allowance-status" aria-live="polite"></span>
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5">{{ __('message.hr_no_rider_accounts_hint') }}</td>
+                                <td colspan="4">{{ __('message.hr_no_rider_accounts_hint') }}</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -315,32 +347,31 @@
         </section>
 
         @if(!empty($lateFineSheet))
-            <section class="sa-module-panel sa-late-fine-sheet-panel">
-                <header class="sa-module-panel__head">
+            <section class="sa-late-fine-sheet-stack">
+                <header class="sa-late-fine-sheet-stack__head">
                     <h3>{{ __('message.sa_late_fine_sheet_title') }}</h3>
-                    <span>{{ $lateFineSheet['monthLabel'] ?? '' }}</span>
                 </header>
-                <p class="sa-fuel-default-panel__hint">{{ __('message.sa_late_fine_sheet_hint') }}</p>
                 <div class="pds-hr-page sa-late-fine-sheet-embed">
                     @include('hr.partials.styles')
                     @include('hr.partials._late-fine-sheet', $lateFineSheet)
                 </div>
             </section>
         @endif
+        </div>
     @endif
 
     @if(($screenKey ?? '') === 'rider-salary')
-        <section class="sa-module-panel sa-late-fine-staff-panel">
+        <div class="sa-rider-salary-page sa-hr-salary-page">
+        <section class="sa-module-panel sa-rider-salary-staff">
             <header class="sa-module-panel__head">
                 <h3>{{ __('message.sa_rider_way_rate_title') }}</h3>
                 <span>{{ $riderSalaryStaff->count() }} {{ __('message.hr_people') }}</span>
             </header>
-            <p class="sa-fuel-default-panel__hint">{{ __('message.sa_rider_way_rate_hint') }}</p>
             <div class="sa-module-table-wrap">
-                <table class="sa-module-table sa-late-fine-staff-table">
+                <table class="sa-module-table sa-late-fine-staff-table sa-rider-salary-table">
                     <thead>
                         <tr>
-                            <th>#</th>
+                            <th class="sa-rider-salary-table__num">#</th>
                             <th>{{ __('message.name') }}</th>
                             <th>{{ __('message.hr_way_rate') }}</th>
                             <th></th>
@@ -348,13 +379,23 @@
                     </thead>
                     <tbody>
                         @forelse($riderSalaryStaff as $i => $member)
+                            @php
+                                $wayFormId = 'sa-rider-way-'.$member->id;
+                                $riderInitial = strtoupper(substr(preg_replace('/\s+/u', '', (string) $member->name), 0, 1));
+                            @endphp
                             <tr data-staff-id="{{ $member->id }}">
-                                <td>{{ $i + 1 }}</td>
-                                <td><strong>{{ $member->name }}</strong></td>
+                                <td class="sa-rider-salary-table__num">{{ $i + 1 }}</td>
+                                <td>
+                                    <div class="sa-office-salary-person">
+                                        <span class="sa-office-salary-avatar">{{ $riderInitial }}</span>
+                                        <strong>{{ $member->name }}</strong>
+                                    </div>
+                                </td>
                                 <td>
                                     <form method="POST"
                                           action="{{ route('super-admin.rider-salary.staff.way-rate', $member->id) }}"
-                                          class="sa-late-fine-allowance-form sa-rider-way-rate-form">
+                                          class="sa-late-fine-allowance-form sa-rider-way-rate-form"
+                                          id="{{ $wayFormId }}">
                                         @csrf
                                         @method('PUT')
                                         <input type="number"
@@ -364,13 +405,15 @@
                                                value="{{ (int) ($member->way_rate ?: 1000) }}"
                                                required
                                                inputmode="numeric"
-                                               class="sa-late-fine-allowance-input">
-                                        <button type="submit" class="sa-module-hero__btn sa-late-fine-allowance-btn">
-                                            {{ __('message.save') }}
-                                        </button>
+                                               class="sa-late-fine-allowance-input sa-no-spin">
                                     </form>
                                 </td>
-                                <td class="sa-late-fine-allowance-status" aria-live="polite"></td>
+                                <td>
+                                    <button type="submit" form="{{ $wayFormId }}" class="sa-module-hero__btn sa-late-fine-allowance-btn">
+                                        {{ __('message.save') }}
+                                    </button>
+                                    <span class="sa-late-fine-allowance-status" aria-live="polite"></span>
+                                </td>
                             </tr>
                         @empty
                             <tr>
@@ -383,67 +426,59 @@
         </section>
 
         @if(!empty($riderSalarySheet))
-            <section class="sa-module-panel sa-late-fine-sheet-panel">
+            <section class="sa-module-panel sa-hr-salary-sheet-panel">
                 <header class="sa-module-panel__head">
                     <h3>{{ __('message.sa_rider_salary_sheet_title') }}</h3>
-                    <span>{{ $riderSalarySheet['monthLabel'] ?? '' }}</span>
                 </header>
-                <p class="sa-fuel-default-panel__hint">{{ __('message.sa_salary_deposit_sheet_hint') }}</p>
                 <div class="pds-hr-page sa-late-fine-sheet-embed sa-salary-sheet-embed">
                     @include('hr.partials.styles')
                     @include('hr.partials._rider-salary-sheet', $riderSalarySheet)
                 </div>
             </section>
         @endif
+        </div>
     @endif
 
     @if(($screenKey ?? '') === 'office-salary')
         @php
             $officeSalaryDefault = (int) ($defaultOfficeSalary ?? 600000);
         @endphp
-        <section class="sa-module-panel sa-fuel-default-panel">
+        <div class="sa-office-salary-page sa-hr-salary-page">
+        <section class="sa-module-panel sa-office-salary-default">
             <header class="sa-module-panel__head">
                 <h3>{{ __('message.sa_office_salary_default_title') }}</h3>
-                <span>{{ __('message.sa_fuel_default_badge') }}</span>
             </header>
-            <p class="sa-fuel-default-panel__hint">{{ __('message.sa_office_salary_default_hint') }}</p>
-            <form method="POST" action="{{ route('super-admin.office-salary.default') }}" class="sa-fuel-default-form">
+            <form method="POST" action="{{ route('super-admin.office-salary.default') }}" class="sa-office-salary-default__form">
                 @csrf
                 <label for="sa_default_office_salary">{{ __('message.hr_monthly_salary') }}</label>
-                <div class="sa-fuel-default-form__row">
-                    <input type="number"
-                           id="sa_default_office_salary"
-                           name="monthly_salary"
-                           min="0"
-                           step="1"
-                           value="{{ $officeSalaryDefault }}"
-                           required
-                           inputmode="numeric">
-                    <button type="submit" class="sa-module-hero__btn sa-fuel-default-form__btn">
-                        <i class="fas fa-save" aria-hidden="true"></i>
-                        <span>{{ __('message.save') }}</span>
-                    </button>
-                </div>
+                <input type="number"
+                       id="sa_default_office_salary"
+                       name="monthly_salary"
+                       min="0"
+                       step="1"
+                       value="{{ $officeSalaryDefault }}"
+                       required
+                       inputmode="numeric"
+                       class="sa-no-spin">
+                <button type="submit" class="sa-module-hero__btn sa-fuel-default-form__btn">
+                    {{ __('message.save') }}
+                </button>
             </form>
-            @if(session('success'))
-                <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
-            @endif
             @error('monthly_salary')
                 <p class="sa-fuel-default-panel__err">{{ $message }}</p>
             @enderror
         </section>
 
-        <section class="sa-module-panel sa-late-fine-staff-panel">
+        <section class="sa-module-panel sa-office-salary-staff">
             <header class="sa-module-panel__head">
                 <h3>{{ __('message.sa_office_salary_title') }}</h3>
                 <span>{{ $officeSalaryStaff->count() }} {{ __('message.hr_people') }}</span>
             </header>
-            <p class="sa-fuel-default-panel__hint">{{ __('message.sa_office_salary_hint') }}</p>
             <div class="sa-module-table-wrap">
-                <table class="sa-module-table sa-late-fine-staff-table">
+                <table class="sa-module-table sa-late-fine-staff-table sa-office-salary-table">
                     <thead>
                         <tr>
-                            <th>#</th>
+                            <th class="sa-office-salary-table__num">#</th>
                             <th>{{ __('message.name') }}</th>
                             <th>{{ __('message.hr_monthly_salary') }}</th>
                             <th></th>
@@ -451,13 +486,23 @@
                     </thead>
                     <tbody>
                         @forelse($officeSalaryStaff as $i => $member)
+                            @php
+                                $officeFormId = 'sa-office-salary-'.$member->id;
+                                $officeInitial = strtoupper(substr(preg_replace('/\s+/u', '', (string) $member->name), 0, 1));
+                            @endphp
                             <tr data-staff-id="{{ $member->id }}">
-                                <td>{{ $i + 1 }}</td>
-                                <td><strong>{{ $member->name }}</strong></td>
+                                <td class="sa-office-salary-table__num">{{ $i + 1 }}</td>
+                                <td>
+                                    <div class="sa-office-salary-person">
+                                        <span class="sa-office-salary-avatar">{{ $officeInitial }}</span>
+                                        <strong>{{ $member->name }}</strong>
+                                    </div>
+                                </td>
                                 <td>
                                     <form method="POST"
                                           action="{{ route('super-admin.office-salary.staff.monthly-salary', $member->id) }}"
-                                          class="sa-late-fine-allowance-form sa-office-salary-form">
+                                          class="sa-late-fine-allowance-form sa-office-salary-form"
+                                          id="{{ $officeFormId }}">
                                         @csrf
                                         @method('PUT')
                                         <input type="number"
@@ -467,13 +512,15 @@
                                                value="{{ (int) ($member->monthly_salary ?: $officeSalaryDefault) }}"
                                                required
                                                inputmode="numeric"
-                                               class="sa-late-fine-allowance-input">
-                                        <button type="submit" class="sa-module-hero__btn sa-late-fine-allowance-btn">
-                                            {{ __('message.save') }}
-                                        </button>
+                                               class="sa-late-fine-allowance-input sa-no-spin">
                                     </form>
                                 </td>
-                                <td class="sa-late-fine-allowance-status" aria-live="polite"></td>
+                                <td>
+                                    <button type="submit" form="{{ $officeFormId }}" class="sa-module-hero__btn sa-late-fine-allowance-btn">
+                                        {{ __('message.save') }}
+                                    </button>
+                                    <span class="sa-late-fine-allowance-status" aria-live="polite"></span>
+                                </td>
                             </tr>
                         @empty
                             <tr>
@@ -486,18 +533,17 @@
         </section>
 
         @if(!empty($officeSalarySheet))
-            <section class="sa-module-panel sa-late-fine-sheet-panel">
+            <section class="sa-module-panel sa-hr-salary-sheet-panel">
                 <header class="sa-module-panel__head">
                     <h3>{{ __('message.sa_office_salary_sheet_title') }}</h3>
-                    <span>{{ $officeSalarySheet['monthLabel'] ?? '' }}</span>
                 </header>
-                <p class="sa-fuel-default-panel__hint">{{ __('message.sa_salary_deposit_sheet_hint') }}</p>
                 <div class="pds-hr-page sa-late-fine-sheet-embed sa-salary-sheet-embed">
                     @include('hr.partials.styles')
                     @include('hr.partials._office-salary-sheet', $officeSalarySheet)
                 </div>
             </section>
         @endif
+        </div>
     @endif
 
     @if(($screenKey ?? '') === 'kyo-shin')
@@ -506,10 +552,6 @@
                 <h3>{{ __('message.kyo_shin_set_totals') }}</h3>
                 <span>{{ __('message.sa_fuel_default_badge') }}</span>
             </header>
-            <p class="sa-fuel-default-panel__hint">{{ __('message.kyo_shin_set_totals_hint') }}</p>
-            @if(session('success'))
-                <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
-            @endif
             <div class="sa-module-table-wrap">
                 <table class="sa-module-table sa-late-fine-staff-table">
                     <thead>
@@ -524,10 +566,11 @@
                     </thead>
                     <tbody>
                         @forelse(($kyoShinControl ?? []) as $row)
+                            @php $kyoFormId = 'kyo-shin-total-'.preg_replace('/[^a-zA-Z0-9_-]/', '-', (string) $row['key']); @endphp
                             <tr>
                                 <td><strong>{{ $row['label'] }}</strong></td>
                                 <td>
-                                    <form method="POST" action="{{ route('super-admin.kyo-shin.total') }}" class="sa-late-fine-allowance-form">
+                                    <form method="POST" action="{{ route('super-admin.kyo-shin.total') }}" class="sa-kyo-total-form" id="{{ $kyoFormId }}">
                                         @csrf
                                         <input type="hidden" name="scope_key" value="{{ $row['key'] }}">
                                         <input type="number"
@@ -538,33 +581,26 @@
                                                required
                                                inputmode="numeric"
                                                class="sa-late-fine-allowance-input">
-                                        <button type="submit" class="sa-module-hero__btn sa-late-fine-allowance-btn">
-                                            {{ __('message.save') }}
-                                        </button>
                                     </form>
-                                    <small style="display:block;margin-top:6px;color:#94a3b8">{{ number_format($row['thein_total'], 2) }} {{ __('message.kyo_shin_thein') }}</small>
                                 </td>
                                 <td>
                                     {{ number_format($row['cash_on_hand']) }} Ks
-                                    <small style="display:block;color:#94a3b8">{{ number_format($row['thein_cash_on_hand'], 2) }} {{ __('message.kyo_shin_thein') }}</small>
                                 </td>
                                 <td>
                                     {{ number_format($row['returned_today']) }} Ks
-                                    <small style="display:block;color:#94a3b8">{{ number_format($row['thein_returned_today'], 2) }} {{ __('message.kyo_shin_thein') }}</small>
                                 </td>
                                 <td>
                                     {{ number_format($row['os_receivable']) }} Ks
-                                    <small style="display:block;color:#94a3b8">{{ number_format($row['thein_os_receivable'], 2) }} {{ __('message.kyo_shin_thein') }}</small>
                                 </td>
                                 <td>
-                                    <a href="{{ route('order.kyo-shin', ['scope' => $row['key']]) }}" class="sa-module-links__item" target="_blank" rel="noopener">
-                                        {{ __('message.sa_open') }}
-                                    </a>
+                                    <button type="submit" form="{{ $kyoFormId }}" class="sa-module-hero__btn sa-late-fine-allowance-btn">
+                                        {{ __('message.save') }}
+                                    </button>
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5">{{ __('message.kyo_shin_empty') }}</td>
+                                <td colspan="6">{{ __('message.kyo_shin_empty') }}</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -586,68 +622,28 @@
     @endif
 
     @if(($screenKey ?? '') === 'roles-permissions' && !empty($rolesPermissions))
-        <section class="sa-module-panel sa-late-fine-sheet-panel">
-            <header class="sa-module-panel__head">
-                <h3>{{ __('message.sa_screen_roles_permissions') }}</h3>
-                <span>{{ ($rolesPermissions['roles'] ?? collect())->count() }} {{ __('message.role') }}</span>
-            </header>
-            <p class="sa-fuel-default-panel__hint">{{ __('message.sa_roles_permissions_embed_hint') }}</p>
+        <section class="sa-module-panel sa-roles-panel">
             <div class="sa-roles-embed">
                 @include('permission.partials._roles-board', $rolesPermissions)
             </div>
         </section>
-        <style>
-            .sa-roles-embed .btn {
-                display: inline-flex; align-items: center; gap: 6px;
-                border-radius: 999px; padding: 0.5rem 0.9rem; font-weight: 700;
-                text-decoration: none; border: 1px solid transparent; cursor: pointer;
-            }
-            .sa-roles-embed .btn-primary { background: #FE6F07; color: #fff; border-color: #FE6F07; }
-            .sa-roles-embed .btn-outline-danger { background: #fff; color: #b91c1c; border-color: #fecaca; }
-            .sa-roles-embed .pds-roles-hero { display: none; }
-        </style>
     @endif
 
     @if(($screenKey ?? '') === 'general-setting' && !empty($generalSetting))
-        <section class="sa-module-panel sa-system-settings-panel">
-            <header class="sa-module-panel__head">
-                <div>
-                    <h3>{{ __('message.sa_screen_general_setting') }}</h3>
-                    <p class="mb-0 text-muted">{{ __('message.sa_screen_general_setting_sub') }}</p>
-                </div>
-            </header>
-            @if(session('success'))
-                <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
-            @endif
-            @if(session('error'))
-                <p class="sa-fuel-default-panel__err">{{ session('error') }}</p>
-            @endif
+        <section class="sa-settings-page">
             @if($errors->any())
                 <p class="sa-fuel-default-panel__err">{{ $errors->first() }}</p>
             @endif
-            <div class="sa-system-settings-embed">
-                @include('setting.general-setting', $generalSetting)
-            </div>
+            @include('setting.general-setting', $generalSetting)
         </section>
     @endif
 
     @if(($screenKey ?? '') === 'company-contact' && !empty($companyContact))
-        <section class="sa-module-panel sa-system-settings-panel">
-            <header class="sa-module-panel__head">
-                <div>
-                    <h3>{{ __('message.sa_screen_company_contact') }}</h3>
-                    <p class="mb-0 text-muted">{{ __('message.sa_screen_company_contact_sub') }}</p>
-                </div>
-            </header>
-            @if(session('success'))
-                <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
+        <section class="sa-settings-page">
+            @if($errors->any())
+                <p class="sa-fuel-default-panel__err">{{ $errors->first() }}</p>
             @endif
-            @if(session('error'))
-                <p class="sa-fuel-default-panel__err">{{ session('error') }}</p>
-            @endif
-            <div class="sa-system-settings-embed">
-                @include('setting.company-contact-setting', $companyContact)
-            </div>
+            @include('setting.company-contact-setting', $companyContact)
         </section>
     @endif
 
@@ -656,22 +652,11 @@
     @endif
 
     @if(($screenKey ?? '') === 'api-server-setting' && !empty($apiServerSetting))
-        <section class="sa-module-panel sa-system-settings-panel">
-            <header class="sa-module-panel__head">
-                <div>
-                    <h3>{{ __('message.sa_screen_api_server') }}</h3>
-                    <p class="mb-0 text-muted">{{ __('message.sa_screen_api_server_sub') }}</p>
-                </div>
-            </header>
-            @if(session('success'))
-                <p class="sa-fuel-default-panel__ok">{{ session('success') }}</p>
+        <section class="sa-settings-page">
+            @if($errors->any())
+                <p class="sa-fuel-default-panel__err">{{ $errors->first() }}</p>
             @endif
-            @if(session('error'))
-                <p class="sa-fuel-default-panel__err">{{ session('error') }}</p>
-            @endif
-            <div class="sa-system-settings-embed">
-                @include('setting.api-server-setting', $apiServerSetting)
-            </div>
+            @include('setting.api-server-setting', $apiServerSetting)
         </section>
     @endif
 
@@ -885,9 +870,11 @@
 @endif
 <style>
     .sa-late-fine-sheet-embed {
-        overflow-x: auto;
-        margin-top: 4px;
-        padding-bottom: 8px;
+        overflow: visible;
+        margin-top: 0;
+        padding-bottom: 0;
+        min-width: 0;
+        max-width: 100%;
     }
     .sa-late-fine-sheet-embed .pds-hr-toolbar { margin-top: 0; }
     .sa-late-fine-sheet-panel { overflow: visible; }
@@ -982,6 +969,157 @@
         $('.pds-roles-delete-btn').removeClass('is-visible');
         $('.pds-roles-delete-btn[data-role-panel="' + $active.data('role-id') + '"]').addClass('is-visible');
     }
+
+    var $page = $('.pds-roles-page.is-embed');
+    var csrf = $page.attr('data-csrf') || $('meta[name="csrf-token"]').attr('content') || '';
+    var storeUrl = $page.attr('data-store-role-url') || '';
+    var toggleUrl = $page.attr('data-toggle-url') || '';
+    var deletePrompt = @json(__('message.delete_msg'));
+    var pendingDeleteUrl = '';
+
+    ['#pdsRoleAddModal', '#pdsRoleDeleteModal'].forEach(function (sel) {
+        var el = document.querySelector(sel);
+        if (el && el.parentNode !== document.body) {
+            document.body.appendChild(el);
+        }
+    });
+
+    function openModal(sel) {
+        var el = document.querySelector(sel);
+        if (!el) return;
+        document.body.appendChild(el);
+        el.hidden = false;
+        el.classList.add('is-open');
+    }
+    function closeModals() {
+        ['#pdsRoleAddModal', '#pdsRoleDeleteModal'].forEach(function (sel) {
+            var el = document.querySelector(sel);
+            if (!el) return;
+            el.hidden = true;
+            el.classList.remove('is-open');
+        });
+    }
+
+    $(document).on('click', '.js-pds-role-add, .pds-roles-page.is-embed .pds-roles-add-btn', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var err = document.getElementById('pdsRoleAddError');
+        if (err) { err.hidden = true; err.textContent = ''; }
+        var form = document.getElementById('pdsRoleAddForm');
+        if (form) form.reset();
+        openModal('#pdsRoleAddModal');
+        return false;
+    });
+
+    $(document).on('click', '.js-pds-role-delete', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        pendingDeleteUrl = this.getAttribute('data-delete-url') || '';
+        var label = this.getAttribute('data-role-label') || '';
+        var msg = document.getElementById('pdsRoleDeleteMessage');
+        if (msg) msg.textContent = label ? (deletePrompt + ' ' + label) : deletePrompt;
+        var err = document.getElementById('pdsRoleDeleteError');
+        if (err) { err.hidden = true; err.textContent = ''; }
+        openModal('#pdsRoleDeleteModal');
+        return false;
+    });
+
+    $(document).on('click', '[data-close-modal]', function (e) {
+        e.preventDefault();
+        closeModals();
+    });
+
+    $(document).on('submit', '#pdsRoleAddForm', function (e) {
+        e.preventDefault();
+        if (!storeUrl) return;
+        var form = this;
+        var submitBtn = form.querySelector('[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
+        fetch(storeUrl, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrf,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: (form.querySelector('[name="name"]') || {}).value || '',
+                employee_type_name: (form.querySelector('[name="employee_type_name"]') || {}).value || ''
+            })
+        }).then(function (res) {
+            return res.json().then(function (data) {
+                if (!res.ok) throw data;
+                return data;
+            });
+        }).then(function () {
+            window.location.reload();
+        }).catch(function (err) {
+            var msg = (err && err.errors && (err.errors.name || err.errors.employee_type_name))
+                ? [].concat(err.errors.name || [], err.errors.employee_type_name || []).join(' ')
+                : (err && err.message) || 'Could not save';
+            var box = document.getElementById('pdsRoleAddError');
+            if (box) { box.hidden = false; box.textContent = msg; }
+        }).finally(function () {
+            if (submitBtn) submitBtn.disabled = false;
+        });
+    });
+
+    $(document).on('click', '#pdsRoleDeleteConfirm', function () {
+        if (!pendingDeleteUrl) return;
+        var btn = this;
+        btn.disabled = true;
+        fetch(pendingDeleteUrl, {
+            method: 'DELETE',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrf
+            }
+        }).then(function (res) {
+            return res.json().then(function (data) {
+                if (!res.ok) throw data;
+                return data;
+            });
+        }).then(function () {
+            window.location.reload();
+        }).catch(function (err) {
+            var box = document.getElementById('pdsRoleDeleteError');
+            if (box) {
+                box.hidden = false;
+                box.textContent = (err && err.message) || 'Could not delete';
+            }
+        }).finally(function () {
+            btn.disabled = false;
+        });
+    });
+
+    $(document).on('change', '.pds-roles-page.is-embed .permission_check', function () {
+        var input = this;
+        if (!toggleUrl || input.disabled || input.dataset.saving === '1') return;
+        var allowed = input.checked;
+        input.dataset.saving = '1';
+        fetch(toggleUrl, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrf,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                role: input.getAttribute('data-role-name'),
+                permission: input.getAttribute('data-permission-name'),
+                allowed: allowed
+            })
+        }).then(function (res) {
+            if (!res.ok) throw new Error('save failed');
+        }).catch(function () {
+            input.checked = !allowed;
+        }).finally(function () {
+            input.dataset.saving = '0';
+        });
+    });
 })(jQuery);
 </script>
 @endif
@@ -1040,10 +1178,11 @@
                 e.preventDefault();
                 var row = form.closest('tr');
                 var status = row ? row.querySelector('.sa-late-fine-allowance-status') : null;
-                var btn = form.querySelector('button[type="submit"]');
+                var btn = form.querySelector('button[type="submit"]')
+                    || (form.id ? document.querySelector('button[form="' + form.id + '"]') : null);
                 var token = document.querySelector('meta[name="csrf-token"]');
                 if (btn) btn.disabled = true;
-                if (status) status.textContent = '…';
+                if (status) status.textContent = '';
 
                 fetch(form.action, {
                     method: 'POST',
@@ -1059,9 +1198,17 @@
                         return data;
                     });
                 }).then(function (data) {
-                    if (status) status.textContent = data.message || 'OK';
-                    var input = form.querySelector('input[name="' + valueKey + '"]');
-                    if (input && data[valueKey] != null) input.value = data[valueKey];
+                    if (status) status.textContent = '';
+                    ['fuel_amount', 'fuel_min_ways', valueKey].filter(function (key, i, arr) {
+                        return key && arr.indexOf(key) === i;
+                    }).forEach(function (key) {
+                        var input = form.querySelector('input[name="' + key + '"]')
+                            || (form.id ? document.querySelector('input[form="' + form.id + '"][name="' + key + '"]') : null);
+                        if (input && data[key] != null) input.value = data[key];
+                    });
+                    if (window.saShowSuccess) {
+                        window.saShowSuccess(data.message || '');
+                    }
                 }).catch(function () {
                     if (status) status.textContent = 'Error';
                 }).finally(function () {
@@ -1071,10 +1218,22 @@
         });
     }
 
+    bindSaStaffForms('.sa-kyo-total-form', 'total_amount');
     bindSaStaffForms('.sa-late-fine-allowance-form:not(.sa-rider-way-rate-form):not(.sa-rider-fuel-form):not(.sa-office-salary-form)', 'allowance_minutes');
     bindSaStaffForms('.sa-rider-way-rate-form', 'way_rate');
     bindSaStaffForms('.sa-office-salary-form', 'monthly_salary');
     bindSaStaffForms('.sa-rider-fuel-form', 'fuel_amount');
+
+    document.querySelectorAll('.sa-rider-remit-page input[type="number"], .sa-hr-salary-page input[type="number"]').forEach(function (input) {
+        input.addEventListener('wheel', function (e) {
+            e.preventDefault();
+        }, { passive: false });
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                e.preventDefault();
+            }
+        });
+    });
 })();
 </script>
 @endpush

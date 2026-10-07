@@ -29,6 +29,7 @@ class SettingRequest extends FormRequest
             'site_favicon' => 'nullable|image|mimes:jpg,jpeg,png,webp,ico,gif',
             'brand_color' => 'nullable|in:point,amber,delivery_job',
             'brand_font' => 'nullable|in:outfit,z17_strength,rubik',
+            'ui_theme' => 'nullable|in:classic,liquid_glass,aurora',
         ];
     }
 

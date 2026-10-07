@@ -13,18 +13,22 @@ class RiderRemitSettingsController extends Controller
     {
         $data = $request->validate([
             'fuel_amount' => 'required|numeric|min:0',
+            'fuel_min_ways' => 'required|integer|min:1|max:1000',
         ]);
 
         $oldDefault = $service->defaultFuelAmount();
         $amount = $service->setDefaultFuelAmount((float) $data['fuel_amount']);
+        $service->setFuelMinWays((int) $data['fuel_min_ways']);
 
         $day = now('Asia/Yangon')->toDateString();
         $service->applyDefaultFuelToOpenRemits($day, null, $oldDefault, $amount);
+        $service->resyncOpenRemitFuel((int) ($request->user()?->id ?? 0) ?: null);
 
         if ($request->expectsJson() || $request->ajax()) {
             return response()->json([
                 'message' => __('message.sa_fuel_default_saved'),
                 'default_fuel' => $amount,
+                'fuel_min_ways' => $service->fuelMinWays(),
             ]);
         }
 
@@ -42,8 +46,10 @@ class RiderRemitSettingsController extends Controller
 
         $data = $request->validate([
             'fuel_amount' => 'required|numeric|min:0|max:10000000',
+            'fuel_min_ways' => 'required|integer|min:1|max:1000',
         ]);
 
+        $service->setRiderFuelMinWays((int) $rider->id, (int) $data['fuel_min_ways']);
         $amount = $service->setRiderFuelAmount((int) $rider->id, (float) $data['fuel_amount']);
 
         if ($request->expectsJson() || $request->ajax()) {
@@ -51,6 +57,7 @@ class RiderRemitSettingsController extends Controller
                 'message' => __('message.sa_rider_fuel_saved'),
                 'rider_id' => (int) $rider->id,
                 'fuel_amount' => $amount,
+                'fuel_min_ways' => $service->riderFuelMinWays((int) $rider->id),
             ]);
         }
 

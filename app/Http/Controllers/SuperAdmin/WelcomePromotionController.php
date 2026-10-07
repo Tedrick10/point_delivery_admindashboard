@@ -41,6 +41,7 @@ class WelcomePromotionController extends Controller
                 'contact_number',
                 'welcome_promo_enabled',
                 'welcome_discount_percent',
+                'welcome_max_orders',
                 'welcome_orders_used',
                 'status',
             ]);
@@ -63,7 +64,6 @@ class WelcomePromotionController extends Controller
     {
         $data = $request->validate([
             'title' => 'required|string|max:255',
-            'max_orders' => 'required|integer|min:1|max:1000',
             'discount_type' => 'required|in:percentage,fixed',
             'discount_value' => 'required|numeric|min:0',
             'status' => 'required|in:0,1',
@@ -83,9 +83,10 @@ class WelcomePromotionController extends Controller
             ->where('user_type', 'client')
             ->findOrFail($id);
 
-        $data = $request->validate([
+        $request->validate([
             'welcome_promo_enabled' => 'nullable|boolean',
             'welcome_discount_percent' => 'nullable|numeric|min:0|max:100',
+            'welcome_max_orders' => 'nullable|integer|min:1|max:1000',
         ]);
 
         $shop->welcome_promo_enabled = $request->boolean('welcome_promo_enabled');
@@ -93,6 +94,10 @@ class WelcomePromotionController extends Controller
         $shop->welcome_discount_percent = ($percent === null || $percent === '')
             ? null
             : round((float) $percent, 2);
+        $maxOrders = $request->input('welcome_max_orders');
+        $shop->welcome_max_orders = ($maxOrders === null || $maxOrders === '')
+            ? null
+            : (int) $maxOrders;
         $shop->save();
 
         if ($request->expectsJson() || $request->ajax()) {
@@ -101,6 +106,7 @@ class WelcomePromotionController extends Controller
                 'shop_id' => $shop->id,
                 'welcome_promo_enabled' => (bool) $shop->welcome_promo_enabled,
                 'welcome_discount_percent' => $shop->welcome_discount_percent,
+                'welcome_max_orders' => $shop->welcome_max_orders,
             ]);
         }
 

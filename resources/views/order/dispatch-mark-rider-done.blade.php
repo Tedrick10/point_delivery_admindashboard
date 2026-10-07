@@ -36,6 +36,15 @@
                 @if(!$isDispatchPickup || $items->isEmpty())
                     <p class="pds-ard-empty">{{ __('message.admin_mark_rider_done_confirm') }}</p>
                 @else
+                    <div class="pds-ard-search">
+                        <span class="pds-ard-search__icon" aria-hidden="true"><i class="fas fa-search"></i></span>
+                        <input type="search"
+                               class="pds-ard-search__input js-ard-search"
+                               placeholder="{{ __('message.admin_rider_done_search') }}"
+                               autocomplete="off"
+                               aria-label="{{ __('message.admin_rider_done_search') }}">
+                    </div>
+                    <p class="pds-ard-search-empty js-ard-search-empty" hidden>{{ __('message.admin_rider_done_search_empty') }}</p>
                     @foreach($items as $index => $item)
                         @php
                             $itemId = (int) $item->id;
@@ -56,7 +65,9 @@
                         <section class="pds-ard-card"
                                  data-item-id="{{ $itemId }}"
                                  data-prev-size="{{ $weight }}"
-                                 data-needs-photo="{{ $needsPhoto ? '1' : '0' }}">
+                                 data-needs-photo="{{ $needsPhoto ? '1' : '0' }}"
+                                 data-customer-name="{{ $customerName }}"
+                                 data-customer-phone="{{ $customerPhone }}">
                             <header class="pds-ard-card__head">
                                 <div class="pds-ard-card__title-wrap">
                                     <span class="pds-ard-card__index">{{ $index + 1 }}</span>
@@ -189,6 +200,10 @@
                                                    required>
                                             <span class="pds-ard-upload__preview" hidden>
                                                 <img src="" alt="" data-ard-preview-img>
+                                                <span class="pds-ard-upload__ready">
+                                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                                    {{ __('message.admin_rider_done_photo_ready') }}
+                                                </span>
                                             </span>
                                             <span class="pds-ard-upload__icon" aria-hidden="true"><i class="fas fa-camera"></i></span>
                                             <span class="pds-ard-upload__text">
@@ -288,6 +303,48 @@
         $opt.addClass('is-selected');
     });
 
+    function digitsOnly(value) {
+        return String(value || '').replace(/\D+/g, '');
+    }
+
+    function filterArdCards() {
+        var q = String($form.find('.js-ard-search').val() || '').trim().toLowerCase();
+        var qDigits = digitsOnly(q);
+        var visible = 0;
+        $form.find('.pds-ard-card').each(function () {
+            var $card = $(this);
+            if (!q) {
+                $card.removeClass('is-search-hidden');
+                visible += 1;
+                return;
+            }
+            var name = String($card.attr('data-customer-name') || '').toLowerCase();
+            var phone = String($card.attr('data-customer-phone') || '').toLowerCase();
+            var phoneDigits = digitsOnly(phone);
+            var match = name.indexOf(q) !== -1
+                || phone.indexOf(q) !== -1
+                || (qDigits.length >= 3 && phoneDigits.indexOf(qDigits) !== -1);
+            $card.toggleClass('is-search-hidden', !match);
+            if (match) visible += 1;
+        });
+        $form.find('.js-ard-search-empty').prop('hidden', visible > 0);
+        if (visible === 1) {
+            var $only = $form.find('.pds-ard-card:not(.is-search-hidden)').first();
+            if ($only.length && $only[0].scrollIntoView) {
+                $only[0].scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }
+
+    $form.on('input', '.js-ard-search', filterArdCards);
+    $form.on('keydown', '.js-ard-search', function (e) {
+        if (e.key === 'Enter') e.preventDefault();
+    });
+
+    if (typeof window.pdsScanImageDrop === 'function') {
+        window.pdsScanImageDrop($form[0]);
+    }
+
     $form.on('change', '.js-ard-photo', function () {
         var input = this;
         var file = input.files && input.files[0];
@@ -304,13 +361,14 @@
             $upload.removeData('preview-url');
         }
 
-        if (file && file.type && file.type.indexOf('image/') === 0) {
+        if (file && ((file.type && file.type.indexOf('image/') === 0) || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(file.name || ''))) {
             var url = URL.createObjectURL(file);
             $upload.data('preview-url', url);
-            $img.attr('src', url).attr('alt', '');
+            $img.attr('src', url).attr('alt', file.name || '');
             $preview.prop('hidden', false);
             $upload.addClass('has-file');
             $remove.prop('hidden', false);
+            $label.text(file.name || @json(__('message.admin_rider_done_photo_ready')));
         } else {
             $img.attr('src', '').attr('alt', '');
             $preview.prop('hidden', true);

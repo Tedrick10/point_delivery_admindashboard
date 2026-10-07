@@ -341,29 +341,27 @@ function isSameDayOrderCutoffPassed(?Carbon $now = null): bool
 }
 
 /**
- * Rider ငွေအပ် sheet date for a newly Delivered parcel (Asia/Yangon).
+ * Rider ငွေအပ် / Rider List date for a newly Delivered parcel (Asia/Yangon).
  *
- * Until this rider has any admin Completed stamp on the Yangon calendar day of $at
- * → previous calendar day (မနေ့က). After Completed → that calendar day (ဒီနေ့).
+ * Before 10:00 AM → previous calendar day (ရှေ့ရက်).
+ * From 10:00 AM onward → that calendar day (ဒီနေ့).
  *
- * (Replaces the old 09:00 AM cutoff.)
+ * $riderId is kept for call-site compatibility (no longer gates the day).
  */
-function resolveRiderRemitDate(?int $riderId, ?Carbon $at = null): string
+function resolveRiderRemitDate(?int $riderId = null, ?\DateTimeInterface $at = null): string
 {
     $tz = 'Asia/Yangon';
-    $at = ($at ?? Carbon::now($tz))->copy()->timezone($tz);
-    $today = $at->toDateString();
-    $yesterday = $at->copy()->subDay()->toDateString();
+    // Normalize via UTC instant so a mislabeled timezone on delivered_at cannot shift the day.
+    $at = $at
+        ? Carbon::instance(\DateTimeImmutable::createFromInterface($at))->utc()->timezone($tz)
+        : Carbon::now($tz);
+    $cutoff = $at->copy()->startOfDay()->setTime(10, 0, 0);
 
-    if (! $riderId || $riderId < 1) {
-        return $yesterday;
+    if ($at->lt($cutoff)) {
+        return $at->copy()->subDay()->toDateString();
     }
 
-    if (riderHasAdminCompletedOnDay((int) $riderId, $today)) {
-        return $today;
-    }
-
-    return $yesterday;
+    return $at->toDateString();
 }
 
 /**
@@ -386,14 +384,14 @@ function riderHasAdminCompletedOnDay(int $riderId, string $dayYmd): bool
 
 /**
  * @deprecated Use resolveRiderRemitDate() — kept for call-site compatibility.
- * Without a rider id this returns the Yangon calendar day of $at (no 9AM shift).
+ * Same 10:00 AM Yangon cutoff as resolveRiderRemitDate().
  */
 function riderRemitBusinessDate(?Carbon $at = null): Carbon
 {
     $tz = 'Asia/Yangon';
-    $at = ($at ?? Carbon::now($tz))->copy()->timezone($tz);
+    $day = resolveRiderRemitDate(null, $at);
 
-    return $at->copy()->startOfDay();
+    return Carbon::parse($day, $tz)->startOfDay();
 }
 
 /**
@@ -415,36 +413,66 @@ function riderRemitBusinessDayBounds(string $dayYmd): array
 
 /**
  * Default From / To / Date on OS List, Daily Check, Money Transfer, Rider ငွေအပ်.
- * One Yangon calendar day behind today (10th → 9th).
+ * Same 10:00 AM Yangon cutoff as resolveRiderRemitDate().
  */
 function yangonSettlementDefaultDate(string $format = 'd-m-Y'): string
 {
-    return now('Asia/Yangon')->subDay()->format($format);
+    $day = resolveRiderRemitDate();
+
+    return Carbon::parse($day, 'Asia/Yangon')->format($format);
 }
 
 /**
  * Daily Check List invoice day (Asia/Yangon).
  *
- * Same lag as Rider ငွေအပ်: first admin Completed on Yangon day C → C − 1.
- * After that rider already has a Completed on day C, later items → C.
+ * Same 10:00 AM cutoff as Rider ငွေအပ် / Delivered:
+ * before 10:00 → previous calendar day; from 10:00 → that calendar day.
+ *
+ * $riderId / $excludeItemId kept for call-site compatibility (unused).
  */
 function dailyCheckListDate(?Carbon $at = null, ?int $riderId = null, ?int $excludeItemId = null): Carbon
 {
     $tz = 'Asia/Yangon';
-    $at = ($at ?? Carbon::now($tz))->copy()->timezone($tz);
+    $day = resolveRiderRemitDate($riderId, $at);
 
-    if ($riderId && $riderId > 0 && riderHadAdminCompletedBefore($riderId, $at, $excludeItemId)) {
-        return $at->copy()->startOfDay();
+    return Carbon::parse($day, $tz)->startOfDay();
+}
+
+/**
+ * Normalize rider_remit_date / sheet day to Y-m-d (no timezone shift).
+ */
+function normalizeYangonDateOnly(mixed $value): ?string
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+    if ($value instanceof \DateTimeInterface) {
+        return $value->format('Y-m-d');
+    }
+    $raw = trim((string) $value);
+    if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $raw, $m)) {
+        return $m[1];
     }
 
-    return $at->copy()->subDay()->startOfDay();
+    try {
+        return Carbon::parse($raw, 'Asia/Yangon')->toDateString();
+    } catch (\Throwable $e) {
+        return null;
+    }
 }
 
 /**
  * Invoice day for a completed dispatch item (Rider + OS Daily Check / ငွေရှင်းတမ်း).
+ * Prefer stamped rider_remit_date so Delivered and Completed share one sheet day.
  */
 function dailyCheckListDateForItem($item, ?Carbon $at = null): Carbon
 {
+    $tz = 'Asia/Yangon';
+    $remit = normalizeYangonDateOnly($item?->rider_remit_date ?? null);
+    if ($remit !== null) {
+        return Carbon::parse($remit, $tz)->startOfDay();
+    }
+
     $stamp = $at;
     if (! $stamp && ! empty($item?->admin_completed_at)) {
         $stamp = Carbon::parse($item->admin_completed_at);
@@ -467,9 +495,7 @@ function dailyCheckListItemInPeriod($item, string $fromDay, string $toDay): bool
 }
 
 /**
- * ငွေရှင်းတမ်း invoice day (Asia/Yangon) — same rule as Daily Check:
- * a rider's first Completed on Yangon day C lands on C − 1;
- * later Completeds that same rider on C land on C.
+ * ငွေရှင်းတမ်း invoice day (Asia/Yangon) — same 10:00 AM rule as Daily Check / Rider ငွေအပ်.
  */
 function osSettlementListDateForItem($item, ?Carbon $at = null): Carbon
 {
@@ -484,6 +510,7 @@ function osSettlementItemInPeriod($item, string $fromDay, string $toDay): bool
 }
 
 /**
+ * @deprecated Completed-once lag removed — use resolveRiderRemitDate() / dailyCheckListDate().
  * True when this rider already has another admin Completed earlier on the same Yangon day.
  */
 function riderHadAdminCompletedBefore(int $riderId, Carbon $at, ?int $excludeItemId = null): bool
@@ -504,23 +531,26 @@ function riderHadAdminCompletedBefore(int $riderId, Carbon $at, ?int $excludeIte
 }
 
 /**
- * UTC bounds for Daily Check List day D on admin_completed_at.
+ * UTC fetch window for Daily Check / OS settlement sheet day D.
  *
- * Sheet D includes:
- * - first Completed on Yangon day D+1 (maps to D)
- * - later Completed on Yangon day D after that rider already Completed once on D
+ * Includes:
+ * - admin_completed_at in [D 10:00, D+1 10:00) Yangon (10:00 AM cutoff)
+ * - plus a small pad so PHP can still match rider_remit_date outliers
  *
  * @return array{start: Carbon, end: Carbon}
  */
 function dailyCheckListDayBounds(string $dayYmd): array
 {
     $tz = 'Asia/Yangon';
-    $start = Carbon::parse($dayYmd, $tz)->startOfDay();
-    $end = $start->copy()->addDays(2);
+    $start = Carbon::parse($dayYmd, $tz)->setTime(10, 0, 0);
+    // Pad ±1 calendar day so items stamped by rider_remit_date still load, then
+    // dailyCheckListDateForItem / osSettlementItemInPeriod filter exactly.
+    $fetchStart = $start->copy()->subDay();
+    $fetchEnd = $start->copy()->addDays(2);
 
     return [
-        'start' => $start->copy()->utc(),
-        'end' => $end->copy()->utc(),
+        'start' => $fetchStart->copy()->utc(),
+        'end' => $fetchEnd->copy()->utc(),
     ];
 }
 

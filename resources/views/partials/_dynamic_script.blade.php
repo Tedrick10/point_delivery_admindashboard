@@ -70,6 +70,7 @@
 
         function toggleDeleteButton() {
             const btn = $('#deleteSelectedBtn');
+            const keepVisible = btn.closest('.pds-dm-toolbar').length > 0;
             const bulk = btn.closest('.pds-os-list-bulk, .mb-3');
             if (!btn.length) {
                 bulk.hide();
@@ -78,9 +79,15 @@
             if ($('.select-table-row-checked-values:checked').length > 0) {
                 btn.addClass('is-visible').removeAttr('hidden').show();
                 btn.prop('disabled', false);
-                btn.removeClass('bg-gray text-white');
-                btn.addClass('bg-danger text-white');
+                btn.removeClass('bg-gray');
+                if (!keepVisible) {
+                    btn.addClass('bg-danger text-white');
+                }
                 bulk.show();
+            } else if (keepVisible) {
+                btn.addClass('is-visible text-white').removeAttr('hidden').show();
+                btn.prop('disabled', false);
+                btn.removeClass('bg-gray bg-danger');
             } else {
                 btn.removeClass('is-visible').attr('hidden', true).hide();
                 btn.prop('disabled', true);
@@ -848,6 +855,12 @@
         };
 
         $('#pdsNotificationDropdownToggle').on('click', window.pdsToggleNotificationDropdown);
+
+        $(document).on('show.bs.dropdown', '.pds-topbar .dropdown', function() {
+            if (!$(this).hasClass('pds-notify-dropdown') && pdsIsNotificationOpen()) {
+                pdsSetNotificationOpen(false);
+            }
+        });
 
         $(document).on('click', function(event) {
             if (!$(event.target).closest('.pds-notify-dropdown').length && pdsIsNotificationOpen()) {

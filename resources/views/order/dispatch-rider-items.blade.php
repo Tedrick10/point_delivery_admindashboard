@@ -37,7 +37,7 @@
                     </div>
                 </div>
                 <a
-                    href="{{ route('order.dispatch.rider-list', array_filter(['from_date' => $filterFromDate, 'to_date' => $filterToDate, 'branch_id' => $branchFilter ?? null])) }}"
+                    href="{{ route('order.dispatch.rider-list', array_filter(['branch_id' => $branchFilter ?? null])) }}"
                     class="pds-rider-close-btn"
                     title="{{ __('message.close') }}"
                 >
@@ -50,11 +50,11 @@
                 <div class="pds-rider-toolbar__fields pds-rider-toolbar__fields--dates">
                     <div class="pds-dispatch-field pds-dispatch-field-sm">
                         <label for="rider_items_from_date">{{ __('message.from') }}</label>
-                        <input type="text" name="from_date" id="rider_items_from_date" class="pds-dispatch-input dispatch-datepicker" value="{{ $filterFromDate }}" autocomplete="off">
+                        <input type="text" name="from_date" id="rider_items_from_date" class="pds-dispatch-input dispatch-datepicker" value="{{ $filterFromDate }}" placeholder="{{ __('message.all') }}" autocomplete="off">
                     </div>
                     <div class="pds-dispatch-field pds-dispatch-field-sm">
                         <label for="rider_items_to_date">{{ __('message.to') }}</label>
-                        <input type="text" name="to_date" id="rider_items_to_date" class="pds-dispatch-input dispatch-datepicker" value="{{ $filterToDate }}" autocomplete="off">
+                        <input type="text" name="to_date" id="rider_items_to_date" class="pds-dispatch-input dispatch-datepicker" value="{{ $filterToDate }}" placeholder="{{ __('message.all') }}" autocomplete="off">
                     </div>
                     <div class="pds-dispatch-field pds-dispatch-field-sm pds-rider-toolbar__grow">
                         <label for="rider_items_search">{{ __('message.search') }}</label>
@@ -141,8 +141,10 @@
                                 <tr>
                                     <th class="pds-rider-sticky-col pds-rider-sticky-col--no">{{ __('message.no') }}</th>
                                     @if(! empty($canSelectItems))
-                                    <th class="pds-rider-sticky-col pds-rider-sticky-col--check">
-                                        <input type="checkbox" id="riderItemsSelectAll" title="{{ __('message.select_all') }}">
+                                    <th class="pds-rider-sticky-col pds-rider-sticky-col--check" data-rider-select-all-cell>
+                                        <label class="pds-rider-select-all-label" title="{{ __('message.select_all') }}">
+                                            <input type="checkbox" id="riderItemsSelectAll" class="js-rider-items-select-all" aria-label="{{ __('message.select_all') }}">
+                                        </label>
                                     </th>
                                     @endif
                                     @if(! empty($showReturnRetryColumn))
@@ -458,16 +460,81 @@
 </div>
 
 
-    @section('bottom_script')
+    @push('bottom_script')
         <script src="{{ asset('js/pds-photo-zoom.js') }}?v=3"></script>
         <script src="{{ asset('js/dispatch-item-form.js') }}?v=35"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
-            $(document).ready(function () {
+            $(function () {
                 // Static table (not DataTables): refresh the page after Admin item edits.
                 window.reloadDispatchItemsTable = function () {
                     typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                 };
+
+                // Bind Select All first so a later init error cannot leave it dead.
+                function riderRowChecks() {
+                    return $('#riderItemsTable tbody .pds-rider-item-check').filter(function () {
+                        return !this.disabled;
+                    });
+                }
+
+                function riderSyncSelectAllState() {
+                    var $checks = riderRowChecks();
+                    var checkedCount = $checks.filter(':checked').length;
+                    var allOn = $checks.length > 0 && checkedCount === $checks.length;
+                    var $master = $('#riderItemsSelectAll');
+                    $master.prop('checked', allOn);
+                    $master.prop('indeterminate', !allOn && checkedCount > 0);
+                }
+
+                function riderUpdateSelectedTotal() {
+                    var total = 0;
+                    riderRowChecks().filter(':checked').each(function () {
+                        total += parseFloat($(this).closest('tr').data('cust-paid')) || 0;
+                    });
+                    $('#riderItemsSelectedTotal').text(Number(total || 0).toLocaleString('en-US', {
+                        maximumFractionDigits: 0,
+                    }));
+                    $('#riderItemsAssignRider').prop('disabled', riderRowChecks().filter(':checked').length === 0);
+                    riderSyncSelectAllState();
+                }
+
+                function riderSetAllItemChecks(checked) {
+                    riderRowChecks().each(function () {
+                        this.checked = !!checked;
+                    });
+                    var $master = $('#riderItemsSelectAll');
+                    $master.prop('checked', !!checked);
+                    $master.prop('indeterminate', false);
+                    riderUpdateSelectedTotal();
+                }
+
+                window.pdsRiderItemsSetAllChecks = riderSetAllItemChecks;
+                window.pdsRiderItemsUpdateSelection = riderUpdateSelectedTotal;
+
+                $(document)
+                    .off('change.riderItemsSelectAll', '#riderItemsSelectAll')
+                    .on('change.riderItemsSelectAll', '#riderItemsSelectAll', function () {
+                        riderSetAllItemChecks($(this).prop('checked'));
+                    });
+
+                $(document)
+                    .off('click.riderItemsSelectAllCell', '[data-rider-select-all-cell]')
+                    .on('click.riderItemsSelectAllCell', '[data-rider-select-all-cell]', function (e) {
+                        if ($(e.target).is('input, label, label *')) return;
+                        e.preventDefault();
+                        var $master = $('#riderItemsSelectAll');
+                        var next = !$master.prop('checked') || $master.prop('indeterminate');
+                        riderSetAllItemChecks(next);
+                    });
+
+                $(document)
+                    .off('change.riderItemCheck', '#riderItemsTable .pds-rider-item-check')
+                    .on('change.riderItemCheck', '#riderItemsTable .pds-rider-item-check', function () {
+                        riderUpdateSelectedTotal();
+                    });
+
+                riderUpdateSelectedTotal();
 
                 if (typeof flatpickr !== 'undefined') {
                     flatpickr('.dispatch-datepicker', {
@@ -579,8 +646,8 @@
                 var setReturnTypeUrl = @json(route('order.dispatch.rider-items.return-type', ['riderId' => $rider->id]));
                 var toggleReturnUrl = @json(route('order.dispatch.rider-items.toggle-return', ['riderId' => $rider->id, 'itemId' => 0]));
                 var isReturnTab = @json(($status ?? '') === 'return');
-                // Return tab: allow picking the current rider again so parcels re-enter Assigned.
-                var includeCurrentRider = isReturnTab;
+                // Include current rider so items can re-enter Assigned with same rider.
+                var includeCurrentRider = true;
                 var csrfToken = @json(csrf_token());
                 var riderSearchUrl = @json(route('ajax-list', ['type' => 'dispatch_deliveryman_search']));
                 var riderCache = [];
@@ -619,7 +686,7 @@
 
                 function selectedHalfDeliTotal() {
                     var total = 0;
-                    $('#riderItemsTable tbody .pds-rider-item-check:checked').each(function () {
+                    riderRowChecks().filter(':checked').each(function () {
                         var deli = parseFloat($(this).closest('tr').data('deli-amount')) || 0;
                         total += Math.round(Math.max(0, deli) / 2);
                     });
@@ -628,7 +695,7 @@
 
                 function selectedItemIds() {
                     var ids = [];
-                    $('#riderItemsTable tbody .pds-rider-item-check:checked').each(function () {
+                    riderRowChecks().filter(':checked').each(function () {
                         var id = parseInt($(this).val(), 10);
                         if (id > 0) ids.push(id);
                     });
@@ -636,28 +703,8 @@
                 }
 
                 function updateSelectedTotal() {
-                    var total = 0;
-                    $('#riderItemsTable tbody .pds-rider-item-check:checked').each(function () {
-                        total += parseFloat($(this).closest('tr').data('cust-paid')) || 0;
-                    });
-                    $('#riderItemsSelectedTotal').text(formatAmount(total));
-                    $('#riderItemsAssignRider').prop('disabled', selectedItemIds().length === 0);
+                    riderUpdateSelectedTotal();
                 }
-
-                $('#riderItemsSelectAll').on('change', function () {
-                    var checked = $(this).is(':checked');
-                    $('#riderItemsTable tbody .pds-rider-item-check:not(:disabled)').prop('checked', checked);
-                    updateSelectedTotal();
-                });
-
-                $(document).on('change', '.pds-rider-item-check', function () {
-                    var $checks = $('#riderItemsTable tbody .pds-rider-item-check:not(:disabled)');
-                    var allChecked = $checks.length > 0 && $checks.filter(':checked').length === $checks.length;
-                    $('#riderItemsSelectAll').prop('checked', allChecked);
-                    updateSelectedTotal();
-                });
-
-                updateSelectedTotal();
 
                 function submitBulkUpdate(toStatus, remark, photoFile, deliveredType, gateAmount, deliveredPhotoFile, pointAmount, agentAmount) {
                     var ids = selectedItemIds();
@@ -1138,5 +1185,5 @@
                 }
             });
         </script>
-    @endsection
+    @endpush
 </x-master-layout>

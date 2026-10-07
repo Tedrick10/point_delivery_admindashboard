@@ -2,10 +2,11 @@
     @include('partials._body_loader')
 </div>
 
+{{-- Build menu (shared as MyNavBar) then show it in the top header. --}}
 @include('partials._body_sidebar')
 
 @php
-    // Sidebar builds the menu inside an isolated include scope; re-bind for header.
+    // Sidebar include builds the menu; re-bind for header nav.
     if (! isset($MyNavBar)) {
         $MyNavBar = $MenuList ?? \Menu::get('MenuList');
     }

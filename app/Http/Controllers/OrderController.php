@@ -499,11 +499,207 @@ class OrderController extends Controller
             return redirect()->back()->withErrors($message);
         }
 
+        if (session()->isStarted()) {
+            session()->save();
+        }
+
         $workflow = app(DispatchOrderWorkflowService::class);
         $workflow->healPickupErrorChoicesToCancelled();
 
         $items = DispatchOrderItem::query()
-            ->whereIn('status', ['collected', 'assigned', 'courier_assigned', 'courier_departed', 'pending', 'completed', 'return'])
+            ->whereIn('status', ['collected', 'assigned', 'courier_assigned', 'courier_departed', 'pending', 'completed', 'return', 'os_returned'])
+            ->with([
+                'order.client',
+                'order.delivery_man',
+                'order.dispatchItems:id,order_id,status,admin_updated_at',
+                'fromBranch:id,name',
+                'toBranch:id,name',
+                'deliveryMan:id,name',
+                'kyoShinItem',
+            ])
+            ->orderByDesc('received_date')
+            ->orderByDesc('id')
+            ->get();
+
+        $pageTitle = __('message.follow_up');
+        $assets = [];
+        $canReassignFollowUpRider = auth()->user()->can('order-edit') || auth()->user()->user_type === 'admin';
+
+        return view('order.dispatch-to-assign', compact('pageTitle', 'assets', 'items', 'canReassignFollowUpRider'));
+    }
+
+    /**
+     * Follow Up — assign / reassign delivery rider for any non-terminal parcel.
+     * Blocked: Delivered, Completed, Finished (and Cancelled).
+     */
+    public function dispatchToAssignReassignRider(Request $request)
+    {
+        if (! auth()->user()->can('order-edit') && auth()->user()->user_type !== 'admin') {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $data = $request->validate([
+            'item_ids' => 'required|array|min:1|max:100',
+            'item_ids.*' => 'integer|exists:dispatch_order_items,id',
+            'delivery_man_id' => 'required|integer|exists:users,id',
+        ]);
+
+        $toRider = User::query()
+            ->where('id', (int) $data['delivery_man_id'])
+            ->where('user_type', 'delivery_man')
+            ->where('status', 1)
+            ->availableForAssign()
+            ->first();
+
+        if (! $toRider) {
+            return response()->json([
+                'message' => __('message.not_found_entry', ['name' => __('message.delivery_man')]),
+            ], 422);
+        }
+
+        if (! $toRider->isRiderWorkOn()) {
+            return response()->json(['message' => __('message.rider_work_off_assign_blocked')], 422);
+        }
+
+        $workflow = app(DispatchOrderWorkflowService::class);
+        $ids = array_values(array_unique(array_map('intval', $data['item_ids'])));
+        $items = DispatchOrderItem::query()
+            ->with(['order', 'kyoShinItem', 'deliveryMan:id,name,branch_id'])
+            ->whereIn('id', $ids)
+            ->get();
+
+        if ($items->isEmpty()) {
+            return response()->json(['message' => __('message.no_record_found')], 422);
+        }
+
+        $blocked = $items->filter(fn (DispatchOrderItem $item) => ! $workflow->canReassignFollowUpRider($item));
+        if ($blocked->isNotEmpty()) {
+            return response()->json([
+                'message' => __('message.follow_up_reassign_terminal_blocked'),
+            ], 422);
+        }
+
+        $returnItems = $items->filter(fn (DispatchOrderItem $item) => $item->status === 'return');
+        if ($returnItems->isNotEmpty()) {
+            $missingType = $returnItems->filter(static fn (DispatchOrderItem $item) => $item->returnType() === null);
+            if ($missingType->isNotEmpty()) {
+                return response()->json([
+                    'message' => __('message.return_type_required_before_assign'),
+                ], 422);
+            }
+
+            $missingDeli = $returnItems->filter(static function (DispatchOrderItem $item) {
+                return $item->isDeliveryReturn() && (float) ($item->deli_amount ?? 0) <= 0;
+            });
+            if ($missingDeli->isNotEmpty()) {
+                return response()->json([
+                    'message' => __('message.return_delivery_deli_required_before_assign'),
+                ], 422);
+            }
+        }
+
+        $toBranchId = (int) ($toRider->branch_id ?? 0);
+        if ($toBranchId > 0) {
+            $mismatch = $items->filter(function (DispatchOrderItem $item) use ($toBranchId) {
+                $itemTo = (int) ($item->to_branch_id ?? 0);
+
+                return $itemTo > 0 && $itemTo !== $toBranchId;
+            });
+            if ($mismatch->isNotEmpty()) {
+                return response()->json(['message' => __('message.assign_100_rider_branch_mismatch')], 422);
+            }
+        }
+
+        $sameOnly = $items->every(fn (DispatchOrderItem $item) => (int) ($item->delivery_man_id ?? 0) === (int) $toRider->id);
+        $allReturn = $items->every(fn (DispatchOrderItem $item) => $item->status === 'return');
+        if ($sameOnly && ! $allReturn) {
+            return response()->json(['message' => __('message.dispatch_rider_reassign_same')], 422);
+        }
+
+        $payloadBase = [
+            'delivery_man_id' => $toRider->id,
+            'status' => 'courier_assigned',
+            'assigned_at' => now(),
+            'received_date' => Carbon::now('Asia/Yangon')->toDateString(),
+            'delivery_locked' => false,
+            'admin_updated_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        $updated = 0;
+        foreach ($items as $item) {
+            $fromStatus = (string) $item->status;
+            $itemPayload = $payloadBase;
+
+            if ($fromStatus === 'return') {
+                $itemPayload['admin_completed_at'] = null;
+                if (Schema::hasColumn('dispatch_order_items', 'assigned_from_return')) {
+                    $itemPayload['assigned_from_return'] = $item->isNormalReturn();
+                }
+                if (Schema::hasColumn('dispatch_order_items', 'return_reassigned')) {
+                    $itemPayload['return_reassigned'] = false;
+                }
+            } else {
+                if (Schema::hasColumn('dispatch_order_items', 'assigned_from_return')) {
+                    $itemPayload['assigned_from_return'] = false;
+                }
+                if (Schema::hasColumn('dispatch_order_items', 'return_reassigned')) {
+                    $itemPayload['return_reassigned'] = false;
+                }
+            }
+
+            $item->forceFill($itemPayload)->save();
+
+            if ($fromStatus === 'return' && $item->isKyoShinGiven()) {
+                try {
+                    app(KyoShinService::class)->clearReturnMoneyReceivedForItemIds([(int) $item->id]);
+                } catch (\Throwable $e) {
+                    \Log::warning('kyo shin clear return money failed after follow-up reassign', [
+                        'item_id' => $item->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+            $updated++;
+        }
+
+        $items = DispatchOrderItem::query()->whereIn('id', $items->pluck('id')->all())->get();
+        $audit = app(DispatchOrderAuditService::class);
+        $push = app(\App\Services\AppPushService::class);
+        foreach ($items->groupBy('order_id') as $orderId => $orderItems) {
+            $order = Order::find($orderId);
+            if ($order) {
+                $audit->logDeliveryRiderAssigned($order, $toRider, $orderItems->count());
+            }
+        }
+
+        foreach ($items as $item) {
+            try {
+                $push->notifyRiderDeliveryAssigned($toRider, $item);
+            } catch (\Throwable $e) {
+                \Log::warning('push failed after follow-up rider reassign', [
+                    'item_id' => $item->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return response()->json([
+            'message' => __('message.dispatch_rider_reassigned_success', [
+                'count' => $updated,
+                'rider' => $toRider->name,
+            ]),
+            'updated' => $updated,
+        ]);
+    }
+
+    public function dispatchToAssignDetails($item)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return response(__('message.demo_permission_denied'), 403);
+        }
+
+        $item = DispatchOrderItem::query()
             ->with([
                 'order.client',
                 'order.delivery_man',
@@ -517,14 +713,9 @@ class OrderController extends Controller
                 'deliveredPhotoMedia',
                 'pendingRemarks.photoMedia',
             ])
-            ->orderByDesc('received_date')
-            ->orderByDesc('id')
-            ->get();
+            ->findOrFail($item);
 
-        $pageTitle = __('message.follow_up');
-        $assets = [];
-
-        return view('order.dispatch-to-assign', compact('pageTitle', 'assets', 'items'));
+        return view('order.partials._follow_up_details_content', compact('item'));
     }
 
     public function dispatchAssignPickupRider(Request $request, $id)
@@ -1774,8 +1965,8 @@ class OrderController extends Controller
      * Admin Rider List — per-rider Assigned / On Way / Delivered / Pending item counts.
      */
     /**
-     * Admin Rider List — status counts per rider for a day (default: Yangon today).
-     * From–To can widen the window; empty request dates fall back to today.
+     * Admin Rider List — all-time status counts per rider.
+     * Day-by-day From/To filtering lives on Item Details only.
      */
     public function dispatchRiderList(Request $request)
     {
@@ -1786,15 +1977,6 @@ class OrderController extends Controller
         }
 
         $statuses = ['courier_assigned', 'courier_departed', 'pending', 'completed', 'return', 'os_returned'];
-        $yangonToday = now('Asia/Yangon')->format('d-m-Y');
-        $fromDateRaw = trim((string) $request->get('from_date', $yangonToday));
-        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw !== '' ? $fromDateRaw : $yangonToday));
-        if ($fromDateRaw === '') {
-            $fromDateRaw = $yangonToday;
-        }
-        if ($toDateRaw === '') {
-            $toDateRaw = $fromDateRaw;
-        }
         $riderFilter = trim((string) $request->get('rider_id', 'all'));
         if ($riderFilter === '') {
             $riderFilter = 'all';
@@ -1804,13 +1986,7 @@ class OrderController extends Controller
         $branchTabs = $branches;
         $selectedBranchId = $branchId;
 
-        $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
-        $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
-        if ($toDay < $fromDay) {
-            $toDay = $fromDay;
-            $toDateRaw = $fromDateRaw;
-        }
-        $hasDateFilter = true;
+        $hasDateFilter = false;
 
         $countQuery = DispatchOrderItem::query()
             ->selectRaw("
@@ -1826,10 +2002,7 @@ class OrderController extends Controller
                 COUNT(*) as total
             ")
             ->whereNotNull('delivery_man_id')
-            ->whereIn('status', $statuses)
-            ->where(function ($dateQuery) use ($fromDay, $toDay) {
-                $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
-            });
+            ->whereIn('status', $statuses);
 
         $countRows = $countQuery->groupBy('delivery_man_id')->get();
 
@@ -1858,9 +2031,6 @@ class OrderController extends Controller
                 ->where('status', 'assigned')
                 ->when(\Illuminate\Support\Facades\Schema::hasColumn('dispatch_order_items', 'mdy_inbox_at'), function ($query) {
                     $query->whereNull('mdy_inbox_at');
-                })
-                ->where(function ($dateQuery) use ($fromDay, $toDay) {
-                    $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
                 })
                 ->groupBy('hub_user_id')
                 ->get();
@@ -1942,8 +2112,6 @@ class OrderController extends Controller
 
         $pageTitle = __('message.rider_list');
         $assets = [];
-        $filterFromDate = $fromDateRaw;
-        $filterToDate = $toDateRaw;
         $riderOfMonthUrl = route('deliveryman.rider-of-month');
 
         return view('order.dispatch-rider-list', compact(
@@ -1951,11 +2119,7 @@ class OrderController extends Controller
             'assets',
             'riders',
             'riderOptions',
-            'filterFromDate',
-            'filterToDate',
             'riderFilter',
-            'fromDay',
-            'toDay',
             'hasDateFilter',
             'riderOfMonthUrl',
             'branchTabs',
@@ -2010,22 +2174,26 @@ class OrderController extends Controller
                 ->withErrors(__('message.not_found_entry', ['name' => __('message.delivery_man')]));
         }
 
-        $yangonToday = now('Asia/Yangon')->format('d-m-Y');
-        $fromDateRaw = trim((string) $request->get('from_date', $yangonToday));
-        $toDateRaw = trim((string) $request->get('to_date', $fromDateRaw !== '' ? $fromDateRaw : $yangonToday));
-        if ($fromDateRaw === '') {
-            $fromDateRaw = $yangonToday;
+        // Default: All items (no day-by-day). User may apply From/To when they want.
+        $fromDateRaw = trim((string) $request->get('from_date', ''));
+        $toDateRaw = trim((string) $request->get('to_date', ''));
+        $fromDay = null;
+        $toDay = null;
+        $hasDateFilter = $fromDateRaw !== '' || $toDateRaw !== '';
+        if ($hasDateFilter) {
+            if ($fromDateRaw === '') {
+                $fromDateRaw = $toDateRaw;
+            }
+            if ($toDateRaw === '') {
+                $toDateRaw = $fromDateRaw;
+            }
+            $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
+            $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
+            if ($toDay < $fromDay) {
+                $toDay = $fromDay;
+                $toDateRaw = $fromDateRaw;
+            }
         }
-        if ($toDateRaw === '') {
-            $toDateRaw = $fromDateRaw;
-        }
-        $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
-        $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
-        if ($toDay < $fromDay) {
-            $toDay = $fromDay;
-            $toDateRaw = $fromDateRaw;
-        }
-        $hasDateFilter = true;
 
         $search = trim((string) $request->get('search', ''));
 
@@ -2061,9 +2229,11 @@ class OrderController extends Controller
                 ->where('status', $queryStatus);
         }
 
-        $itemsQuery->where(function ($dateQuery) use ($fromDay, $toDay) {
-            $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
-        });
+        if ($hasDateFilter && $fromDay && $toDay) {
+            $itemsQuery->where(function ($dateQuery) use ($fromDay, $toDay) {
+                $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
+            });
+        }
 
         if ($status === 'delivered') {
             $itemsQuery->whereNull('admin_completed_at');
@@ -2105,10 +2275,15 @@ class OrderController extends Controller
                 'return' => $hasReturnRetry ? __('message.follow_up_status_return') : null,
             ]),
             'courier_departed' => [
+                'courier_assigned' => __('message.follow_up_status_assigned'),
                 'pending' => __('message.follow_up_status_pending'),
                 'completed' => __('message.follow_up_status_delivered'),
             ],
             'pending' => array_filter([
+                'courier_assigned' => __('message.follow_up_status_assigned'),
+                'courier_departed' => ($hasNormalAssigned || ! $hasNoFeeOsReturn)
+                    ? __('message.follow_up_status_on_way')
+                    : null,
                 'completed' => $hasNormalAssigned || ! $hasNoFeeOsReturn
                     ? __('message.follow_up_status_delivered')
                     : null,
@@ -2118,6 +2293,9 @@ class OrderController extends Controller
                 'os_returned' => $hasNoFeeOsReturn ? __('message.follow_up_status_os_returned') : null,
             ]),
             'delivered' => [
+                'courier_assigned' => __('message.follow_up_status_assigned'),
+                'courier_departed' => __('message.follow_up_status_on_way'),
+                'pending' => __('message.follow_up_status_pending'),
                 'admin_completed' => __('message.follow_up_status_completed'),
             ],
             'completed' => [
@@ -2130,7 +2308,7 @@ class OrderController extends Controller
         $filterToDate = $toDateRaw;
         [, $branchFilter] = resolveDestinationBranchFilter($request, auth()->user());
 
-        $canReassignRider = in_array($status, ['pending', 'return'], true)
+        $canReassignRider = in_array($status, ['courier_assigned', 'courier_departed', 'pending', 'delivered', 'return'], true)
             && (auth()->user()->can('order-edit') || auth()->user()->user_type === 'admin');
         $canSelectItems = $canBulkUpdate || $canReassignRider;
         // No-fee OS return cycle has no Return checkbox — only Assigned / Pending / Os Returned.
@@ -2245,9 +2423,10 @@ class OrderController extends Controller
             'item_ids' => 'required|array|min:1',
             'item_ids.*' => 'integer',
             'delivery_man_id' => 'required|integer|exists:users,id',
-            'from_status' => 'nullable|string|in:pending,return',
+            'from_status' => 'nullable|string|in:courier_assigned,courier_departed,pending,delivered,return',
         ]);
         $fromStatus = (string) ($data['from_status'] ?? 'pending');
+        $queryStatus = $fromStatus === 'delivered' ? 'completed' : $fromStatus;
 
         $fromRider = User::query()
             ->where('id', $riderId)
@@ -2277,12 +2456,7 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.rider_work_off_assign_blocked')], 422);
         }
 
-        // Pending → must pick a different rider. Return → same rider is allowed
-        // so the parcel can re-enter that rider's Assigned list.
-        if ($fromStatus !== 'return' && (int) $fromRider->id === (int) $toRider->id) {
-            return response()->json(['message' => __('message.dispatch_rider_reassign_same')], 422);
-        }
-
+        // Same rider is allowed so parcels can re-enter Assigned / change rider.
         $fromBranchId = (int) ($fromRider->branch_id ?? 0);
         $toBranchId = (int) ($toRider->branch_id ?? 0);
         if ($fromBranchId > 0 && $toBranchId > 0 && $fromBranchId !== $toBranchId) {
@@ -2290,11 +2464,14 @@ class OrderController extends Controller
         }
 
         $ids = array_values(array_unique(array_map('intval', $data['item_ids'])));
-        $items = DispatchOrderItem::query()
+        $itemsQuery = DispatchOrderItem::query()
             ->where('delivery_man_id', $fromRider->id)
-            ->where('status', $fromStatus)
-            ->whereIn('id', $ids)
-            ->get();
+            ->where('status', $queryStatus)
+            ->whereIn('id', $ids);
+        if ($fromStatus === 'delivered') {
+            $itemsQuery->whereNull('admin_completed_at');
+        }
+        $items = $itemsQuery->get();
 
         if ($items->isEmpty()) {
             return response()->json(['message' => __('message.no_record_found')], 422);
@@ -2327,8 +2504,10 @@ class OrderController extends Controller
             'admin_updated_at' => now(),
             'updated_at' => now(),
         ];
+        $clearDeliveredProof = $fromStatus === 'delivered' || $queryStatus === 'completed';
 
         $updated = 0;
+        $syncedExpenseDays = [];
         foreach ($items as $item) {
             $itemPayload = $payload;
             if ($fromStatus === 'return') {
@@ -2350,14 +2529,21 @@ class OrderController extends Controller
                         $itemPayload['return_reassigned'] = false;
                     }
                 }
-            } elseif ($fromStatus === 'pending') {
-                // Pending → another rider: normal Assigned (no Return column / retry checkbox).
+            } else {
+                // Re-enter Assigned from Assigned / On Way / Pending / Delivered.
                 if (Schema::hasColumn('dispatch_order_items', 'assigned_from_return')) {
                     $itemPayload['assigned_from_return'] = false;
                 }
                 if (Schema::hasColumn('dispatch_order_items', 'return_reassigned')) {
                     $itemPayload['return_reassigned'] = false;
                 }
+            }
+            if ($clearDeliveredProof || $queryStatus === 'completed') {
+                $remitDay = normalizeYangonDateOnly($item->rider_remit_date) ?? '';
+                if ($remitDay !== '' && (float) ($item->agent_amount ?? 0) > 0) {
+                    $syncedExpenseDays[$remitDay] = true;
+                }
+                $itemPayload = array_merge($itemPayload, $this->riderListClearDeliveredFields());
             }
             $item->forceFill($itemPayload)->save();
             if ($fromStatus === 'return' && $item->isKyoShinGiven()) {
@@ -2371,6 +2557,14 @@ class OrderController extends Controller
                 }
             }
             $updated++;
+        }
+
+        if ($syncedExpenseDays !== []) {
+            $agentSync = app(\App\Services\ExpenseAgentFeeSyncService::class);
+            $adminId = (int) (auth()->id() ?? 0) ?: null;
+            foreach (array_keys($syncedExpenseDays) as $expenseDay) {
+                $agentSync->syncExpenseDate((string) $expenseDay, $adminId, null);
+            }
         }
 
         $items = DispatchOrderItem::query()->whereIn('id', $items->pluck('id')->all())->get();
@@ -2505,7 +2699,7 @@ class OrderController extends Controller
         $rules = [
             'item_ids' => 'required|array|min:1',
             'item_ids.*' => 'integer',
-            'to_status' => 'required|string|in:courier_departed,pending,completed,admin_completed,admin_finished,return,os_returned',
+            'to_status' => 'required|string|in:courier_assigned,courier_departed,pending,completed,admin_completed,admin_finished,return,os_returned',
             'remark' => 'nullable|string|max:1000',
             'pending_photo' => 'nullable|image|max:10240',
             'delivered_photo' => 'nullable|image|max:10240',
@@ -2855,13 +3049,13 @@ class OrderController extends Controller
 
         $syncedExpenseDays = [];
         foreach ($items as $item) {
+            $fromStatus = (string) $item->status;
             try {
-                $workflow->assertDeliveryStatusTransition($item, $toStatus, $remark);
+                $workflow->assertDeliveryStatusTransition($item, $toStatus, $remark, true);
             } catch (\InvalidArgumentException $e) {
                 return response()->json(['message' => $e->getMessage()], 422);
             }
 
-            $fromStatus = (string) $item->status;
             $fill = [
                 'status' => $toStatus,
                 'admin_updated_at' => now(),
@@ -2869,9 +3063,24 @@ class OrderController extends Controller
             if ((int) ($item->delivery_man_id ?? 0) <= 0) {
                 $fill['delivery_man_id'] = $rider->id;
             }
+            if ($toStatus === 'courier_assigned') {
+                $fill['assigned_at'] = $item->assigned_at ?: now();
+                $fill['delivery_locked'] = false;
+            }
+            if ($toStatus === 'courier_departed') {
+                $fill['delivery_locked'] = false;
+            }
             if ($toStatus === 'pending') {
                 $fill['remark'] = $remark;
                 $fill['pending_photo_id'] = $pendingPhotoId;
+                $fill['delivery_locked'] = false;
+            }
+            if ($fromStatus === 'completed' && in_array($toStatus, ['courier_assigned', 'courier_departed', 'pending'], true)) {
+                $remitDay = normalizeYangonDateOnly($item->rider_remit_date) ?? '';
+                if ($remitDay !== '' && (float) ($item->agent_amount ?? 0) > 0) {
+                    $syncedExpenseDays[$remitDay] = true;
+                }
+                $fill = array_merge($fill, $this->riderListClearDeliveredFields());
             }
             if ($toStatus === 'completed') {
                 $fill['delivery_locked'] = true;
@@ -4858,6 +5067,29 @@ class OrderController extends Controller
                 });
             }
         });
+    }
+
+    /**
+     * Clear delivered settlement fields when rolling back from Delivered.
+     * Non-nullable DB columns must reset to 0 (not null).
+     *
+     * @return array<string, mixed>
+     */
+    private function riderListClearDeliveredFields(): array
+    {
+        return [
+            'delivery_locked' => false,
+            'delivered_at' => null,
+            'delivered_type' => null,
+            'delivered_photo_id' => 0,
+            'gate_amount' => 0,
+            'point_amount' => 0,
+            'agent_amount' => 0,
+            'agent_expense_branch_id' => null,
+            'rider_remit_at' => null,
+            'rider_remit_date' => null,
+            'admin_completed_at' => null,
+        ];
     }
 
     /**

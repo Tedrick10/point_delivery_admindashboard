@@ -269,6 +269,8 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('order/{id}/create-return', [OrderController::class, 'createReturnOrder'])->name('order.create-return');
     Route::post('order/dispatch-store', [OrderController::class, 'dispatchStore'])->name('order.dispatch-store');
     Route::get('dispatch-to-assign', [OrderController::class, 'dispatchToAssign'])->name('order.dispatch.to-assign');
+    Route::get('dispatch-to-assign/{item}/details', [OrderController::class, 'dispatchToAssignDetails'])->name('order.dispatch.to-assign.details');
+    Route::post('dispatch-to-assign/reassign-rider', [OrderController::class, 'dispatchToAssignReassignRider'])->name('order.dispatch.to-assign.reassign-rider');
     Route::post('dispatch-to-assign/move', [OrderController::class, 'dispatchMoveToAssign100'])->name('order.dispatch.move-to-assign-100');
     Route::get('dispatch-assign-100', [OrderController::class, 'dispatchAssign100'])->name('order.dispatch.assign-100');
     Route::get('dispatch-assign-100/labels', [OrderController::class, 'dispatchAssign100Labels'])->name('order.dispatch.assign-100-labels');
@@ -701,6 +703,8 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
         Route::post('account-creation/{id}/work-status', [AccountCreationController::class, 'updateWorkStatus'])->name('account-creation.work-status');
         Route::get('roles-permissions/create-role', [RolesPermissionsController::class, 'createRole'])->name('roles-permissions.create-role');
         Route::post('roles-permissions/roles', [RolesPermissionsController::class, 'storeRole'])->name('roles-permissions.store-role');
+        Route::post('roles-permissions/permissions/toggle', [RolesPermissionsController::class, 'togglePermission'])->name('roles-permissions.toggle-permission');
+        Route::delete('roles-permissions/roles/{id}', [RolesPermissionsController::class, 'destroyRole'])->name('roles-permissions.destroy-role');
         Route::post('expense-summary/confirm', [ExpenseSummaryController::class, 'confirm'])->name('expense-summary.confirm');
         Route::post('welcome-promotion/settings', [\App\Http\Controllers\SuperAdmin\WelcomePromotionController::class, 'updateSettings'])
             ->name('welcome-promotion.settings');

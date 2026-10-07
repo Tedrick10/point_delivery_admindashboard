@@ -101,7 +101,9 @@ class DeliverymanController extends Controller
         $export = $auth_user->can('deliveryman-list')
             ? '<a href="'.route('deliveryman.excel').'" class="btn btn-sm btn-success loadRemoteModel"><i class="fa fa-download"></i> '. __('message.export').'</a>'
             : '';
-        $multi_checkbox_delete = $auth_user->can('deliveryman-delete') ? '<button id="deleteSelectedBtn" checked-title = "deliveryman-checked" class="float-left btn btn-sm ">' . __('message.delete_selected') . '</button>' : '';
+        $multi_checkbox_delete = $auth_user->can('deliveryman-delete')
+            ? '<button type="button" id="deleteSelectedBtn" checked-title="deliveryman-checked" class="btn btn-sm pds-dm-delete-btn is-visible">' . __('message.delete_selected') . '</button>'
+            : '';
         return $dataTable->with([
             'status' => request('status'),
             'branch_id' => $selectedBranchId,

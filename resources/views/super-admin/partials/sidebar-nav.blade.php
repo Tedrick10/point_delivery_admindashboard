@@ -1,6 +1,7 @@
 @php
     $screens = config('super_admin_screens', []);
-    $periodQuery = request()->query();
+    $periodQuery = request()->only(['period', 'date', 'date_from', 'date_to', 'month']);
+    $periodQuery = array_filter($periodQuery, fn ($value) => $value !== null && $value !== '');
     $withPeriod = function (string $url) use ($periodQuery): string {
         if ($periodQuery === []) {
             return $url;
@@ -52,7 +53,7 @@
         ],
         [
             'label' => __('message.sa_nav_settings'),
-            'keys' => ['general-setting', 'company-contact', 'api-server-setting', 'app-store-update', 'ui-theme', 'app-copy'],
+            'keys' => ['general-setting', 'company-contact', 'api-server-setting', 'app-store-update', 'app-copy'],
         ],
     ];
 @endphp

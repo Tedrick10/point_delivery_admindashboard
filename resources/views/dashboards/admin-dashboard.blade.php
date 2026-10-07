@@ -757,9 +757,9 @@
                         </div>
                     </div>
                 </div>
+                    </div>
+                </div>
             </div>
-        </div>
-    </div>
 
     @push('bottom_script')
         <script>
@@ -769,7 +769,7 @@
                 }
 
                 if (window.jQuery && $.fn.DataTable && document.getElementById('basic-table')) {
-                    $('#basic-table').DataTable({
+             $('#basic-table').DataTable({
                         dom: '<"row align-items-center"<"col-md-2"><"col-md-6" B><"col-md-4"f>><"table-responsive my-3" rt><"d-flex" <"flex-grow-1" l><"p-2" i><"mt-4" p>><"clear">',
                         order: [[1, 'desc']]
                     });
@@ -794,7 +794,7 @@
                 if (monthList.month_start && monthList.month_end) {
                     var startDate = new Date(monthList.month_start);
                     var endDate = new Date(monthList.month_end);
-                    for (var currentDate = new Date(startDate); currentDate <= endDate; currentDate.setDate(currentDate.getDate() + 1)) {
+            for (var currentDate = new Date(startDate); currentDate <= endDate; currentDate.setDate(currentDate.getDate() + 1)) {
                         categories.push(currentDate.toISOString().split('T')[0]);
                     }
                 }
@@ -859,8 +859,8 @@
                     new ApexCharts(document.querySelector('#pds-order-pipeline-bar'), {
                         series: [{ name: @json(__('message.total_order')), data: pipelineSeries }],
                         chart: Object.assign({ type: 'bar', height: 320 }, chartDefaults),
-                        plotOptions: {
-                            bar: {
+                plotOptions: {
+                    bar: {
                                 horizontal: true,
                                 borderRadius: 8,
                                 barHeight: '62%',
@@ -871,7 +871,7 @@
                             (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07'),
                             '#EA580C', (window.pdsBrandColor || '#FE6F07'), '#16a34a', '#ef4444'
                         ],
-                        dataLabels: {
+                dataLabels: {
                             enabled: true,
                             style: { fontSize: '11px', fontWeight: 700, colors: ['#fff'] }
                         },
@@ -906,11 +906,11 @@
                             '#EA580C', (window.pdsBrandColor || '#FE6F07'), (window.pdsBrandColor || '#FE6F07')
                         ],
                         dataLabels: { enabled: false },
-                        xaxis: {
+                xaxis: {
                             categories: weeklyLabels,
                             labels: { style: { fontWeight: 600 } }
-                        },
-                        yaxis: {
+                },
+                yaxis: {
                             labels: { formatter: function (val) { return Math.round(val); } }
                         },
                         grid: { borderColor: '#f5f5f4', strokeDashArray: 4 },
@@ -999,15 +999,15 @@
                         },
                         dataLabels: { enabled: false },
                         stroke: { show: true, width: 2, colors: ['transparent'] },
-                        xaxis: {
-                            categories: categories,
+                xaxis: {
+                    categories: categories,
                             labels: {
                                 rotate: -45,
                                 rotateAlways: categories.length > 14,
                                 style: { fontSize: '10px' }
                             }
-                        },
-                        yaxis: {
+                },
+                yaxis: {
                             labels: {
                                 formatter: function (val) {
                                     return Number(val || 0).toLocaleString();

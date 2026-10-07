@@ -30,9 +30,6 @@
                         class="sa-settings-input"
                         placeholder="{{ __('message.'.$key) }}"
                     >
-                    @if(!empty($info['hint']))
-                        <p class="sa-settings-hint">{{ $info['hint'] }}</p>
-                    @endif
                 </div>
             @endforeach
         </div>

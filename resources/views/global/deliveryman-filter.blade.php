@@ -18,12 +18,6 @@
                     </div>
 
                     <div class="card-body pds-page-body pds-deliveryman-list-body">
-                        @if(isset($multi_checkbox_delete))
-                            <div class="pds-bulk-actions mb-2">
-                                {!! $multi_checkbox_delete !!}
-                            </div>
-                        @endif
-
                         @include('partials._branch-tabs', [
                             'branchTabs' => $branchTabs ?? collect(),
                             'selectedBranchId' => ($selectedBranchId ?? 0) > 0 ? $selectedBranchId : null,
@@ -34,7 +28,17 @@
                             'routeQuery' => array_filter(['status' => request('status')]),
                         ])
 
-                        @include('global.deliveryman-datatable')
+                        <div class="pds-dm-toolbar">
+                            <div class="pds-dm-toolbar__bulk">
+                                @if(isset($multi_checkbox_delete))
+                                    {!! $multi_checkbox_delete !!}
+                                @endif
+                            </div>
+                            <label class="pds-dm-toolbar__search">
+                                <span>{{ __('message.search') }}:</span>
+                                <input type="search" id="pds-dm-search" placeholder="" autocomplete="off">
+                            </label>
+                        </div>
 
                         <div class="pds-table-shell pds-deliveryman-table-shell">
                             {{ $dataTable->table(['class' => 'table w-100 pds-datatable pds-deliveryman-datatable'], false) }}
@@ -48,6 +52,17 @@
     @section('bottom_script')
         {{ $dataTable->scripts() }}
         <style>
+            body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar #deleteSelectedBtn,
+            body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar .pds-dm-delete-btn {
+                background: #FE6F07 !important;
+                border: 0 !important;
+                color: #fff !important;
+            }
+            body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar #deleteSelectedBtn:hover,
+            body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar .pds-dm-delete-btn:hover {
+                background: #E86200 !important;
+                color: #fff !important;
+            }
             body.pds-admin .pds-deliveryman-list-page .pds-inline-contact {
                 cursor: pointer;
                 border-bottom: 1px dashed transparent;
@@ -68,15 +83,49 @@
                 font-size: inherit;
                 line-height: 1.4;
             }
+            body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-table-shell,
+            body.pds-admin .pds-deliveryman-list-page .dataTables_wrapper {
+                overflow: hidden !important;
+            }
+            body.pds-admin .pds-deliveryman-list-page table.pds-deliveryman-datatable {
+                width: 100% !important;
+                max-width: 100% !important;
+                min-width: 0 !important;
+                table-layout: fixed !important;
+            }
+            body.pds-admin .pds-deliveryman-list-page table.pds-deliveryman-datatable th,
+            body.pds-admin .pds-deliveryman-list-page table.pds-deliveryman-datatable td {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
             body.pds-admin .pds-deliveryman-list-page .pds-inline-contact-input.is-invalid {
                 border-color: #dc3545;
             }
         </style>
         <script>
             $(document).ready(function() {
-                $('.pds-list-filters .select2js').select2({ width: '100%' });
-
                 var $table = $('table.pds-datatable');
+                var $search = $('#pds-dm-search');
+                var hideDtSearch = function () {
+                    $('.pds-deliveryman-list-page .dataTables_filter').hide();
+                    $('.pds-deliveryman-list-page .dataTables_wrapper > .row.align-items-center').hide();
+                };
+                hideDtSearch();
+                var fitDmTable = function () {
+                    hideDtSearch();
+                    if (!$.fn.DataTable || !$.fn.DataTable.isDataTable($table)) return;
+                    $table.css({ width: '100%', minWidth: 0, maxWidth: '100%' });
+                    try { $table.DataTable().columns.adjust(); } catch (e) {}
+                };
+                $search.on('keyup input', function () {
+                    if ($.fn.DataTable && $.fn.DataTable.isDataTable($table)) {
+                        $table.DataTable().search($search.val()).draw();
+                    }
+                });
+                $table.on('init.dt draw.dt', fitDmTable);
+                window.setTimeout(fitDmTable, 50);
+                window.setTimeout(fitDmTable, 300);
                 var contactUpdateUrl = @json(url('deliveryman'));
                 var workStatusUrl = @json(url('deliveryman'));
                 var csrfToken = $('meta[name="csrf-token"]').attr('content');

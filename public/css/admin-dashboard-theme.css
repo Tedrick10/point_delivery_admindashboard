@@ -69,7 +69,7 @@ body.pds-admin .content-page .card.card-block.card-stretch > .card-body {
 /* Keep list page title + Export / Add buttons visible while scrolling */
 body.pds-admin .content-page .pds-list-toolbar {
     position: sticky;
-    top: 73px;
+    top: var(--pds-topbar-h, 73px);
     z-index: 25;
     background: var(--admin-card);
     padding: 0.75rem 0;
@@ -668,9 +668,14 @@ body.pds-admin .pds-sidebar {
 body.pds-admin .pds-sidebar .pds-sidebar-scroll {
     height: calc(100vh - 76px);
     overflow-x: hidden !important;
-    overflow-y: auto;
+    overflow-y: auto !important;
     scrollbar-gutter: stable;
     padding-bottom: 1.5rem;
+    pointer-events: auto !important;
+}
+body.pds-admin .pds-sidebar .mm-sidebar-menu,
+body.pds-admin .pds-sidebar .mm-sidebar-menu a {
+    pointer-events: auto !important;
 }
 
 body.pds-admin .pds-sidebar .pds-sidebar-scroll::-webkit-scrollbar {
@@ -4734,6 +4739,7 @@ body.pds-admin #loading {
     background: #1A120E !important;
     transition: opacity 0.45s ease, visibility 0.45s ease;
     isolation: isolate;
+    pointer-events: none !important;
 }
 
 body.pds-admin.dark #loading {
@@ -5616,17 +5622,23 @@ body.pds-admin .pds-topbar .dropdown-menu {
 body.pds-admin .pds-topbar .dropdown-menu.pds-lang-menu,
 body.pds-admin .pds-topbar .dropdown-menu.pds-lang-menu.mm-sub-dropdown {
     overflow: hidden !important;
-    width: 260px !important;
-    min-width: 260px !important;
-    max-width: calc(100vw - 2rem);
+    width: 248px !important;
+    min-width: 248px !important;
+    max-width: calc(100vw - 1.5rem);
     padding: 0 !important;
-    margin-top: 0.55rem !important;
+    margin-top: 0.45rem !important;
     float: none !important;
+    right: 0 !important;
+    left: auto !important;
+    z-index: 2200 !important;
+    background: #fff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12) !important;
+    border-radius: 14px !important;
 }
 
-body.pds-admin .pds-lang-menu__header,
-body.pds-admin .pds-notify-menu__header {
-    padding: 0.75rem 1rem;
+body.pds-admin .pds-lang-menu__header {
+    padding: 0.7rem 0.95rem;
     margin: 0;
     width: 100%;
     box-sizing: border-box;
@@ -5634,14 +5646,32 @@ body.pds-admin .pds-notify-menu__header {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--pds-muted);
-    border-bottom: 1px solid var(--pds-border);
-    background: #FAFBFD;
+    color: #94a3b8;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    background: #fff;
 }
 
 body.pds-admin.dark .pds-lang-menu__header,
 body.pds-admin.dark .pds-notify-menu__header {
+    background: rgba(18, 24, 38, 0.96);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+    color: #94a3b8 !important;
+}
+
+body.pds-admin.dark .pds-notify-menu {
+    background: rgba(18, 24, 38, 0.98) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+body.pds-admin.dark .pds-notify-menu__tabs,
+body.pds-admin.dark .pds-notify-menu__body {
+    background: transparent;
+}
+
+body.pds-admin.dark .pds-notify-menu__meta {
     background: rgba(255, 255, 255, 0.03);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
 }
 
 body.pds-admin .pds-lang-menu__list {
@@ -5820,13 +5850,16 @@ body.pds-admin .pds-topbar .dropdown-menu.pds-notify-menu.show {
 }
 
 body.pds-admin .pds-notify-menu {
-    width: min(420px, calc(100vw - 2rem));
+    width: min(380px, calc(100vw - 1.5rem));
     padding: 0;
     overflow: hidden;
     display: none;
     flex-direction: column;
-    border: 1px solid rgba(var(--brand-rgb), 0.12) !important;
-    background: rgba(var(--brand-rgb), 0.04) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: #fff !important;
+    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.14) !important;
+    border-radius: 16px !important;
+    z-index: 2200 !important;
 }
 
 body.pds-admin .pds-notify-menu.show {
@@ -5838,14 +5871,14 @@ body.pds-admin .pds-notify-menu__header {
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    padding: 0.95rem 1rem 0.7rem !important;
-    font-size: 0.78rem !important;
+    padding: 0.85rem 1rem !important;
+    font-size: 0.72rem !important;
     font-weight: 800 !important;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #1c1917 !important;
-    background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.1) 0%, rgba(255, 252, 248, 0) 70%) !important;
-    border-bottom: 1px solid rgba(var(--brand-rgb), 0.12) !important;
+    color: #334155 !important;
+    background: #fff !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.07) !important;
     flex-shrink: 0;
 }
 
@@ -5938,7 +5971,7 @@ body.pds-admin .pds-notify-mark-read:hover {
 }
 
 body.pds-admin .pds-notify-menu__body {
-    max-height: 340px;
+    max-height: 320px;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 0.45rem 0.4rem 0.55rem;
@@ -5946,7 +5979,7 @@ body.pds-admin .pds-notify-menu__body {
     min-height: 0;
     position: relative;
     z-index: 1;
-    background: rgba(var(--brand-rgb), 0.04);
+    background: #fff;
 }
 
 body.pds-admin .pds-notify-menu__body .notification-height,
@@ -6099,12 +6132,12 @@ body.pds-admin .pds-notification-tabs--page {
 }
 
 body.pds-admin .pds-notification-tab {
-    border: 1px solid #e7e5e4;
+    border: 1px solid #e2e8f0;
     background: #fff;
-    color: #78716c;
+    color: #64748b;
     border-radius: 999px;
-    padding: 0.32rem 0.7rem;
-    font-size: 0.68rem;
+    padding: 0.3rem 0.62rem;
+    font-size: 0.66rem;
     font-weight: 700;
     cursor: pointer;
     text-decoration: none;
@@ -8082,6 +8115,44 @@ body.pds-admin .pds-ard-body {
     overflow: auto;
     background: #f7f6f4;
 }
+body.pds-admin .pds-ard-search {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    margin: 0 0 0.85rem;
+    padding: 0 0 0.55rem;
+    background: linear-gradient(180deg, #f7f6f4 78%, rgba(247, 246, 244, 0));
+}
+body.pds-admin .pds-ard-search__input {
+    width: 100%;
+    height: 42px;
+    padding: 0 0.9rem 0 2.35rem;
+    border: 1px solid #e7e5e4;
+    border-radius: 12px;
+    background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23a8a29e' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242 1.106a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E") no-repeat 0.85rem center;
+    color: #1c1917;
+    font-size: 0.88rem;
+}
+body.pds-admin .pds-ard-search__icon {
+    display: none;
+}
+body.pds-admin .pds-ard-search__input:focus {
+    outline: none;
+    border-color: var(--site-color);
+    box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.16);
+}
+body.pds-admin .pds-ard-search-empty {
+    margin: 0 0 0.85rem;
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    background: #fff7ed;
+    color: #9a3412;
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+body.pds-admin .pds-ard-card.is-search-hidden {
+    display: none !important;
+}
 body.pds-admin .pds-ard-empty {
     margin: 0;
     padding: 1.25rem;
@@ -8385,8 +8456,12 @@ body.pds-admin .pds-ard-upload.has-file {
 }
 body.pds-admin .pds-ard-upload.has-file {
     justify-content: center;
-    padding: 0.55rem;
-    min-height: 120px;
+    padding: 0;
+    min-height: 168px;
+    overflow: hidden;
+    border-style: solid;
+    border-color: var(--site-color);
+    background: #1c1917;
 }
 body.pds-admin .pds-ard-upload input {
     position: absolute;
@@ -8406,16 +8481,39 @@ body.pds-admin .pds-ard-upload__preview {
     background: #fff;
     box-shadow: 0 2px 8px rgba(154, 52, 18, 0.12);
 }
-body.pds-admin .pds-ard-upload.has-file .pds-ard-upload__preview {
-    width: 112px;
-    height: 112px;
-    border-radius: 14px;
+body.pds-admin .pds-ard-upload.has-file .pds-ard-upload__preview,
+body.pds-admin .pds-ard-upload.has-file .pds-ard-upload__preview[hidden] {
+    display: block !important;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: inherit;
+    box-shadow: none;
+    z-index: 1;
 }
 body.pds-admin .pds-ard-upload__preview img {
     display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+body.pds-admin .pds-ard-upload__ready {
+    position: absolute;
+    left: 0.7rem;
+    bottom: 0.7rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.6rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94);
+    color: #166534;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 body.pds-admin .pds-ard-upload.has-file .pds-ard-upload__icon,
 body.pds-admin .pds-ard-upload.has-file .pds-ard-upload__text {
@@ -10664,6 +10762,54 @@ body.pds-admin .pds-follow-up-cell--rider {
     color: #334155;
 }
 
+body.pds-admin .pds-follow-up-check-col {
+    width: 42px;
+    text-align: center;
+    vertical-align: middle !important;
+}
+
+body.pds-admin .pds-follow-up-check-col input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--site-color, #FE6F07);
+}
+
+body.pds-admin .pds-follow-up-rider-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 160px;
+    padding: 0.28rem 0.55rem;
+    border: 1px solid rgba(var(--brand-rgb), 0.35);
+    border-radius: 999px;
+    background: rgba(var(--brand-rgb), 0.08);
+    color: var(--site-color, #FE6F07);
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+body.pds-admin .pds-follow-up-rider-btn span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.pds-admin .pds-follow-up-rider-btn i {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+}
+
+body.pds-admin .pds-follow-up-rider-btn:hover {
+    background: var(--site-color, #FE6F07);
+    border-color: var(--site-color, #FE6F07);
+    color: #fff;
+}
+
 body.pds-admin .pds-follow-up-address-cell {
     max-width: none;
     white-space: normal;
@@ -12893,6 +13039,18 @@ body.pds-admin .pds-rider-items-table {
     min-width: 1680px;
 }
 
+/* Header-nav layout: prefer fitting the viewport before forcing scroll */
+body.pds-admin.pds-header-nav .pds-rider-items-table {
+    min-width: 0;
+    width: 100%;
+}
+
+@media (max-width: 1399.98px) {
+    body.pds-admin.pds-header-nav .pds-rider-items-table {
+        min-width: 1180px;
+    }
+}
+
 body.pds-admin .pds-rider-table-shell--scroll thead th {
     position: sticky;
     top: 0;
@@ -13411,6 +13569,12 @@ body.pds-admin .pds-rider-status-chip {
     letter-spacing: 0.03em;
 }
 
+body.pds-admin .pds-rider-list-table thead th .pds-rider-status-chip {
+    text-transform: none;
+    letter-spacing: 0.03em;
+    font-size: 0.68rem;
+}
+
 body.pds-admin .pds-rider-status-chip--assigned {
     background: #eff6ff;
     color: #1d4ed8;
@@ -13432,8 +13596,9 @@ body.pds-admin .pds-rider-status-chip--completed {
 }
 
 body.pds-admin .pds-rider-status-chip--pending {
-    background: rgba(var(--brand-rgb), 0.08);
-    color: var(--site-color);
+    background: #fff7ed !important;
+    color: #9a3412 !important;
+    border: 1px solid #fdba74;
 }
 
 body.pds-admin .pds-rider-status-chip--return {
@@ -13658,9 +13823,15 @@ body.pds-admin .pds-rider-sticky-col {
     background: #fff;
 }
 
+/* Corner sticky cells must sit ABOVE other sticky thead th (z-index 8),
+   otherwise the ID column steals Select All clicks. */
 body.pds-admin .pds-rider-items-table thead .pds-rider-sticky-col {
-    z-index: 4;
-    background: linear-gradient(180deg, rgba(var(--brand-rgb), 0.06) 0%, rgba(var(--brand-rgb), 0.16) 100%);
+    z-index: 12 !important;
+    background: var(--site-color, #FE6F07) !important;
+}
+
+body.pds-admin .pds-rider-items-table thead .pds-rider-sticky-col--check {
+    z-index: 13 !important;
 }
 
 body.pds-admin .pds-rider-sticky-col--no {
@@ -13671,9 +13842,35 @@ body.pds-admin .pds-rider-sticky-col--no {
 
 body.pds-admin .pds-rider-sticky-col--check {
     left: 48px;
-    min-width: 44px;
+    min-width: 48px;
     text-align: center;
     box-shadow: 4px 0 10px rgba(15, 23, 42, 0.04);
+}
+
+body.pds-admin .pds-rider-select-all-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin: 0;
+    cursor: pointer;
+}
+
+body.pds-admin #riderItemsSelectAll,
+body.pds-admin .pds-rider-items-table .pds-rider-item-check {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #fff;
+    position: relative;
+    z-index: 2;
+    pointer-events: auto;
+}
+
+body.pds-admin .pds-rider-items-table tbody .pds-rider-item-check {
+    accent-color: var(--site-color, #FE6F07);
 }
 
 body.pds-admin .pds-rider-items-table tbody tr:hover .pds-rider-sticky-col {
@@ -14226,19 +14423,24 @@ body.pds-admin .pds-os-settlement-tab em {
 body.pds-admin .pds-os-settlement-tab.is-active {
     background: var(--site-color);
     border-color: var(--site-color);
-    color: #fff;
+    color: #fff !important;
     box-shadow: 0 8px 18px rgba(var(--brand-rgb), 0.28);
+}
+
+body.pds-admin .pds-os-settlement-tab.is-active > span,
+body.pds-admin .pds-os-settlement-tab.is-active span {
+    color: #fff !important;
 }
 
 body.pds-admin .pds-os-settlement-tab.is-active i,
 body.pds-admin .pds-os-settlement-tab[data-tab="receive"].is-active i,
 body.pds-admin .pds-os-settlement-tab[data-tab="kyo_shin"].is-active i {
-    color: #fff;
+    color: #fff !important;
 }
 
 body.pds-admin .pds-os-settlement-tab.is-active em {
-    background: #fff;
-    color: var(--site-color);
+    background: #fff !important;
+    color: var(--site-color) !important;
     font-weight: 800;
 }
 
@@ -14256,7 +14458,7 @@ body.pds-admin .pds-os-settlement-tab[data-tab="kyo_shin"].is-active {
 }
 
 body.pds-admin .pds-os-settlement-tab[data-tab="kyo_shin"].is-active span {
-    color: #fff;
+    color: #fff !important;
 }
 
 body.pds-admin .pds-os-settlement-tab[data-tab="kyo_shin"].is-active em {
@@ -20545,10 +20747,8 @@ body.pds-admin .pds-os-list-bulk:not(:has(#deleteSelectedBtn.is-visible)) {
 body.pds-admin .pds-os-list-table-shell {
     border: 1px solid #e8edf3;
     border-radius: 16px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: hidden;
     background: #fff;
-    -webkit-overflow-scrolling: touch;
 }
 
 body.pds-admin .pds-os-list-filters {
@@ -21103,8 +21303,102 @@ body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-list-body {
     padding-top: 0.35rem;
 }
 
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    padding: 0.85rem 1.1rem;
+    margin: 0 0 1rem;
+    background: linear-gradient(180deg, #FAFBFD 0%, #F8FAFC 100%);
+    border: 1px solid var(--pds-border);
+    border-radius: var(--pds-radius-lg);
+}
+
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar__bulk {
+    display: flex;
+    align-items: center;
+    min-height: 42px;
+}
+
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar #deleteSelectedBtn,
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar #deleteSelectedBtn:not(.is-visible),
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar #deleteSelectedBtn[hidden],
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar #deleteSelectedBtn.bg-gray,
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar #deleteSelectedBtn.bg-danger,
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar #deleteSelectedBtn.btn-danger,
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar #deleteSelectedBtn.btn-outline-danger,
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar .pds-dm-delete-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    visibility: visible;
+    opacity: 1;
+    height: 42px;
+    padding: 0.45rem 1.35rem !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: #FE6F07 !important;
+    color: #fff !important;
+    font-weight: 700;
+    box-shadow: none !important;
+}
+
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar #deleteSelectedBtn:hover,
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar #deleteSelectedBtn:focus,
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar .pds-dm-delete-btn:hover,
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar .pds-dm-delete-btn:focus {
+    background: #E86200 !important;
+    color: #fff !important;
+}
+
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar__search {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0 0 0 auto;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #475569;
+}
+
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar__search input {
+    min-width: 240px;
+    height: 42px;
+    border: 1px solid var(--pds-border) !important;
+    border-radius: 999px !important;
+    padding: 0.45rem 1rem 0.45rem 2.35rem !important;
+    background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2364748B' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242 1.106a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E") no-repeat 0.9rem center !important;
+}
+
+body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar__search input:focus {
+    outline: none;
+    border-color: rgba(254, 111, 7, 0.55) !important;
+    box-shadow: 0 0 0 3px rgba(254, 111, 7, 0.12);
+}
+
+body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-table-shell .dataTables_wrapper > .row.align-items-center,
+body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-table-shell .dataTables_filter,
+body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-table-shell .dt-buttons,
+body.pds-admin .pds-deliveryman-list-page .dataTables_wrapper .dataTables_filter {
+    display: none !important;
+}
+
+@media (max-width: 767.98px) {
+    body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar__search {
+        width: 100%;
+        margin-left: 0;
+    }
+    body.pds-admin .pds-deliveryman-list-page .pds-dm-toolbar__search input {
+        flex: 1;
+        min-width: 0;
+    }
+}
+
 body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-table-shell {
-    overflow-x: auto;
+    overflow-x: hidden;
+    overflow-y: visible;
 }
 
 body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-table-shell .dataTables_wrapper,
@@ -21114,7 +21408,8 @@ body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-table-shell table.dat
 }
 
 body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-datatable {
-    min-width: 1180px;
+    min-width: 0 !important;
+    width: 100% !important;
 }
 
 body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-datatable thead th.pds-dm-col-work,
@@ -21371,8 +21666,7 @@ body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-datatable tbody tr:ho
 
 @media (max-width: 1200px) {
     body.pds-admin .pds-deliveryman-list-page .pds-deliveryman-table-shell {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        overflow: hidden !important;
     }
 }
 
@@ -23147,6 +23441,8 @@ body.pds-admin .pds-user-reg-page {
     max-width: none;
 }
 
+/* Scrollbar hide is enforced in partials/_head.blade.php (#pds-hide-scrollbars). */
+
 body.pds-admin .pds-user-reg-page .pds-user-reg-card {
     width: 100%;
     max-width: none;
@@ -23567,7 +23863,13 @@ body.pds-admin .pds-dispatch-os-list-page .pds-os-settlement-tab {
 body.pds-admin .pds-dispatch-os-list-page .pds-os-settlement-tab.is-active {
     background: linear-gradient(135deg, var(--site-color) 0%, var(--site-color) 100%);
     border-color: var(--site-color);
+    color: #fff !important;
     box-shadow: 0 8px 18px rgba(var(--brand-rgb), 0.28);
+}
+
+body.pds-admin .pds-dispatch-os-list-page .pds-os-settlement-tab.is-active span,
+body.pds-admin .pds-dispatch-os-list-page .pds-os-settlement-tab.is-active i {
+    color: #fff !important;
 }
 
 body.pds-admin .pds-dispatch-os-list-page .pds-os-settlement-tab[data-tab="receive"].is-active {
@@ -24043,7 +24345,18 @@ body.pds-admin .pds-kyo-shin-page .pds-os-settlement-tab {
 body.pds-admin .pds-kyo-shin-page .pds-os-settlement-tab.is-active {
     background: linear-gradient(135deg, var(--site-color) 0%, var(--site-color) 100%);
     border-color: var(--site-color);
+    color: #fff !important;
     box-shadow: 0 8px 18px rgba(var(--brand-rgb), 0.28);
+}
+
+body.pds-admin .pds-kyo-shin-page .pds-os-settlement-tab.is-active span,
+body.pds-admin .pds-kyo-shin-page .pds-os-settlement-tab.is-active i {
+    color: #fff !important;
+}
+
+body.pds-admin .pds-kyo-shin-page .pds-os-settlement-tab.is-active em {
+    background: #fff !important;
+    color: var(--site-color) !important;
 }
 
 body.pds-admin .pds-kyo-shin-page .pds-kyo-shin-check-bar {
@@ -25365,6 +25678,15 @@ body.pds-admin #adminSpaContent.pds-spa-loading {
     transition: opacity 0.12s ease;
 }
 
+/* After first hide, keep cinematic splash off during SPA navigations */
+body.pds-admin.pds-splash-done #loading,
+body.pds-admin.pds-splash-done #loader.pds-splash {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 /* Empty live badges must never render as orange dots */
 body.pds-admin .pds-sidebar .badge.d-none,
 body.pds-admin .pds-sidebar .badge-pill.d-none,
@@ -25547,10 +25869,13 @@ body.pds-admin table.dataTable thead th.sorting_desc:after {
 body.pds-admin .pds-table-shell,
 body.pds-admin .pds-dispatch-table-shell,
 body.pds-admin .pds-dispatch-to-assign-table-shell,
-body.pds-admin .pds-rider-table-shell {
+body.pds-admin .pds-rider-table-shell,
+body.pds-admin .pds-os-list-table-shell,
+body.pds-admin .pds-deliveryman-table-shell {
     border: 1px solid #cbbfb3 !important;
     border-radius: 8px !important;
-    overflow: auto;
+    /* Never overflow:auto on the shell — it draws a scroll track under pagination. */
+    overflow: hidden !important;
     background: #fff !important;
 }
 
@@ -25705,4 +26030,121 @@ body.pds-admin div.dataTables_scroll,
 body.pds-admin div.dataTables_scrollBody {
     border-top: 0 !important;
     border-bottom: 0 !important;
+}
+
+
+/* Point brand fill: white text on orange buttons/cards
+   (beats global `body.pds-admin span { color: var(--admin-text) }`) */
+body.pds-admin .btn-primary,
+body.pds-admin .btn-primary:hover,
+body.pds-admin .btn-primary:focus,
+body.pds-admin .btn-primary:active,
+body.pds-admin .btn-primary span,
+body.pds-admin .btn-primary i,
+body.pds-admin .btn-md.btn-primary,
+body.pds-admin .btn-md.btn-primary span,
+body.pds-admin .btn-warning,
+body.pds-admin .btn-warning span,
+body.pds-admin .btn-warning i,
+body.pds-admin .btn-info,
+body.pds-admin .btn-info span,
+body.pds-admin .btn-info i,
+body.pds-admin .bg-primary,
+body.pds-admin .bg-primary span,
+body.pds-admin .badge-primary,
+body.pds-admin .badge.bg-primary,
+body.pds-admin .pds-rider-check-btn,
+body.pds-admin .pds-rider-check-btn:hover,
+body.pds-admin .pds-rider-check-btn span,
+body.pds-admin .pds-rider-check-btn i,
+body.pds-admin .pds-rider-of-month-btn,
+body.pds-admin .pds-rider-of-month-btn:hover,
+body.pds-admin .pds-rider-of-month-btn span,
+body.pds-admin .pds-rider-of-month-btn i,
+body.pds-admin .pds-dispatch-filter-action-primary,
+body.pds-admin .pds-dispatch-filter-action-primary:hover,
+body.pds-admin .pds-dispatch-filter-action-primary span,
+body.pds-admin .pds-dispatch-filter-action-primary i,
+body.pds-admin .pds-daily-check-search-btn,
+body.pds-admin .pds-daily-check-search-btn:hover,
+body.pds-admin .pds-daily-check-search-btn span,
+body.pds-admin .pds-daily-check-search-btn i,
+body.pds-admin .pds-label-popup__btn:not(.pds-label-popup__btn--ghost),
+body.pds-admin .pds-label-popup__btn:not(.pds-label-popup__btn--ghost) span,
+body.pds-admin .pds-label-popup__btn:not(.pds-label-popup__btn--ghost) i,
+body.pds-admin .pds-dispatch-btn-primary,
+body.pds-admin .pds-dispatch-btn-primary:hover,
+body.pds-admin .pds-dispatch-btn-primary span,
+body.pds-admin .pds-dispatch-btn-primary i,
+body.pds-admin .pds-dispatch-btn-primary .pds-dispatch-btn-label,
+body.pds-admin .pds-dispatch-btn-primary .pds-dispatch-btn-spinner,
+body.pds-admin .pds-assign-action-btn,
+body.pds-admin .pds-assign-action-btn:hover,
+body.pds-admin .pds-assign-action-btn span,
+body.pds-admin .pds-assign-action-btn i,
+body.pds-admin .pds-assign-action-btn__label,
+body.pds-admin .pds-assign-action-btn__icon,
+body.pds-admin .pds-assign-action-btn--rider,
+body.pds-admin .pds-assign-action-btn--rider span,
+body.pds-admin .pds-assign-action-btn--rider i,
+body.pds-admin .pds-assign-action-btn--rider .pds-assign-action-btn__label,
+body.pds-admin .pds-assign-action-btn--point,
+body.pds-admin .pds-assign-action-btn--point span,
+body.pds-admin .pds-assign-action-btn--point i,
+body.pds-admin .pds-hr-stat:not(.pds-hr-stat--soft),
+body.pds-admin .pds-hr-stat:not(.pds-hr-stat--soft) span,
+body.pds-admin .pds-hr-stat:not(.pds-hr-stat--soft) .pds-hr-stat__value,
+body.pds-admin .pds-hr-stat:not(.pds-hr-stat--soft) .pds-hr-stat__label,
+body.pds-admin .pds-hr-tab.is-active,
+body.pds-admin .pds-hr-tab.is-active span,
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-check-btn,
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-check-btn span,
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-check-btn i,
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-of-month-btn,
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-of-month-btn span,
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-of-month-btn i,
+body.pds-admin .pds-dispatch-rider-items-page .pds-rider-check-btn,
+body.pds-admin .pds-dispatch-rider-items-page .pds-rider-check-btn span,
+body.pds-admin .pds-dispatch-rider-items-page .pds-rider-check-btn i,
+body.pds-admin .pds-dispatch-os-list-page .pds-rider-check-btn,
+body.pds-admin .pds-dispatch-os-list-page .pds-rider-check-btn span,
+body.pds-admin .pds-dispatch-os-list-page .pds-rider-check-btn i,
+body.pds-admin .pds-kyo-shin-page .pds-rider-check-btn,
+body.pds-admin .pds-kyo-shin-page .pds-rider-check-btn span,
+body.pds-admin .pds-kyo-shin-page .pds-rider-check-btn i,
+body.pds-admin .pds-os-settlement-tab.is-active,
+body.pds-admin .pds-os-settlement-tab.is-active span,
+body.pds-admin .pds-os-settlement-tab.is-active i,
+body.pds-admin .pds-kyo-shin-page .pds-os-settlement-tab.is-active,
+body.pds-admin .pds-kyo-shin-page .pds-os-settlement-tab.is-active span,
+body.pds-admin .pds-kyo-shin-page .pds-os-settlement-tab.is-active i,
+body.pds-admin .pds-dispatch-os-list-page .pds-os-settlement-tab.is-active,
+body.pds-admin .pds-dispatch-os-list-page .pds-os-settlement-tab.is-active span,
+body.pds-admin .pds-dispatch-os-list-page .pds-os-settlement-tab.is-active i {
+    color: #fff !important;
+}
+
+body.pds-admin .pds-os-settlement-tab.is-active em,
+body.pds-admin .pds-kyo-shin-page .pds-os-settlement-tab.is-active em,
+body.pds-admin .pds-dispatch-os-list-page .pds-os-settlement-tab.is-active em {
+    color: var(--site-color) !important;
+}
+
+body.pds-admin .pds-os-settlement-tab[data-tab="receive"].is-active em,
+body.pds-admin .pds-dispatch-os-list-page .pds-os-settlement-tab[data-tab="receive"].is-active em {
+    color: #059669 !important;
+}
+
+body.pds-admin .pds-os-settlement-tab[data-tab="kyo_shin"].is-active em,
+body.pds-admin .pds-dispatch-os-list-page .pds-os-settlement-tab[data-tab="kyo_shin"].is-active em {
+    color: #7c3aed !important;
+}
+
+/* Keep kyo-shin outline variant orange text, not white */
+body.pds-admin .pds-assign-action-btn--kyo-shin,
+body.pds-admin .pds-assign-action-btn--kyo-shin span,
+body.pds-admin .pds-assign-action-btn--kyo-shin i,
+body.pds-admin .pds-assign-action-btn--kyo-shin .pds-assign-action-btn__label,
+body.pds-admin .pds-assign-action-btn--kyo-shin .pds-assign-action-btn__icon {
+    color: var(--site-color) !important;
 }
