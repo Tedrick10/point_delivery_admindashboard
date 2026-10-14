@@ -1,5 +1,5 @@
 <?php
-    $auth_user = authSession();
+    $auth_user = auth()->user() ?: authSession();
     $id = $order->id;
     $delete_at = $order->deleted_at;
     $workflow = app(\App\Services\DispatchOrderWorkflowService::class);

@@ -194,8 +194,15 @@ class User extends Authenticatable implements HasMedia
     public function riderAssignedPhone(): ?string
     {
         $phone = trim((string) ($this->contact_number ?? ''));
+        if ($phone === '') {
+            return null;
+        }
 
-        return $phone !== '' ? $phone : null;
+        $formatted = function_exists('normalizeContactNumber')
+            ? normalizeContactNumber($phone)
+            : $phone;
+
+        return $formatted !== '' ? $formatted : $phone;
     }
 
     public function isRiderWorkOn(): bool

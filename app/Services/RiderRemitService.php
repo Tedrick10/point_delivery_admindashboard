@@ -1209,7 +1209,7 @@ class RiderRemitService
     protected function dueByRider(?int $branchId, string $day): Collection
     {
         $completed = $this->remittableItemsQuery($branchId, $day)
-            ->get(['id', 'delivery_man_id', 'cust_get', 'gate_amount', 'agent_amount']);
+            ->get(['id', 'delivery_man_id', 'cust_get', 'os_paid', 'gate_amount', 'agent_amount']);
 
         $kyoOs = $this->kyoOsRemittableItemsQuery($branchId, $day)
             ->with('kyoShinItem')
@@ -1225,13 +1225,16 @@ class RiderRemitService
         return $riderIds->mapWithKeys(function ($riderId) use ($completed, $kyoOs) {
             $doneGroup = $completed->where('delivery_man_id', $riderId);
             $kyoGroup = $kyoOs->where('delivery_man_id', $riderId);
-            // အပ်ရမည့်ငွေ = Delivered cust_get only. ကြိုရှင်း Os Returned is a separate additive row.
+            // အပ်ရမည့်ငွေ = Delivered cust_get + Os Paid (pay_done cash not stored in cust_get).
+            // ကြိုရှင်း Os Returned is a separate additive row.
             // ဆီဖိုး ways = completed Delivered only (no-fee Os Returned does not earn fuel).
 
             return [
                 (int) $riderId => (object) [
                     'delivery_man_id' => (int) $riderId,
-                    'due' => round($doneGroup->sum(fn (DispatchOrderItem $i) => (float) ($i->cust_get ?? 0)), 2),
+                    'due' => round($doneGroup->sum(function (DispatchOrderItem $i) {
+                        return (float) ($i->cust_get ?? 0) + (float) ($i->os_paid ?? 0);
+                    }), 2),
                     'gate' => round($doneGroup->sum(fn (DispatchOrderItem $i) => (float) ($i->gate_amount ?? 0)), 2),
                     'agent' => round($doneGroup->sum(fn (DispatchOrderItem $i) => (float) ($i->agent_amount ?? 0)), 2),
                     'item_count' => $doneGroup->count() + $kyoGroup->count(),

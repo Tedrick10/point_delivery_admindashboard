@@ -201,10 +201,6 @@
 
     function adjustDeliAmountForSizeChange(currentAmount, previousSize, newSize) {
         var next = Math.max(1, Math.min(10, parseInt(newSize, 10) || 0));
-        if (next <= 1) {
-            return null;
-        }
-
         var prevRaw = parseInt(previousSize, 10);
         var prev = (!prevRaw || prevRaw < 1) ? 0 : Math.max(1, Math.min(10, prevRaw));
         var current = parseFloat(currentAmount);
@@ -212,7 +208,13 @@
             current = 0;
         }
 
+        // No amount yet — Size(1) must be typed first.
         if (current <= 0 && prev <= 0) {
+            return null;
+        }
+
+        // First Size(1) / re-tap Size(1): keep manual amount. Stepping DOWN to Size(1) adjusts.
+        if (next <= 1 && prev <= 1) {
             return null;
         }
 

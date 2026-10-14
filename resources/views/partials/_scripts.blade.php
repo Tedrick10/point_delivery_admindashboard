@@ -8,6 +8,7 @@
 <script src="{{ public_asset_ver('js/image-drop-upload.js') }}"></script>
 <script>window.PDS_MYANMAR_NRC_DATA_URL = @json(asset('data/myanmar-nrc.json'));</script>
 <script src="{{ public_asset_ver('js/myanmar-nrc-box.js') }}"></script>
+<script src="{{ public_asset_ver('js/os-reg-location.js') }}"></script>
 <script src="{{ public_asset_ver('js/os-account-modal.js') }}"></script>
 <script>
 if (window.PDS_MYANMAR_NRC_DATA_URL) {
@@ -188,3 +189,16 @@ if (window.PDS_MYANMAR_NRC_DATA_URL) {
     });
 </script>
 <script src="{{ public_asset_ver('js/pds-frozen-table.js') }}"></script>
+@if(file_exists(public_path('js/pds-table-freeze.js')))
+<script src="{{ public_asset_ver('js/pds-table-freeze.js') }}"></script>
+@endif
+<script>
+    // Quiet DataTables Ajax failures (live refresh / transient 5xx) — no browser alert spam.
+    if (window.jQuery && jQuery.fn && jQuery.fn.dataTable) {
+        jQuery.fn.dataTable.ext.errMode = function (settings, helpPage, message) {
+            if (window.console && console.warn) {
+                console.warn('DataTables:', message);
+            }
+        };
+    }
+</script>

@@ -39,6 +39,11 @@
                         </option>
                     @endforeach
                 </select>
+                <div class="sa-field-hint" style="margin-top:0.45rem;font-size:0.78rem;">
+                    <a href="{{ route('super-admin.branches.create') }}" style="color:var(--site-color,#FE6F07);font-weight:600;text-decoration:none;">
+                        + {{ __('message.sa_new_branch') }}
+                    </a>
+                </div>
                 @error('branch_id')
                     <div class="sa-field-error">{{ $message }}</div>
                 @enderror

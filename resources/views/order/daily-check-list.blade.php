@@ -16,6 +16,57 @@
             white-space: nowrap;
             vertical-align: middle;
         }
+
+        /* Critical: center Check Detail + shrink to content (beats cached theme CSS). */
+        body.pds-admin #dailyCheckDetailModal.modal {
+            z-index: 10600 !important;
+            padding: 1.5rem !important;
+            overflow: hidden !important;
+        }
+        body.pds-admin #dailyCheckDetailModal.modal.show {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+        body.pds-admin.modal-open .modal-backdrop.pds-check-detail-backdrop {
+            z-index: 10590 !important;
+        }
+        body.pds-admin #dailyCheckDetailModal .modal-dialog.pds-check-detail-dialog {
+            width: min(96vw, 1680px);
+            max-width: min(96vw, 1680px);
+            height: auto !important;
+            max-height: calc(100vh - 3rem);
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        body.pds-admin #dailyCheckDetailModal.show .modal-dialog.pds-check-detail-dialog {
+            transform: none;
+        }
+        body.pds-admin #dailyCheckDetailModal .pds-check-detail-modal,
+        body.pds-admin #dailyCheckDetailModal .modal-body,
+        body.pds-admin #dailyCheckDetailModal .pds-check-detail {
+            display: flex;
+            flex-direction: column;
+            flex: 0 0 auto !important;
+            min-height: 0;
+            height: auto !important;
+            max-height: calc(100vh - 3rem);
+            overflow: hidden;
+        }
+        body.pds-admin #dailyCheckDetailModal .pds-check-detail__header {
+            flex: 0 0 auto;
+            position: relative;
+            z-index: 3;
+        }
+        body.pds-admin #dailyCheckDetailModal .pds-check-detail__body {
+            flex: 0 1 auto;
+            min-height: 0;
+            max-height: min(70vh, calc(100vh - 9rem));
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+        }
     </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-daily-check-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
@@ -245,29 +296,37 @@
                                     </tr>
                                 @endforeach
                             </tbody>
-                            @php
-                                $totalItemCount = (int) $rows->sum('item_count');
-                                $totalAdvance = (float) $rows->sum('advance_paid');
-                                $totalDeli = (float) $rows->sum('deli_amount');
-                                $totalOsPaid = (float) $rows->sum('os_paid');
-                                $totalGate = (float) $rows->sum('gate');
-                                $totalOsToPay = (float) $rows->sum('os_to_pay');
-                                $totalAmount = (float) $rows->sum('amount');
-                                $colspanTail = $mode !== 'all' ? 4 : 3;
-                            @endphp
-                            <tfoot>
-                                <tr class="pds-daily-check-total-row">
-                                    <td colspan="4" class="pds-daily-check-total-label">{{ __('message.total') }}</td>
-                                    <td class="text-center">{{ number_format($totalItemCount) }}</td>
-                                    <td class="text-right">{{ number_format($totalAdvance) }}</td>
-                                    <td class="text-right {{ $totalAmount < 0 ? 'pds-os-to-pay-negative' : '' }}">{{ number_format($totalAmount) }}</td>
-                                    <td class="text-right {{ $totalOsToPay < 0 ? 'pds-os-to-pay-negative' : '' }}">{{ number_format($totalOsToPay) }}</td>
-                                    <td class="text-right">{{ number_format($totalDeli) }}</td>
-                                    <td class="text-right">{{ number_format($totalGate) }}</td>
-                                    <td colspan="{{ $colspanTail }}"></td>
-                                </tr>
-                            </tfoot>
                         </table>
+                        </div>
+                        @php
+                            $totalItemCount = (int) $rows->sum('item_count');
+                            $totalAdvance = (float) $rows->sum('advance_paid');
+                            $totalDeli = (float) $rows->sum('deli_amount');
+                            $totalGate = (float) $rows->sum('gate');
+                            $totalOsToPay = (float) $rows->sum('os_to_pay');
+                            $totalAmount = (float) $rows->sum('amount');
+                            $colspanTail = $mode !== 'all' ? 4 : 3;
+                        @endphp
+                        <div class="pds-frozen-table__foot">
+                            <table class="table pds-rider-list-table pds-daily-check-table">
+                                <colgroup>
+                                    @foreach($dcCols as $col)
+                                        <col style="width: {{ $col['w'] }}px">
+                                    @endforeach
+                                </colgroup>
+                                <tfoot>
+                                    <tr class="pds-daily-check-total-row">
+                                        <td colspan="4" class="pds-daily-check-total-label">{{ __('message.total') }}</td>
+                                        <td class="text-center">{{ number_format($totalItemCount) }}</td>
+                                        <td class="text-right">{{ number_format($totalAdvance) }}</td>
+                                        <td class="text-right {{ $totalAmount < 0 ? 'pds-os-to-pay-negative' : '' }}">{{ number_format($totalAmount) }}</td>
+                                        <td class="text-right {{ $totalOsToPay < 0 ? 'pds-os-to-pay-negative' : '' }}">{{ number_format($totalOsToPay) }}</td>
+                                        <td class="text-right">{{ number_format($totalDeli) }}</td>
+                                        <td class="text-right">{{ number_format($totalGate) }}</td>
+                                        <td colspan="{{ $colspanTail }}"></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
                         </div>
                     </div>
                 @endif
@@ -276,7 +335,8 @@
     </div>
 
     <div class="modal fade" id="dailyCheckDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable pds-check-detail-dialog" role="document">
+        {{-- No modal-dialog-centered: tall content was clipping the header off the top of the viewport. --}}
+        <div class="modal-dialog modal-xl pds-check-detail-dialog" role="document">
             <div class="modal-content pds-check-detail-modal">
                 <div class="modal-body p-0" id="dailyCheckDetailBody"></div>
             </div>
@@ -358,6 +418,17 @@
                 return setTimeout(bootDailyCheckList, 40);
             }
             var $ = window.jQuery;
+
+            function portalDailyCheckModals() {
+                ['#dailyCheckDetailModal', '#dailyCheckRemitDateModal', '#dailyCheckRemitPhotoModal', '#dailyCheckItemMediaModal'].forEach(function (sel) {
+                    var $fresh = $('#adminLiveRoot ' + sel + ', #adminSpaContent ' + sel).first();
+                    if (!$fresh.length) return;
+                    $('body > ' + sel).remove();
+                    $fresh.appendTo(document.body);
+                });
+            }
+            portalDailyCheckModals();
+
             if (window.__pdsDailyCheckBound) return;
             window.__pdsDailyCheckBound = true;
 
@@ -366,9 +437,11 @@
                 if (!root) return;
                 var headWrap = root.querySelector('.pds-frozen-table__head');
                 var bodyWrap = root.querySelector('.pds-frozen-table__body');
+                var footWrap = root.querySelector('.pds-frozen-table__foot');
                 if (!headWrap || !bodyWrap) return;
                 bodyWrap.addEventListener('scroll', function () {
                     headWrap.scrollLeft = bodyWrap.scrollLeft;
+                    if (footWrap) footWrap.scrollLeft = bodyWrap.scrollLeft;
                 });
             })();
 
@@ -414,17 +487,42 @@
                 e.stopPropagation();
                 var url = $(this).attr('data-url') || $(this).data('url');
                 if (!url) return;
+                var $modal = $('#dailyCheckDetailModal');
+                if ($modal.length && !$modal.parent().is('body')) {
+                    $modal.appendTo(document.body);
+                }
                 $('#dailyCheckDetailBody').html('<div class="p-5 text-center text-muted">Loading...</div>');
-                $('#dailyCheckDetailModal').modal('show');
+                $modal.modal('show');
                 $.ajax({ url: url, method: 'GET', dataType: 'json' })
                     .done(function (res) {
                         $('#dailyCheckDetailBody').html((res && res.html) ? res.html : '<div class="p-4 text-muted">No data</div>');
+                        var modalEl = document.getElementById('dailyCheckDetailModal');
+                        if (modalEl) modalEl.scrollTop = 0;
+                        var bodyEl = document.querySelector('#dailyCheckDetailModal .pds-check-detail__body');
+                        if (bodyEl) bodyEl.scrollTop = 0;
                     })
                     .fail(function (xhr) {
                         var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Failed to load check detail';
                         $('#dailyCheckDetailBody').html('<div class="p-4 text-danger text-center">' + msg + '</div>');
                     });
             });
+
+            $(document)
+                .off('show.bs.modal.pdsCheckDetail shown.bs.modal.pdsCheckDetail hidden.bs.modal.pdsCheckDetail')
+                .on('show.bs.modal.pdsCheckDetail', '#dailyCheckDetailModal', function () {
+                    if (!$(this).parent().is('body')) {
+                        $(this).appendTo(document.body);
+                    }
+                })
+                .on('shown.bs.modal.pdsCheckDetail', '#dailyCheckDetailModal', function () {
+                    this.scrollTop = 0;
+                    var bodyEl = this.querySelector('.pds-check-detail__body');
+                    if (bodyEl) bodyEl.scrollTop = 0;
+                    $('.modal-backdrop').last().addClass('pds-check-detail-backdrop');
+                })
+                .on('hidden.bs.modal.pdsCheckDetail', '#dailyCheckDetailModal', function () {
+                    $('.modal-backdrop.pds-check-detail-backdrop').removeClass('pds-check-detail-backdrop');
+                });
 
             $(document).on('click', '.js-daily-check-item-media', function (e) {
                 e.preventDefault();

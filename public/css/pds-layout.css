@@ -2,21 +2,7 @@
  * Point Delivery — Admin layout (compatible with backend.css shell)
  */
 
-/* Global: no visible scrollbar tracks (scroll still works) */
-html.pds-admin-root,
-body.pds-admin,
-body.pds-admin * {
-    scrollbar-width: none !important;
-    -ms-overflow-style: none !important;
-}
-html.pds-admin-root::-webkit-scrollbar,
-body.pds-admin::-webkit-scrollbar,
-body.pds-admin *::-webkit-scrollbar {
-    width: 0 !important;
-    height: 0 !important;
-    display: none !important;
-}
-
+/* Page shell: no sideways document growth. Table scrollports keep their own bars. */
 body.pds-admin {
     --pds-sidebar-w: 286px;
     --pds-sidebar-w-collapsed: 80px;

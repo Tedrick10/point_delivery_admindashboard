@@ -19,6 +19,7 @@ use App\Http\Controllers\CityController;
 use App\Http\Controllers\ClaimsController;
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\BranchController;
+use App\Http\Controllers\BranchAdminController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DeliverymanController;
 use App\Http\Controllers\DocumentController;
@@ -31,6 +32,7 @@ use App\Http\Controllers\DeliveryPartnerController;
 use App\Http\Controllers\Frontendwebsite\FronthomeController;
 use App\Http\Controllers\SuperAdmin\AuthController as SuperAdminAuthController;
 use App\Http\Controllers\SuperAdmin\BranchAdminController as SuperAdminBranchAdminController;
+use App\Http\Controllers\SuperAdmin\BranchController as SuperAdminBranchController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
 use App\Http\Controllers\SuperAdmin\LateFineSettingsController as SuperAdminLateFineSettingsController;
 use App\Http\Controllers\SuperAdmin\RiderRemitSettingsController as SuperAdminRiderRemitSettingsController;
@@ -229,6 +231,8 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::delete('branch-force-delete/{id?}', [BranchController::class, 'action'])->name('branch.force.delete');
     Route::get('branch-restore/{id?}', [BranchController::class, 'action'])->name('branch.restore');
 
+    Route::resource('branch-admins', BranchAdminController::class)->except(['show']);
+
     Route::resource('extracharge', ExtraChargeController::class);
     Route::delete('extracharge-force-delete/{id?}', [ExtraChargeController::class, 'action'])->name('extracharge.force.delete');
     Route::get('extracharge-restore/{id?}', [ExtraChargeController::class, 'action'])->name('extracharge.restore');
@@ -393,6 +397,9 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('dispatch-order/{id}/move-pre-pickup-to-order-list', [OrderController::class, 'dispatchMovePrePickupToOrderList'])->name('order.dispatch.move-pre-pickup-to-order-list');
     Route::get('dispatch-order/{id}/mark-rider-done', [OrderController::class, 'dispatchMarkRiderDoneForm'])->name('order.dispatch.mark-rider-done.form');
     Route::post('dispatch-order/{id}/mark-rider-done', [OrderController::class, 'dispatchMarkRiderDone'])->name('order.dispatch.mark-rider-done');
+    Route::post('dispatch-order/mark-rider-done/heartbeat', [OrderController::class, 'dispatchMarkRiderDoneHeartbeat'])->name('order.dispatch.mark-rider-done.heartbeat');
+    Route::post('dispatch-order/mark-rider-done/release', [OrderController::class, 'dispatchMarkRiderDoneRelease'])->name('order.dispatch.mark-rider-done.release');
+    Route::get('dispatch-order/rider-done/presence', [OrderController::class, 'dispatchRiderDonePresence'])->name('order.dispatch.rider-done.presence');
     Route::post('dispatch-order/{id}/status', [OrderController::class, 'updateDispatchStatus'])->name('order.dispatch.status');
     Route::get('order/live-version', [OrderController::class, 'liveVersion'])->name('order.live-version');
     Route::resource('order', OrderController::class);
@@ -694,6 +701,7 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
             ->name('office-salary.default');
         Route::post('kyo-shin/total', [SuperAdminKyoShinSettingsController::class, 'saveTotal'])
             ->name('kyo-shin.total');
+        Route::resource('branches', SuperAdminBranchController::class)->except(['show']);
         Route::resource('branch-admins', SuperAdminBranchAdminController::class)->except(['show']);
         Route::get('account-creation/create', [AccountCreationController::class, 'create'])->name('account-creation.create');
         Route::post('account-creation', [AccountCreationController::class, 'store'])->name('account-creation.store');

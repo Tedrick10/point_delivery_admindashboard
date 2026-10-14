@@ -32,6 +32,12 @@
                     'active' => request()->routeIs('super-admin.screens.hub'),
                 ],
                 [
+                    'href' => $withPeriod(route('super-admin.branches.index')),
+                    'icon' => 'fa-code-branch',
+                    'label' => __('message.sa_branches_title'),
+                    'active' => request()->routeIs('super-admin.branches.*'),
+                ],
+                [
                     'href' => $withPeriod(route('super-admin.branch-admins.index')),
                     'icon' => 'fa-user-shield',
                     'label' => __('message.sa_branch_admins'),

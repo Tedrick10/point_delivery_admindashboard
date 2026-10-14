@@ -2,11 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
-
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
-
+use Illuminate\Validation\Rule;
 
 class UserRequest extends FormRequest
 {
@@ -21,22 +21,66 @@ class UserRequest extends FormRequest
     }
 
     /**
+     * Active-user id being edited (route param), if any.
+     */
+    protected function editingUserId(): ?int
+    {
+        $userId = $this->route('users')
+            ?? $this->route('deliveryman')
+            ?? $this->route('sub_admin')
+            ?? $this->id;
+
+        return $userId !== null && $userId !== '' ? (int) $userId : null;
+    }
+
+    /**
+     * Account type for this request (OS / Rider / staff).
+     * Phone uniqueness is scoped per user_type so OS and Rider may share a number.
+     */
+    protected function contactUserType(): string
+    {
+        if ($this->routeIs('deliveryman.*', 'deliveryman.store')) {
+            return 'delivery_man';
+        }
+
+        if ($this->requiresOsProfile()) {
+            return 'client';
+        }
+
+        if ($this->routeIs('sub-admin.*', 'sub-admin.store')) {
+            return (string) ($this->input('user_type') ?: 'staff');
+        }
+
+        return (string) ($this->input('user_type') ?: 'client');
+    }
+
+    /**
+     * Phone unique among non-deleted users of the same user_type only.
+     */
+    protected function uniqueContactNumberRule(?int $ignoreUserId = null, ?string $userType = null)
+    {
+        $userType = $userType ?: $this->contactUserType();
+
+        return Rule::unique('users', 'contact_number')
+            ->ignore($ignoreUserId)
+            ->whereNull('deleted_at')
+            ->where('user_type', $userType);
+    }
+
+    /**
      * Get the validation rules that apply to the request.
      *
      * @return array
      */
     public function rules()
     {
-        $user_id = $this->route('users')
-            ?? $this->route('deliveryman')
-            ?? $this->route('sub_admin')
-            ?? $this->id;
+        $user_id = $this->editingUserId();
 
         $rules = [
             'name' => 'required|string|max:255',
             'username'  => 'sometimes|required|unique:users,username,'.$user_id,
             'email'     => 'sometimes|nullable|email|unique:users,email,'.$user_id,
-            'contact_number' => 'required|max:30|unique:users,contact_number,'.$user_id,
+            'contact_number' => ['required', 'max:30', $this->uniqueContactNumberRule($user_id)],
             'profile_image' => 'nullable|image|mimes:jpg,jpeg,png,gif',
         ];
 
@@ -44,14 +88,14 @@ class UserRequest extends FormRequest
             $rules['username'] = 'required|unique:users,username,'.$user_id;
             $rules['email'] = 'sometimes|nullable|email|unique:users,email,'.$user_id;
             // Admin sets rider phone (required). No midnight re-entry in Rider App.
-            $rules['contact_number'] = 'required|max:30|unique:users,contact_number,'.$user_id;
+            $rules['contact_number'] = ['required', 'max:30', $this->uniqueContactNumberRule($user_id)];
             $rules['branch_id'] = 'required|exists:branches,id';
         }
 
         if ($this->routeIs('sub-admin.*', 'sub-admin.store')) {
             $rules['username'] = 'required|unique:users,username,'.$user_id;
             $rules['email'] = 'required|email|unique:users,email,'.$user_id;
-            $rules['contact_number'] = 'required|max:30|unique:users,contact_number,'.$user_id;
+            $rules['contact_number'] = ['required', 'max:30', $this->uniqueContactNumberRule($user_id)];
             $rules['user_type'] = 'required|string|max:100';
         }
 
@@ -132,6 +176,51 @@ class UserRequest extends FormRequest
             'username.unique' => __('message.username_taken'),
             'username.regex' => __('message.username_invalid'),
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            if (! $validator->errors()->has('contact_number')) {
+                return;
+            }
+
+            $contact = (string) ($this->input('contact_number') ?? '');
+            if ($contact === '') {
+                return;
+            }
+
+            $existing = User::query()
+                ->where('contact_number', $contact)
+                ->where('user_type', $this->contactUserType())
+                ->whereNull('deleted_at')
+                ->when($this->editingUserId(), fn ($q, $id) => $q->where('id', '!=', $id))
+                ->first(['id', 'name', 'user_type', 'contact_number']);
+
+            if (! $existing) {
+                return;
+            }
+
+            $typeKey = match ((string) $existing->user_type) {
+                'delivery_man' => 'message.delivery_man',
+                'client' => 'message.online_shop',
+                'admin' => 'message.admin',
+                'manager' => 'message.manager',
+                'staff' => 'message.staff',
+                default => null,
+            };
+            $typeLabel = $typeKey ? __($typeKey) : (string) $existing->user_type;
+
+            $validator->errors()->forget('contact_number');
+            $validator->errors()->add(
+                'contact_number',
+                __('message.contact_number_already_taken_by', [
+                    'name' => $existing->name,
+                    'type' => $typeLabel,
+                    'phone' => $existing->contact_number,
+                ])
+            );
+        });
     }
 
      /**

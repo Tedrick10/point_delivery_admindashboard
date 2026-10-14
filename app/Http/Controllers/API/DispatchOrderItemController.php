@@ -253,6 +253,34 @@ class DispatchOrderItemController extends Controller
         $template = $existing->first();
         $previousTotal = max(1, (int) $order->total_parcel);
 
+        // Prefer pickup/from branch. Do not copy an intercity To from the first parcel —
+        // mixed orders (e.g. one Yangon piece + local MDY extras) were landing extras under Yangon Ngwe Latt Saung.
+        $fromBranchId = (int) ($template?->from_branch_id ?? 0);
+        if ($fromBranchId <= 0) {
+            $fromBranchId = (int) (auth()->user()->branch_id ?? 0)
+                ?: (int) resolveDefaultDispatchBranchId(
+                    config('dispatch_item_cities.default_from_branch', 'မန္တလေး')
+                );
+        }
+        $templateToBranchId = (int) ($template?->to_branch_id ?? 0);
+        $toBranchId = $templateToBranchId > 0 ? $templateToBranchId : $fromBranchId;
+        $deliveryCity = trim((string) ($template?->delivery_city ?? ''));
+        $township = trim((string) ($template?->township ?? ''));
+        if ($fromBranchId > 0 && $toBranchId > 0 && $toBranchId !== $fromBranchId) {
+            $toBranchId = $fromBranchId;
+            $deliveryCity = '';
+            $township = '';
+        }
+        if ($deliveryCity === '' || $township === '') {
+            $route = defaultDeliveryRouteForBranch($toBranchId ?: $fromBranchId);
+            if ($deliveryCity === '') {
+                $deliveryCity = (string) ($route['city'] ?? config('dispatch_item_cities.default_delivery_city', 'Mandalay'));
+            }
+            if ($township === '') {
+                $township = (string) ($route['township'] ?? config('dispatch_item_cities.default_township', 'ချမ်းမြသာစည်'));
+            }
+        }
+
         $item = DispatchOrderItem::create([
             'order_id' => $order->id,
             'photo_id' => 0,
@@ -261,10 +289,10 @@ class DispatchOrderItemController extends Controller
             'code' => DispatchOrderItem::generateCode(),
             'item_name' => 'ထပ်တိုး Parcel '.$extraNumber,
             'remark' => 'rider_added',
-            'from_branch_id' => $template?->from_branch_id,
-            'to_branch_id' => $template?->to_branch_id,
-            'delivery_city' => $template?->delivery_city,
-            'township' => $template?->township,
+            'from_branch_id' => $fromBranchId > 0 ? $fromBranchId : null,
+            'to_branch_id' => $toBranchId > 0 ? $toBranchId : null,
+            'delivery_city' => $deliveryCity !== '' ? $deliveryCity : null,
+            'township' => $township !== '' ? $township : null,
             'weight' => 0,
             'item_value' => 0,
             'deli_amount' => 0,
@@ -698,7 +726,7 @@ class DispatchOrderItemController extends Controller
 
     /**
      * Rider Delivery list — items assigned via Assign 100 (item.delivery_man_id).
-     * Day-by-day by default (Asia/Yangon today) via from_date / to_date.
+     * No day filter by default (all assigned parcels). Optional from_date / to_date narrows the list.
      */
     public function listDeliveryItems(Request $request)
     {
@@ -714,12 +742,16 @@ class DispatchOrderItemController extends Controller
         $statuses = $workflow->deliveryItemStatuses();
         $statusFilter = trim((string) $request->get('status', 'all'));
 
-        // Day-by-day: default to Yangon today when dates are omitted.
-        $yangonToday = Carbon::now('Asia/Yangon')->toDateString();
-        $fromDay = $this->parseDeliveryListDay($request->get('from_date')) ?? $yangonToday;
-        $toDay = $this->parseDeliveryListDay($request->get('to_date')) ?? $fromDay;
-        if ($toDay < $fromDay) {
-            $toDay = $fromDay;
+        $hasDateFilter = $request->filled('from_date') || $request->filled('to_date');
+        $fromDay = null;
+        $toDay = null;
+        if ($hasDateFilter) {
+            $yangonToday = Carbon::now('Asia/Yangon')->toDateString();
+            $fromDay = $this->parseDeliveryListDay($request->get('from_date')) ?? $yangonToday;
+            $toDay = $this->parseDeliveryListDay($request->get('to_date')) ?? $fromDay;
+            if ($toDay < $fromDay) {
+                $toDay = $fromDay;
+            }
         }
 
         $riderScope = fn ($q) => $q->where('delivery_man_id', $user->id);
@@ -729,7 +761,9 @@ class DispatchOrderItemController extends Controller
             ->where($riderScope)
             ->whereIn('status', $statuses)
             ->whereNull('admin_completed_at');
-        $this->applyRiderDeliveryListDayFilter($baseQuery, $fromDay, $toDay);
+        if ($hasDateFilter) {
+            $this->applyRiderDeliveryListDayFilter($baseQuery, $fromDay, $toDay);
+        }
 
         $counts = [
             'all' => (clone $baseQuery)->count(),
@@ -754,7 +788,9 @@ class DispatchOrderItemController extends Controller
             ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
-        $this->applyRiderDeliveryListDayFilter($query, $fromDay, $toDay);
+        if ($hasDateFilter) {
+            $this->applyRiderDeliveryListDayFilter($query, $fromDay, $toDay);
+        }
 
         if ($statusFilter !== '' && $statusFilter !== 'all') {
             if ($statusFilter === 'courier_assigned') {

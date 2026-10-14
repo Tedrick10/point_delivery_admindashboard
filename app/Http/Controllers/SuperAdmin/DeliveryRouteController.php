@@ -28,12 +28,20 @@ class DeliveryRouteController extends BaseDeliveryRouteLocationController
             return response()->json(['message' => $message]);
         }
 
-        $params = ['screen' => 'delivery-route', 'tab' => $tab];
+        $cityId = null;
         if ($tab === 'township') {
             $cityId = (int) $request->input('delivery_city_id', $request->get('city_id', 0));
-            if ($cityId > 0) {
-                $params['city_id'] = $cityId;
-            }
+            $cityId = $cityId > 0 ? $cityId : null;
+        }
+
+        return $this->redirectAfterMutation($tab, $message, $cityId);
+    }
+
+    protected function redirectAfterMutation(string $tab, string $message, ?int $cityId = null)
+    {
+        $params = ['screen' => 'delivery-route', 'tab' => $tab];
+        if ($tab === 'township' && $cityId) {
+            $params['city_id'] = $cityId;
         }
 
         return redirect()

@@ -371,7 +371,35 @@
                 ->link->href('javascript:void(0)')
                 ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
 
-            // From / To / City — managed only in Super Admin panel (not branch sidebar)
+            if (\Illuminate\Support\Facades\Route::has('branch.index')) {
+                $menu
+                    ->add('<span>' . __('message.branch') . '</span>', [
+                        'route' => 'branch.index',
+                    ])
+                    ->data('permission', 'branch-list')
+                    ->prepend('<i class="fas fa-code-branch"></i>')
+                    ->link->attr(['class' => '']);
+            }
+
+            if (\Illuminate\Support\Facades\Route::has('branch-admins.index')) {
+                $menu
+                    ->add('<span>' . __('message.sa_branch_admins') . '</span>', [
+                        'route' => 'branch-admins.index',
+                    ])
+                    ->data('permission', 'branch-admin-list')
+                    ->prepend('<i class="fas fa-user-shield"></i>')
+                    ->link->attr(['class' => '']);
+            }
+
+            if (\Illuminate\Support\Facades\Route::has('delivery-route-locations.index')) {
+                $menu
+                    ->add('<span>' . __('message.delivery_route_locations_title') . '</span>', [
+                        'route' => 'delivery-route-locations.index',
+                    ])
+                    ->data('permission', 'delivery-route-list')
+                    ->prepend('<i class="fas fa-map-marker-alt"></i>')
+                    ->link->attr(['class' => '']);
+            }
 
             // My Salary — every office / admin account can open their own payroll slip
             $menu

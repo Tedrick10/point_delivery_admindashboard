@@ -16,6 +16,13 @@
 
         value = String(value).trim();
 
+        // Two numbers: 09x / 09y
+        if (/[\/,|;]/.test(value)) {
+            return value.split(/\s*[\/,|;]\s*/).map(normalizePhone).filter(Boolean).filter(function (part, i, arr) {
+                return arr.indexOf(part) === i;
+            }).join(' / ');
+        }
+
         if (/^[A-Z]{2}\s+/i.test(value)) {
             value = value.replace(/^[A-Z]{2}\s+/i, '').trim();
         }
@@ -49,13 +56,21 @@
             digits = digits.replace(/^0+/, '');
         }
         if (/^9\d{7,9}$/.test(digits)) {
-            return '+95' + digits;
+            return '0' + digits;
         }
-        if (digits.indexOf('95') === 0) {
-            return '+' + digits;
+        if (digits.indexOf('95') === 0 && digits.length > 2) {
+            var afterCc = digits.slice(2);
+            if (/^9\d{7,9}$/.test(afterCc)) {
+                return '0' + afterCc;
+            }
         }
 
-        return '+95' + digits;
+        return digits.indexOf('0') === 0 ? digits : (digits.indexOf('9') === 0 ? '0' + digits : digits);
+    }
+
+    function looksLikePhone(value) {
+        var digits = String(value || '').replace(/\D/g, '');
+        return digits.length >= 8 && /^[\d+\s().-]+$/.test(String(value || '').trim());
     }
 
     function normalizeOsPayload(item) {
@@ -64,48 +79,83 @@
         }
 
         var text = item.text || item.name || '';
-        var name = item.name || text.replace(/\s*\([^)]*\)\s*$/, '').trim();
+        var name = String(item.name || text.replace(/\s*\([^)]*\)\s*$/, '').trim() || '').trim();
+        var phoneRaw = item.phone || item.contact_number || '';
+        var phone = normalizePhone(phoneRaw);
+
+        // Guard against swapped API / Select2 leftovers: name in phone, phone in name.
+        if (name && looksLikePhone(name) && phoneRaw && !looksLikePhone(phoneRaw)) {
+            phone = normalizePhone(name);
+            name = String(phoneRaw).trim();
+        } else if ((!name || looksLikePhone(name)) && phoneRaw && !looksLikePhone(phoneRaw)) {
+            name = String(phoneRaw).trim();
+            phone = normalizePhone(item.name || '');
+        }
 
         return {
             id: String(item.id),
-            text: text,
+            text: text || name,
             name: name,
-            phone: normalizePhone(item.phone || item.contact_number || ''),
+            phone: phone,
             address: (item.address || '').replace(/\r\n/g, '\n').trim()
         };
     }
 
-    function cacheOsClient(item) {
+    function cacheOsClient(item, replace) {
         var payload = normalizeOsPayload(item);
         if (!payload) {
             return null;
         }
 
-        var existing = osClientCache[payload.id] || {};
+        var existing = replace ? {} : (osClientCache[payload.id] || {});
         osClientCache[payload.id] = {
             id: payload.id,
-            text: payload.text || existing.text,
-            name: payload.name || existing.name,
-            phone: payload.phone || existing.phone,
-            address: payload.address || existing.address
+            text: payload.text || existing.text || '',
+            name: payload.name || existing.name || '',
+            phone: payload.phone || existing.phone || '',
+            address: payload.address || existing.address || ''
         };
 
         return osClientCache[payload.id];
     }
 
-    function mergeOsResults(serverResults) {
-        (serverResults || []).forEach(cacheOsClient);
+    function sortOsClients(list) {
+        return (list || []).slice().sort(function (a, b) {
+            return (a.name || '').localeCompare(b.name || '');
+        });
+    }
 
-        return Object.keys(osClientCache)
-            .map(function (id) { return osClientCache[id]; })
-            .sort(function (a, b) {
-                return (a.name || '').localeCompare(b.name || '');
-            });
+    /** Full cached list (A→Z). Used for empty-query browse / modal filter. */
+    function getCachedOsClients() {
+        return sortOsClients(
+            Object.keys(osClientCache).map(function (id) {
+                return osClientCache[id];
+            })
+        );
+    }
+
+    /**
+     * Merge server rows into cache. When serverResults is provided, return ONLY those
+     * rows (so Select2 search respects `q`). Empty array = cache-only callers should
+     * use getCachedOsClients() instead of expecting a full dump here.
+     */
+    function mergeOsResults(serverResults) {
+        var rows = serverResults || [];
+        rows.forEach(cacheOsClient);
+
+        return sortOsClients(
+            rows
+                .map(function (item) {
+                    var cached = cacheOsClient(item);
+                    return cached || normalizeOsPayload(item);
+                })
+                .filter(Boolean)
+        );
     }
 
     function filterOsClients(term) {
         var query = (term || '').toLowerCase().trim();
-        var list = mergeOsResults([]);
+        var list = getCachedOsClients();
 
         if (!query) {
             return list;
@@ -134,12 +184,12 @@
             .done(function (res) {
                 mergeOsResults(res.results || []);
                 if (typeof callback === 'function') {
-                    callback(mergeOsResults([]));
+                    callback(getCachedOsClients());
                 }
             })
             .fail(function () {
                 if (typeof callback === 'function') {
-                    callback(mergeOsResults([]));
+                    callback(getCachedOsClients());
                 }
             });
     };
@@ -155,18 +205,19 @@
             return;
         }
 
-        var $name = $form.find('#os_name');
-        var $phone = $form.find('#os_phone');
-        var $address = $form.find('#os_address');
+        // Always target the text inputs (not the Select2 #client_id which is also labeled OS name).
+        var $name = $form.find('input#os_name');
+        var $phone = $form.find('input#os_phone');
+        var $address = $form.find('input#os_address');
 
-        if ($name.length && payload.name) {
-            $name.val(payload.name);
+        if ($name.length) {
+            $name.val(payload.name || '').trigger('input');
         }
-        if ($phone.length && payload.phone) {
-            $phone.val(payload.phone);
+        if ($phone.length) {
+            $phone.val(payload.phone || '').trigger('input');
         }
-        if ($address.length && payload.address) {
-            $address.val(payload.address);
+        if ($address.length) {
+            $address.val(payload.address || '').trigger('input');
         }
     }
 
@@ -207,7 +258,8 @@
                 var match = (res.results || []).find(function (row) {
                     return String(row.id) === String(userId);
                 });
-                callback(match ? cacheOsClient(match) : cached);
+                // Replace cache entry so a previous bad name/phone mapping cannot stick.
+                callback(match ? cacheOsClient(match, true) : cached);
             })
             .fail(function () {
                 callback(cached);
@@ -229,11 +281,8 @@
             setOsContactFields(merged);
         };
 
-        if (payload.phone || payload.address) {
-            fillFields(payload);
-            return;
-        }
-
+        // Always reload by id so Os Name / Os Phone never swap or stay stale
+        // when Select2 only keeps { id, text }.
         fetchOsClientById(payload.id, function (fresh) {
             fillFields(fresh || payload);
         });
@@ -276,15 +325,27 @@
 
                     if (!term) {
                         window.refreshOsClientCache(function () {
-                            success({ results: mergeOsResults([]) });
+                            success({ results: getCachedOsClients() });
                         });
                         return;
                     }
 
                     $.ajax(params).then(success).fail(failure);
                 },
-                processResults: function (data) {
-                    return { results: mergeOsResults(data.results || []) };
+                processResults: function (data, params) {
+                    var term = (params && params.term) ? String(params.term).trim() : '';
+                    var serverRows = mergeOsResults(data.results || []);
+
+                    // Typed search must show matches only — never the full A→Z cache
+                    // (that kept highlighting "Apple Testing User" for every query).
+                    if (term) {
+                        if (serverRows.length) {
+                            return { results: serverRows };
+                        }
+                        return { results: filterOsClients(term) };
+                    }
+
+                    return { results: getCachedOsClients() };
                 }
             }
         });

@@ -65,8 +65,16 @@ class DispatchOrderItemDataTable extends DataTable
                 return $code;
             })
             ->editColumn('status', function ($row) {
-                $label = strtoupper($row->status ?? 'collected');
-                return '<span class="pds-dispatch-item-status">' . e($label) . '</span>';
+                $status = strtolower((string) ($row->status ?? 'collected'));
+                $label = strtoupper($status !== '' ? $status : 'collected');
+                $tone = match ($status) {
+                    'collected', 'completed', 'delivered', 'finished' => 'success',
+                    'cancelled', 'cancel', 'error', 'failed' => 'danger',
+                    'assigned', 'picked', 'on_way', 'pending' => 'info',
+                    default => 'neutral',
+                };
+
+                return '<span class="pds-dispatch-item-status pds-dispatch-item-status--'.$tone.'">' . e($label) . '</span>';
             })
             ->editColumn('photo_id', function ($row) {
                 $order = $row->relationLoaded('order') ? $row->order : $row->order()->first();
@@ -76,36 +84,56 @@ class DispatchOrderItemDataTable extends DataTable
                 $editUrl = route('order.dispatch.item.edit', [$row->order_id, $row->id]);
                 $editTitle = e(__('message.add_or_update_item'));
 
+                // Inline SVG so the pen never depends on Font Awesome / table icon CSS.
+                $penSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false">'
+                    . '<path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1.003 1.003 0 0 0 0-1.42l-2.5-2.5a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.99-1.66z"/>'
+                    . '</svg>';
+
                 $editBtn = '';
                 if ($canEdit) {
                     $editBtn = '<a href="' . e($editUrl) . '"'
                         . ' class="pds-dispatch-photo-edit-btn loadRemoteModel"'
                         . ' title="' . $editTitle . '"'
                         . ' aria-label="' . $editTitle . '">'
-                        . '<i class="fas fa-pen" aria-hidden="true"></i>'
+                        . $penSvg
                         . '</a>';
                 }
 
-                if (!$row->photo_id || !$row->photoMedia) {
-                    if ($editBtn === '') {
-                        return '-';
+                $media = ($row->photo_id && $row->photoMedia) ? $row->photoMedia : null;
+                $url = null;
+                if ($media) {
+                    $url = mediaPublicUrl($media) ?: null;
+                    if (($url === null || $url === '') && method_exists($media, 'getUrl')) {
+                        try {
+                            $url = (string) $media->getUrl();
+                        } catch (\Throwable $e) {
+                            $url = null;
+                        }
                     }
-
-                    return '<div class="pds-dispatch-photo-thumb-wrap is-edit-only">'
-                        . $editBtn
-                        . '</div>';
+                    if (($url === null || $url === '') && function_exists('mediaAbsoluteUrl')) {
+                        $url = mediaAbsoluteUrl($media) ?: null;
+                    }
                 }
 
-                $url = mediaPublicUrl($row->photoMedia);
-                $cacheV = optional($row->photoMedia->updated_at)->timestamp
-                    ?: (@filemtime((string) $row->photoMedia->getPath()) ?: time());
-                $url = $url . (str_contains($url, '?') ? '&' : '?') . 'v=' . $cacheV;
-                $name = e($row->photoMedia->file_name ?? 'Photo');
+                $name = e(__('message.photo'));
+                $imgHtml = '';
+                if ($url !== null && $url !== '') {
+                    $cacheV = optional($media->updated_at)->timestamp ?: time();
+                    $url = $url . (str_contains($url, '?') ? '&' : '?') . 'v=' . $cacheV;
+                    $imgHtml = '<img src="' . e($url) . '" alt="" class="pds-dispatch-photo-thumb" loading="lazy"'
+                        . ' onerror="this.onerror=null;var w=this.closest(\'.pds-dispatch-photo-thumb-wrap\');if(w){w.classList.add(\'is-broken\');}this.remove();">';
+                }
 
-                return '<div class="pds-dispatch-photo-thumb-wrap">'
+                $wrapClass = 'pds-dispatch-photo-thumb-wrap'
+                    . ($imgHtml === '' ? ' is-missing' : '')
+                    . ($editBtn === '' ? ' is-readonly' : '');
+
+                return '<div class="' . $wrapClass . '">'
                     . $editBtn
-                    . '<button type="button" class="pds-dispatch-photo-thumb-btn" data-photo-url="' . e($url) . '" data-photo-name="' . $name . '" title="' . $name . '">'
-                    . '<img src="' . e($url) . '" alt="' . $name . '" class="pds-dispatch-photo-thumb" loading="lazy">'
+                    . '<button type="button" class="pds-dispatch-photo-thumb-btn"'
+                    . ($imgHtml !== '' ? ' data-photo-url="' . e($url) . '" data-photo-name="' . $name . '"' : ' disabled')
+                    . ' title="' . $name . '">'
+                    . $imgHtml
                     . '</button>'
                     . '</div>';
             })
@@ -116,7 +144,8 @@ class DispatchOrderItemDataTable extends DataTable
                 return e($row->customer_name ?? '-');
             })
             ->editColumn('customer_phone', function ($row) {
-                $phone = normalizeContactNumber($row->customer_phone ?? '');
+                $raw = $row->getAttributes()['customer_phone'] ?? $row->customer_phone ?? '';
+                $phone = normalizeContactNumber((string) $raw);
 
                 return e($phone !== '' ? $phone : '-');
             })
@@ -136,7 +165,16 @@ class DispatchOrderItemDataTable extends DataTable
                 return stringLong($row->item_name ?? '', 'title', 20) ?: '-';
             })
             ->editColumn('remark', function ($row) {
-                return stringLong($row->remark ?? '', 'title', 16) ?: '-';
+                $remark = trim((string) ($row->remark ?? ''));
+                $normalized = strtolower(preg_replace('/\s+/', '_', $remark) ?? '');
+                // Empty / system "rider_added" (Rider Done) → green Done badge.
+                if ($remark === '' || $remark === '-' || $normalized === 'rider_added' || $normalized === 'rider_done') {
+                    return '<span class="pds-dispatch-item-remark pds-dispatch-item-remark--done">'
+                        . e(__('message.done'))
+                        . '</span>';
+                }
+
+                return e(stringLong($remark, 'title', 16) ?: $remark);
             })
             ->editColumn('weight', function ($row) {
                 return formatDispatchItemSize($row->weight);
@@ -165,7 +203,7 @@ class DispatchOrderItemDataTable extends DataTable
                 ])->render();
             })
             ->rawColumns([
-                'checkbox', 'code', 'status', 'customer_address', 'photo_id',
+                'checkbox', 'code', 'status', 'customer_address', 'photo_id', 'remark',
                 'advance_paid', 'item_value', 'deli_amount', 'cust_get', 'os_to_pay', 'action',
             ])
             ->with('pds_totals', $this->totalsForQuery($query));
@@ -229,31 +267,37 @@ class DispatchOrderItemDataTable extends DataTable
             ['data' => 'township', 'name' => 'township', 'title' => __('message.township'), 'orderable' => false],
             ['data' => 'item_name', 'name' => 'item_name', 'title' => __('message.item_name'), 'orderable' => false],
             ['data' => 'remark', 'name' => 'remark', 'title' => __('message.remark_label'), 'orderable' => false],
-            ['data' => 'weight', 'name' => 'weight', 'title' => __('message.size'), 'orderable' => false, 'footer' => __('message.total_amount')],
-            ['data' => 'advance_paid', 'name' => 'advance_paid', 'title' => __('message.advance_paid'), 'orderable' => false, 'className' => 'text-right', 'footer' => '0'],
-            ['data' => 'item_value', 'name' => 'item_value', 'title' => __('message.item_value'), 'orderable' => false, 'className' => 'text-right', 'footer' => '0'],
-            ['data' => 'deli_amount', 'name' => 'deli_amount', 'title' => __('message.deli_amount'), 'orderable' => false, 'width' => 140, 'className' => 'text-right', 'footer' => '0'],
-            ['data' => 'cust_get', 'name' => 'cust_get', 'title' => __('message.cust_get'), 'orderable' => false, 'className' => 'text-right', 'footer' => '0'],
-            ['data' => 'os_to_pay', 'name' => 'os_to_pay', 'title' => __('message.os_to_pay'), 'orderable' => false, 'className' => 'text-right', 'footer' => '0'],
+            // No column footers — totals live in #dispatchItemsDock. DT tfoot was the empty white bar.
+            ['data' => 'weight', 'name' => 'weight', 'title' => __('message.size'), 'orderable' => false],
+            ['data' => 'advance_paid', 'name' => 'advance_paid', 'title' => __('message.advance_paid'), 'orderable' => false, 'className' => 'text-right'],
+            ['data' => 'item_value', 'name' => 'item_value', 'title' => __('message.item_value'), 'orderable' => false, 'className' => 'text-right'],
+            ['data' => 'deli_amount', 'name' => 'deli_amount', 'title' => __('message.deli_amount'), 'orderable' => false, 'width' => 140, 'className' => 'text-right'],
+            ['data' => 'cust_get', 'name' => 'cust_get', 'title' => __('message.cust_get'), 'orderable' => false, 'className' => 'text-right'],
+            ['data' => 'os_to_pay', 'name' => 'os_to_pay', 'title' => __('message.os_to_pay'), 'orderable' => false, 'className' => 'text-right'],
             Column::computed('action')
                 ->title(__('message.action'))
                 ->exportable(false)
                 ->printable(false)
                 ->width(90)
-                ->addClass('text-center')
-                ->footer(''),
+                ->addClass('text-center'),
         ];
     }
 
     public function getBuilderParameters(): array
     {
-        $params = parent::getBuilderParameters();
+        $params = $this->pdsDefaultBuilderParameters();
+        // sDom overwrites dom in DataTables compat map — must clear both or empty chrome + slab remain.
         $params['dom'] = 't';
+        $params['sDom'] = 't';
         $params['searching'] = false;
         $params['paging'] = false;
         $params['ordering'] = false;
         $params['order'] = [];
-        $params['scrollX'] = false;
+        // No DT scrollX/scrollY — those left an empty white slab under the last row.
+        // .pds-dispatch-items-table-shell owns overflow; thead is CSS-sticky.
+        $params['scrollX'] = '';
+        $params['scrollY'] = '';
+        $params['scrollCollapse'] = false;
         $params['autoWidth'] = false;
         $params['info'] = false;
         $params['lengthChange'] = false;
@@ -262,7 +306,27 @@ class DispatchOrderItemDataTable extends DataTable
             'emptyTable' => __('message.no_record_found'),
             'zeroRecords' => __('message.no_record_found'),
         ]);
-        $params['footerCallback'] = 'function () { if (typeof window.pdsFillDispatchItemsTotals === "function") { window.pdsFillDispatchItemsTotals(this); } }';
+        $params['drawCallback'] = 'function () {
+            var api = this.api();
+            function realign() {
+                try {
+                    var table = api.table().node();
+                    if (table) {
+                        $(table).find("tfoot").remove();
+                        var $wrap = $(table).closest(".dataTables_wrapper");
+                        $wrap.find(".dataTables_scrollFoot, tfoot").remove();
+                    }
+                } catch (eFoot) {}
+                if (typeof window.pdsFillDispatchItemsTotals === "function") {
+                    try { window.pdsFillDispatchItemsTotals(api); } catch (e2) {}
+                }
+                if (typeof window.pdsFitDispatchItemsScroll === "function") {
+                    try { window.pdsFitDispatchItemsScroll(api); } catch (eFit) {}
+                }
+            }
+            realign();
+            setTimeout(realign, 100);
+        }';
 
         return $params;
     }

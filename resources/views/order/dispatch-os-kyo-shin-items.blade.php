@@ -34,7 +34,7 @@
                 </a>
             </div>
 
-            <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-no-freeze">
+            <div class="pds-rider-table-shell pds-rider-table-shell--scroll">
                 @if($items->isEmpty())
                     <div class="pds-os-settlement-section__empty">
                         <p>{{ __('message.kyo_shin_empty') }}</p>

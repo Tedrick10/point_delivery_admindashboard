@@ -340,7 +340,10 @@
             if (url.indexOf('#') == 0) {
                 $(url).modal('open');
             } else {
-                $.get(url, function(data) {
+                $.ajax({
+                    url: url,
+                    method: 'GET',
+                    success: function(data) {
                     $('#remoteModelData').html(data);
                     $('#remoteModelData').find('script').each(function () {
                         var code = this.text || this.textContent || '';
@@ -378,6 +381,27 @@
                                 || ''
                             ).trim()
                         });
+                    }
+                    },
+                    error: function (xhr) {
+                        var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                            ? xhr.responseJSON.message
+                            : @json(__('message.something_went_wrong'));
+                        var title = (xhr.status === 423)
+                            ? @json(__('message.admin_rider_done_busy_title'))
+                            : @json(__('message.error'));
+                        if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+                            Swal.fire({
+                                icon: xhr.status === 423 ? 'warning' : 'error',
+                                title: title,
+                                text: msg,
+                                confirmButtonColor: (window.pdsBrandColor || '#FE6F07'),
+                            });
+                        } else if (typeof SnackBar === 'function') {
+                            SnackBar({ message: msg, status: 'error' });
+                        } else {
+                            alert(msg);
+                        }
                     }
                 });
             }

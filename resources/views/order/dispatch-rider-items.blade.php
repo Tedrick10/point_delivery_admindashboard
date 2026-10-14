@@ -462,7 +462,7 @@
 
     @push('bottom_script')
         <script src="{{ asset('js/pds-photo-zoom.js') }}?v=3"></script>
-        <script src="{{ asset('js/dispatch-item-form.js') }}?v=35"></script>
+        <script src="{{ asset('js/dispatch-item-form.js') }}?v=37"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(function () {
@@ -706,7 +706,12 @@
                     riderUpdateSelectedTotal();
                 }
 
+                var bulkUpdateInFlight = false;
+
                 function submitBulkUpdate(toStatus, remark, photoFile, deliveredType, gateAmount, deliveredPhotoFile, pointAmount, agentAmount) {
+                    if (bulkUpdateInFlight) {
+                        return;
+                    }
                     var ids = selectedItemIds();
                     if (!ids.length) {
                         notify(@json(__('message.select_items_to_assign')), 'error');
@@ -742,6 +747,7 @@
                     }
 
                     var $btn = $('#riderItemsBulkUpdate');
+                    bulkUpdateInFlight = true;
                     $btn.prop('disabled', true);
                     $.ajax({
                         url: bulkUpdateUrl,
@@ -763,6 +769,7 @@
                             }
                         },
                         error: function (xhr) {
+                            bulkUpdateInFlight = false;
                             var msg = (xhr.responseJSON && xhr.responseJSON.message)
                                 ? xhr.responseJSON.message
                                 : @json(__('message.something_went_wrong'));

@@ -431,7 +431,8 @@ class OsSettlementService
         string $deliveryFormat = 'table',
         string $paymentMethod = 'kpay',
         ?string $settlementSide = null,
-        ?array $itemIds = null
+        ?array $itemIds = null,
+        ?int $branchId = null
     ): OsSettlementBatch {
         $settlementSide = $this->normalizeSettlementSide($settlementSide);
         $isKyoShinSide = $settlementSide === 'kyo_shin';
@@ -446,17 +447,20 @@ class OsSettlementService
                     ->where('status', 'completed')
                     ->whereHas('kyoShinItem');
                 applyForcedItemOwnership($kyoShinQuery);
+                if ($branchId !== null && $branchId > 0) {
+                    applyDestinationBranchFilter($kyoShinQuery, $branchId);
+                }
                 $items = $kyoShinQuery
                     ->get()
                     ->filter(static fn ($item) => (int) ($item->order?->client_id ?? 0) === $osId)
                     ->values();
             } else {
-                $items = $this->finishedKyoShinItemsForPeriod($fromDay, $toDay)
+                $items = $this->finishedKyoShinItemsForPeriod($fromDay, $toDay, $branchId)
                     ->filter(static fn ($item) => (int) ($item->order?->client_id ?? 0) === $osId)
                     ->values();
             }
         } else {
-            $items = $this->completedItemsForPeriod($osId, $fromDay, $toDay);
+            $items = $this->completedItemsForPeriod($osId, $fromDay, $toDay, $branchId);
             $items = $this->filterItemsBySettlementSide($items, $settlementSide);
             if ($wantedIds !== []) {
                 $items = $items

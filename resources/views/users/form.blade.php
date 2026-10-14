@@ -157,7 +157,7 @@
             $('#user_form [type="submit"]').prop('disabled', false).removeClass('disabled');
             @endif
 
-            function toE164Mm(value) {
+            function toLocalMm(value) {
                 var digits = String(value || '').replace(/\D/g, '');
                 while (digits.indexOf('95') === 0 && digits.length >= 12) {
                     var rest = digits.slice(2);
@@ -171,12 +171,18 @@
                     digits = digits.replace(/^0+/, '');
                 }
                 if (/^9\d{7,9}$/.test(digits)) {
-                    return '+95' + digits;
+                    return '0' + digits;
                 }
                 if (!digits) {
                     return '';
                 }
-                return digits.indexOf('95') === 0 ? '+' + digits : '+95' + digits;
+                if (digits.indexOf('95') === 0 && digits.length > 2) {
+                    var afterCc = digits.slice(2);
+                    if (/^9\d{7,9}$/.test(afterCc)) {
+                        return '0' + afterCc;
+                    }
+                }
+                return digits.indexOf('9') === 0 ? '0' + digits : digits;
             }
 
             function isPlausiblyMmMobile(value) {
@@ -194,21 +200,12 @@
                     return true;
                 }
 
-                var iti = window.userRegPhoneIti;
-                var e164 = '';
-                try {
-                    if (iti && typeof iti.getNumber === 'function') {
-                        e164 = iti.getNumber() || '';
+                var local = toLocalMm(input.value);
+                if (isPlausiblyMmMobile(local) || isPlausiblyMmMobile(input.value)) {
+                    $('#contact_number_hidden').val(local);
+                    if (local && input.value !== local) {
+                        input.value = local;
                     }
-                } catch (err) {
-                    e164 = '';
-                }
-                if (!e164) {
-                    e164 = toE164Mm(input.value);
-                }
-
-                if (isPlausiblyMmMobile(e164) || isPlausiblyMmMobile(input.value)) {
-                    $('#contact_number_hidden').val(e164 || toE164Mm(input.value));
                     return true;
                 }
 
@@ -220,141 +217,31 @@
                 if (!input) {
                     return;
                 }
-                if (!window.intlTelInput) {
-                    window.setTimeout(initUserRegPhone, 120);
-                    return;
-                }
-                if (input.classList.contains('iti__tel-input') || input.closest('.iti')) {
-                    return;
-                }
 
                 var isReadonly = input.hasAttribute('readonly');
-                var iti = window.intlTelInput(input, {
-                    initialCountry: 'mm',
-                    onlyCountries: ['mm'],
-                    separateDialCode: true,
-                    allowDropdown: false,
-                    nationalMode: true,
-                    autoPlaceholder: 'aggressive',
-                    utilsScript: "{{ asset('vendor/intlTelInput/js/utils.js') }}",
-                    hiddenInput: null
-                });
-
-                window.userRegPhoneIti = iti;
-
-                function applyStoredNumber() {
-                    if (!isReadonly) {
-                        if (input.value) {
-                            iti.setNumber(toE164Mm(input.value));
-                        }
-                        return;
-                    }
-                    var stored = $('#contact_number_hidden').val() || input.value;
-                    if (!stored) {
-                        return;
-                    }
-                    iti.setNumber(toE164Mm(stored));
+                var stored = $('#contact_number_hidden').val() || input.value;
+                if (stored) {
+                    input.value = toLocalMm(stored);
                 }
-
-                window.setTimeout(applyStoredNumber, 0);
-                window.setTimeout(applyStoredNumber, 250);
 
                 if (isReadonly) {
                     return;
                 }
 
-                $(input).on('input change countrychange', function () {
+                $(input).off('input.userRegPhone change.userRegPhone').on('input.userRegPhone change.userRegPhone', function () {
                     $(input).closest('.pds-dispatch-field').find('.pds-phone-error').remove();
                     window.syncUserRegPhoneField();
                 });
             }
 
             initUserRegPhone();
-
-            function initUserRegLocation() {
-                var $box = $('#reg_location_box');
-                var $state = $('#reg_state');
-                var $township = $('#reg_township');
-                if (!$box.length || !$state.length || !$township.length) {
-                    return;
-                }
-
-                var states = [];
-                try {
-                    var raw = $('#reg_mm_location_data').text();
-                    states = raw ? JSON.parse(raw) : [];
-                } catch (err) {
-                    states = (window.PDS_MYANMAR_NRC_DATA && window.PDS_MYANMAR_NRC_DATA.states) || [];
-                }
-
-                var placeholderTownship = $box.data('placeholder-township') || '';
-                var placeholderLocked = $box.data('placeholder-township-locked') || placeholderTownship;
-
-                function findState(value) {
-                    value = String(value || '');
-                    return states.find(function (state) {
-                        return state.name_mm === value || state.name_en === value;
-                    }) || null;
-                }
-
-                function townLabel(town) {
-                    var mm = town.name_mm || '';
-                    var en = town.name_en || '';
-                    if (mm && en) {
-                        return mm + ' (' + en + ')';
-                    }
-                    return mm || en;
-                }
-
-                function rebuildTownships(selectedTown, keepDisabledEmpty) {
-                    var state = findState($state.val());
-                    var towns = (state && state.townships) ? state.townships : [];
-                    var current = selectedTown != null ? String(selectedTown) : String($township.val() || '');
-                    var matched = false;
-
-                    $township.empty().append(
-                        $('<option>', {
-                            value: '',
-                            text: !$state.val() ? placeholderLocked : placeholderTownship
-                        })
-                    );
-
-                    towns.forEach(function (town) {
-                        var value = town.name_mm || town.name_en || '';
-                        if (!value) {
-                            return;
-                        }
-                        var isSelected = !!(current && (current === value || current === town.name_en || current === town.name_mm));
-                        if (isSelected) {
-                            matched = true;
-                        }
-                        $township.append($('<option>', {
-                            value: value,
-                            text: townLabel(town),
-                            selected: isSelected
-                        }));
-                    });
-
-                    if (current && !matched) {
-                        $township.append($('<option>', {
-                            value: current,
-                            text: current,
-                            selected: true
-                        }));
-                    }
-
-                    $township.prop('disabled', !!(keepDisabledEmpty && !$state.val()));
-                }
-
-                $state.on('change', function () {
-                    rebuildTownships('', true);
-                });
-
-                // Ensure township options match the selected region on first paint / edit.
-                rebuildTownships($box.data('selected-township') || $township.val() || '', true);
+        });
+    </script>
+    <script>
+        $(document).ready(function () {
+            if (typeof window.initOsRegLocationFields === 'function') {
+                window.initOsRegLocationFields($('#user_form'));
             }
-
-            initUserRegLocation();
         });
     </script>
     @endpush

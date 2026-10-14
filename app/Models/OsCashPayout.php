@@ -122,9 +122,17 @@ class OsCashPayout extends Model
         if ($path === '') {
             return null;
         }
+        if (preg_match('#^https?://#i', $path) === 1) {
+            return $path;
+        }
 
-        // Always expose a public URL when a path is stored (avoid hiding
-        // rider uploads if exists() fails due to symlink / path quirks).
-        return asset('storage/'.ltrim($path, '/'));
+        // Root-relative: works on localhost even when APP_URL points elsewhere.
+        $path = preg_replace('#^public/#', '', $path) ?: $path;
+        $path = ltrim((string) $path, '/');
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+        }
+
+        return '/storage/'.$path;
     }
 }

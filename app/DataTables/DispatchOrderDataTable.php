@@ -67,15 +67,15 @@ class DispatchOrderDataTable extends OrderDataTable
 
                 return '<span class="pds-order-type-badge ' . e($type['class']) . '">' . e($type['label']) . '</span>';
             })
-            ->editColumn('admin_status', function ($row) {
+            ->addColumn('admin_status', function ($row) {
                 $this->ensureDispatchItemsSynced($row);
 
                 return view('order.dispatch-admin-status', ['order' => $row])->render();
             })
-            ->editColumn('rider_status', function ($row) {
+            ->addColumn('rider_status', function ($row) {
                 return view('order.dispatch-rider-status', ['order' => $row])->render();
             })
-            ->editColumn('pickup_rider', function ($row) use ($pickupRiders, $workflow) {
+            ->addColumn('pickup_rider', function ($row) use ($pickupRiders, $workflow) {
                 if (!auth()->user()->can('order-edit')) {
                     return optional($row->delivery_man)->name ?? '-';
                 }
@@ -94,20 +94,24 @@ class DispatchOrderDataTable extends OrderDataTable
                     'pickupRiders' => $pickupRiders,
                 ])->render();
             })
-            ->editColumn('os_name', function ($row) {
-                return stringLong(resolveDispatchOsName($row), 'title', 40);
+            ->addColumn('os_name', function ($row) {
+                return e(stringLong(resolveDispatchOsName($row), 'title', 40));
             })
-            ->editColumn('phone', function ($row) {
-                return resolveDispatchOsPhone($row);
+            ->addColumn('phone', function ($row) {
+                $phone = resolveDispatchOsPhone($row);
+
+                return e($phone !== '' && $phone !== '-' ? $phone : '-');
             })
-            ->editColumn('address_code', function ($row) {
+            ->addColumn('address_code', function ($row) {
                 $address = resolveDispatchOsAddress($row);
-                return '<span data-toggle="tooltip" title="' . e($address) . '">' . stringLong($address, 'title', 18) . '</span>';
+                $safe = $address !== '' && $address !== '-' ? $address : '-';
+
+                return '<span data-toggle="tooltip" title="' . e($safe) . '">' . e(stringLong($safe, 'title', 28)) . '</span>';
             })
-            ->editColumn('order_count', function ($row) {
+            ->addColumn('order_count', function ($row) {
                 return max(0, (int) ($row->total_parcel ?? 0));
             })
-            ->editColumn('item_count', function ($row) use ($workflow) {
+            ->addColumn('item_count', function ($row) use ($workflow) {
                 $this->ensureDispatchItemsSynced($row);
                 $count = (int) ($row->dispatch_items_count ?? $row->dispatchItems()
                     ->whereIn('status', $workflow->clientVisibleItemStatuses())
@@ -134,7 +138,7 @@ class DispatchOrderDataTable extends OrderDataTable
 
                 return '<a href="' . e($url) . '" class="pds-dispatch-item-count is-link" title="' . e(__('message.order_detail_list')) . '">' . e($label) . '</a>';
             })
-            ->editColumn('deli_amount', function ($row) use ($workflow) {
+            ->addColumn('deli_amount', function ($row) use ($workflow) {
                 // Sum item DeliAmount across visible statuses (not only collected).
                 $amount = (float) $row->dispatchItems()
                     ->whereIn('status', $workflow->clientVisibleItemStatuses())
@@ -142,7 +146,7 @@ class DispatchOrderDataTable extends OrderDataTable
 
                 return number_format($amount);
             })
-            ->editColumn('remark', function ($row) {
+            ->addColumn('remark', function ($row) {
                 $workflow = app(DispatchOrderWorkflowService::class);
                 if ((($row->status ?? '') === 'pickup_error' || $workflow->isPickupErrorCancelled($row))
                     && ! empty(trim((string) ($row->reason ?? '')))) {
@@ -153,9 +157,11 @@ class DispatchOrderDataTable extends OrderDataTable
                         . '</span>';
                 }
 
-                return stringLong($row->description ?? '', 'title', 20) ?: '-';
+                $text = stringLong($row->description ?? '', 'title', 20);
+
+                return e($text !== '' ? $text : '-');
             })
-            ->editColumn('order_date', function ($row) {
+            ->addColumn('order_date', function ($row) {
                 return $row->created_at ? Carbon::parse($row->created_at)->format('d-m-Y H:i:s') : '-';
             })
             ->editColumn('id', function ($row) {
@@ -301,20 +307,20 @@ class DispatchOrderDataTable extends OrderDataTable
         $isPickUpTab = ! $isDedicated && $dispatchStatus === 'rider_pick_up_unassigned';
 
         $tail = [
-            ['data' => 'os_name', 'name' => 'os_name', 'title' => __('message.os_name'), 'orderable' => false],
-            ['data' => 'phone', 'name' => 'phone', 'title' => __('message.phone'), 'orderable' => false],
-            ['data' => 'address_code', 'name' => 'address_code', 'title' => __('message.address'), 'orderable' => false],
-            ['data' => 'order_count', 'name' => 'total_parcel', 'title' => __('message.order_count')],
+            ['data' => 'os_name', 'name' => 'os_name', 'title' => __('message.os_name'), 'orderable' => false, 'searchable' => false],
+            ['data' => 'phone', 'name' => 'phone', 'title' => __('message.phone'), 'orderable' => false, 'searchable' => false],
+            ['data' => 'address_code', 'name' => 'address_code', 'title' => __('message.address'), 'orderable' => false, 'searchable' => false],
+            ['data' => 'order_count', 'name' => 'total_parcel', 'title' => __('message.order_count'), 'orderable' => false],
         ];
 
         if (! $isPickUpTab) {
-            $tail[] = ['data' => 'item_count', 'name' => 'item_count', 'title' => __('message.item_count'), 'orderable' => false];
+            $tail[] = ['data' => 'item_count', 'name' => 'item_count', 'title' => __('message.item_count'), 'orderable' => false, 'searchable' => false];
         }
 
         $columns = array_merge($columns, $tail, [
-            ['data' => 'deli_amount', 'name' => 'total_amount', 'title' => __('message.deli_amount')],
-            ['data' => 'remark', 'name' => 'description', 'title' => __('message.remark')],
-            ['data' => 'order_date', 'name' => 'created_at', 'title' => __('message.date')],
+            ['data' => 'deli_amount', 'name' => 'total_amount', 'title' => __('message.deli_amount'), 'orderable' => false],
+            ['data' => 'remark', 'name' => 'description', 'title' => __('message.remark'), 'orderable' => false],
+            ['data' => 'order_date', 'name' => 'created_at', 'title' => __('message.date'), 'orderable' => false],
             Column::computed('action')
                 ->title(__('message.action'))
                 ->exportable(false)
@@ -338,10 +344,11 @@ class DispatchOrderDataTable extends OrderDataTable
 
     public function getBuilderParameters(): array
     {
-        $params = parent::getBuilderParameters();
-        // scrollX clones a separate header table; combined with pds-frozen-table it
-        // shifts body cells under the wrong headers on Order List.
-        $params['scrollX'] = false;
+        $params = $this->pdsDefaultBuilderParameters();
+        // Native DataTables freeze: header + footer stay put while body scrolls.
+        $params['scrollX'] = true;
+        $params['scrollY'] = 'calc(100vh - 280px)';
+        $params['scrollCollapse'] = true;
         $params['paging'] = false;
         $params['pageLength'] = -1;
         $params['lengthChange'] = false;
@@ -350,7 +357,6 @@ class DispatchOrderDataTable extends OrderDataTable
         $params['order'] = [];
         $params['dom'] = '<"pds-dispatch-dt-top" f>rt<"clear">';
         $params['searching'] = false;
-        $params['order'] = [[1, 'desc']];
         $params['footerCallback'] = 'function () {
             var api = this.api();
             var json = api.ajax.json() || {};
@@ -371,6 +377,38 @@ class DispatchOrderDataTable extends OrderDataTable
             setByName("total_parcel", fmt(totals.order_count));
             setByName("item_count", fmt(totals.item_count));
             setByName("total_amount", fmt(totals.deli_amount));
+            try { api.columns.adjust(); } catch (e) {}
+        }';
+        $params['autoWidth'] = true;
+        $params['drawCallback'] = 'function () {
+            var api = this.api();
+            function realign() {
+                try { api.columns.adjust(); } catch (e) {}
+                try {
+                    var wrap = $(api.table().container());
+                    var $scrollBody = wrap.find(".dataTables_scrollBody");
+                    var $bodyTable = $scrollBody.find("table");
+                    var $headInner = wrap.find(".dataTables_scrollHeadInner");
+                    var $footInner = wrap.find(".dataTables_scrollFootInner");
+                    if ($bodyTable.length && $headInner.length) {
+                        // Match header/footer to the natural body table width (not the viewport).
+                        var w = Math.ceil($bodyTable[0].scrollWidth || $bodyTable.outerWidth());
+                        $bodyTable.css({ width: w + "px", minWidth: w + "px" });
+                        $headInner.width(w);
+                        $headInner.children("table").css({ width: w + "px", minWidth: w + "px" });
+                        if ($footInner.length) {
+                            $footInner.width(w);
+                            $footInner.children("table").css({ width: w + "px", minWidth: w + "px" });
+                        }
+                    }
+                } catch (e) {}
+                if (window.pdsSyncDataTableFreeze) {
+                    try { window.pdsSyncDataTableFreeze(api.table().node()); } catch (e) {}
+                }
+            }
+            realign();
+            setTimeout(realign, 100);
+            setTimeout(realign, 300);
         }';
 
         return $params;

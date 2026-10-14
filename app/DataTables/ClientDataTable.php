@@ -230,8 +230,10 @@ class ClientDataTable extends DataTable
 
     public function getBuilderParameters(): array
     {
-        $params = parent::getBuilderParameters();
+        $params = $this->pdsDefaultBuilderParameters();
         $params['scrollX'] = true;
+        $params['scrollY'] = 'calc(100vh - 320px)';
+        $params['scrollCollapse'] = true;
         $params['autoWidth'] = true;
 
         return $params;

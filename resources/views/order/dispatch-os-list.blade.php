@@ -134,7 +134,7 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell pds-no-freeze">
+                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell">
                             @if($payToOsRows->isEmpty())
                                 <div class="pds-os-settlement-section__empty">
                                     <p>{{ __('message.os_settlement_pay_empty') }}</p>
@@ -200,7 +200,7 @@
                             </div>
                         </div>
 
-                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell pds-no-freeze">
+                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell">
                             @if($receiveFromOsRows->isEmpty())
                                 <div class="pds-os-settlement-section__empty pds-os-settlement-section__empty--receive">
                                     <p>{{ __('message.os_settlement_receive_empty') }}</p>
@@ -241,7 +241,7 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell pds-no-freeze">
+                        <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-os-settlement-shell">
                             @if($kyoShinPayRows->isEmpty())
                                 <div class="pds-os-settlement-section__empty pds-os-settlement-section__empty--kyo-shin">
                                     <p>{{ __('message.os_settlement_kyo_shin_empty') }}</p>
@@ -282,6 +282,7 @@
             $(document).ready(function () {
                 var filterFrom = @json($filterFromDate);
                 var filterTo = @json($filterToDate);
+                var filterBranchId = @json($branchFilter ?? 'all');
                 var uploadUrlTemplate = @json(url('dispatch-os-list/__OS__/upload-kpay-slip'));
                 var finishUrlTemplate = @json(url('dispatch-os-list/__OS__/finish'));
                 var slipPreviewUrlTemplate = @json(url('dispatch-os-list/__OS__/slip-preview'));
@@ -625,6 +626,7 @@
                         _token: csrf,
                         from_date: filterFrom,
                         to_date: filterTo,
+                        branch_id: filterBranchId,
                         delivery_format: 'table',
                         payment_method: settlementSide === 'kyo_shin' ? 'cash' : (paymentMethod || 'kpay'),
                         settlement_side: settlementSide,
@@ -658,6 +660,7 @@
                             _token: csrf,
                             from_date: filterFrom,
                             to_date: filterTo,
+                            branch_id: filterBranchId,
                             items: items,
                             delivery_format: 'table',
                             settlement_side: section,
@@ -755,7 +758,12 @@
                     $.ajax({
                         url: slipPreviewUrlTemplate.replace('__OS__', osId),
                         type: 'GET',
-                        data: { from_date: filterFrom, to_date: filterTo, settlement_side: settlementSide },
+                        data: {
+                            from_date: filterFrom,
+                            to_date: filterTo,
+                            branch_id: filterBranchId,
+                            settlement_side: settlementSide,
+                        },
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
                         success: function (res) {
                             $('#osSettlementSlipModalHost').html(res.html || '');

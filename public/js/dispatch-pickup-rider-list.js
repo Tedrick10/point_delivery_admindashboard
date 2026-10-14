@@ -96,10 +96,43 @@
         syncPickupRiderCellState($select);
     }
 
+    function realignDispatchOrderTable() {
+        var table = getTableApi();
+        if (!table) {
+            return;
+        }
+        try {
+            table.columns.adjust();
+        } catch (e) {}
+        try {
+            var wrap = $(table.table().container());
+            var $bodyTable = wrap.find('.dataTables_scrollBody table');
+            var $headInner = wrap.find('.dataTables_scrollHeadInner');
+            var $footInner = wrap.find('.dataTables_scrollFootInner');
+            if ($bodyTable.length && $headInner.length) {
+                var w = Math.ceil(($bodyTable[0] && $bodyTable[0].scrollWidth) || $bodyTable.outerWidth());
+                $bodyTable.css({ width: w + 'px', minWidth: w + 'px' });
+                $headInner.width(w);
+                $headInner.children('table').css({ width: w + 'px', minWidth: w + 'px' });
+                if ($footInner.length) {
+                    $footInner.width(w);
+                    $footInner.children('table').css({ width: w + 'px', minWidth: w + 'px' });
+                }
+            }
+        } catch (e) {}
+        if (typeof window.pdsSyncDataTableFreeze === 'function') {
+            try {
+                window.pdsSyncDataTableFreeze(table.table().node());
+            } catch (e) {}
+        }
+    }
+
     function initAllPickupRiderSelects(config) {
         $('.dispatch-pickup-rider-select2').each(function () {
             initPickupRiderSelect($(this), config);
         });
+        window.setTimeout(realignDispatchOrderTable, 60);
+        window.setTimeout(realignDispatchOrderTable, 220);
     }
 
     function assignPickupRider($select, riderId, config) {

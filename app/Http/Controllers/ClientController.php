@@ -195,7 +195,7 @@ class ClientController extends Controller
         }
         if ($rawPhone !== null && $rawPhone !== '') {
             $contactNumber = normalizeContactNumber((string) $rawPhone);
-            if ($contactNumber === '' || preg_match('/^\+\d{1,4}$/', $contactNumber)) {
+            if ($contactNumber === '' || strlen(preg_replace('/\D+/', '', $contactNumber) ?? '') < 8) {
                 $contactNumber = null;
             }
             $request->merge(['contact_number' => $contactNumber]);
@@ -225,9 +225,12 @@ class ClientController extends Controller
         }
 
         if ($request->boolean('from_dispatch')) {
+            $phoneVariants = contactNumberLookupVariants((string) ($request->contact_number ?? ''));
             $existingUser = User::where('user_type', 'client')
-                ->where(function ($query) use ($request, $username) {
-                    if ($request->filled('contact_number')) {
+                ->where(function ($query) use ($request, $username, $phoneVariants) {
+                    if (! empty($phoneVariants)) {
+                        $query->whereIn('contact_number', $phoneVariants);
+                    } elseif ($request->filled('contact_number')) {
                         $query->where('contact_number', $request->contact_number);
                     }
                     if ($username !== '') {
@@ -266,7 +269,25 @@ class ClientController extends Controller
             'name' => 'required|string|max:255',
             'username' => 'required|string|min:3|max:50|unique:users,username',
             'password' => 'required|string|min:6|confirmed',
-            'contact_number' => 'required|string|max:30|unique:users,contact_number',
+            'contact_number' => [
+                'required',
+                'string',
+                'max:50',
+                function ($attribute, $value, $fail) {
+                    $variants = contactNumberLookupVariants((string) $value);
+                    if ($variants === []) {
+                        return;
+                    }
+                    $exists = User::query()
+                        ->where('user_type', 'client')
+                        ->whereNull('deleted_at')
+                        ->whereIn('contact_number', $variants)
+                        ->exists();
+                    if ($exists) {
+                        $fail(__('message.contact_number_already_taken'));
+                    }
+                },
+            ],
             'os_profile.address_unit' => 'required|string|max:255',
             'os_profile.state_division' => 'required|string|max:255',
             'os_profile.township' => 'required|string|max:255',
@@ -299,7 +320,7 @@ class ClientController extends Controller
             'email_verified_at' => now(),
             'otp_verify_at' => now(),
             'referral_code' => generateRandomCode(),
-            'os_profile' => $osProfile,
+            'os_profile' => rememberOsLoginPassword($osProfile, (string) $request->password),
         ]);
 
         $user->assignRole('client');
@@ -376,7 +397,7 @@ class ClientController extends Controller
             $payload['username'] = $username;
             $payload['email'] = $email;
             $payload['address'] = $address;
-            $payload['os_profile'] = $osProfile;
+            $payload['os_profile'] = rememberOsLoginPassword($osProfile, (string) $request->password);
             $payload['display_name'] = $request->name;
             $payload['user_type'] = 'client';
             $payload['referral_code'] = generateRandomCode();

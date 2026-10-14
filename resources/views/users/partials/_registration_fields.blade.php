@@ -6,8 +6,8 @@
     $isEdit = isset($id);
 
     $phoneValue = old('contact_number', optional($data ?? null)->contact_number ?? '');
-    $phoneNational = preg_replace('/^\+?95\s*/', '', trim((string) $phoneValue));
-    $phoneStored = trim((string) (optional($data ?? null)->contact_number ?? $phoneValue));
+    $phoneNational = normalizeContactNumber($phoneValue);
+    $phoneStored = normalizeContactNumber((string) (optional($data ?? null)->contact_number ?? $phoneValue));
     $usernameValue = old('username', optional($data ?? null)->username ?? '');
 
     $selectedState = trim((string) old('os_profile.state_division', $profile['state_division'] ?? ''));
@@ -43,6 +43,28 @@
                        @if($isEdit) readonly tabindex="-1" @else required @endif>
             </div>
 
+            @if($isEdit)
+            @php $currentLoginPassword = osLoginPasswordFromProfile($data ?? null); @endphp
+            <div class="pds-dispatch-field pds-dispatch-field--full">
+                <label for="reg_current_password">{{ __('message.reg_current_password') }}</label>
+                <div class="pds-os-password-wrap">
+                    <input type="{{ $currentLoginPassword !== '' ? 'password' : 'text' }}"
+                           id="reg_current_password"
+                           class="pds-dispatch-input"
+                           value="{{ $currentLoginPassword }}"
+                           placeholder="{{ $currentLoginPassword !== '' ? '' : __('message.reg_current_password_unknown') }}"
+                           readonly
+                           tabindex="-1"
+                           autocomplete="off">
+                    @if($currentLoginPassword !== '')
+                        <button type="button" class="pds-os-password-toggle" tabindex="-1">
+                            <i class="fas fa-eye-slash"></i>
+                        </button>
+                    @endif
+                </div>
+            </div>
+            @endif
+
             @if(!$isEdit)
             <div class="pds-dispatch-field">
                 <label for="reg_password">{{ __('message.password') }} <span class="text-danger">*</span></label>
@@ -62,12 +84,6 @@
                 </div>
             </div>
             @else
-            <div class="pds-dispatch-field pds-dispatch-field--full">
-                <div class="pds-user-reg-password-change">
-                    <h6 class="pds-user-reg-password-change__title">{{ __('message.change_password') }}</h6>
-                </div>
-            </div>
-
             <div class="pds-dispatch-field">
                 <label for="reg_password">{{ __('message.new_password') }}</label>
                 <div class="pds-os-password-wrap">
@@ -118,7 +134,7 @@
                                required
                            @endif>
                 </div>
-                {{-- Edit posts stored E.164; create prefers hidden when JS syncs, else falls back to name=phone. --}}
+                {{-- Edit/create store local 09… format (no +95). --}}
                 <input type="hidden"
                        name="contact_number"
                        id="contact_number_hidden"
@@ -161,15 +177,21 @@
              data-placeholder-township-locked="{{ __('message.nrc_placeholder_town_locked') }}">
             <div class="pds-dispatch-field">
                 <label for="reg_state">{{ __('message.region') }} <span class="text-danger">*</span></label>
-                <select name="os_profile[state_division]" id="reg_state" class="pds-dispatch-input pds-dispatch-select" required>
+                <select name="os_profile[state_division]"
+                        id="reg_state"
+                        class="pds-dispatch-input pds-dispatch-select pds-os-location-select"
+                        required
+                        data-placeholder="{{ __('message.reg_placeholder_state_division') }}">
                     <option value="">{{ __('message.reg_placeholder_state_division') }}</option>
                     @foreach($mmStates as $state)
                         @php
                             $stateValue = (string) ($state['name_mm'] ?? $state['name_en'] ?? '');
                             $stateLabel = trim(($state['name_mm'] ?? '').(($state['name_en'] ?? '') !== '' ? ' ('.$state['name_en'].')' : ''));
+                            $stateTownships = $state['townships'] ?? [];
                         @endphp
                         <option value="{{ $stateValue }}"
                                 data-name-en="{{ $state['name_en'] ?? '' }}"
+                                data-townships="{{ e(json_encode($stateTownships, JSON_UNESCAPED_UNICODE)) }}"
                                 @selected($selectedState === $stateValue || $selectedState === ($state['name_en'] ?? ''))>
                             {{ $stateLabel !== '' ? $stateLabel : $stateValue }}
                         </option>
@@ -179,7 +201,12 @@
 
             <div class="pds-dispatch-field">
                 <label for="reg_township">{{ __('message.township') }} <span class="text-danger">*</span></label>
-                <select name="os_profile[township]" id="reg_township" class="pds-dispatch-input pds-dispatch-select" required @disabled($selectedState === '')>
+                <select name="os_profile[township]"
+                        id="reg_township"
+                        class="pds-dispatch-input pds-dispatch-select pds-os-location-select"
+                        required
+                        @disabled($selectedState === '')
+                        data-placeholder="{{ __('message.reg_placeholder_township') }}">
                     <option value="">
                         {{ $selectedState === '' ? __('message.nrc_placeholder_town_locked') : __('message.reg_placeholder_township') }}
                     </option>
@@ -209,7 +236,8 @@
                 </select>
             </div>
         </div>
-        <script type="application/json" id="reg_mm_location_data">@json($mmStates)</script>
+        {{-- SPA strips <script> tags from page content; keep states in a plain element. --}}
+        <div id="reg_mm_location_data" class="d-none" hidden aria-hidden="true" data-states="{{ e(json_encode($mmStates, JSON_UNESCAPED_UNICODE)) }}"></div>
     </div>
 
     <div class="pds-user-reg-section">

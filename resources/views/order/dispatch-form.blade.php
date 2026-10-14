@@ -223,7 +223,7 @@
         @include('order.partials._os_search_modal')
 
         @section('bottom_script')
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=5"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=8"></script>
         <script>
             $(document).ready(function () {
                 if ($.fn.magnificPopup && $('.pds-gate-pass-showcase').length) {

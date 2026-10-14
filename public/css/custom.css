@@ -774,12 +774,70 @@ body.pds-admin .content-page .card.card-block.card-stretch {
     height: auto !important;
 }
 
-/* Table shells must remain scrollable even when rounded wrappers set overflow:hidden */
+/* Table shells: scrollable + height-capped so sticky header/footer can freeze */
 body.pds-admin .pds-rider-table-shell--scroll,
 body.pds-admin .pds-cash-payout-shell.pds-rider-table-shell--scroll {
-    overflow: auto !important;
-    max-height: calc(100vh - 260px) !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin !important;
+    -ms-overflow-style: auto !important;
+    max-height: calc(100vh - var(--pds-topbar-h, 60px) - 12.5rem) !important;
+}
+
+/* Items list: full natural height (page scrolls). Nested max-height crushed rows. */
+body.pds-admin .pds-dispatch-items-table-shell,
+body.pds-admin .pds-dispatch-items-page .pds-dispatch-items-table-shell {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+}
+
+body.pds-admin .pds-dispatch-items-screen,
+body.pds-admin .pds-dispatch-items-body {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+}
+
+body.pds-admin .pds-dispatch-items-body {
+    padding-bottom: 0 !important;
+}
+
+body.pds-admin .pds-dispatch-items-page {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* Empty DT chrome under items table (legacy sDom) — was the white slab */
+body.pds-admin .pds-dispatch-items-table-shell .dataTables_wrapper > .row,
+body.pds-admin .pds-dispatch-items-table-shell .dataTables_wrapper > .d-flex,
+body.pds-admin .pds-dispatch-items-table-shell .dataTables_wrapper > .clear {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+body.pds-admin .pds-dispatch-items-table-shell .table-responsive.my-3,
+body.pds-admin .pds-dispatch-items-table-shell .pds-dt-scroll-host {
+    margin: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+}
+
+body.pds-admin:has(.pds-dispatch-items-page) .mm-footer.pds-footer {
+    background: transparent !important;
+    margin-top: 0 !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+body.pds-admin:has(.pds-dispatch-items-page) .content-page.pds-content-shell {
+    padding-bottom: 0.5rem !important;
 }
 
 body.pds-admin .dataTables_wrapper .dataTables_scrollHead table,

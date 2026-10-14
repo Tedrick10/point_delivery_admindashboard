@@ -477,6 +477,45 @@ class OrderController extends Controller
             $activeToBranchId = (int) ($preferred?->id ?? 0);
         }
 
+        $riderDonePresence = null;
+        if ($request->input('dispatch_status') === 'rider_pick_up_done') {
+            $presence = app(\App\Services\RiderDonePresenceLock::class);
+            $acquire = $presence->acquire(auth()->user(), (int) $order->id);
+            if (! $acquire['ok']) {
+                $busyMessage = $acquire['message'] ?? __('message.admin_rider_done_busy', ['name' => __('message.admin')]);
+                $fallback = [
+                    'orders_type' => 'list',
+                    'dispatch_status' => 'rider_pick_up_done',
+                ];
+                $referer = (string) $request->headers->get('referer', '');
+                if ($referer !== '') {
+                    $query = parse_url($referer, PHP_URL_QUERY);
+                    parse_str(is_string($query) ? $query : '', $refQuery);
+                    foreach (['from_date', 'to_date', 'search_term', 'orders_type'] as $key) {
+                        if (! empty($refQuery[$key])) {
+                            $fallback[$key] = $refQuery[$key];
+                        }
+                    }
+                    if (($refQuery['dispatch_status'] ?? '') === 'rider_pick_up_done') {
+                        return redirect()
+                            ->to($referer)
+                            ->with('rider_done_busy', $busyMessage);
+                    }
+                }
+
+                return redirect()
+                    ->route('order.index', $fallback)
+                    ->with('rider_done_busy', $busyMessage);
+            }
+            $riderDonePresence = [
+                'token' => $acquire['lock']['token'] ?? null,
+                'order_id' => (int) $order->id,
+                'user_name' => auth()->user()->name,
+                'heartbeat_url' => route('order.dispatch.mark-rider-done.heartbeat'),
+                'release_url' => route('order.dispatch.mark-rider-done.release'),
+            ];
+        }
+
         return $dataTable->with([
             'order_id' => $id,
             'to_branch_id' => $activeToBranchId,
@@ -488,7 +527,8 @@ class OrderController extends Controller
             'kyoShinActionUrl',
             'destinationBranches',
             'activeToBranchId',
-            'tabCounts'
+            'tabCounts',
+            'riderDonePresence'
         ));
     }
 
@@ -865,6 +905,16 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.admin_rider_done_not_allowed')], 422);
         }
 
+        $presence = app(\App\Services\RiderDonePresenceLock::class);
+        $acquire = $presence->acquire(auth()->user(), (int) $order->id);
+        if (! $acquire['ok']) {
+            return response()->json([
+                'message' => $acquire['message'] ?? __('message.admin_rider_done_busy', ['name' => __('message.admin')]),
+                'busy' => true,
+                'holder' => $acquire['lock']['user_name'] ?? null,
+            ], 423);
+        }
+
         $pickupService = app(\App\Services\PickupParcelDispatchService::class);
         if ($pickupService->isDispatchPickupOrder($order)) {
             $pickupService->ensureDispatchItems($order->fresh());
@@ -882,7 +932,82 @@ class OrderController extends Controller
             'items' => $items,
             'pickupService' => $pickupService,
             'isDispatchPickup' => $pickupService->isDispatchPickupOrder($order),
+            'riderDoneLockToken' => $acquire['lock']['token'] ?? null,
+            'riderDoneHeartbeatUrl' => route('order.dispatch.mark-rider-done.heartbeat'),
+            'riderDoneReleaseUrl' => route('order.dispatch.mark-rider-done.release'),
         ]);
+    }
+
+    public function dispatchMarkRiderDoneHeartbeat(Request $request)
+    {
+        if (! auth()->user()->can('order-edit') && ! auth()->user()->can('order-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $data = $request->validate([
+            'token' => 'nullable|string|max:80',
+            'order_id' => 'required|integer|min:1',
+        ]);
+
+        $result = app(\App\Services\RiderDonePresenceLock::class)->heartbeat(
+            auth()->user(),
+            (int) $data['order_id'],
+            isset($data['token']) ? (string) $data['token'] : null
+        );
+
+        if (! $result['ok']) {
+            return response()->json([
+                'message' => $result['message'] ?? __('message.admin_rider_done_busy', ['name' => __('message.admin')]),
+                'busy' => true,
+            ], 423);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'token' => $result['lock']['token'] ?? null,
+        ]);
+    }
+
+    public function dispatchMarkRiderDoneRelease(Request $request)
+    {
+        if (! auth()->check()) {
+            return response()->json(['ok' => true]);
+        }
+
+        $data = $request->validate([
+            'token' => 'nullable|string|max:80',
+            'order_id' => 'required|integer|min:1',
+        ]);
+
+        app(\App\Services\RiderDonePresenceLock::class)->release(
+            auth()->user(),
+            (int) $data['order_id'],
+            isset($data['token']) ? (string) $data['token'] : null
+        );
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function dispatchRiderDonePresence()
+    {
+        if (! auth()->user()->can('order-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $locks = app(\App\Services\RiderDonePresenceLock::class)->activeLocks();
+        $viewerId = (int) auth()->id();
+        $payload = [];
+        foreach ($locks as $orderId => $lock) {
+            $payload[] = [
+                'order_id' => (int) $orderId,
+                'user_id' => (int) ($lock['user_id'] ?? 0),
+                'user_name' => (string) ($lock['user_name'] ?? 'Admin'),
+                'is_mine' => (int) ($lock['user_id'] ?? 0) === $viewerId,
+                'locked_at' => $lock['locked_at'] ?? null,
+            ];
+        }
+
+        return response()->json(['locks' => $payload]);
     }
 
     public function dispatchMarkRiderDone(Request $request, $id)
@@ -902,6 +1027,19 @@ class OrderController extends Controller
 
         if (! $workflow->canAdminMarkRiderDone($order)) {
             return response()->json(['message' => __('message.admin_rider_done_not_allowed')], 422);
+        }
+
+        $presence = app(\App\Services\RiderDonePresenceLock::class);
+        $holderCheck = $presence->heartbeat(
+            auth()->user(),
+            (int) $order->id,
+            $request->input('rider_done_lock_token') ? (string) $request->input('rider_done_lock_token') : null
+        );
+        if (! $holderCheck['ok']) {
+            return response()->json([
+                'message' => $holderCheck['message'] ?? __('message.admin_rider_done_busy', ['name' => __('message.admin')]),
+                'busy' => true,
+            ], 423);
         }
 
         if ($pickupService->isDispatchPickupOrder($order)) {
@@ -1016,6 +1154,12 @@ class OrderController extends Controller
         }
 
         $workflow->syncOrderWorkflow($order->fresh(['dispatchItems', 'delivery_man']));
+
+        $presence->release(
+            auth()->user(),
+            (int) $order->id,
+            $request->input('rider_done_lock_token') ? (string) $request->input('rider_done_lock_token') : null
+        );
 
         return response()->json([
             'status' => true,
@@ -2772,6 +2916,21 @@ class OrderController extends Controller
                 ]);
 
             if ($updated <= 0) {
+                $alreadyFinished = DispatchOrderItem::query()
+                    ->where('delivery_man_id', $rider->id)
+                    ->where('status', 'completed')
+                    ->whereNotNull('admin_finished_at')
+                    ->whereIn('id', $ids)
+                    ->count();
+
+                if ($alreadyFinished > 0 && $alreadyFinished === count($ids)) {
+                    return response()->json([
+                        'message' => __('message.rider_items_marked_finished', ['count' => $alreadyFinished]),
+                        'updated' => $alreadyFinished,
+                        'already_finished' => true,
+                    ]);
+                }
+
                 return response()->json([
                     'message' => __('message.rider_items_mark_finished_none'),
                 ], 422);
@@ -2798,6 +2957,22 @@ class OrderController extends Controller
                 ]);
 
             if ($updated <= 0) {
+                // Idempotent: duplicate submit / race after a successful mark — already Completed.
+                $alreadyCompleted = DispatchOrderItem::query()
+                    ->where('delivery_man_id', $rider->id)
+                    ->where('status', 'completed')
+                    ->whereNotNull('admin_completed_at')
+                    ->whereIn('id', $ids)
+                    ->count();
+
+                if ($alreadyCompleted > 0 && $alreadyCompleted === count($ids)) {
+                    return response()->json([
+                        'message' => __('message.rider_items_marked_completed', ['count' => $alreadyCompleted]),
+                        'updated' => $alreadyCompleted,
+                        'already_completed' => true,
+                    ]);
+                }
+
                 return response()->json([
                     'message' => __('message.rider_items_mark_completed_none'),
                 ], 422);
@@ -3592,11 +3767,12 @@ class OrderController extends Controller
 
         $settlementService = app(OsSettlementService::class);
         $settlementSide = $settlementService->normalizeSettlementSide($request->get('settlement_side'));
+        [$branchId] = resolveDestinationBranchFilter($request);
         if ($settlementSide === 'kyo_shin') {
-            $items = $settlementService->kyoShinDetailItemsForPeriod($osId, $fromDay, $toDay);
+            $items = $settlementService->kyoShinDetailItemsForPeriod($osId, $fromDay, $toDay, $branchId);
         } else {
             $items = $settlementService->filterItemsBySettlementSide(
-                $settlementService->completedItemsForPeriod($osId, $fromDay, $toDay),
+                $settlementService->completedItemsForPeriod($osId, $fromDay, $toDay, $branchId),
                 $settlementSide
             );
         }
@@ -3611,9 +3787,13 @@ class OrderController extends Controller
 
             if ($batch && is_array($batch->item_ids) && $batch->item_ids !== []) {
                 $itemIds = array_map('intval', $batch->item_ids);
-                $items = DispatchOrderItem::query()
+                $batchQuery = DispatchOrderItem::query()
                     ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch', 'kyoShinItem'])
-                    ->whereIn('id', $itemIds)
+                    ->whereIn('id', $itemIds);
+                if ($branchId !== null && $branchId > 0) {
+                    applyDestinationBranchFilter($batchQuery, $branchId);
+                }
+                $items = $batchQuery
                     ->get()
                     ->sortBy(static fn ($item) => array_search((int) $item->id, $itemIds, true) ?: 9999)
                     ->values();
@@ -3737,6 +3917,7 @@ class OrderController extends Controller
 
         $settlementService = app(OsSettlementService::class);
         $osName = $this->resolveOsListDisplayName($osId, $osClient);
+        [$branchId] = resolveDestinationBranchFilter($request);
 
         try {
             $batch = $settlementService->finishOs(
@@ -3750,7 +3931,8 @@ class OrderController extends Controller
                 $deliveryFormat,
                 $paymentMethod,
                 $settlementSide,
-                $itemIds !== [] ? $itemIds : null
+                $itemIds !== [] ? $itemIds : null,
+                $branchId
             );
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -3814,6 +3996,7 @@ class OrderController extends Controller
         $settlementService = app(OsSettlementService::class);
         $deliveryFormat = $settlementService->normalizeDeliveryFormat($request->input('delivery_format'));
         $slipCompany = $this->dispatchOsSlipCompany();
+        [$branchId] = resolveDestinationBranchFilter($request);
         $finished = 0;
         $errors = [];
         $finishedIds = [];
@@ -3859,7 +4042,8 @@ class OrderController extends Controller
                     $deliveryFormat,
                     $paymentMethod,
                     $settlementSide,
-                    $itemIds !== [] ? $itemIds : null
+                    $itemIds !== [] ? $itemIds : null,
+                    $branchId
                 );
                 $finished++;
                 $finishedIds[] = $osId;

@@ -280,59 +280,235 @@ window.pdsBrandFontId = @json($liveFontPack['id'] ?? brandFontId());
 document.documentElement.setAttribute('data-brand-font', window.pdsBrandFontId || '');
 </script>
 <style id="pds-hide-scrollbars">
-    /* Force-hide scrollbar chrome on every admin screen (wheel/trackpad still scroll). */
+    /*
+     * Page chrome: keep document from growing sideways.
+     * Do NOT zero-out scrollbars globally — that breaks horizontal drag-scroll
+     * on Windows / some touch laptops (wide DataTables / table-responsive).
+     */
     html.pds-admin-root {
         overflow-x: hidden !important;
-        scrollbar-width: none !important;
-        -ms-overflow-style: none !important;
     }
-    html.pds-admin-root,
-    html.pds-admin-root body,
-    body.pds-admin,
-    body.pds-admin * {
-        scrollbar-width: none !important;
-        -ms-overflow-style: none !important;
-    }
-    html.pds-admin-root::-webkit-scrollbar,
-    html.pds-admin-root::-webkit-scrollbar-thumb,
-    html.pds-admin-root::-webkit-scrollbar-track,
-    html.pds-admin-root body::-webkit-scrollbar,
-    body.pds-admin::-webkit-scrollbar,
-    body.pds-admin *::-webkit-scrollbar,
-    body.pds-admin *::-webkit-scrollbar-thumb,
-    body.pds-admin *::-webkit-scrollbar-track {
-        width: 0 !important;
-        height: 0 !important;
-        display: none !important;
-        appearance: none !important;
-        -webkit-appearance: none !important;
-        background: transparent !important;
-        border: 0 !important;
-    }
-    /* Shells must not scroll — that draws a track under pagination. */
-    body.pds-admin .pds-table-shell,
-    body.pds-admin .pds-os-list-table-shell,
-    body.pds-admin .pds-deliveryman-table-shell,
-    body.pds-admin [class*="-table-shell"] {
-        overflow: hidden !important;
-        scrollbar-width: none !important;
-        -ms-overflow-style: none !important;
-    }
-    /* Wide tables may scroll inside scrollBody only (above pagination), chrome hidden */
-    body.pds-admin .dataTables_wrapper,
+
+    /*
+     * Wide tables: scroll INSIDE a height-capped shell so thead/tfoot can freeze.
+     * Footer docks outside the shell (e.g. .pds-items-dock) stay put automatically.
+     */
+    body.pds-admin .table-responsive,
     body.pds-admin .dataTables_scroll,
     body.pds-admin .dataTables_scrollBody,
-    body.pds-admin .table-responsive {
-        scrollbar-width: none !important;
-        -ms-overflow-style: none !important;
+    body.pds-admin .pds-rider-table-shell--scroll,
+    body.pds-admin .pds-cash-payout-shell.pds-rider-table-shell--scroll,
+    body.pds-admin .pds-dispatch-to-assign-table-shell,
+    body.pds-admin .pds-table-scroll,
+    body.pds-admin .pds-h-scroll {
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin !important;
+        -ms-overflow-style: auto !important;
     }
-    body.pds-admin .dataTables_scrollBody::-webkit-scrollbar,
-    body.pds-admin .table-responsive::-webkit-scrollbar {
-        width: 0 !important;
-        height: 0 !important;
+
+    /* DataTables scrollY/scrollX hosts — shell must not steal the scrollport
+       (items list is excluded: it scrolls on the shell, not scrollBody). */
+    body.pds-admin .pds-dispatch-table-shell,
+    body.pds-admin .pds-dispatch-list-page .pds-dispatch-table-shell,
+    body.pds-admin .pds-table-shell:has(.dataTables_scroll):not(.pds-dispatch-items-table-shell),
+    body.pds-admin .pds-deliveryman-table-shell:has(.dataTables_scroll),
+    body.pds-admin .pds-report-table-shell:has(.dataTables_scroll) {
+        overflow: hidden !important;
+        max-height: none !important;
+    }
+
+    body.pds-admin .pds-dt-scroll-host.table-responsive,
+    body.pds-admin .dataTables_wrapper .table-responsive:has(.dataTables_scroll) {
+        overflow: visible !important;
+    }
+
+    body.pds-admin .dataTables_wrapper .dataTables_scrollBody {
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+        scrollbar-width: thin !important;
+        -ms-overflow-style: auto !important;
+    }
+
+    body.pds-admin .dataTables_wrapper .dataTables_scrollBody::-webkit-scrollbar {
+        width: 10px !important;
+        height: 10px !important;
+        display: block !important;
+    }
+
+    body.pds-admin div.dataTables_scrollFoot.is-visible,
+    body.pds-admin div.dataTables_scrollFootInner.is-visible {
+        display: block !important;
+        height: auto !important;
+    }
+
+    body.pds-admin .pds-rider-table-shell--scroll,
+    body.pds-admin .pds-cash-payout-shell.pds-rider-table-shell--scroll,
+    body.pds-admin .pds-dispatch-to-assign-table-shell {
+        max-height: calc(100vh - var(--pds-topbar-h, 60px) - 12.5rem) !important;
+    }
+
+    /* Items list: natural height — page scrolls (no nested max-height). */
+    body.pds-admin .pds-dispatch-items-page .pds-dispatch-items-table-shell,
+    body.pds-admin .pds-dispatch-items-table-shell {
+        max-height: none !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+    }
+
+    body.pds-admin .pds-dispatch-items-screen,
+    body.pds-admin .pds-dispatch-items-body {
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+    }
+
+    body.pds-admin .pds-dispatch-items-table-shell .dataTables_scroll,
+    body.pds-admin .pds-dispatch-items-table-shell .dataTables_scrollBody,
+    body.pds-admin .pds-dispatch-items-table-shell .dataTables_scrollHead,
+    body.pds-admin .pds-dispatch-items-table-shell .dataTables_scrollFoot {
+        height: auto !important;
+        max-height: none !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+    }
+
+    body.pds-admin .pds-dispatch-items-table-shell .dataTables_scrollFoot {
         display: none !important;
     }
-    /* List pages: fit table to card width */
+
+    body.pds-admin .pds-dispatch-items-table-shell .pds-dispatch-items-datatable thead th {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 6 !important;
+    }
+
+    body.pds-admin .table-responsive::-webkit-scrollbar,
+    body.pds-admin .dataTables_scroll::-webkit-scrollbar,
+    body.pds-admin .dataTables_scrollBody::-webkit-scrollbar,
+    body.pds-admin .pds-dispatch-items-table-shell::-webkit-scrollbar,
+    body.pds-admin .pds-rider-table-shell--scroll::-webkit-scrollbar,
+    body.pds-admin .pds-dispatch-to-assign-table-shell::-webkit-scrollbar,
+    body.pds-admin .pds-table-scroll::-webkit-scrollbar,
+    body.pds-admin .pds-h-scroll::-webkit-scrollbar {
+        width: 10px !important;
+        height: 10px !important;
+        display: block !important;
+        appearance: auto !important;
+        -webkit-appearance: auto !important;
+    }
+
+    body.pds-admin .table-responsive::-webkit-scrollbar-thumb,
+    body.pds-admin .dataTables_scroll::-webkit-scrollbar-thumb,
+    body.pds-admin .dataTables_scrollBody::-webkit-scrollbar-thumb,
+    body.pds-admin .pds-dispatch-items-table-shell::-webkit-scrollbar-thumb,
+    body.pds-admin .pds-rider-table-shell--scroll::-webkit-scrollbar-thumb,
+    body.pds-admin .pds-dispatch-to-assign-table-shell::-webkit-scrollbar-thumb,
+    body.pds-admin .pds-table-scroll::-webkit-scrollbar-thumb,
+    body.pds-admin .pds-h-scroll::-webkit-scrollbar-thumb {
+        background: rgba(15, 23, 42, 0.28) !important;
+        border-radius: 999px !important;
+        border: 2px solid transparent !important;
+        background-clip: padding-box !important;
+    }
+
+    body.pds-admin .table-responsive::-webkit-scrollbar-track,
+    body.pds-admin .dataTables_scroll::-webkit-scrollbar-track,
+    body.pds-admin .dataTables_scrollBody::-webkit-scrollbar-track,
+    body.pds-admin .pds-dispatch-items-table-shell::-webkit-scrollbar-track,
+    body.pds-admin .pds-rider-table-shell--scroll::-webkit-scrollbar-track,
+    body.pds-admin .pds-dispatch-to-assign-table-shell::-webkit-scrollbar-track,
+    body.pds-admin .pds-table-scroll::-webkit-scrollbar-track,
+    body.pds-admin .pds-h-scroll::-webkit-scrollbar-track {
+        background: rgba(15, 23, 42, 0.06) !important;
+    }
+
+    /* Non-DataTables shells: CSS sticky freeze */
+    body.pds-admin .pds-plain-freeze:not(.pds-dispatch-items-table-shell),
+    body.pds-admin .pds-auto-freeze-shell,
+    body.pds-admin .pds-table-shell.pds-plain-freeze:not(.pds-dispatch-items-table-shell),
+    body.pds-admin .pds-rider-table-shell--scroll,
+    body.pds-admin .pds-dispatch-to-assign-table-shell:not(:has(.dataTables_scroll)) {
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+        max-height: calc(100vh - var(--pds-topbar-h, 60px) - 12.5rem) !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin !important;
+        -ms-overflow-style: auto !important;
+    }
+
+    /* Items list must win over plain-freeze (page scrolls; no nested viewport). */
+    body.pds-admin .pds-dispatch-items-table-shell,
+    body.pds-admin .pds-dispatch-items-page .pds-dispatch-items-table-shell,
+    body.pds-admin .pds-dispatch-items-table-shell.pds-plain-freeze {
+        max-height: none !important;
+        height: auto !important;
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+    }
+
+    /* Status pills must not clip inside tight spreadsheet cells */
+    body.pds-admin table tbody td:has(.pds-dispatch-status),
+    body.pds-admin table tbody td:has(.pds-dispatch-item-status),
+    body.pds-admin table tbody td:has(.pds-rider-status-chip) {
+        overflow: visible !important;
+        max-width: none !important;
+        white-space: nowrap !important;
+    }
+    body.pds-admin .pds-dispatch-to-assign-table th:nth-child(6),
+    body.pds-admin .pds-dispatch-to-assign-table td:nth-child(6) {
+        width: 128px !important;
+        min-width: 128px !important;
+        max-width: none !important;
+        overflow: visible !important;
+    }
+
+    body.pds-admin .pds-plain-freeze thead th,
+    body.pds-admin .pds-plain-freeze thead td,
+    body.pds-admin .pds-rider-table-shell--scroll thead th,
+    body.pds-admin .pds-rider-items-table thead th,
+    body.pds-admin .pds-rider-list-table thead th,
+    body.pds-admin .pds-dispatch-items-table-shell:not(:has(.dataTables_scroll)) thead th,
+    body.pds-admin .pds-dispatch-to-assign-table thead th,
+    body.pds-admin .pds-dispatch-table thead th {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 8 !important;
+    }
+
+    body.pds-admin .pds-plain-freeze tfoot td,
+    body.pds-admin .pds-plain-freeze tfoot th,
+    body.pds-admin .pds-rider-items-table tfoot td,
+    body.pds-admin .pds-rider-items-table tfoot th,
+    body.pds-admin .pds-rider-table-shell--scroll tfoot td,
+    body.pds-admin .pds-rider-table-shell--scroll tfoot th {
+        position: sticky !important;
+        bottom: 0 !important;
+        z-index: 7 !important;
+        background: #fff7ed !important;
+    }
+
+    /* Beat spreadsheet collapse + backend.css .table{overflow:hidden} so sticky works */
+    body.pds-admin .content-page .pds-plain-freeze table.table,
+    body.pds-admin .content-page .pds-plain-freeze table.dataTable,
+    body.pds-admin .content-page .pds-plain-freeze .pds-rider-list-table,
+    body.pds-admin .content-page .pds-plain-freeze .pds-rider-items-table,
+    body.pds-admin .content-page .pds-plain-freeze .pds-dispatch-to-assign-table,
+    body.pds-admin .content-page .pds-rider-table-shell--scroll table.table,
+    body.pds-admin .content-page .pds-rider-table-shell--scroll .pds-rider-items-table,
+    body.pds-admin .content-page .pds-rider-table-shell--scroll .pds-rider-list-table,
+    body.pds-admin .pds-plain-freeze > table,
+    body.pds-admin .pds-plain-freeze table,
+    body.pds-admin table.pds-sticky-freeze {
+        border-collapse: separate !important;
+        border-spacing: 0 !important;
+        overflow: visible !important;
+    }
+
+    /* List pages: fit table to card width (inner scrollport still scrolls) */
     body.pds-admin .pds-deliveryman-list-page table.dataTable,
     body.pds-admin .pds-os-list-page table.dataTable,
     body.pds-admin .pds-user-reg-page table.dataTable {

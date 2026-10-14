@@ -727,15 +727,30 @@ class MoneyTransferService
 
     /**
      * Public URL for KBZ Pay slip uploaded at OS Finish.
+     * Root-relative so local APP_URL mismatches don't break thumbnails.
      */
     protected function kpaySlipUrl(?OsSettlementBatch $batch): ?string
     {
-        $path = $batch?->kpay_slip_path;
-        if (! $path) {
+        return $this->publicStorageUrl($batch?->kpay_slip_path);
+    }
+
+    protected function publicStorageUrl(?string $path): ?string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
             return null;
         }
+        if (preg_match('#^https?://#i', $path) === 1) {
+            return $path;
+        }
 
-        return Storage::disk('public')->url($path);
+        $path = preg_replace('#^public/#', '', $path) ?: $path;
+        $path = ltrim((string) $path, '/');
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+        }
+
+        return '/storage/'.$path;
     }
 
     /**

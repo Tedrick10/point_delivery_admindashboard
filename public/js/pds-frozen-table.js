@@ -179,12 +179,13 @@
     }
 
     function boot() {
-        // Do not freeze DataTables Order List shells (.pds-dispatch-table-shell):
-        // splitting thead/tbody there misaligns columns under the wrong headers.
-        document.querySelectorAll([
-            '.pds-rider-table-shell',
-            '.pds-dispatch-to-assign-table-shell'
-        ].join(',')).forEach(freezeShell);
+        // Prefer CSS sticky via pds-table-freeze.js (.pds-plain-freeze).
+        // Only keep/resync shells that were already DOM-split (e.g. Daily Check).
+        document.querySelectorAll('.pds-frozen-table').forEach(function (shell) {
+            if (shell.dataset.pdsFrozen !== '1' && shell.querySelector('.pds-frozen-table__head')) {
+                shell.dataset.pdsFrozen = '1';
+            }
+        });
     }
 
     window.pdsResyncFrozenTables = function () {

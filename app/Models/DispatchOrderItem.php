@@ -108,6 +108,34 @@ class DispatchOrderItem extends Model
         'agent_expense_branch_id' => 'integer',
     ];
 
+    public function getCustomerPhoneAttribute($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        if (! function_exists('normalizeContactNumber')) {
+            return $value;
+        }
+
+        $formatted = normalizeContactNumber((string) $value);
+
+        return $formatted !== '' ? $formatted : $value;
+    }
+
+    public function setCustomerPhoneAttribute($value): void
+    {
+        if ($value === null || $value === '') {
+            $this->attributes['customer_phone'] = $value;
+
+            return;
+        }
+
+        $this->attributes['customer_phone'] = function_exists('normalizeContactNumber')
+            ? normalizeContactNumber((string) $value)
+            : $value;
+    }
+
     protected static function booted(): void
     {
         static::saving(function (self $item) {

@@ -61,7 +61,8 @@
                             $custGet = (float) ($item->cust_get ?? 0);
                             // Production rider check detail treats Cust Paid as collected = Cust Get.
                             $custPaid = $custGet;
-                            $osAmount = 0.0;
+                            // Os Paid (pay_done): deli cash is on hand but not in cust_get — show in Os Amount.
+                            $osAmount = (float) ($item->os_paid ?? 0);
                             $officeAmount = 0.0;
                             $gateAmount = (float) ($item->gate_amount ?? 0);
                             $sumAdvance += (float) $item->advance_paid;

@@ -28,9 +28,14 @@
             <h3>{{ __('message.sa_accounts_by_branch') }}</h3>
             <span>{{ $branches->count() }} {{ __('message.sa_metric_branches') }}</span>
         </div>
-        <a href="{{ route('super-admin.branch-admins.create') }}" class="sa-btn sa-btn-primary">
-            <i class="fas fa-plus"></i> {{ __('message.sa_new_branch_admin') }}
-        </a>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <a href="{{ route('super-admin.branches.create') }}" class="sa-btn sa-btn-ghost">
+                <i class="fas fa-plus"></i> {{ __('message.sa_new_branch') }}
+            </a>
+            <a href="{{ route('super-admin.branch-admins.create') }}" class="sa-btn sa-btn-primary">
+                <i class="fas fa-plus"></i> {{ __('message.sa_new_branch_admin') }}
+            </a>
+        </div>
     </header>
     <div class="sa-module-table-wrap">
         <table class="sa-module-table sa-people-table">

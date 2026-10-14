@@ -13,16 +13,61 @@ class DeliveryRouteLocationController extends Controller
 {
     public function index(Request $request)
     {
-        // Branch / hub panels cannot manage this — Super Admin only.
-        if (! function_exists('isSuperAdmin') || ! isSuperAdmin(auth()->user())) {
-            abort(403, __('message.demo_permission_denied'));
+        $user = auth()->user();
+
+        if (function_exists('isSuperAdmin') && isSuperAdmin($user)) {
+            return redirect()->route('super-admin.screens.show', [
+                'screen' => 'delivery-route',
+                'tab' => $request->get('tab', 'from_to'),
+                'city_id' => $request->get('city_id'),
+            ]);
         }
 
-        return redirect()->route('super-admin.screens.show', [
-            'screen' => 'delivery-route',
-            'tab' => $request->get('tab', 'from_to'),
-            'city_id' => $request->get('city_id'),
-        ]);
+        $canList = $user
+            && (
+                $user->can('delivery-route-list')
+                || (method_exists($user, 'hasRole') && $user->hasRole('manager'))
+            );
+
+        if (! $canList) {
+            return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
+        }
+
+        $tab = trim((string) $request->get('tab', 'from_to'));
+        if (! in_array($tab, ['from_to', 'city', 'township'], true)) {
+            $tab = 'from_to';
+        }
+
+        $branches = Branch::query()->orderByRaw(destinationBranchOrderSql())->orderBy('name')->get();
+        $cities = DeliveryCity::query()->withCount('townships')->orderBy('sort_order')->orderBy('name')->get();
+        $filterCityId = (int) $request->get('city_id', 0);
+        if ($filterCityId <= 0) {
+            $filterCityId = (int) ($cities->first()?->id ?? 0);
+        }
+
+        $townships = DeliveryTownship::query()
+            ->with('city')
+            ->when($filterCityId > 0, fn ($q) => $q->where('delivery_city_id', $filterCityId))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+
+        $canEdit = $user->can('delivery-route-add')
+            || $user->can('delivery-route-edit')
+            || $user->can('delivery-route-delete')
+            || (method_exists($user, 'hasRole') && $user->hasRole('manager'));
+
+        $pageTitle = __('message.delivery_route_locations_title');
+
+        return view('setting.delivery-route-locations', compact(
+            'pageTitle',
+            'tab',
+            'branches',
+            'cities',
+            'townships',
+            'filterCityId',
+            'canEdit'
+        ));
     }
 
     public function storeBranch(Request $request)
@@ -286,14 +331,21 @@ class DeliveryRouteLocationController extends Controller
 
     protected function assertCanEdit(): void
     {
-        $this->assertSuperAdmin();
-    }
-
-    protected function assertSuperAdmin(): void
-    {
-        if (! function_exists('isSuperAdmin') || ! isSuperAdmin(auth()->user())) {
-            abort(403, __('message.demo_permission_denied'));
+        $user = auth()->user();
+        if (function_exists('isSuperAdmin') && isSuperAdmin($user)) {
+            return;
         }
+
+        if ($user && (
+            $user->can('delivery-route-add')
+            || $user->can('delivery-route-edit')
+            || $user->can('delivery-route-delete')
+            || (method_exists($user, 'hasRole') && $user->hasRole('manager'))
+        )) {
+            return;
+        }
+
+        abort(403, __('message.demo_permission_denied'));
     }
 
     protected function ok(Request $request, string $message, string $tab)
@@ -307,13 +359,13 @@ class DeliveryRouteLocationController extends Controller
 
     protected function redirectAfterMutation(string $tab, string $message, ?int $cityId = null)
     {
-        $params = ['screen' => 'delivery-route', 'tab' => $tab];
+        $params = ['tab' => $tab];
         if ($tab === 'township' && $cityId) {
             $params['city_id'] = $cityId;
         }
 
         return redirect()
-            ->route('super-admin.screens.show', $params)
+            ->route('delivery-route-locations.index', $params)
             ->withSuccess($message);
     }
 }

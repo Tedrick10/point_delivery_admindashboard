@@ -43,22 +43,13 @@ class DailyCheckListService
 
         foreach ($modes as $partyType) {
             $items = $this->baseItemsQuery($fromDay, $toDay, $branchId)
-                ->when($partyType === DailyCheckInvoice::PARTY_OS, function ($q) use ($osId) {
+                ->when($partyType === DailyCheckInvoice::PARTY_OS, function ($q) {
                     // OS only after Finish (admin_finished_at). No-fee Os Return stays off Daily Check.
+                    // Do not filter by order.client_id here — photo/Viber parcels often store the
+                    // uploader as client_id while pickup_point is the real Online Shop.
                     $q->where('status', 'completed');
                     $q->whereNotNull('admin_finished_at');
                     $q->whereHas('order');
-                    if ($osId !== null) {
-                        if ($osId > 0) {
-                            $q->whereHas('order', fn ($oq) => $oq->where('client_id', $osId));
-                        } else {
-                            $q->whereHas('order', function ($oq) {
-                                $oq->where(function ($inner) {
-                                    $inner->whereNull('client_id')->orWhere('client_id', 0);
-                                });
-                            });
-                        }
-                    }
                 })
                 ->when($partyType === DailyCheckInvoice::PARTY_RIDER, function ($q) use ($riderId) {
                     // Completed stays on Rider even after Finish; OS is additive.
@@ -72,10 +63,18 @@ class DailyCheckListService
                 ->with(['order.client.city', 'order.client', 'toBranch', 'fromBranch', 'deliveryMan.city', 'kyoShinItem'])
                 ->get();
 
+            if ($partyType === DailyCheckInvoice::PARTY_OS && $osId !== null) {
+                $items = $items->filter(function (DispatchOrderItem $item) use ($osId) {
+                    $partyId = $this->osPartyUserId($item);
+
+                    return $osId > 0 ? $partyId === (int) $osId : $partyId === 0;
+                })->values();
+            }
+
             $grouped = $items->groupBy(function (DispatchOrderItem $item) use ($partyType) {
                 $day = $this->itemDay($item);
                 $partyId = $partyType === DailyCheckInvoice::PARTY_OS
-                    ? (int) ($item->order?->client_id ?? 0)
+                    ? $this->osPartyUserId($item)
                     : (int) ($item->delivery_man_id ?? 0);
 
                 return $partyType.'|'.$partyId.'|'.$day;
@@ -89,7 +88,7 @@ class DailyCheckListService
                     continue;
                 }
                 $partyId = $partyType === DailyCheckInvoice::PARTY_OS
-                    ? (int) ($first->order?->client_id ?? 0)
+                    ? $this->osPartyUserId($first)
                     : (int) ($first->delivery_man_id ?? 0);
 
                 $invoice = $this->ensureInvoice($partyType, $partyId, $day, $groupItems);
@@ -184,6 +183,13 @@ class DailyCheckListService
             ->get()
             ->sortBy(fn ($item) => array_search((int) $item->id, array_map('intval', $ids), true) ?: 9999)
             ->values();
+
+        if ($invoice->isOs() && $items->isNotEmpty()) {
+            $partyId = (int) $invoice->party_user_id;
+            $items = $items
+                ->filter(fn (DispatchOrderItem $item) => $this->osPartyUserId($item) === $partyId)
+                ->values();
+        }
 
         if ($items->isEmpty()) {
             return $this->reloadItemsForInvoice($invoice);
@@ -337,32 +343,44 @@ class DailyCheckListService
         }
 
         $items = $this->baseItemsQuery($day, $day, null)
-            ->when($invoice->isOs(), function ($q) use ($invoice) {
+            ->when($invoice->isOs(), function ($q) {
                 $q->where('status', 'completed');
                 $q->whereNotNull('admin_finished_at');
-                $partyId = (int) $invoice->party_user_id;
-                if ($partyId > 0) {
-                    $q->whereHas('order', fn ($oq) => $oq->where('client_id', $partyId));
-                } else {
-                    $q->whereHas('order', function ($oq) {
-                        $oq->where(function ($inner) {
-                            $inner->whereNull('client_id')->orWhere('client_id', 0);
-                        });
-                    });
-                }
+                $q->whereHas('order');
             })
             ->when($invoice->isRider(), function ($q) use ($invoice) {
                 $q->where('delivery_man_id', (int) $invoice->party_user_id);
             })
             ->with(['order.client.city', 'toBranch', 'fromBranch', 'deliveryMan', 'photoMedia', 'custPhotoMedia', 'custSignMedia', 'kyoShinItem'])
             ->get()
-            ->filter(fn (DispatchOrderItem $item) => $this->itemDay($item) === $day)
+            ->filter(function (DispatchOrderItem $item) use ($invoice, $day) {
+                if ($this->itemDay($item) !== $day) {
+                    return false;
+                }
+                if ($invoice->isOs()) {
+                    return $this->osPartyUserId($item) === (int) $invoice->party_user_id;
+                }
+
+                return true;
+            })
             ->values();
 
         $invoice->item_ids = $items->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
         $invoice->save();
 
         return $items->values();
+    }
+
+    /**
+     * Online Shop party id for Daily Check grouping (pickup shop → client account).
+     */
+    protected function osPartyUserId(DispatchOrderItem $item): int
+    {
+        if (function_exists('resolveDispatchOsPartyUserId')) {
+            return resolveDispatchOsPartyUserId($item->order);
+        }
+
+        return (int) ($item->order?->client_id ?? 0);
     }
 
     protected function mapRow(
@@ -397,9 +415,10 @@ class DailyCheckListService
         // DeliAmount column = sum of item DeliAmount (Return ရိုးရိုး stays 0).
         $deli = round($deli, 2);
 
-        // Rider Amount = collected Cust Get. OS Amount also uses rider-collected Cust Get
-        // (KBZ Pay / Cash Pay from settlement). OsToPay stays the remittance figure.
-        $amount = $custGet;
+        // Amount = Cust Get + Os Paid. Os Paid (pay_done) is cash on hand but not in cust_get
+        // when Item Value is 0 / OS already settled deli — must still appear on Daily Check + Rider ငွေအပ်.
+        // OsToPay stays the OS settlement remittance figure.
+        $amount = $custGet + $osPaid;
         // Production greens Payment when amount == osPayment (settled).
         $osPayment = $invoice->remitted_date ? $amount : 0.0;
         $paymentInfo = $this->partyBankPaymentInfo($invoice, $amount);

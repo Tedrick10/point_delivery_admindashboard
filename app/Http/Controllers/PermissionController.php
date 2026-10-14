@@ -80,6 +80,21 @@ class PermissionController extends Controller
                 'hint' => __('message.roles_module_expense_summary_hint'),
                 'icon' => 'fas fa-file-invoice-dollar',
             ],
+            'branch' => [
+                'label' => __('message.sa_branches_title'),
+                'hint' => __('message.roles_module_branch_hint'),
+                'icon' => 'fas fa-code-branch',
+            ],
+            'branch-admin' => [
+                'label' => __('message.sa_branch_admins'),
+                'hint' => __('message.roles_module_branch_admin_hint'),
+                'icon' => 'fas fa-user-shield',
+            ],
+            'delivery-route' => [
+                'label' => __('message.sa_screen_delivery_route'),
+                'hint' => __('message.roles_module_delivery_route_hint'),
+                'icon' => 'fas fa-map-marker-alt',
+            ],
             'subadmin' => [
                 'label' => __('message.account_creation'),
                 'hint' => __('message.roles_module_account_hint'),
@@ -199,7 +214,7 @@ class PermissionController extends Controller
 
         $managedParentNames = array_column($this->adminPanelPermissionModules(), 'key');
         if ($managedParentNames === []) {
-            $managedParentNames = ['order', 'users', 'deliveryman', 'hr-payroll', 'subadmin', 'role', 'permission'];
+            $managedParentNames = ['order', 'users', 'deliveryman', 'hr-payroll', 'branch', 'branch-admin', 'delivery-route', 'subadmin', 'role', 'permission'];
         }
 
         $managedPermissionIds = Permission::query()

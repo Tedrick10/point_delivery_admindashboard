@@ -66,7 +66,7 @@
                         <p>{{ __('message.no_record_found') }}</p>
                     </div>
                 @else
-                    <div class="pds-rider-table-shell pds-no-freeze">
+                    <div class="pds-rider-table-shell">
                         <table class="table pds-rider-list-table">
                             <thead>
                                 <tr>

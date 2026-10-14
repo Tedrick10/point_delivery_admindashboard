@@ -97,29 +97,29 @@
                             <thead>
                                 <tr>
                                     @if($canReassignFollowUpRider)
-                                        <th class="pds-follow-up-check-col">
+                                        <th class="pds-fu-col pds-fu-col--check pds-follow-up-check-col">
                                             <input type="checkbox" id="followUpSelectAll" aria-label="{{ __('message.all') }}">
                                         </th>
                                     @endif
-                                    <th>{{ __('message.no') }}</th>
-                                    <th>{{ __('message.order') }}</th>
-                                    <th>{{ __('message.received_date') }}</th>
-                                    <th>{{ __('message.voucher_code') }}</th>
-                                    <th>{{ __('message.status') }}</th>
-                                    <th>{{ __('message.from_to') }}</th>
-                                    <th>{{ __('message.os_name') }}</th>
-                                    <th>{{ __('message.os_address') }}</th>
-                                    <th>{{ __('message.pickup') }}</th>
-                                    <th>{{ __('message.customer_name') }}</th>
-                                    <th>{{ __('message.phone') }}</th>
-                                    <th>{{ __('message.address') }}</th>
-                                    <th>{{ __('message.township') }}</th>
-                                    <th>{{ __('message.delivery_man') }}</th>
-                                    <th>{{ __('message.cust_paid') }}</th>
-                                    <th>{{ __('message.item_value') }}</th>
-                                    <th>{{ __('message.deli_amount') }}</th>
-                                    <th>{{ __('message.remark_label') }}</th>
-                                    <th>{{ __('message.action') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--no">{{ __('message.no') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--date">{{ __('message.order') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--date">{{ __('message.received_date') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--voucher">{{ __('message.voucher_code') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--status">{{ __('message.status') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--fromto">{{ __('message.from_to') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--os">{{ __('message.os_name') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--os-addr">{{ __('message.os_address') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--pickup">{{ __('message.pickup') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--customer">{{ __('message.customer_name') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--phone">{{ __('message.phone') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--addr">{{ __('message.address') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--township">{{ __('message.township') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--rider">{{ __('message.delivery_man') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--money">{{ __('message.cust_paid') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--money">{{ __('message.item_value') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--deli">{{ __('message.deli_amount') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--remark">{{ __('message.remark_label') }}</th>
+                                    <th class="pds-fu-col pds-fu-col--action">{{ __('message.action') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -156,7 +156,7 @@
                                         data-to-branch-id="{{ (int) ($item->to_branch_id ?? 0) }}"
                                     >
                                         @if($canReassignFollowUpRider)
-                                            <td class="pds-follow-up-check-col">
+                                            <td class="pds-fu-col pds-fu-col--check pds-follow-up-check-col">
                                                 @if($rowCanReassign)
                                                     <input type="checkbox"
                                                            class="pds-follow-up-item-check"
@@ -165,31 +165,31 @@
                                                 @endif
                                             </td>
                                         @endif
-                                        <td class="to-assign-row-no">{{ $index + 1 }}</td>
-                                        <td>{{ $orderDate }}</td>
-                                        <td>{{ $receivedDate }}</td>
-                                        <td>
+                                        <td class="pds-fu-col pds-fu-col--no to-assign-row-no">{{ $index + 1 }}</td>
+                                        <td class="pds-fu-col pds-fu-col--date">{{ $orderDate }}</td>
+                                        <td class="pds-fu-col pds-fu-col--date">{{ $receivedDate }}</td>
+                                        <td class="pds-fu-col pds-fu-col--voucher">
                                             {{ $item->code ?? '-' }}
                                             @if($item->kyoShinItem)
                                                 <span class="pds-kyo-shin-row-badge">{{ __('message.kyo_shin_title') }}</span>
                                             @endif
                                         </td>
-                                        <td class="pds-follow-up-status-cell">
+                                        <td class="pds-fu-col pds-fu-col--status pds-follow-up-status-cell">
                                             <span class="pds-dispatch-status {{ $workflow->followUpItemStatusClass($item) }}" title="{{ $workflow->followUpItemStatusLabel($item) }}">{{ $workflow->followUpItemStatusLabel($item) }}</span>
                                         </td>
-                                        <td>{{ $fromTo }}</td>
-                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--name" title="{{ $osName }}">{{ $osName }}</span></td>
-                                        <td class="pds-follow-up-address-cell" title="{{ $osAddress }}">
-                                            <span class="pds-follow-up-cell pds-follow-up-cell--address">{{ stringLong($osAddress, 'title', 18) ?: '-' }}</span>
+                                        <td class="pds-fu-col pds-fu-col--fromto">{{ $fromTo }}</td>
+                                        <td class="pds-fu-col pds-fu-col--os"><span class="pds-follow-up-cell pds-follow-up-cell--name" title="{{ $osName }}">{{ $osName }}</span></td>
+                                        <td class="pds-fu-col pds-fu-col--os-addr pds-follow-up-address-cell" title="{{ $osAddress }}">
+                                            <span class="pds-follow-up-cell pds-follow-up-cell--address">{{ stringLong($osAddress, 'title', 28) ?: '-' }}</span>
                                         </td>
-                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--rider" title="{{ $pickupRider }}">{{ $pickupRider }}</span></td>
-                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--name" title="{{ $item->customer_name }}">{{ $item->customer_name ?: '-' }}</span></td>
-                                        <td><span class="pds-follow-up-cell pds-follow-up-cell--phone">{{ $item->customer_phone ?: '-' }}</span></td>
-                                        <td class="pds-follow-up-address-cell" title="{{ $item->customer_address }}">
-                                            <span class="pds-follow-up-cell pds-follow-up-cell--address">{{ stringLong($item->customer_address ?? '', 'title', 18) ?: '-' }}</span>
+                                        <td class="pds-fu-col pds-fu-col--pickup"><span class="pds-follow-up-cell pds-follow-up-cell--rider" title="{{ $pickupRider }}">{{ $pickupRider }}</span></td>
+                                        <td class="pds-fu-col pds-fu-col--customer"><span class="pds-follow-up-cell pds-follow-up-cell--name" title="{{ $item->customer_name }}">{{ $item->customer_name ?: '-' }}</span></td>
+                                        <td class="pds-fu-col pds-fu-col--phone"><span class="pds-follow-up-cell pds-follow-up-cell--phone">{{ $item->customer_phone ?: '-' }}</span></td>
+                                        <td class="pds-fu-col pds-fu-col--addr pds-follow-up-address-cell" title="{{ $item->customer_address }}">
+                                            <span class="pds-follow-up-cell pds-follow-up-cell--address">{{ stringLong($item->customer_address ?? '', 'title', 28) ?: '-' }}</span>
                                         </td>
-                                        <td>{{ $township }}</td>
-                                        <td>
+                                        <td class="pds-fu-col pds-fu-col--township">{{ $township }}</td>
+                                        <td class="pds-fu-col pds-fu-col--rider">
                                             @if($rowCanReassign)
                                                 <button type="button"
                                                         class="pds-follow-up-rider-btn js-follow-up-assign-one"
@@ -203,11 +203,11 @@
                                                 <span class="pds-follow-up-cell pds-follow-up-cell--rider" title="{{ $deliveryRider }}">{{ $deliveryRider !== '-' ? $deliveryRider : '-' }}</span>
                                             @endif
                                         </td>
-                                        <td>{{ (float) $item->advance_paid == 0.0 ? '' : number_format((float) $item->advance_paid) }}</td>
-                                        <td class="pds-follow-up-num-cell">{{ number_format((float) $item->item_value) }}</td>
-                                        <td class="text-right pds-follow-up-num-cell">{!! formatDispatchDeliAmountHtml($item) !!}</td>
-                                        <td title="{{ $item->remark }}">{{ stringLong($item->remark ?? '', 'title', 16) ?: '-' }}</td>
-                                        <td class="pds-follow-up-actions-cell">
+                                        <td class="pds-fu-col pds-fu-col--money pds-follow-up-num-cell">{{ (float) $item->advance_paid == 0.0 ? '' : number_format((float) $item->advance_paid) }}</td>
+                                        <td class="pds-fu-col pds-fu-col--money pds-follow-up-num-cell">{{ number_format((float) $item->item_value) }}</td>
+                                        <td class="pds-fu-col pds-fu-col--deli text-right pds-follow-up-num-cell">{!! formatDispatchDeliAmountHtml($item) !!}</td>
+                                        <td class="pds-fu-col pds-fu-col--remark" title="{{ $item->remark }}">{{ stringLong($item->remark ?? '', 'title', 24) ?: '-' }}</td>
+                                        <td class="pds-fu-col pds-fu-col--action pds-follow-up-actions-cell">
                                             <button type="button"
                                                     class="pds-follow-up-details-btn"
                                                     data-url="{{ route('order.dispatch.to-assign.details', $item->id) }}">
@@ -248,7 +248,7 @@
 
 
     @section('bottom_script')
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=5"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=8"></script>
         <script>
             (function () {
                 var osSearchRoute = "{{ route('ajax-list', ['type' => 'os_dispatch_search']) }}";

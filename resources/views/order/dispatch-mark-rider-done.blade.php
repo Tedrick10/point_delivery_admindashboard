@@ -2,6 +2,9 @@
     $orderId = (int) $order->id;
     $riderName = optional($order->delivery_man)->name ?: '-';
     $itemCount = $items->count();
+    $lockToken = (string) ($riderDoneLockToken ?? '');
+    $heartbeatUrl = (string) ($riderDoneHeartbeatUrl ?? '');
+    $releaseUrl = (string) ($riderDoneReleaseUrl ?? '');
 @endphp
 <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable pds-admin-rider-done-wrap" role="document">
     <div class="modal-content pds-admin-rider-done-modal">
@@ -9,8 +12,15 @@
               method="POST"
               enctype="multipart/form-data"
               action="{{ route('order.dispatch.mark-rider-done', $orderId) }}"
-              data-admin-rider-done-form="1">
+              data-admin-rider-done-form="1"
+              data-ard-lock-token="{{ $lockToken }}"
+              data-ard-order-id="{{ $orderId }}"
+              data-ard-heartbeat-url="{{ $heartbeatUrl }}"
+              data-ard-release-url="{{ $releaseUrl }}">
             @csrf
+            @if($lockToken !== '')
+                <input type="hidden" name="rider_done_lock_token" value="{{ $lockToken }}">
+            @endif
 
             <div class="pds-ard-header">
                 <div class="pds-ard-header__main">
@@ -244,6 +254,41 @@
     if (!$form.length) return;
 
     var SIZE_STEP = 500;
+    var lockToken = String($form.attr('data-ard-lock-token') || '');
+    var orderId = parseInt($form.attr('data-ard-order-id'), 10) || 0;
+    var releaseUrl = String($form.attr('data-ard-release-url') || '');
+    var modalReleased = false;
+
+    function csrfToken() {
+        return $('meta[name="csrf-token"]').attr('content')
+            || String($form.find('input[name="_token"]').val() || '');
+    }
+
+    // Order Detail page owns the lock; modal only releases when opened stand-alone.
+    function releaseModalLockIfOwned() {
+        if (modalReleased || window.__pdsRiderDoneItemsLock || !releaseUrl || !lockToken || !orderId) {
+            return;
+        }
+        modalReleased = true;
+        var body = new FormData();
+        body.append('_token', csrfToken());
+        body.append('token', lockToken);
+        body.append('order_id', String(orderId));
+        if (navigator.sendBeacon) {
+            navigator.sendBeacon(releaseUrl, body);
+            return;
+        }
+        $.ajax({
+            url: releaseUrl,
+            method: 'POST',
+            data: { _token: csrfToken(), token: lockToken, order_id: orderId },
+            async: false,
+        });
+    }
+
+    $(document)
+        .off('hidden.bs.modal.ardModalPresence', '#remoteModelData')
+        .on('hidden.bs.modal.ardModalPresence', '#remoteModelData', releaseModalLockIfOwned);
 
     function parseAmount(raw) {
         var n = parseFloat(String(raw || '').replace(/,/g, '').trim());
@@ -251,8 +296,9 @@
     }
 
     function adjustDeli(currentAmount, previousSize, newSize) {
-        if (newSize <= 1) return null;
         if (currentAmount <= 0 && previousSize <= 0) return null;
+        // First Size(1) / re-tap Size(1): keep manual amount. Stepping DOWN to Size(1) adjusts.
+        if (newSize <= 1 && previousSize <= 1) return null;
         var effectivePrev = previousSize > 0 ? previousSize : 1;
         var adjusted = currentAmount + (newSize - effectivePrev) * SIZE_STEP;
         return adjusted < 0 ? 0 : adjusted;

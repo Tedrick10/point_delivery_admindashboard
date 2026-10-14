@@ -310,8 +310,10 @@ class DeliverymanDataTable extends DataTable
 
     public function getBuilderParameters(): array
     {
-        $params = parent::getBuilderParameters();
-        $params['scrollX'] = false;
+        $params = $this->pdsDefaultBuilderParameters();
+        $params['scrollX'] = true;
+        $params['scrollY'] = 'calc(100vh - 320px)';
+        $params['scrollCollapse'] = true;
         $params['autoWidth'] = false;
 
         return $params;

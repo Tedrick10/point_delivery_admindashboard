@@ -133,28 +133,54 @@
                         </div>
                     </div>
                 @else
-                    <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-daily-check-shell">
-                        <table class="table pds-rider-list-table pds-daily-check-table pds-money-transfer-table {{ $showCashCols ? 'is-cash-cols' : 'is-kpay-compact' }}" id="moneyTransferTable">
-                            <thead>
-                                <tr>
-                                    <th style="width:48px">{{ __('message.no') }}</th>
-                                    <th>{{ __('message.os_name') }}</th>
-                                    @if($showMethodCol)
-                                        <th>{{ __('message.payment_method') }}</th>
-                                    @endif
-                                    <th class="text-right" title="{{ __('message.money_transfer_col_help_due') }}">{{ __('message.os_to_pay') }}</th>
-                                    @if($showCashCols)
-                                        <th>{{ __('message.delivery_man') }}</th>
-                                        <th>{{ __('message.status') }}</th>
-                                        <th>{{ __('message.remark_label') }}</th>
-                                        <th class="pds-mt-photo-col">{{ __('message.finish_image') }}</th>
-                                        <th class="pds-mt-photo-col">{{ __('message.pending_image') }}</th>
-                                        <th class="text-center">{{ __('message.action') }}</th>
-                                    @else
-                                        <th>{{ __('message.kpay_slip') }}</th>
-                                    @endif
-                                </tr>
-                            </thead>
+                    @php
+                        $mtHeadCols = [
+                            ['label' => __('message.no'), 'class' => '', 'col' => 'mt-col-no'],
+                            ['label' => __('message.os_name'), 'class' => '', 'col' => 'mt-col-os'],
+                        ];
+                        if ($showMethodCol) {
+                            $mtHeadCols[] = ['label' => __('message.payment_method'), 'class' => '', 'col' => 'mt-col-method'];
+                        }
+                        $mtHeadCols[] = ['label' => __('message.os_to_pay'), 'class' => 'text-right', 'title' => __('message.money_transfer_col_help_due'), 'col' => 'mt-col-due'];
+                        if ($showCashCols) {
+                            $mtHeadCols[] = ['label' => __('message.delivery_man'), 'class' => '', 'col' => 'mt-col-rider'];
+                            $mtHeadCols[] = ['label' => __('message.status'), 'class' => '', 'col' => 'mt-col-status'];
+                            $mtHeadCols[] = ['label' => __('message.remark_label'), 'class' => '', 'col' => 'mt-col-remark'];
+                            $mtHeadCols[] = ['label' => __('message.finish_image'), 'class' => 'pds-mt-photo-col', 'col' => 'mt-col-photo'];
+                            $mtHeadCols[] = ['label' => __('message.pending_image'), 'class' => 'pds-mt-photo-col', 'col' => 'mt-col-photo'];
+                            $mtHeadCols[] = ['label' => __('message.action'), 'class' => 'text-center', 'col' => 'mt-col-action'];
+                        } else {
+                            $mtHeadCols[] = ['label' => __('message.kpay_slip'), 'class' => '', 'col' => 'mt-col-photo'];
+                        }
+                        $mtDueColIndex = $showMethodCol ? 3 : 2; // 0-based
+                        $mtTotalDue = (float) $rows->sum(function ($r) { return (float) ($r->amount_due ?? 0); });
+                        $mtColCount = count($mtHeadCols);
+                        $mtTableClass = 'table pds-rider-list-table pds-daily-check-table pds-money-transfer-table '.($showCashCols ? 'is-cash-cols' : 'is-kpay-compact');
+                    @endphp
+                    <div class="pds-frozen-table pds-daily-check-shell pds-money-transfer-shell" id="moneyTransferFrozen" data-due-col="{{ $mtDueColIndex }}">
+                        <div class="pds-frozen-table__head">
+                            <table class="{{ $mtTableClass }}">
+                                <colgroup>
+                                    @foreach($mtHeadCols as $col)
+                                        <col class="{{ $col['col'] }}">
+                                    @endforeach
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        @foreach($mtHeadCols as $col)
+                                            <th class="{{ $col['class'] }}" @if(!empty($col['title'])) title="{{ $col['title'] }}" @endif>{{ $col['label'] }}</th>
+                                        @endforeach
+                                    </tr>
+                                </thead>
+                            </table>
+                        </div>
+                        <div class="pds-frozen-table__body">
+                        <table class="{{ $mtTableClass }}" id="moneyTransferTable">
+                            <colgroup>
+                                @foreach($mtHeadCols as $col)
+                                    <col class="{{ $col['col'] }}">
+                                @endforeach
+                            </colgroup>
                             <tbody>
                                 @foreach($rows as $index => $row)
                                     @php $rowMethod = (string) ($row->payment_method ?? $paymentMethod); @endphp
@@ -225,23 +251,21 @@
                                                     <span class="text-muted">—</span>
                                                 @endif
                                             </td>
+                                            @php
+                                                $finishUrl = $row->done_photo_url ?: $row->kpay_slip_url;
+                                                $pendingUrl = $row->pending_photo_url ?? null;
+                                            @endphp
                                             <td class="pds-mt-photo-cell">
-                                                @if(!empty($row->kpay_slip_url))
-                                                    <a href="{{ $row->kpay_slip_url }}" target="_blank" rel="noopener" class="pds-mt-photo" title="{{ __('message.finish_image') }}">
-                                                        <img src="{{ $row->kpay_slip_url }}" alt="{{ __('message.finish_image') }}">
-                                                    </a>
-                                                @else
-                                                    <span class="pds-mt-photo-empty" aria-hidden="true"><i class="far fa-image"></i></span>
-                                                @endif
+                                                @include('order.partials._money-transfer-photo', [
+                                                    'url' => $finishUrl,
+                                                    'title' => __('message.finish_image'),
+                                                ])
                                             </td>
                                             <td class="pds-mt-photo-cell">
-                                                @if(!empty($row->pending_photo_url))
-                                                    <a href="{{ $row->pending_photo_url }}" target="_blank" rel="noopener" class="pds-mt-photo" title="{{ __('message.pending_image') }}">
-                                                        <img src="{{ $row->pending_photo_url }}" alt="{{ __('message.pending_image') }}">
-                                                    </a>
-                                                @else
-                                                    <span class="pds-mt-photo-empty" aria-hidden="true"><i class="far fa-image"></i></span>
-                                                @endif
+                                                @include('order.partials._money-transfer-photo', [
+                                                    'url' => $pendingUrl,
+                                                    'title' => __('message.pending_image'),
+                                                ])
                                             </td>
                                             <td class="text-center pds-money-transfer-actions">
                                                 @if($canEdit && !empty($row->transfer_id) && !empty($row->can_switch_to_kpay))
@@ -264,38 +288,57 @@
                                             <td><span class="text-muted">—</span></td>
                                             <td><span class="text-muted">—</span></td>
                                             <td class="pds-mt-photo-cell">
-                                                @if(!empty($row->kpay_slip_url))
-                                                    <a href="{{ $row->kpay_slip_url }}" target="_blank" rel="noopener" class="pds-mt-photo" title="{{ __('message.kpay_slip') }}">
-                                                        <img src="{{ $row->kpay_slip_url }}" alt="{{ __('message.kpay_slip') }}">
-                                                    </a>
-                                                @else
-                                                    <span class="pds-mt-photo-empty" aria-hidden="true"><i class="far fa-image"></i></span>
-                                                @endif
+                                                @include('order.partials._money-transfer-photo', [
+                                                    'url' => $row->kpay_slip_url,
+                                                    'title' => __('message.finish_image'),
+                                                ])
                                             </td>
                                             <td class="pds-mt-photo-cell">
-                                                <span class="pds-mt-photo-empty" aria-hidden="true"><i class="far fa-image"></i></span>
+                                                @include('order.partials._money-transfer-photo', [
+                                                    'url' => null,
+                                                    'title' => __('message.pending_image'),
+                                                ])
                                             </td>
                                             <td class="text-center pds-money-transfer-actions">
                                                 <span class="text-muted">—</span>
                                             </td>
                                             @endif
                                         @else
-                                            <td style="min-width:120px;">
-                                                @if(!empty($row->kpay_slip_url))
-                                                    <a href="{{ $row->kpay_slip_url }}" target="_blank" rel="noopener" title="{{ __('message.kpay_slip') }}">
-                                                        <img src="{{ $row->kpay_slip_url }}"
-                                                             alt="{{ __('message.kpay_slip') }}"
-                                                             style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;">
-                                                    </a>
-                                                @else
-                                                    <span class="text-muted">—</span>
-                                                @endif
+                                            <td class="pds-mt-photo-cell" style="min-width:120px;">
+                                                @include('order.partials._money-transfer-photo', [
+                                                    'url' => $row->kpay_slip_url,
+                                                    'title' => __('message.kpay_slip'),
+                                                    'large' => true,
+                                                ])
                                             </td>
                                         @endif
                                     </tr>
                                 @endforeach
                             </tbody>
                         </table>
+                        </div>
+                        <div class="pds-frozen-table__foot">
+                            <table class="{{ $mtTableClass }}">
+                                <colgroup>
+                                    @foreach($mtHeadCols as $col)
+                                        <col class="{{ $col['col'] }}">
+                                    @endforeach
+                                </colgroup>
+                                <tfoot>
+                                    <tr class="pds-daily-check-total-row pds-money-transfer-total-row">
+                                        @for($i = 0; $i < $mtColCount; $i++)
+                                            @if($i === $mtDueColIndex - 1)
+                                                <td class="pds-daily-check-total-label text-right">{{ __('message.total') }}</td>
+                                            @elseif($i === $mtDueColIndex)
+                                                <td class="text-right pds-money-transfer-due">{{ number_format($mtTotalDue) }}</td>
+                                            @else
+                                                <td></td>
+                                            @endif
+                                        @endfor
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
                     </div>
                 @endif
             </div>
@@ -352,6 +395,54 @@
                 return setTimeout(bootMoneyTransfer, 40);
             }
             var $ = window.jQuery;
+
+            (function bindFrozenMoneyTransferScroll() {
+                var root = document.getElementById('moneyTransferFrozen');
+                if (!root) return;
+                var headWrap = root.querySelector('.pds-frozen-table__head');
+                var bodyWrap = root.querySelector('.pds-frozen-table__body');
+                var footWrap = root.querySelector('.pds-frozen-table__foot');
+                var headTable = headWrap && headWrap.querySelector('table');
+                var bodyTable = bodyWrap && bodyWrap.querySelector('table');
+                var footTable = footWrap && footWrap.querySelector('table');
+                if (!headWrap || !bodyWrap || !bodyTable) return;
+
+                function syncScroll() {
+                    headWrap.scrollLeft = bodyWrap.scrollLeft;
+                    if (footWrap) footWrap.scrollLeft = bodyWrap.scrollLeft;
+                }
+
+                function syncColWidths() {
+                    var bodyRow = bodyTable.querySelector('tbody tr');
+                    if (!bodyRow) return;
+                    var bodyCells = bodyRow.children;
+                    var headCols = headTable ? headTable.querySelectorAll('colgroup col') : [];
+                    var bodyCols = bodyTable.querySelectorAll('colgroup col');
+                    var footCols = footTable ? footTable.querySelectorAll('colgroup col') : [];
+                    var n = bodyCells.length;
+                    for (var i = 0; i < n; i++) {
+                        var w = Math.ceil(bodyCells[i].getBoundingClientRect().width) + 'px';
+                        if (headCols[i]) headCols[i].style.width = w;
+                        if (bodyCols[i]) bodyCols[i].style.width = w;
+                        if (footCols[i]) footCols[i].style.width = w;
+                    }
+                    var tableWidth = Math.ceil(bodyTable.getBoundingClientRect().width) + 'px';
+                    if (headTable) headTable.style.width = tableWidth;
+                    if (footTable) footTable.style.width = tableWidth;
+                    bodyTable.style.width = tableWidth;
+                    syncScroll();
+                }
+
+                bodyWrap.addEventListener('scroll', syncScroll);
+                window.addEventListener('resize', syncColWidths);
+                // After layout / images settle.
+                requestAnimationFrame(function () {
+                    syncColWidths();
+                    setTimeout(syncColWidths, 50);
+                    setTimeout(syncColWidths, 250);
+                });
+            })();
+
             if (window.__pdsMoneyTransferBound) return;
             window.__pdsMoneyTransferBound = true;
 

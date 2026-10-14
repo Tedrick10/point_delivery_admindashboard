@@ -68,7 +68,7 @@
                         </p>
                     </div>
                 @else
-                    <div class="pds-rider-table-shell pds-rider-table-shell--scroll pds-no-freeze">
+                    <div class="pds-rider-table-shell pds-rider-table-shell--scroll">
                         <table class="table pds-rider-list-table pds-cash-payout-table">
                             <thead>
                                 <tr>

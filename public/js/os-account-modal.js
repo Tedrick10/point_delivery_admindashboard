@@ -113,11 +113,18 @@
             digits = digits.replace(/^0+/, '');
         }
         if (/^9\d{7,9}$/.test(digits)) {
-            $hidden.val('+95' + digits);
+            $hidden.val('0' + digits);
             return;
         }
         if (digits) {
-            $hidden.val(digits.indexOf('95') === 0 ? '+' + digits : digits);
+            if (digits.indexOf('95') === 0 && digits.length > 2) {
+                var afterCc = digits.slice(2);
+                if (/^9\d{7,9}$/.test(afterCc)) {
+                    $hidden.val('0' + afterCc);
+                    return;
+                }
+            }
+            $hidden.val(digits.indexOf('0') === 0 ? digits : (digits.indexOf('9') === 0 ? '0' + digits : digits));
         }
     }
 
@@ -252,85 +259,12 @@
             }
         } catch (e) {}
 
-        initOsRegLocation($form);
-        $form.find('#phone[data-user-reg-phone]').off('input.osReg change.osReg').on('input.osReg change.osReg', syncOsRegPhone);
-    }
-
-    function initOsRegLocation($form) {
-        var $box = $form.find('#reg_location_box');
-        var $state = $form.find('#reg_state');
-        var $township = $form.find('#reg_township');
-        if (!$box.length || !$state.length || !$township.length) {
-            return;
-        }
-
-        var states = [];
-        try {
-            var raw = $form.find('#reg_mm_location_data').text();
-            states = raw ? JSON.parse(raw) : [];
-        } catch (err) {
-            states = (window.PDS_MYANMAR_NRC_DATA && window.PDS_MYANMAR_NRC_DATA.states) || [];
-        }
-
-        var placeholderTownship = $box.data('placeholder-township') || '';
-        var placeholderLocked = $box.data('placeholder-township-locked') || placeholderTownship;
-
-        function findState(value) {
-            value = String(value || '');
-            return states.find(function (state) {
-                return state.name_mm === value || state.name_en === value;
-            }) || null;
-        }
-
-        function townLabel(town) {
-            var mm = town.name_mm || '';
-            var en = town.name_en || '';
-            if (mm && en) {
-                return mm + ' (' + en + ')';
-            }
-            return mm || en;
-        }
-
-        function rebuildTownships(selectedTown) {
-            var state = findState($state.val());
-            var towns = (state && state.townships) ? state.townships : [];
-            var current = selectedTown != null ? String(selectedTown) : String($township.val() || '');
-            var matched = false;
-
-            $township.empty().append(
-                $('<option>', {
-                    value: '',
-                    text: !$state.val() ? placeholderLocked : placeholderTownship
-                })
-            );
-
-            towns.forEach(function (town) {
-                var value = town.name_mm || town.name_en || '';
-                if (!value) {
-                    return;
-                }
-                var isSelected = !!(current && (current === value || current === town.name_en || current === town.name_mm));
-                if (isSelected) {
-                    matched = true;
-                }
-                $township.append($('<option>', {
-                    value: value,
-                    text: townLabel(town),
-                    selected: isSelected
-                }));
+        if (typeof window.initOsRegLocationFields === 'function') {
+            window.initOsRegLocationFields($form, {
+                dropdownParent: $form.closest('.modal-content, .pds-os-account-modal')
             });
-
-            if (current && !matched) {
-                $township.append($('<option>', { value: current, text: current, selected: true }));
-            }
-
-            $township.prop('disabled', !$state.val());
         }
-
-        $state.off('change.osReg').on('change.osReg', function () {
-            rebuildTownships('');
-        });
-        rebuildTownships($box.data('selected-township') || $township.val() || '');
+        $form.find('#phone[data-user-reg-phone]').off('input.osReg change.osReg').on('input.osReg change.osReg', syncOsRegPhone);
     }
 
     $(document).on('click', '#os_account_save_btn', function (e) {

@@ -490,12 +490,21 @@ class DeliverymanController extends Controller
         $deliveryman = User::where('user_type', 'delivery_man')->findOrFail($id);
 
         $request->validate([
-            'contact_number' => 'required|max:20|unique:users,contact_number,'.$deliveryman->id,
+            'contact_number' => [
+                'required',
+                'max:20',
+                \Illuminate\Validation\Rule::unique('users', 'contact_number')
+                    ->ignore($deliveryman->id)
+                    ->whereNull('deleted_at')
+                    ->where('user_type', 'delivery_man'),
+            ],
         ], [
             'contact_number.unique' => __('message.contact_number_already_taken'),
         ]);
 
-        $phone = preg_replace('/\s+/', '', (string) $request->input('contact_number', ''));
+        $phone = function_exists('normalizeContactNumber')
+            ? normalizeContactNumber((string) $request->input('contact_number', ''))
+            : preg_replace('/\s+/', '', (string) $request->input('contact_number', ''));
         $deliveryman->contact_number = $phone;
         $deliveryman->save();
 

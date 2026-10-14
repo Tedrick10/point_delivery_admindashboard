@@ -686,21 +686,39 @@ function sanitizeOrderRemarkFields(array $data): array
 
 function authSession($force = false)
 {
-    $session = new User;
+    $user = auth()->user();
+
+    // DataTables Ajax / live reload can render views without a bound session store.
+    // Never throw — fall back to the authenticated user so list endpoints stay JSON.
+    $sessionAvailable = false;
+    try {
+        $sessionAvailable = app()->bound('session') && Session::isStarted();
+    } catch (\Throwable $e) {
+        $sessionAvailable = false;
+    }
+
+    if (! $sessionAvailable) {
+        return $user ?: new User;
+    }
+
     if ($force) {
-        $user = auth()->user()->getRoleNames();
-        Session::put('auth_user', $user);
-        $session = Session::get('auth_user');
-        return $session;
+        if (! $user) {
+            return new User;
+        }
+        Session::put('auth_user', $user->getRoleNames());
+
+        return Session::get('auth_user');
     }
+
     if (Session::has('auth_user')) {
-        $session = Session::get('auth_user');
-    } else {
-        $user = auth()->user();
-        Session::put('auth_user', $user);
-        $session = Session::get('auth_user');
+        return Session::get('auth_user');
     }
-    return $session;
+
+    if ($user) {
+        Session::put('auth_user', $user);
+    }
+
+    return Session::get('auth_user') ?: ($user ?: new User);
 }
 
 /**
@@ -1066,6 +1084,8 @@ function mediaPublicUrl($media, string $conversionName = ''): ?string
         } elseif ($relative === '' && $fileName !== '') {
             $relative = trim($mediaKey.'/'.$fileName, '/');
         }
+        // Keep Spatie relative path as last resort so remote/prod URLs still resolve
+        // even when local exists() checks fail (e.g. storage not synced to this machine).
     } catch (\Throwable $e) {
         // Keep Spatie relative path when disk checks are unavailable.
     }
@@ -1076,8 +1096,42 @@ function mediaPublicUrl($media, string $conversionName = ''): ?string
 
     // Encode each path segment (brackets/parentheses in filenames break some browsers).
     $encoded = implode('/', array_map('rawurlencode', explode('/', $relative)));
+    $localUrl = '/storage/'.$encoded;
 
-    return '/storage/'.$encoded;
+    // Prefer local public disk when the file is present (prod / synced machines).
+    $existsLocally = false;
+    try {
+        $diskName = (string) ($media->disk ?: 'public');
+        $existsLocally = \Illuminate\Support\Facades\Storage::disk($diskName)->exists($relative);
+    } catch (\Throwable $e) {
+        $existsLocally = false;
+    }
+
+    if ($existsLocally) {
+        return $localUrl;
+    }
+
+    // Local artisan often has DB rows without storage files — load from APP_URL host
+    // (usually production) so thumbs/modals still render.
+    $appUrl = rtrim((string) config('app.url'), '/');
+    if ($appUrl === '') {
+        return $localUrl;
+    }
+
+    $appHost = strtolower((string) (parse_url($appUrl, PHP_URL_HOST) ?: ''));
+    $requestHost = '';
+    try {
+        $requestHost = strtolower((string) request()->getHost());
+    } catch (\Throwable $e) {
+        $requestHost = '';
+    }
+
+    // Same host as APP_URL → relative path is fine (prod). Different host → absolute APP_URL.
+    if ($appHost !== '' && $requestHost !== '' && $appHost === $requestHost) {
+        return $localUrl;
+    }
+
+    return $appUrl.$localUrl;
 }
 
 /**
@@ -1150,9 +1204,17 @@ function mediaAbsoluteDiskPath($media, string $conversionName = ''): ?string
 
 function mediaAbsoluteUrl($media, string $conversionName = ''): ?string
 {
-    $relative = mediaPublicUrl($media, $conversionName);
+    $url = mediaPublicUrl($media, $conversionName);
+    if ($url === null || $url === '') {
+        return null;
+    }
 
-    return $relative ? url($relative) : null;
+    // mediaPublicUrl may already return an absolute APP_URL fallback.
+    if (preg_match('#^https?://#i', $url)) {
+        return $url;
+    }
+
+    return url($url);
 }
 
 function getSingleMediaSettingImage($model = null, $collection_name = null, $check_collection_type = null)
@@ -5951,6 +6013,9 @@ function prepareUserOsProfileFromRequest($request): array
 {
     $osProfile = is_array($request->input('os_profile')) ? $request->input('os_profile') : [];
 
+    // Never accept login_password from the request — only set server-side when admin sets a password.
+    unset($osProfile['login_password']);
+
     if (!empty($osProfile['nrc_region']) || !empty($osProfile['nrc_number'])) {
         $osProfile['nrc'] = trim(
             ($osProfile['nrc_region'] ?? '').'/'.
@@ -5961,6 +6026,30 @@ function prepareUserOsProfileFromRequest($request): array
     }
 
     return $osProfile;
+}
+
+/**
+ * Remember the last admin-set OS login password for staff display (Username section).
+ */
+function rememberOsLoginPassword(array $osProfile, ?string $plainPassword): array
+{
+    $plainPassword = trim((string) $plainPassword);
+    if ($plainPassword === '') {
+        return $osProfile;
+    }
+
+    $osProfile['login_password'] = $plainPassword;
+
+    return $osProfile;
+}
+
+function osLoginPasswordFromProfile($userOrProfile): string
+{
+    $profile = is_array($userOrProfile)
+        ? $userOrProfile
+        : (is_array($userOrProfile->os_profile ?? null) ? $userOrProfile->os_profile : []);
+
+    return trim((string) ($profile['login_password'] ?? ''));
 }
 
 function buildUserAddressFromProfile(array $osProfile): string
@@ -6039,6 +6128,74 @@ function normalizeContactNumber(?string $phone): string
         return '';
     }
 
+    // Allow two (or more) numbers: 09x / 09y , comma, pipe, or semicolon.
+    $parts = preg_split('/\s*[\/,|;]\s*/u', $phone) ?: [];
+    $parts = array_values(array_filter(array_map('trim', $parts), static fn ($part) => $part !== ''));
+
+    if (count($parts) > 1) {
+        $normalized = [];
+        foreach ($parts as $part) {
+            $one = normalizeSingleContactNumber($part);
+            if ($one !== '' && ! in_array($one, $normalized, true)) {
+                $normalized[] = $one;
+            }
+        }
+
+        return implode(' / ', $normalized);
+    }
+
+    return normalizeSingleContactNumber($phone);
+}
+
+/**
+ * Local 09… plus legacy +95 / 95 variants for uniqueness / lookup.
+ *
+ * @return list<string>
+ */
+function contactNumberLookupVariants(?string $phone): array
+{
+    $normalized = normalizeContactNumber($phone);
+    if ($normalized === '') {
+        return [];
+    }
+
+    $variants = [$normalized, trim((string) $phone)];
+
+    foreach (preg_split('/\s*\/\s*/u', $normalized) ?: [] as $part) {
+        $part = trim((string) $part);
+        if ($part === '') {
+            continue;
+        }
+        $variants[] = $part;
+        $digits = preg_replace('/\D+/', '', $part) ?? '';
+        if ($digits === '') {
+            continue;
+        }
+        if (str_starts_with($digits, '0') && strlen($digits) > 1) {
+            $local = substr($digits, 1);
+            $variants[] = '+95'.$local;
+            $variants[] = '95'.$local;
+            $variants[] = $local;
+        } elseif (str_starts_with($digits, '9')) {
+            $variants[] = '0'.$digits;
+            $variants[] = '+95'.$digits;
+            $variants[] = '95'.$digits;
+        }
+    }
+
+    return array_values(array_unique(array_filter($variants, static fn ($v) => $v !== '')));
+}
+
+/**
+ * Local Myanmar display/storage format: 09xxxxxxxx (no +95 country code).
+ */
+function normalizeSingleContactNumber(?string $phone): string
+{
+    $phone = trim((string) $phone);
+    if ($phone === '') {
+        return '';
+    }
+
     if (preg_match('/^[A-Z]{2}\s+(.*)$/i', $phone, $matches)) {
         $phone = trim($matches[1]);
     }
@@ -6063,10 +6220,14 @@ function normalizeContactNumber(?string $phone): string
     $local = normalizeMyanmarLocalDigits($digits);
 
     if ($local === '') {
-        return '+'.$digits;
+        if (preg_match('/^0\d{8,11}$/', $digits)) {
+            return $digits;
+        }
+
+        return $digits;
     }
 
-    return '+95'.$local;
+    return '0'.$local;
 }
 
 function normalizeOrderContactNumbers(array $data): array
@@ -6213,6 +6374,107 @@ function resolveDispatchOsName(?\App\Models\Order $order): string
     $name = $pickup['name'] ?? optional($order->client)->name ?? '';
 
     return trim((string) $name) !== '' ? trim((string) $name) : '-';
+}
+
+/**
+ * Normalize Online Shop display names for matching
+ * (e.g. "Pyone Pyone" ↔ "Pyone Pyone/Viber", "A*B" ↔ "A/B").
+ */
+function normalizeOsDisplayNameKey(?string $name): string
+{
+    $name = mb_strtolower(trim((string) $name));
+    if ($name === '' || $name === '-') {
+        return '';
+    }
+
+    $name = str_replace(['*', '／', '\\'], '/', $name);
+    $name = preg_replace('/\s+/u', ' ', $name) ?? $name;
+    $name = preg_replace('/\s*\/\s*/u', '/', $name) ?? $name;
+    $name = preg_replace('/\/(viber|telegram|fb|facebook)$/u', '', $name) ?? $name;
+
+    return trim($name, " \t\n\r\0\x0B/");
+}
+
+/**
+ * Map a parcel to the Daily Check / settlement Online Shop user id.
+ * Photo / Viber orders often keep the uploader as order.client_id while
+ * pickup_point.name is the real shop — match that shop's client account.
+ */
+function resolveDispatchOsPartyUserId(?\App\Models\Order $order): int
+{
+    if (! $order) {
+        return 0;
+    }
+
+    $fallback = (int) ($order->client_id ?? 0);
+
+    if (shouldUseClientAsDispatchOs($order)) {
+        return $fallback;
+    }
+
+    $resolvedName = resolveDispatchOsName($order);
+    if ($resolvedName === '-' || trim($resolvedName) === '') {
+        return $fallback;
+    }
+
+    $matched = findClientIdByOsDisplayName($resolvedName);
+
+    return $matched > 0 ? $matched : $fallback;
+}
+
+/**
+ * Find an Online Shop (client) user id by display / pickup name.
+ */
+function findClientIdByOsDisplayName(string $name): int
+{
+    $key = normalizeOsDisplayNameKey($name);
+    if ($key === '') {
+        return 0;
+    }
+
+    static $cache = [];
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    static $clientIndex = null;
+    if ($clientIndex === null) {
+        $clientIndex = [];
+        $clients = \App\Models\User::query()
+            ->where('user_type', 'client')
+            ->whereNull('deleted_at')
+            ->get(['id', 'name']);
+
+        foreach ($clients as $client) {
+            $full = normalizeOsDisplayNameKey((string) $client->name);
+            if ($full === '') {
+                continue;
+            }
+            $clientIndex[$full] = (int) $client->id;
+        }
+    }
+
+    if (isset($clientIndex[$key])) {
+        return $cache[$key] = $clientIndex[$key];
+    }
+
+    // Loose contains match (shortest name wins to avoid over-broad hits).
+    $bestId = 0;
+    $bestLen = PHP_INT_MAX;
+    foreach ($clientIndex as $clientKey => $clientId) {
+        if ($clientKey === '') {
+            continue;
+        }
+        if (str_contains($clientKey, $key) || str_contains($key, $clientKey)) {
+            $len = mb_strlen($clientKey);
+            if ($len < $bestLen) {
+                $bestLen = $len;
+                $bestId = (int) $clientId;
+            }
+        }
+    }
+
+    return $cache[$key] = $bestId;
 }
 
 /**
@@ -6640,15 +6902,13 @@ function resolveDispatchItemSuggestedDeliAmount($item): float
 }
 
 /**
- * Size(2)…Size(10): adjust DeliAmount by ±500 per size step.
- * Size(1): returns null — amount is entered manually (no auto 2500).
+ * Size(1)…Size(10): adjust DeliAmount by ±500 per size step from the previous size.
+ * First tap of Size(1) with no prior size returns null — amount stays manual.
+ * Stepping down to Size(1) from Size(2+) DOES subtract the steps (was a bug).
  */
 function adjustDeliAmountForSizeChange($currentAmount, $previousSize, $newSize, int $step = 500): ?float
 {
     $next = normalizeDispatchItemSize($newSize, 1);
-    if ($next <= 1) {
-        return null;
-    }
 
     $prevRaw = ($previousSize === null || $previousSize === '')
         ? 0
@@ -6658,6 +6918,11 @@ function adjustDeliAmountForSizeChange($currentAmount, $previousSize, $newSize, 
 
     // No base amount and no prior size — rider must enter DeliAmount on Size(1) first.
     if ($current <= 0 && $prev <= 0) {
+        return null;
+    }
+
+    // First Size(1) confirm (or re-tap Size(1) while already on it): keep manual amount.
+    if ($next <= 1 && $prev <= 1) {
         return null;
     }
 

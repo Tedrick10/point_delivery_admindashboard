@@ -1,4 +1,47 @@
 <x-master-layout :assets="$assets ?? []">
+    <style>
+        @keyframes pdsRiderDoneRowPulse {
+            0%, 100% { background-color: rgba(234, 88, 12, 0.08); }
+            50% { background-color: rgba(249, 115, 22, 0.38); }
+        }
+        #dataTableBuilder tbody tr.pds-rider-done-checking-busy {
+            animation: pdsRiderDoneRowPulse 0.9s ease-in-out infinite !important;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        #dataTableBuilder tbody tr.pds-rider-done-checking-busy td {
+            background: transparent !important;
+            border-color: transparent !important;
+        }
+        #dataTableBuilder tbody tr.pds-rider-done-checking-mine {
+            animation: pdsRiderDoneRowPulse 1.2s ease-in-out infinite !important;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        #dataTableBuilder tbody tr.pds-rider-done-checking-mine td {
+            background: transparent !important;
+        }
+        .pds-rider-done-busy-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            margin-left: 0.4rem;
+            padding: 0.2rem 0.55rem;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            color: #fff !important;
+            background: #ea580c !important;
+            border: 0;
+            vertical-align: middle;
+            white-space: nowrap;
+            animation: pdsRiderDoneRowPulse 0.9s ease-in-out infinite;
+        }
+        a.pds-dispatch-item-count.is-rider-done-locked {
+            cursor: not-allowed;
+            opacity: 0.85;
+        }
+    </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-list-page{{ request('dispatch_status') === 'pre_order' ? ' pds-pre-pickup-page' : '' }}">
         <div class="row">
             <div class="col-lg-12">
@@ -160,7 +203,7 @@
                             <div class="mb-3">{!! $multi_checkbox_delete !!}</div>
                         @endif
 
-                        <div class="pds-table-shell pds-dispatch-table-shell pds-no-freeze">
+                        <div class="pds-table-shell pds-dispatch-table-shell">
                             {{ $dataTable->table(['class' => 'table w-100 pds-datatable pds-dispatch-datatable'], true) }}
                         </div>
                     </div>
@@ -189,7 +232,7 @@
 
     @section('bottom_script')
         {{ $dataTable->scripts() }}
-        <script src="{{ asset('js/dispatch-pickup-rider-list.js') }}?v=9"></script>
+        <script src="{{ asset('js/dispatch-pickup-rider-list.js') }}?v=11"></script>
         {{-- admin-live.js is loaded globally from _scripts --}}
         <script>
             (function bindDeliAuditLog() {
@@ -337,6 +380,153 @@
                         intervalMs: 5000
                     });
                 }
+
+                @if(($activePickupTab ?? '') === 'rider_pick_up_done')
+                (function bootRiderDonePresenceList() {
+                    var presenceUrl = @json(route('order.dispatch.rider-done.presence'));
+                    var viewerId = {{ (int) auth()->id() }};
+                    var busyTitle = @json(__('message.admin_rider_done_busy_title'));
+                    var busyMsgTpl = @json(__('message.admin_rider_done_busy', ['name' => '__NAME__']));
+                    var busyByTpl = @json(__('message.admin_rider_done_busy_by', ['name' => '__NAME__']));
+                    var busyOrders = {};
+
+                    function showBusyPopup(nameOrMessage, isFullMessage) {
+                        var msg = isFullMessage
+                            ? String(nameOrMessage || '')
+                            : busyMsgTpl.replace('__NAME__', nameOrMessage || 'Admin');
+                        if (!msg) return;
+                        if (window.Swal && typeof Swal.fire === 'function') {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: busyTitle,
+                                text: msg,
+                                confirmButtonColor: (window.pdsBrandColor || '#FE6F07'),
+                                allowOutsideClick: false,
+                            });
+                            return;
+                        }
+                        if (window.SnackBar) {
+                            SnackBar({ message: msg, status: 'error' });
+                            return;
+                        }
+                        alert(msg);
+                    }
+
+                    @if(session('rider_done_busy'))
+                    setTimeout(function () {
+                        showBusyPopup(@json(session('rider_done_busy')), true);
+                    }, 200);
+                    @endif
+
+                    function orderIdFromRow($tr) {
+                        var oid = String($tr.attr('data-order-id') || '');
+                        if (oid) return oid;
+                        var href = $tr.find('a.pds-dispatch-item-count.is-link, a.pds-dispatch-item-count').attr('href')
+                            || $tr.find('a.pds-dispatch-item-count').attr('data-href')
+                            || '';
+                        var m = href.match(/dispatch-order\/(\d+)\/items/);
+                        return m ? m[1] : '';
+                    }
+
+                    function applyPresence(locks) {
+                        busyOrders = {};
+                        (locks || []).forEach(function (lock) {
+                            busyOrders[String(lock.order_id)] = lock;
+                        });
+                        $('#dataTableBuilder tbody tr').each(function () {
+                            var $tr = $(this);
+                            var $count = $tr.find('a.pds-dispatch-item-count').first();
+                            var oid = orderIdFromRow($tr);
+                            $tr.removeClass('pds-rider-done-checking-busy pds-rider-done-checking-mine');
+                            $tr.find('.pds-rider-done-busy-chip').remove();
+                            $tr.removeAttr('data-rider-done-busy-by data-rider-done-busy-uid title');
+                            if ($count.length) {
+                                var originalHref = $count.attr('data-href') || $count.attr('href') || '';
+                                if (originalHref && originalHref !== '#') {
+                                    $count.attr('data-href', originalHref);
+                                }
+                                $count.removeClass('is-rider-done-locked');
+                                if ($count.attr('data-href')) {
+                                    $count.attr('href', $count.attr('data-href'));
+                                }
+                            }
+                            var lock = oid ? busyOrders[oid] : null;
+                            if (!lock) return;
+                            var mine = !!lock.is_mine || Number(lock.user_id) === Number(viewerId);
+                            $tr.addClass(mine ? 'pds-rider-done-checking-mine' : 'pds-rider-done-checking-busy');
+                            $tr.attr('data-order-id', oid);
+                            $tr.attr('data-rider-done-busy-by', lock.user_name || '');
+                            $tr.attr('data-rider-done-busy-uid', lock.user_id || '');
+                            $tr.attr('title', busyByTpl.replace('__NAME__', lock.user_name || 'Admin'));
+                            if (!mine) {
+                                if ($count.length) {
+                                    $count.addClass('is-rider-done-locked').attr('href', '#');
+                                }
+                                if ($count.length && !$count.next('.pds-rider-done-busy-chip').length) {
+                                    $count.after(
+                                        '<span class="pds-rider-done-busy-chip" role="button" tabindex="0"><i class="fas fa-user-lock" aria-hidden="true"></i>'
+                                        + $('<div>').text(lock.user_name || 'Admin').html()
+                                        + '</span>'
+                                    );
+                                }
+                            }
+                        });
+                    }
+
+                    function pollPresence() {
+                        $.ajax({
+                            url: presenceUrl,
+                            method: 'GET',
+                            dataType: 'json',
+                            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                            success: function (res) {
+                                applyPresence(res && res.locks ? res.locks : []);
+                            },
+                        });
+                    }
+
+                    function blockIfBusy(e, $tr) {
+                        var oid = orderIdFromRow($tr);
+                        var lock = oid ? busyOrders[oid] : null;
+                        if (!lock && $tr.hasClass('pds-rider-done-checking-busy')) {
+                            lock = {
+                                user_name: $tr.attr('data-rider-done-busy-by') || 'Admin',
+                                user_id: $tr.attr('data-rider-done-busy-uid') || 0,
+                                is_mine: false,
+                            };
+                        }
+                        if (!lock) return false;
+                        var mine = !!lock.is_mine || Number(lock.user_id) === Number(viewerId);
+                        if (mine) return false;
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        showBusyPopup(lock.user_name || 'Admin');
+                        return true;
+                    }
+
+                    pollPresence();
+                    setInterval(pollPresence, 4000);
+                    $(document).on('draw.dt', '#dataTableBuilder', function () {
+                        pollPresence();
+                    });
+
+                    // Capture early so navigation / loading never starts.
+                    document.addEventListener('click', function (e) {
+                        var target = e.target;
+                        if (!target || !target.closest) return;
+                        var link = target.closest('a.pds-dispatch-item-count');
+                        var chip = target.closest('.pds-rider-done-busy-chip');
+                        if (!link && !chip) return;
+                        var $tr = $(link || chip).closest('tr');
+                        if (!$tr.length) return;
+                        blockIfBusy(e, $tr);
+                    }, true);
+
+                    $(document).on('click', '.pds-rider-done-busy-chip', function (e) {
+                        blockIfBusy(e, $(this).closest('tr'));
+                    });
+                })();
+                @endif
 
                 $(document).on('click', '.js-restore-pickup-cancelled', function (e) {
                     e.preventDefault();

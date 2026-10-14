@@ -33,6 +33,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Twilio\Rest\Client;
 
 class UserController extends Controller
@@ -192,9 +193,17 @@ class UserController extends Controller
             'email' => $isDeliveryMan
                 ? 'required|email|unique:users,email,'.$user_id
                 : 'sometimes|nullable|email|unique:users,email,'.$user_id,
-            'contact_number' => ($isClient || $isDeliveryMan)
-                ? 'required|max:20|unique:users,contact_number,'.$user_id
-                : 'sometimes|required|max:20|unique:users,contact_number,'.$user_id,
+            'contact_number' => [
+                ($isClient || $isDeliveryMan) ? 'required' : 'sometimes',
+                'max:20',
+                Rule::unique('users', 'contact_number')
+                    ->ignore($user_id)
+                    ->whereNull('deleted_at')
+                    ->where(
+                        'user_type',
+                        $isDeliveryMan ? 'delivery_man' : ($isClient ? 'client' : (string) ($decryptedData['user_type'] ?? 'client'))
+                    ),
+            ],
             'password' => ($isClient || $isDeliveryMan) ? 'required|string|min:6' : 'sometimes|required|string|min:6',
             'branch_id' => $isDeliveryMan ? 'required|exists:branches,id' : 'sometimes|nullable|exists:branches,id',
             'date_of_birth' => 'sometimes|nullable|date',
@@ -1391,7 +1400,7 @@ class UserController extends Controller
         return $number;
     }
 
-    private function findUserByPhone(?string $contactNumber): ?User
+    private function findUserByPhone(?string $contactNumber, ?string $userType = null): ?User
     {
         if (empty($contactNumber)) {
             return null;
@@ -1401,10 +1410,13 @@ class UserController extends Controller
         $digits = preg_replace('/\D/', '', $phoneKey);
 
         return User::query()
-            ->where('contact_number', $phoneKey)
-            ->orWhere('contact_number', $digits)
-            ->orWhere('username', $phoneKey)
-            ->orWhere('username', $digits)
+            ->when($userType, fn ($q) => $q->where('user_type', $userType))
+            ->where(function ($q) use ($phoneKey, $digits) {
+                $q->where('contact_number', $phoneKey)
+                    ->orWhere('contact_number', $digits)
+                    ->orWhere('username', $phoneKey)
+                    ->orWhere('username', $digits);
+            })
             ->first();
     }
 
@@ -1485,7 +1497,16 @@ class UserController extends Controller
             ]);
         }
 
-        if (User::where('contact_number', $contactNumber)->exists()) {
+        $normalizedRegisterPhone = $this->normalizeRegisterPhone($contactNumber);
+        $phoneTaken = User::query()
+            ->where('user_type', $userType)
+            ->whereNull('deleted_at')
+            ->where(function ($q) use ($contactNumber, $normalizedRegisterPhone) {
+                $q->where('contact_number', $contactNumber)
+                    ->orWhere('contact_number', $normalizedRegisterPhone);
+            })
+            ->exists();
+        if ($phoneTaken) {
             return json_custom_response(['message' => __('message.contact_number_already_taken'), 'success' => false], 409);
         }
 
@@ -1546,13 +1567,9 @@ class UserController extends Controller
             return json_custom_response(['message' => __('message.please_enter_password'), 'success' => false], 422);
         }
 
-        $user = $this->findUserByPhone($contactNumber);
+        $user = $this->findUserByPhone($contactNumber, $userType);
         if (! $user) {
             return json_custom_response(['message' => __('message.not_found_entry', ['name' => __('message.user')]), 'success' => false], 404);
-        }
-
-        if ($userType && $user->user_type !== $userType) {
-            return json_custom_response(['message' => __('auth.failed'), 'success' => false], 402);
         }
 
         if (! \Hash::check($decryptedPassword, $user->password)) {

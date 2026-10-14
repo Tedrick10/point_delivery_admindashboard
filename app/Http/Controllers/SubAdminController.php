@@ -89,7 +89,14 @@ class SubAdminController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'username' => 'required|string|max:100|unique:users,username',
-            'contact_number' => 'required|string|max:30|unique:users,contact_number',
+            'contact_number' => [
+                'required',
+                'string',
+                'max:30',
+                \Illuminate\Validation\Rule::unique('users', 'contact_number')
+                    ->whereNull('deleted_at')
+                    ->where('user_type', $request->input('user_type')),
+            ],
             'password' => 'required|string|min:6',
             'user_type' => 'required|string|in:'.implode(',', $allowedRoles),
             'profile_image' => 'nullable|image|mimes:jpg,jpeg,png,gif',
@@ -102,7 +109,11 @@ class SubAdminController extends Controller
             ]);
         }
 
-        if (User::withTrashed()->where('contact_number', $contactNumber)->exists()) {
+        if (User::withTrashed()
+            ->where('contact_number', $contactNumber)
+            ->where('user_type', $data['user_type'])
+            ->exists()
+        ) {
             return redirect()->back()->withInput()->withErrors([
                 'contact_number' => __('message.contact_number_already_taken'),
             ]);

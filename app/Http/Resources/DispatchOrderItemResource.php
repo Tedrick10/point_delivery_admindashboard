@@ -13,13 +13,15 @@ class DispatchOrderItemResource extends JsonResource
     {
         $photoUrl = $this->resolvePhotoUrl();
 
+        [$customerName, $customerPhone] = $this->resolveCustomerNamePhone();
+
         return [
             'id' => (int) $this->id,
             'order_id' => (int) $this->order_id,
             'item_name' => $this->item_name,
             'remark' => $this->remark,
-            'customer_name' => $this->customer_name,
-            'customer_phone' => $this->customer_phone,
+            'customer_name' => $customerName,
+            'customer_phone' => $customerPhone,
             'customer_address' => $this->customer_address,
             'delivery_city' => $this->delivery_city,
             'delivery_city_label' => DispatchOrderItem::deliveryCityLabel($this->delivery_city),
@@ -310,5 +312,48 @@ class DispatchOrderItemResource extends JsonResource
         }
 
         return (string) $value;
+    }
+
+    /**
+     * When customer_phone is empty but customer_name is a phone number
+     * (common bad paste), expose it as Cust Phone so riders dial the customer, not OS.
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    protected function resolveCustomerNamePhone(): array
+    {
+        $name = trim((string) ($this->customer_name ?? ''));
+        $phone = trim((string) ($this->customer_phone ?? ''));
+
+        if ($phone === '' && $this->looksLikeContactPhone($name)) {
+            $fromName = function_exists('normalizeContactNumber')
+                ? (normalizeContactNumber($name) ?: $name)
+                : $name;
+
+            return [null, $fromName];
+        }
+
+        $formattedPhone = $phone !== '' && function_exists('normalizeContactNumber')
+            ? (normalizeContactNumber($phone) ?: $phone)
+            : $phone;
+
+        return [
+            $name !== '' ? $name : null,
+            $formattedPhone !== '' ? $formattedPhone : null,
+        ];
+    }
+
+    protected function looksLikeContactPhone(string $value): bool
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return false;
+        }
+        $digits = preg_replace('/\D+/', '', $value) ?? '';
+        if (strlen($digits) < 8 || strlen($digits) > 15) {
+            return false;
+        }
+
+        return (bool) preg_match('/^[\d\s+\-().]+$/', $value);
     }
 }

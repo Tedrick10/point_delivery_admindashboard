@@ -11,10 +11,109 @@
     @endphp
 
     <style>
+        /* Natural table height — page scrolls. No nested max-height (that crushed the table). */
+        .pds-dispatch-items-table-shell {
+            overflow-x: auto !important;
+            overflow-y: visible !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            border-bottom-left-radius: 0 !important;
+            border-bottom-right-radius: 0 !important;
+        }
+        .pds-dispatch-items-screen {
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+        }
+        .pds-dispatch-items-body {
+            height: auto !important;
+            min-height: 0 !important;
+            padding-bottom: 0 !important;
+            padding-top: 0.5rem !important;
+        }
+        /* Kill empty DataTables chrome (sDom leftovers) that left a white slab under rows */
+        .pds-dispatch-items-table-shell .dataTables_wrapper > .row,
+        .pds-dispatch-items-table-shell .dataTables_wrapper > .d-flex,
+        .pds-dispatch-items-table-shell .dataTables_wrapper > .clear,
+        .pds-dispatch-items-table-shell .dataTables_wrapper .dt-buttons,
+        .pds-dispatch-items-table-shell .dataTables_filter,
+        .pds-dispatch-items-table-shell .dataTables_info,
+        .pds-dispatch-items-table-shell .dataTables_length,
+        .pds-dispatch-items-table-shell .dataTables_paginate {
+            display: none !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            border: 0 !important;
+        }
+        .pds-dispatch-items-table-shell .table-responsive.my-3,
+        .pds-dispatch-items-table-shell .pds-dt-scroll-host {
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            height: auto !important;
+            max-height: none !important;
+        }
+        .pds-dispatch-items-table-shell .dataTables_wrapper,
+        .pds-dispatch-items-table-shell .dataTables_scroll,
+        .pds-dispatch-items-table-shell .dataTables_scrollHead,
+        .pds-dispatch-items-table-shell .dataTables_scrollBody,
+        .pds-dispatch-items-table-shell .dataTables_scrollFoot {
+            height: auto !important;
+            max-height: none !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+        }
+        .pds-dispatch-items-table-shell .dataTables_scrollFoot {
+            display: none !important;
+        }
+        .pds-dispatch-items-table-shell .pds-dispatch-items-datatable {
+            width: max-content !important;
+            min-width: 100% !important;
+            margin: 0 !important;
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+        }
+        .pds-dispatch-items-datatable thead th {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 6 !important;
+        }
+        .pds-dispatch-items-datatable tbody td .pds-dispatch-photo-thumb-wrap {
+            margin-top: 6px;
+        }
+        .pds-dispatch-items-datatable .pds-dispatch-photo-thumb-wrap,
+        .pds-dispatch-items-datatable .pds-dispatch-photo-thumb-btn {
+            width: 52px !important;
+            height: 52px !important;
+            min-width: 52px !important;
+            min-height: 52px !important;
+            flex-shrink: 0 !important;
+        }
+        .pds-dispatch-items-datatable td:has(.pds-dispatch-photo-thumb-wrap) {
+            overflow: visible !important;
+            padding-top: 0.85rem !important;
+            padding-bottom: 0.7rem !important;
+        }
         .pds-dispatch-items-datatable th:first-child,
         .pds-dispatch-items-datatable td:first-child {
             text-align: center;
-            width: 42px;
+            width: 42px !important;
+            min-width: 42px !important;
+            max-width: 48px !important;
+            padding-left: 0.45rem !important;
+            padding-right: 0.45rem !important;
+        }
+        .pds-dispatch-items-datatable th:nth-child(2),
+        .pds-dispatch-items-datatable td:nth-child(2) {
+            width: 40px !important;
+            min-width: 40px !important;
+            max-width: 48px !important;
+            text-align: center;
+            padding-left: 0.35rem !important;
+            padding-right: 0.35rem !important;
         }
         .pds-dispatch-items-datatable thead th:first-child {
             pointer-events: auto;
@@ -71,16 +170,6 @@
         .pds-dispatch-items-datatable thead th.sorting_desc:after {
             display: none !important;
             content: none !important;
-        }
-        .pds-dispatch-items-table-shell .dataTables_wrapper,
-        .pds-dispatch-items-table-shell .dataTables_scroll {
-            overflow: visible !important;
-        }
-        .pds-dispatch-items-table-shell {
-            overflow-x: auto;
-            overflow-y: visible;
-            border-bottom-left-radius: 0 !important;
-            border-bottom-right-radius: 0 !important;
         }
         .pds-items-dock {
             display: flex;
@@ -160,11 +249,32 @@
         .pds-items-metric.is-negative strong {
             color: #dc2626;
         }
-        .pds-dispatch-items-datatable tfoot {
-            display: none !important;
-        }
+        /* Kill DT footer row — was the empty white/peach bar under the last item */
+        .pds-dispatch-items-table-shell tfoot,
+        .pds-dispatch-items-datatable tfoot,
+        .pds-dispatch-items-table-shell .dataTables_scrollFoot,
         .pds-dispatch-items-dt-footer {
             display: none !important;
+            height: 0 !important;
+            max-height: 0 !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+            border: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+        .pds-dispatch-items-table-shell tfoot th,
+        .pds-dispatch-items-table-shell tfoot td,
+        .pds-dispatch-items-datatable tfoot th,
+        .pds-dispatch-items-datatable tfoot td {
+            display: none !important;
+            height: 0 !important;
+            padding: 0 !important;
+            border: 0 !important;
+            line-height: 0 !important;
+            font-size: 0 !important;
         }
     </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-items-page" data-active-to-branch="{{ (int) ($activeToBranchId ?? 0) }}">
@@ -233,12 +343,16 @@
                 $destinationBranches = $destinationBranches ?? collect();
                 $activeToBranchId = (int) ($activeToBranchId ?? 0);
                 $tabCounts = $tabCounts ?? collect();
+                $itemsQueryExtras = array_filter([
+                    'from' => request('from') === 'dispatch' ? 'dispatch' : null,
+                    'dispatch_status' => request('dispatch_status') ?: null,
+                ]);
             @endphp
             @if($destinationBranches->isNotEmpty())
                 <div class="pds-dispatch-items-tabs" role="tablist" aria-label="{{ __('message.to') }}">
                     @foreach($destinationBranches as $branchTab)
                         @php $count = (int) ($tabCounts[$branchTab->id] ?? 0); @endphp
-                        <a href="{{ route('order.dispatch.items', ['id' => $order->id, 'to_branch_id' => $branchTab->id] + (request('from') === 'dispatch' ? ['from' => 'dispatch'] : [])) }}"
+                        <a href="{{ route('order.dispatch.items', ['id' => $order->id, 'to_branch_id' => $branchTab->id] + $itemsQueryExtras) }}"
                            class="pds-dispatch-items-tab{{ $activeToBranchId === (int) $branchTab->id ? ' is-active' : '' }}"
                            role="tab">
                             <span>{{ $branchTab->name }}</span>
@@ -296,7 +410,7 @@
     @section('bottom_script')
         {{ $dataTable->scripts() }}
         <script src="{{ asset('js/pds-photo-zoom.js') }}?v=3"></script>
-        <script src="{{ asset('js/dispatch-item-form.js') }}?v=35"></script>
+        <script src="{{ asset('js/dispatch-item-form.js') }}?v=37"></script>
         {{-- admin-live.js is loaded globally from _scripts --}}
         <script>
             (function () {
@@ -317,6 +431,32 @@
                     var amount = Math.round(Number(value) || 0);
                     return amount.toLocaleString('en-US');
                 }
+
+                window.pdsFitDispatchItemsScroll = function (dt) {
+                    // Intentionally no max-height — nested viewport made the table tiny
+                    // and left a white slab under the totals dock.
+                    var api = (dt && typeof dt.rows === 'function')
+                        ? dt
+                        : (dt && dt.api ? dt.api() : (window.LaravelDataTables && window.LaravelDataTables['dataTableBuilder']));
+                    var $shell = $('.pds-dispatch-items-table-shell').first();
+                    if (api && api.table) {
+                        $shell = $(api.table().container()).closest('.pds-dispatch-items-table-shell');
+                    }
+                    if (!$shell.length) return;
+                    $shell.removeClass('pds-plain-freeze').addClass('pds-plain-freeze-skip');
+                    $shell[0].style.setProperty('max-height', 'none', 'important');
+                    $shell[0].style.setProperty('height', 'auto', 'important');
+                    $shell[0].style.setProperty('min-height', '0', 'important');
+                    $shell[0].style.setProperty('overflow-y', 'visible', 'important');
+                    $shell[0].style.setProperty('overflow-x', 'auto', 'important');
+                    $shell.find('.dataTables_scroll, .dataTables_scrollBody, .dataTables_scrollHead').each(function () {
+                        this.style.setProperty('height', 'auto', 'important');
+                        this.style.setProperty('max-height', 'none', 'important');
+                        this.style.setProperty('min-height', '0', 'important');
+                        this.style.setProperty('overflow', 'visible', 'important');
+                    });
+                    $shell.find('.dataTables_scrollFoot, tfoot').remove();
+                };
 
                 window.pdsFillDispatchItemsTotals = function (dt) {
                     var api = (dt && typeof dt.rows === 'function')
@@ -363,7 +503,9 @@
                     var count = api.rows({ filter: 'applied' }).count();
                     $('#dispatchItemsCount').text(count + ' ' + @json(__('message.item_count')));
 
-                    $(api.table().node()).children('tfoot').remove();
+                    var $table = $(api.table().node());
+                    $table.find('tfoot').remove();
+                    $table.closest('.dataTables_wrapper').find('.dataTables_scrollFoot, tfoot').remove();
                 };
 
                 function ensureDispatchItemsSelectAll() {
@@ -411,15 +553,107 @@
                     $('.pds-dispatch-items-screen').toggleClass('has-rows', count > 0);
                     syncDispatchItemsSelectAll();
                     window.pdsFillDispatchItemsTotals(api);
+                    window.pdsFitDispatchItemsScroll(api);
                 });
+
+                var fitTimer = null;
+                function scheduleFit() {
+                    if (fitTimer) clearTimeout(fitTimer);
+                    fitTimer = setTimeout(function () {
+                        var api = window.LaravelDataTables && window.LaravelDataTables['dataTableBuilder'];
+                        if (api) window.pdsFitDispatchItemsScroll(api);
+                    }, 80);
+                }
+                $(window).on('resize.pdsDispatchItemsScroll', scheduleFit);
 
                 setTimeout(function () {
                     $('#dataTableBuilder').trigger('draw.dt');
+                    scheduleFit();
                 }, 300);
 
                 $(document).on('click', '.pds-dispatch-action-edit.loadRemoteModel, .pds-dispatch-photo-edit-btn.loadRemoteModel', function (e) {
                     e.stopPropagation();
                 });
+
+                @if(! empty($riderDonePresence))
+                (function bootRiderDonePresence() {
+                    var cfg = @json($riderDonePresence);
+                    if (!cfg || !cfg.token || !cfg.heartbeat_url || !cfg.release_url) return;
+                    window.__pdsRiderDoneItemsLock = true;
+                    var released = false;
+                    var timer = null;
+
+                    function csrf() {
+                        return $('meta[name="csrf-token"]').attr('content') || '';
+                    }
+
+                    function release() {
+                        if (released) return;
+                        released = true;
+                        window.__pdsRiderDoneItemsLock = false;
+                        if (timer) clearInterval(timer);
+                        var body = new FormData();
+                        body.append('_token', csrf());
+                        body.append('token', cfg.token);
+                        body.append('order_id', String(cfg.order_id || {{ (int) $order->id }}));
+                        if (navigator.sendBeacon) {
+                            navigator.sendBeacon(cfg.release_url, body);
+                            return;
+                        }
+                        $.ajax({
+                            url: cfg.release_url,
+                            method: 'POST',
+                            data: {
+                                _token: csrf(),
+                                token: cfg.token,
+                                order_id: cfg.order_id || {{ (int) $order->id }},
+                            },
+                            async: false,
+                        });
+                    }
+
+                    function heartbeat() {
+                        if (released) return;
+                        $.ajax({
+                            url: cfg.heartbeat_url,
+                            method: 'POST',
+                            data: {
+                                _token: csrf(),
+                                token: cfg.token,
+                                order_id: cfg.order_id || {{ (int) $order->id }},
+                            },
+                            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                            error: function (xhr) {
+                                if (xhr && xhr.status === 423) {
+                                    var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                                        ? xhr.responseJSON.message
+                                        : @json(__('message.admin_rider_done_busy', ['name' => __('message.admin')]));
+                                    if (window.Swal) {
+                                        Swal.fire({
+                                            icon: 'warning',
+                                            title: @json(__('message.admin_rider_done_busy_title')),
+                                            text: msg,
+                                            confirmButtonColor: (window.pdsBrandColor || '#FE6F07'),
+                                        }).then(function () {
+                                            window.location.href = @json(route('order.index', ['orders_type' => 'list', 'dispatch_status' => 'rider_pick_up_done']));
+                                        });
+                                    } else {
+                                        alert(msg);
+                                        window.location.href = @json(route('order.index', ['orders_type' => 'list', 'dispatch_status' => 'rider_pick_up_done']));
+                                    }
+                                }
+                            },
+                        });
+                    }
+
+                    timer = setInterval(heartbeat, 25000);
+                    $(window).on('beforeunload.riderDonePresence pagehide.riderDonePresence', release);
+                    $(document).on('click.riderDonePresence', '.pds-dispatch-items-btn-close', function () {
+                        release();
+                    });
+                })();
+                @endif
+
 
                 if (typeof window.initDispatchItemForm === 'function') {
                     window.initDispatchItemForm({

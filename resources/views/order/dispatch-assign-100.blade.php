@@ -448,7 +448,7 @@
 
 
     @section('bottom_script')
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=5"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=8"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(document).ready(function () {

@@ -210,9 +210,24 @@
         if (tableOwnsThisPage) {
             if (window.__adminLiveReloading) return;
             window.__adminLiveReloading = true;
-            table.ajax.reload(function () {
+            var clearReloadFlag = function () {
                 window.__adminLiveReloading = false;
-            }, false);
+            };
+            try {
+                // Prevent DataTables alert() spam when a live reload hits a bad response.
+                if (window.jQuery && jQuery.fn.dataTable) {
+                    jQuery.fn.dataTable.ext.errMode = function (settings, helpPage, message) {
+                        if (window.console && console.warn) {
+                            console.warn('DataTables live reload:', message);
+                        }
+                        clearReloadFlag();
+                    };
+                }
+                table.one('xhr.dt', clearReloadFlag);
+                table.ajax.reload(clearReloadFlag, false);
+            } catch (e) {
+                clearReloadFlag();
+            }
             return;
         }
         if (hasLiveRoot && softReplaceLiveRoot()) return;

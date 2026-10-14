@@ -267,7 +267,7 @@
             modalParent: '#remoteModelData',
             savedTownship: @json($township)
         };
-        var formSrc = "{{ asset('js/dispatch-item-form.js') }}?v=36";
+        var formSrc = "{{ asset('js/dispatch-item-form.js') }}?v=37";
         var zoomSrc = "{{ asset('js/pds-photo-zoom.js') }}?v=3";
 
         function mountPhotoZoom() {

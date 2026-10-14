@@ -130,7 +130,10 @@
                 <h2>{{ __('message.sa_branches_title') }}</h2>
                 <p>{{ $monthLabel }} · {{ $fmt(count($byBranch)) }} {{ __('message.sa_metric_branches') }}</p>
             </div>
-            <a href="{{ route('super-admin.branch-admins.index') }}" class="sa-btn sa-btn-primary">{{ __('message.sa_manage_admins') }}</a>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                <a href="{{ route('super-admin.branches.create') }}" class="sa-btn sa-btn-primary"><i class="fas fa-plus"></i> {{ __('message.sa_new_branch') }}</a>
+                <a href="{{ route('super-admin.branch-admins.index') }}" class="sa-btn sa-btn-ghost">{{ __('message.sa_manage_admins') }}</a>
+            </div>
         </header>
         <div class="sa-home-table-wrap">
             <table class="sa-home-table">
