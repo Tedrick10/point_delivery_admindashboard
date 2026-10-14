@@ -35,6 +35,29 @@
 
                     <div class="collapse navbar-collapse pds-topbar-group pds-topbar-group--tools" id="navbarSupportedContent">
                         <ul class="navbar-nav ml-auto navbar-list align-items-center pds-topbar-tools">
+                            @if(auth()->user()->can('order-list'))
+                                @php
+                                    $assignedItemCount = \App\Models\DispatchOrderItem::query()
+                                        ->whereHas('messages', function ($q) {
+                                            $q->where('sender_type', 'client')->whereNull('read_at');
+                                        })
+                                        ->count();
+                                @endphp
+                                <li class="nav-item nav-icon pds-message-nav-item">
+                                    <a href="{{ route('order.dispatch.assigned-items') }}"
+                                       class="pds-topbar-tool pds-topbar-message{{ request()->routeIs('order.dispatch.assigned-items') ? ' is-active' : '' }}"
+                                       id="pdsMessageNavLink"
+                                       title="{{ __('message.assigned_item_list') }}"
+                                       aria-label="{{ __('message.assigned_item_list') }}">
+                                        <span class="pds-topbar-tool-icon pds-topbar-message__icon" aria-hidden="true">
+                                            <i class="fab fa-facebook-messenger"></i>
+                                        </span>
+                                        <span class="pds-topbar-badge{{ $assignedItemCount > 0 ? '' : ' d-none' }}"
+                                              id="assignedItemListCount"
+                                              data-live-badge="assignedItemListCount">{{ $assignedItemCount > 0 ? ($assignedItemCount >= 100 ? '99+' : $assignedItemCount) : '' }}</span>
+                                    </a>
+                                </li>
+                            @endif
                             <li class="nav-item nav-icon dropdown pds-notify-dropdown">
                                 <a href="#" class="pds-topbar-tool pds-topbar-notify notification_list" id="pdsNotificationDropdownToggle" aria-haspopup="true" aria-expanded="false" title="{{ __('message.notification') }}">
                                     <span class="pds-topbar-tool-icon">

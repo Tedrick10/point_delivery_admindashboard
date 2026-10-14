@@ -61,9 +61,17 @@ class ExpenseRiderFuelSyncService
 
     public function fuelTotalForRemitDay(string $remitDay, ?int $branchId = null): float
     {
+        // Match Rider ငွေအပ် sheet: only home-branch riders earn ဆီဖိုး on that sheet.
+        // Intercity remits for other-city riders must not inflate Expenses.
         return round((float) RiderRemit::query()
             ->whereDate('remit_date', Carbon::parse($remitDay)->toDateString())
             ->when($branchId && $branchId > 0, fn ($q) => $q->where('branch_id', $branchId))
+            ->whereExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('users')
+                    ->whereColumn('users.id', 'rider_remits.delivery_man_id')
+                    ->whereColumn('users.branch_id', 'rider_remits.branch_id');
+            })
             ->sum('fuel_amount'), 2);
     }
 

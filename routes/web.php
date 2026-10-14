@@ -381,6 +381,8 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('dispatch-order/deli-audit', [OrderController::class, 'dispatchDeliAudit'])->name('order.dispatch.deli-audit');
     Route::get('dispatch-order/{id}/items/live-version', [OrderController::class, 'liveItemsVersion'])->name('order.dispatch.items.live-version');
     Route::get('dispatch-order/{id}/items/deli-audit', [OrderController::class, 'dispatchItemsDeliAudit'])->name('order.dispatch.items.deli-audit');
+    Route::get('dispatch-order/{id}/items/export', [OrderController::class, 'dispatchItemsExport'])->name('order.dispatch.items.export');
+    Route::get('dispatch-order/{id}/items/print', [OrderController::class, 'dispatchItemsPrint'])->name('order.dispatch.items.print');
     Route::get('dispatch-order/{id}/items', [OrderController::class, 'dispatchItems'])->name('order.dispatch.items');
     Route::get('dispatch-order/{id}/item/create', [OrderController::class, 'dispatchItemCreate'])->name('order.dispatch.item.create');
     Route::post('dispatch-order/{id}/item', [OrderController::class, 'dispatchItemStore'])->name('order.dispatch.item.store');

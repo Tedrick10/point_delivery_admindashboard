@@ -91,7 +91,8 @@ class RiderRemitService
                 $riderId,
                 (float) $row->fuel_amount,
                 $fuelWayCount,
-                $this->isOtherBranchRemit($branchId)
+                $this->isOtherBranchRemit($branchId),
+                $branchId > 0 ? $branchId : null
             );
             if (abs((float) $row->fuel_amount - $fuel) < 0.001) {
                 continue;
@@ -357,9 +358,31 @@ class RiderRemitService
         ];
     }
 
-    protected function resolveFuelAmount(int $riderId, ?float $savedFuel, int $itemCount, bool $isOtherBranch = false): float
+    /**
+     * ဆီဖိုး only for riders whose home branch matches the remit sheet.
+     * Intercity / other-city riders may appear in due totals on both sheets, but
+     * fuel belongs on their home-city sheet only (Half Deli elsewhere).
+     */
+    protected function isForeignRiderOnRemit(int $riderId, ?int $remitBranchId): bool
     {
-        if ($isOtherBranch) {
+        $remitBranchId = (int) ($remitBranchId ?? 0);
+        if ($riderId < 1 || $remitBranchId < 1) {
+            return false;
+        }
+
+        $riderBranch = (int) User::query()->whereKey($riderId)->value('branch_id');
+
+        return $riderBranch > 0 && $riderBranch !== $remitBranchId;
+    }
+
+    protected function resolveFuelAmount(
+        int $riderId,
+        ?float $savedFuel,
+        int $itemCount,
+        bool $isOtherBranch = false,
+        ?int $remitBranchId = null
+    ): float {
+        if ($isOtherBranch || $this->isForeignRiderOnRemit($riderId, $remitBranchId)) {
             return 0.0;
         }
 
@@ -419,14 +442,22 @@ class RiderRemitService
             ->values()
             ->all();
 
+        $branchStore = $this->branchStore($branchId);
         $updated = RiderRemit::query()
             ->whereDate('remit_date', $day)
-            ->where('branch_id', $this->branchStore($branchId))
+            ->where('branch_id', $branchStore)
             ->whereNull('submitted_at')
             ->when($customRiderIds !== [], fn ($q) => $q->whereNotIn('delivery_man_id', $customRiderIds))
             ->where(function ($q) use ($oldDefault) {
                 $q->where('fuel_amount', '<=', 0)
                     ->orWhereRaw('ABS(fuel_amount - ?) < 0.001', [$oldDefault]);
+            })
+            // Never auto-fill ဆီဖိုး for riders whose home branch is not this sheet.
+            ->whereExists(function ($q) use ($branchStore) {
+                $q->select(DB::raw(1))
+                    ->from('users')
+                    ->whereColumn('users.id', 'rider_remits.delivery_man_id')
+                    ->where('users.branch_id', $branchStore);
             })
             ->update([
                 'fuel_amount' => $newDefault,
@@ -506,7 +537,13 @@ class RiderRemitService
             $savedFee = $open?->fee_amount;
             $savedDue = (float) ($open?->due_amount ?? 0);
 
-            $fuel = $this->resolveFuelAmount($riderId, $savedFuel, $fuelWayCount, $isOtherBranch);
+            $fuel = $this->resolveFuelAmount(
+                $riderId,
+                $savedFuel,
+                $fuelWayCount,
+                $isOtherBranch,
+                $branchStore > 0 ? $branchStore : null
+            );
             $fee = $this->resolveFeeAmount(
                 $isOtherBranch ? null : $savedFee,
                 $isOtherBranch ? $agent : $gate,
@@ -618,9 +655,15 @@ class RiderRemitService
             $denoms = $this->normalizeDenoms($remit?->denominations);
 
             $prepaid = (float) ($remit?->prepaid_amount ?? 0);
-            // Other branches: no ဆီဖိုး. Half Deli = Agent ရငွေ (auto).
+            // Other branches / foreign riders: no ဆီဖိုး. Half Deli = Agent ရငွေ (auto).
             $savedFuel = (float) ($remit?->fuel_amount ?? 0);
-            $fuel = $this->resolveFuelAmount($riderId, $savedFuel, $fuelWayCount, $isOtherBranch);
+            $fuel = $this->resolveFuelAmount(
+                $riderId,
+                $savedFuel,
+                $fuelWayCount,
+                $isOtherBranch,
+                $branchId && $branchId > 0 ? $branchId : null
+            );
             $fee = $this->resolveFeeAmount(
                 $isOtherBranch ? null : $remit?->fee_amount,
                 $isOtherBranch ? $agent : $gate,
@@ -1034,7 +1077,8 @@ class RiderRemitService
             $riderId,
             $open !== null ? (float) $open->fuel_amount : null,
             $fuelWayCount,
-            $isOtherBranch
+            $isOtherBranch,
+            $branchId > 0 ? $branchId : null
         );
         $fee = $this->resolveFeeAmount(
             $isOtherBranch ? null : $open?->fee_amount,

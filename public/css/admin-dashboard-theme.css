@@ -5344,6 +5344,40 @@ body.pds-admin .pds-topbar-lang-btn[aria-expanded="true"] .pds-topbar-lang-code 
     color: var(--pds-accent);
 }
 
+/* Message (Messenger-style) — icon only, no background card */
+body.pds-admin .pds-topbar-message,
+body.pds-admin .pds-topbar-message:hover,
+body.pds-admin .pds-topbar-message.is-active,
+body.pds-admin .pds-topbar-message:focus {
+    width: 36px;
+    height: 36px;
+    padding: 0 !important;
+    overflow: visible;
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    color: inherit !important;
+}
+
+body.pds-admin .pds-topbar-message__icon {
+    width: 22px;
+    height: 22px;
+}
+
+/* Same Font Awesome Messenger icon used on Order Detail List row actions */
+body.pds-admin .pds-topbar-message__icon .fa-facebook-messenger {
+    font-size: 1.35rem;
+    line-height: 1;
+    color: var(--site-color, #FE6F07);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+body.pds-admin .pds-topbar-message:hover .pds-topbar-message__icon .fa-facebook-messenger,
+body.pds-admin .pds-topbar-message.is-active .pds-topbar-message__icon .fa-facebook-messenger {
+    transform: scale(1.08);
+    opacity: 0.92;
+}
+
 /* Notification badge — keep tiny, top-right; never cover the bell icon */
 body.pds-admin .pds-topbar-notify {
     width: 36px;
@@ -9540,10 +9574,10 @@ body.pds-admin .pds-dispatch-items-screen {
     background: #fff;
     border: 1px solid #e8ecf1;
     border-radius: 18px;
-    overflow: visible;
-    height: auto !important;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     min-height: 0 !important;
-    max-height: none !important;
     box-shadow: 0 8px 30px rgba(15, 23, 42, 0.04);
 }
 
@@ -9788,6 +9822,11 @@ body.pds-admin .pds-dispatch-items-btn-add:hover {
 body.pds-admin .pds-dispatch-items-body {
     padding: 1rem 1.25rem 1.2rem;
     background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
 }
 
 body.pds-admin .pds-dispatch-items-table-shell {
@@ -9796,10 +9835,9 @@ body.pds-admin .pds-dispatch-items-table-shell {
     border-bottom: 0;
     border-radius: 14px 14px 0 0;
     overflow-x: auto !important;
-    overflow-y: visible !important;
-    height: auto !important;
+    overflow-y: auto !important;
+    flex: 1 1 auto;
     min-height: 0 !important;
-    max-height: none !important;
 }
 
 body.pds-admin .pds-dispatch-items-table-shell .dataTables_scroll,
@@ -9821,6 +9859,8 @@ body.pds-admin .pds-dispatch-items-table-shell .pds-dispatch-items-datatable the
     position: sticky !important;
     top: 0 !important;
     z-index: 6 !important;
+    background: var(--site-color, #FE6F07) !important;
+    color: #fff !important;
 }
 
 body.pds-admin .pds-dispatch-items-table-shell .dataTables_wrapper {
@@ -9829,10 +9869,10 @@ body.pds-admin .pds-dispatch-items-table-shell .dataTables_wrapper {
 
 body.pds-admin .pds-dispatch-items-table-shell table.dataTable thead th,
 body.pds-admin .pds-dispatch-items-table-shell .pds-dispatch-items-datatable thead th {
-    background: #f8fafc !important;
-    color: #475569 !important;
-    border-color: #e8ecf1 !important;
-    border-bottom: 2px solid #e2e8f0 !important;
+    background: var(--site-color, #FE6F07) !important;
+    color: #fff !important;
+    border-color: #e07a28 !important;
+    border-bottom: 0 !important;
     font-weight: 700 !important;
     font-size: 0.7rem !important;
     letter-spacing: 0.05em;
@@ -14302,7 +14342,7 @@ body.pds-admin .pds-os-slip-screenshot-btn:hover {
 }
 
 body.pds-admin .pds-os-slip-modal__body {
-    background: #eef6fb;
+    background: #fff7ed;
     padding: 1rem 1.1rem 1.25rem;
 }
 
@@ -15071,12 +15111,12 @@ body.pds-admin .pds-os-settlement-badge--link {
     border: 0;
     cursor: pointer;
     font: inherit;
-    background: #ecfeff;
-    color: #0e7490;
+    background: rgba(var(--brand-rgb), 0.12);
+    color: var(--site-color);
 }
 
 body.pds-admin .pds-os-settlement-badge--link:hover {
-    background: #cffafe;
+    background: rgba(var(--brand-rgb), 0.2);
 }
 
 body.pds-admin .pds-dispatch-rider-list-city {
@@ -15404,10 +15444,10 @@ body.pds-admin .pds-os-slip-preview-btn {
     justify-content: center;
     gap: 0.45rem;
     padding: 0.5rem 0.85rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgba(var(--brand-rgb), 0.35);
     border-radius: 10px;
     background: #fff;
-    color: #0e7490;
+    color: var(--site-color);
     font-size: 0.72rem;
     font-weight: 700;
     cursor: pointer;
@@ -15417,14 +15457,15 @@ body.pds-admin .pds-os-slip-preview-btn {
 
 body.pds-admin .pds-os-slip-preview-btn i {
     font-size: 0.85rem;
+    color: inherit;
 }
 
 body.pds-admin .pds-os-slip-preview-btn:hover {
-    border-color: #67e8f9;
-    background: #ecfeff;
-    color: #0e7490;
+    border-color: var(--site-color);
+    background: rgba(var(--brand-rgb), 0.1);
+    color: var(--site-color);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(14, 116, 144, 0.12);
+    box-shadow: 0 4px 12px rgba(var(--brand-rgb), 0.16);
 }
 
 body.pds-admin .pds-os-finish-btn {
@@ -26536,14 +26577,17 @@ body.pds-admin .pds-dispatch-items-page .pds-dispatch-items-table-shell {
     border-bottom: 0 !important;
     border-radius: 8px 8px 0 0 !important;
     background: #fff !important;
+    /* Shell is the only vertical scroller — sticky orange thead needs this. */
     overflow-x: auto !important;
-    overflow-y: visible !important;
+    overflow-y: auto !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
-    min-height: 0 !important;
+    -webkit-overflow-scrolling: touch;
 }
 
-/* Items table has DT scrolling disabled — flatten any leftover scroll wrappers. */
+/* Flatten DT scroll wrappers; keep sticky on the real thead inside the shell. */
 body.pds-admin .pds-dispatch-items-page .pds-dispatch-items-table-shell .dataTables_scroll,
 body.pds-admin .pds-dispatch-items-page .pds-dispatch-items-table-shell .dataTables_scrollHead,
 body.pds-admin .pds-dispatch-items-page .pds-dispatch-items-table-shell .dataTables_scrollBody,
@@ -26558,13 +26602,23 @@ body.pds-admin .pds-dispatch-items-page .pds-dispatch-items-table-shell .dataTab
     display: none !important;
 }
 
+body.pds-admin .pds-dispatch-items-page .pds-dispatch-items-table-shell .pds-dispatch-items-datatable,
+body.pds-admin .pds-dispatch-items-page .pds-dispatch-items-table-shell table.pds-sticky-freeze {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    overflow: visible !important;
+}
+
 body.pds-admin .pds-dispatch-items-page .pds-dispatch-items-table-shell .pds-dispatch-items-datatable thead th {
     position: sticky !important;
     top: 0 !important;
-    z-index: 6 !important;
+    z-index: 8 !important;
+    background: var(--site-color, #FE6F07) !important;
+    color: #fff !important;
 }
 
 body.pds-admin .pds-dispatch-items-page .pds-items-dock {
+    flex: 0 0 auto;
     border: 1px solid #cbbfb3;
     border-top: 1px solid #e7d5c6;
 }

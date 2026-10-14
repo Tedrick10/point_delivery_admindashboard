@@ -58,6 +58,7 @@ use App\Services\DispatchOrderAuditService;
 use App\Services\DispatchOrderWorkflowService;
 use App\Notifications\CustomerSupportNotification;
 use Illuminate\Support\Facades\Mail;
+use App\Exports\DispatchOrderItemsExport;
 use Maatwebsite\Excel\Facades\Excel;
 
 class OrderController extends Controller
@@ -530,6 +531,84 @@ class OrderController extends Controller
             'tabCounts',
             'riderDonePresence'
         ));
+    }
+
+    public function dispatchItemsExport(Request $request, $id)
+    {
+        if (! auth()->user()->can('order-list')) {
+            abort(403);
+        }
+
+        $order = Order::with('client')->findOrFail($id);
+        [$items, $toBranchId] = $this->dispatchItemsForExportOrPrint($request, $order);
+        $osName = function_exists('resolveDispatchOsName')
+            ? resolveDispatchOsName($order)
+            : (string) ($order->client->name ?? $order->id);
+        $safeOs = preg_replace('/[^A-Za-z0-9_-]+/', '_', $osName) ?: 'order';
+        $filename = 'order_'.$order->id.'_'.$safeOs.'_items.xlsx';
+
+        return Excel::download(new DispatchOrderItemsExport($items), $filename);
+    }
+
+    public function dispatchItemsPrint(Request $request, $id)
+    {
+        if (! auth()->user()->can('order-list')) {
+            abort(403);
+        }
+
+        $order = Order::with('client')->findOrFail($id);
+        [$items, $toBranchId] = $this->dispatchItemsForExportOrPrint($request, $order);
+        $osName = function_exists('resolveDispatchOsName')
+            ? resolveDispatchOsName($order)
+            : (string) ($order->client->name ?? $order->id);
+        $branchName = $toBranchId > 0
+            ? (string) (\App\Models\Branch::query()->whereKey($toBranchId)->value('name') ?? '')
+            : '';
+        $autoprint = $request->boolean('autoprint', true);
+
+        return view('order.dispatch-items-print', compact(
+            'order',
+            'items',
+            'osName',
+            'branchName',
+            'autoprint'
+        ));
+    }
+
+    /**
+     * @return array{0: \Illuminate\Support\Collection<int, DispatchOrderItem>, 1: int}
+     */
+    protected function dispatchItemsForExportOrPrint(Request $request, Order $order): array
+    {
+        $workflow = app(DispatchOrderWorkflowService::class);
+        $visibleStatuses = $workflow->clientVisibleItemStatuses();
+        $loginUser = auth()->user();
+        $destinationBranches = destinationBranchTabs($loginUser);
+
+        $tabCounts = DispatchOrderItem::query()
+            ->where('order_id', $order->id)
+            ->whereIn('status', $visibleStatuses)
+            ->selectRaw('to_branch_id, COUNT(*) as total')
+            ->groupBy('to_branch_id')
+            ->pluck('total', 'to_branch_id');
+
+        $toBranchId = (int) $request->input('to_branch_id', 0);
+        if ($toBranchId <= 0 || ! $destinationBranches->contains(fn ($b) => (int) $b->id === $toBranchId)) {
+            $preferred = $destinationBranches->first(fn ($b) => (int) ($tabCounts[$b->id] ?? 0) > 0)
+                ?: $destinationBranches->firstWhere('name', 'မန္တလေး')
+                ?: $destinationBranches->first();
+            $toBranchId = (int) ($preferred?->id ?? 0);
+        }
+
+        $items = DispatchOrderItem::query()
+            ->where('order_id', $order->id)
+            ->whereIn('status', $visibleStatuses)
+            ->when($toBranchId > 0, fn ($q) => $q->where('to_branch_id', $toBranchId))
+            ->with(['toBranch'])
+            ->orderBy('id')
+            ->get();
+
+        return [$items, $toBranchId];
     }
 
     public function dispatchToAssign()

@@ -11,26 +11,63 @@
     @endphp
 
     <style>
-        /* Natural table height — page scrolls. No nested max-height (that crushed the table). */
-        .pds-dispatch-items-table-shell {
-            overflow-x: auto !important;
-            overflow-y: visible !important;
-            height: auto !important;
+        /* Viewport-locked screen: only the table body scrolls; orange thead + dock stay put. */
+        body.pds-admin:has(.pds-dispatch-items-page),
+        body.pds-admin:has(.pds-dispatch-items-page) #app {
+            overflow: hidden !important;
+            height: 100vh !important;
+        }
+        body.pds-admin:has(.pds-dispatch-items-page) .content-page {
+            overflow: hidden !important;
+            max-height: calc(100vh - var(--pds-topbar-h, 73px)) !important;
+        }
+        .pds-dispatch-items-page {
+            display: flex !important;
+            flex-direction: column !important;
+            height: calc(100vh - var(--pds-topbar-h, 73px) - 1.25rem) !important;
+            max-height: calc(100vh - var(--pds-topbar-h, 73px) - 1.25rem) !important;
             min-height: 0 !important;
-            max-height: none !important;
-            border-bottom-left-radius: 0 !important;
-            border-bottom-right-radius: 0 !important;
+            overflow: hidden !important;
         }
         .pds-dispatch-items-screen {
-            height: auto !important;
+            display: flex !important;
+            flex-direction: column !important;
+            flex: 1 1 auto !important;
+            height: 100% !important;
             min-height: 0 !important;
-            max-height: none !important;
+            max-height: 100% !important;
+            overflow: hidden !important;
+        }
+        .pds-dispatch-items-topbar,
+        .pds-dispatch-items-tabs,
+        .pds-dispatch-items-page > .pds-dispatch-items-screen > .alert {
+            flex: 0 0 auto !important;
         }
         .pds-dispatch-items-body {
-            height: auto !important;
+            display: flex !important;
+            flex-direction: column !important;
+            flex: 1 1 auto !important;
             min-height: 0 !important;
-            padding-bottom: 0 !important;
+            height: auto !important;
+            padding-bottom: 0.85rem !important;
             padding-top: 0.5rem !important;
+            overflow: hidden !important;
+        }
+        .pds-dispatch-items-table-shell {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            height: auto !important;
+            max-height: none !important;
+            overflow-x: auto !important;
+            overflow-y: auto !important;
+            border-bottom-left-radius: 0 !important;
+            border-bottom-right-radius: 0 !important;
+            -webkit-overflow-scrolling: touch;
+        }
+        .pds-items-dock {
+            flex: 0 0 auto !important;
+            position: relative !important;
+            z-index: 4 !important;
         }
         /* Kill empty DataTables chrome (sDom leftovers) that left a white slab under rows */
         .pds-dispatch-items-table-shell .dataTables_wrapper > .row,
@@ -69,17 +106,25 @@
         .pds-dispatch-items-table-shell .dataTables_scrollFoot {
             display: none !important;
         }
-        .pds-dispatch-items-table-shell .pds-dispatch-items-datatable {
+        .pds-dispatch-items-table-shell .pds-dispatch-items-datatable,
+        .pds-dispatch-items-table-shell table.pds-sticky-freeze {
             width: max-content !important;
             min-width: 100% !important;
             margin: 0 !important;
             border-collapse: separate !important;
             border-spacing: 0 !important;
+            /* backend.css .table { overflow:hidden } breaks sticky thead */
+            overflow: visible !important;
         }
-        .pds-dispatch-items-datatable thead th {
+        .pds-dispatch-items-datatable thead th,
+        .pds-dispatch-items-table-shell table.pds-sticky-freeze thead th {
+            position: -webkit-sticky !important;
             position: sticky !important;
             top: 0 !important;
-            z-index: 6 !important;
+            z-index: 8 !important;
+            background: var(--site-color, #FE6F07) !important;
+            color: #fff !important;
+            box-shadow: 0 1px 0 #e07a28;
         }
         .pds-dispatch-items-datatable tbody td .pds-dispatch-photo-thumb-wrap {
             margin-top: 6px;
@@ -176,6 +221,7 @@
             align-items: stretch;
             justify-content: space-between;
             gap: 1rem;
+            flex: 0 0 auto !important;
             flex-wrap: wrap;
             padding: 0.85rem 1rem;
             background:
@@ -184,6 +230,8 @@
             border-top: 0;
             border-radius: 0 0 14px 14px;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            position: relative;
+            z-index: 4;
         }
         .pds-items-dock__meta {
             display: flex;
@@ -300,12 +348,20 @@
                             <span class="pds-assign-action-btn__label">{{ __('message.kyo_shin_give') }}</span>
                         </button>
                     @endif
-                    <button type="button" class="pds-dispatch-items-icon-btn" title="{{ __('message.download') }}">
+                    <a href="{{ route('order.dispatch.items.export', ['id' => $order->id, 'to_branch_id' => $activeToBranchId ?? 0]) }}"
+                       class="pds-dispatch-items-icon-btn"
+                       id="dispatchItemsDownloadBtn"
+                       title="{{ __('message.download') }}">
                         <i class="fas fa-cloud-download-alt"></i>
-                    </button>
-                    <button type="button" class="pds-dispatch-items-icon-btn" onclick="window.print()" title="{{ __('message.print') }}">
+                    </a>
+                    <a href="{{ route('order.dispatch.items.print', ['id' => $order->id, 'to_branch_id' => $activeToBranchId ?? 0, 'autoprint' => 1]) }}"
+                       class="pds-dispatch-items-icon-btn"
+                       id="dispatchItemsPrintBtn"
+                       target="_blank"
+                       rel="noopener"
+                       title="{{ __('message.print') }}">
                         <i class="fas fa-print"></i>
-                    </button>
+                    </a>
                     @if(auth()->user()->can('order-add') && $canEditItemInfo)
                         <a href="{{ route('order.dispatch.item.create', $order->id) }}"
                            class="pds-dispatch-items-btn-add loadRemoteModel"
@@ -364,7 +420,7 @@
 
             <div class="pds-dispatch-items-body">
                 <div class="pds-dispatch-items-table-shell pds-table-shell">
-                    {{ $dataTable->table(['class' => 'table w-100 pds-datatable pds-dispatch-items-datatable'], false) }}
+                    {{ $dataTable->table(['class' => 'table w-100 pds-datatable pds-dispatch-items-datatable pds-sticky-freeze'], false) }}
                 </div>
                 <div class="pds-items-dock" id="dispatchItemsDock">
                     <div class="pds-items-dock__meta">
@@ -433,8 +489,7 @@
                 }
 
                 window.pdsFitDispatchItemsScroll = function (dt) {
-                    // Intentionally no max-height — nested viewport made the table tiny
-                    // and left a white slab under the totals dock.
+                    // Shell must be the scrollport; sticky orange thead sticks to shell top.
                     var api = (dt && typeof dt.rows === 'function')
                         ? dt
                         : (dt && dt.api ? dt.api() : (window.LaravelDataTables && window.LaravelDataTables['dataTableBuilder']));
@@ -443,12 +498,21 @@
                         $shell = $(api.table().container()).closest('.pds-dispatch-items-table-shell');
                     }
                     if (!$shell.length) return;
+                    var shell = $shell[0];
                     $shell.removeClass('pds-plain-freeze').addClass('pds-plain-freeze-skip');
-                    $shell[0].style.setProperty('max-height', 'none', 'important');
-                    $shell[0].style.setProperty('height', 'auto', 'important');
-                    $shell[0].style.setProperty('min-height', '0', 'important');
-                    $shell[0].style.setProperty('overflow-y', 'visible', 'important');
-                    $shell[0].style.setProperty('overflow-x', 'auto', 'important');
+                    shell.style.setProperty('min-height', '0', 'important');
+                    shell.style.setProperty('overflow-y', 'auto', 'important');
+                    shell.style.setProperty('overflow-x', 'auto', 'important');
+                    shell.style.setProperty('flex', '1 1 auto', 'important');
+                    // Explicit pixel height so overflow-y:auto actually scrolls (flex alone can fail).
+                    var dock = document.getElementById('dispatchItemsDock');
+                    var top = shell.getBoundingClientRect().top;
+                    var dockH = dock ? dock.getBoundingClientRect().height : 0;
+                    var avail = Math.floor(window.innerHeight - top - dockH - 12);
+                    if (avail > 160) {
+                        shell.style.setProperty('height', avail + 'px', 'important');
+                        shell.style.setProperty('max-height', avail + 'px', 'important');
+                    }
                     $shell.find('.dataTables_scroll, .dataTables_scrollBody, .dataTables_scrollHead').each(function () {
                         this.style.setProperty('height', 'auto', 'important');
                         this.style.setProperty('max-height', 'none', 'important');
@@ -456,6 +520,17 @@
                         this.style.setProperty('overflow', 'visible', 'important');
                     });
                     $shell.find('.dataTables_scrollFoot, tfoot').remove();
+                    $shell.find('table.pds-dispatch-items-datatable, table.pds-sticky-freeze').each(function () {
+                        this.style.setProperty('overflow', 'visible', 'important');
+                        this.style.setProperty('border-collapse', 'separate', 'important');
+                    });
+                    $shell.find('thead th').each(function () {
+                        this.style.setProperty('position', 'sticky', 'important');
+                        this.style.setProperty('top', '0', 'important');
+                        this.style.setProperty('z-index', '8', 'important');
+                        this.style.setProperty('background', getComputedStyle(document.body).getPropertyValue('--site-color').trim() || '#FE6F07', 'important');
+                        this.style.setProperty('color', '#fff', 'important');
+                    });
                 };
 
                 window.pdsFillDispatchItemsTotals = function (dt) {

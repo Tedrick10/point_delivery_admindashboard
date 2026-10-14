@@ -154,24 +154,7 @@
                 }
             }
 
-            $assignedItemCount = DispatchOrderItem::query()
-                ->whereHas('messages', function ($q) {
-                    $q->where('sender_type', 'client')->whereNull('read_at');
-                })
-                ->count();
-            $assignedBadgeClass = 'badge badge-pill badge-info p-1' . ($assignedItemCount > 0 ? '' : ' d-none');
-            $assignedBadge =
-                '<span class="' . $assignedBadgeClass . '" id="assignedItemListCount" data-live-badge="assignedItemListCount">' .
-                ($assignedItemCount > 0 ? $assignedItemCount : '') .
-                '</span>';
-            $menu->order
-                ->add('<span>' . __('message.assigned_item_list') . ' ' . $assignedBadge . '</span>', [
-                    'class' => 'sidebar-layout',
-                    'route' => 'order.dispatch.assigned-items',
-                ])
-                ->data('permission', 'order-list')
-                ->prepend('<i class="fas fa-clipboard-check"></i>')
-                ->link->attr(['class' => '']);
+            // Message (assigned-item chat) lives in the topbar as a Messenger-style icon.
 
             $workflow = app(\App\Services\DispatchOrderWorkflowService::class);
             $workflow->healPickupErrorChoicesToCancelled();

@@ -84,7 +84,7 @@
         if (!badges) return;
         setBadge($('#assign100Count'), badges.assign100, 'badge badge-pill badge-warning p-1 animate__animated animate__flash');
         setBadge($('#preOrderCount'), badges.preOrder, 'badge badge-pill badge-info p-1 animate__animated animate__flash');
-        setBadge($('#assignedItemListCount'), badges.assignedItems, 'badge badge-pill badge-info p-1');
+        setBadge($('#assignedItemListCount'), badges.assignedItems, 'pds-topbar-badge');
         setBadge($('#pickupErrorCount'), badges.pickupError, 'badge badge-pill badge-danger p-1 animate__animated animate__flash');
         setBadge($('#pickupCancelledCount'), badges.pickupCancelled, 'badge badge-pill badge-danger p-1 animate__animated animate__flash');
         setBadge($('#hubInboxCount'), badges.hubInbox, 'badge badge-pill badge-info p-1');
