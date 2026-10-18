@@ -42,9 +42,12 @@
         if (input) {
             var iti = window.intlTelInput(input, {
                 hiddenInput: "contact_number",
-                separateDialCode: true,
+                separateDialCode: false,
+                nationalMode: true,
+                allowDropdown: false,
                 initialCountry: "mm",
-                utilsScript: "{{ asset('vendor/intlTelInput/js/utils.js') }}" // just for formatting/placeholders etc
+                onlyCountries: ["mm"],
+                utilsScript: "{{ asset('vendor/intlTelInput/js/utils.js') }}"
             });
 
             input.addEventListener("countrychange", function() {

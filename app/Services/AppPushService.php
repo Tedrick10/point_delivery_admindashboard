@@ -306,6 +306,12 @@ class AppPushService
 
         $credentials = $this->credentialsPathForUser($user);
         if ($credentials === null) {
+            Log::warning('fcm push skipped: missing service-account credentials', [
+                'user_id' => $user->id,
+                'user_type' => $user->user_type ?? '',
+                'hint' => 'Place user-service-account.json in storage/app/firebase/',
+            ]);
+
             return false;
         }
 

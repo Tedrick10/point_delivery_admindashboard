@@ -452,7 +452,7 @@ class DispatchOrderAuditService
             'actor_role' => $actorRole,
             'admin_name' => $actorRole === 'admin' ? $actorName : null,
             'client_name' => in_array($actorRole, ['client', 'os'], true) ? $actorName : null,
-            'action' => 'Item ဖျက်',
+            'action' => 'Cancelled',
         ]);
     }
 
@@ -533,7 +533,13 @@ class DispatchOrderAuditService
         if ($sizeLabel !== '—') {
             $actionParts[] = $this->t('dispatch_audit_field_size').' — '.$sizeLabel;
         }
+        $actionParts[] = $this->t('dispatch_audit_field_original_deli').' — '.$fromLabel;
         $actionParts[] = $this->t('dispatch_audit_field_deli_amount').' — '.$fromLabel.' → '.$toLabel;
+
+        $photoMeta = $this->resolvePhotoMeta($item);
+        $photos = ! empty($photoMeta['photo_url'])
+            ? [['url' => $photoMeta['photo_url'], 'label' => $itemLabel]]
+            : [];
 
         $this->record($order, self::TYPE_DELI_AMOUNT, $this->t('dispatch_audit_deli_amount_changed', [
             'actor' => $actorName,
@@ -558,6 +564,8 @@ class DispatchOrderAuditService
             'to' => $toLabel,
             'weight' => $sizeWeight,
             'size' => $sizeLabel !== '—' ? $sizeLabel : null,
+            'photo_url' => $photoMeta['photo_url'] ?? null,
+            'photos' => $photos,
             'action' => implode(' · ', $actionParts),
             'action_parts' => $actionParts,
             'before' => [
@@ -569,6 +577,11 @@ class DispatchOrderAuditService
                 'weight' => $sizeWeight,
             ],
         ]);
+
+        // Keep Order List DELIAMOUNT / live refresh in sync with Audit Log.
+        if (function_exists('forgetAdminOrderListLiveVersion')) {
+            forgetAdminOrderListLiveVersion();
+        }
     }
 
     /**
@@ -658,7 +671,7 @@ class DispatchOrderAuditService
         $toUtc = Carbon::parse($toDay, $tz)->endOfDay()->utc()->format('Y-m-d H:i:s');
 
         $histories = OrderHistory::query()
-            ->with(['order:id'])
+            ->with(['order.dispatchItems.photoMedia'])
             ->whereIn('history_type', [
                 self::TYPE_DELI_AMOUNT,
                 self::TYPE_ADMIN_ITEM_INFO,
@@ -727,6 +740,151 @@ class DispatchOrderAuditService
                     $seenKeys[$dedupeKey] = true;
                 }
             }
+        }
+
+        return $entries
+            ->sortByDesc('sort_at')
+            ->values()
+            ->map(function (array $e) {
+                unset($e['sort_at']);
+
+                return $e;
+            });
+    }
+
+    /**
+     * Item Details checklist timeline for Order List (photo / name / phone / address / ငွေကောက်).
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function detailsTimelineForRange(string $fromDay, string $toDay): Collection
+    {
+        $tz = 'Asia/Yangon';
+        $fromDay = Carbon::parse($fromDay, $tz)->toDateString();
+        $toDay = Carbon::parse($toDay, $tz)->toDateString();
+        if ($toDay < $fromDay) {
+            $toDay = $fromDay;
+        }
+
+        $fromUtc = Carbon::parse($fromDay, $tz)->startOfDay()->utc()->format('Y-m-d H:i:s');
+        $toUtc = Carbon::parse($toDay, $tz)->endOfDay()->utc()->format('Y-m-d H:i:s');
+
+        $histories = OrderHistory::query()
+            ->with(['order.dispatchItems.photoMedia'])
+            ->whereIn('history_type', [
+                self::TYPE_ADMIN_ITEM_INFO,
+                self::TYPE_RIDER_ITEM_INFO,
+                self::TYPE_OS_ITEM_INFO,
+                self::TYPE_ITEM_CREATED,
+            ])
+            ->where(function ($q) use ($fromUtc, $toUtc) {
+                $q->where(function ($d) use ($fromUtc, $toUtc) {
+                    $d->whereNotNull('datetime')
+                        ->where('datetime', '>=', $fromUtc)
+                        ->where('datetime', '<=', $toUtc);
+                })->orWhere(function ($c) use ($fromUtc, $toUtc) {
+                    $c->whereNull('datetime')
+                        ->where('created_at', '>=', $fromUtc)
+                        ->where('created_at', '<=', $toUtc);
+                });
+            })
+            ->orderByDesc('datetime')
+            ->orderByDesc('id')
+            ->limit(400)
+            ->get();
+
+        $entries = collect();
+        foreach ($histories as $history) {
+            $order = $history->order;
+            if (! $order) {
+                continue;
+            }
+
+            $type = (string) ($history->history_type ?? '');
+            $data = is_array($history->history_data) ? $history->history_data : [];
+            $at = $history->datetime ?? $history->created_at;
+
+            $role = match ($type) {
+                self::TYPE_RIDER_ITEM_INFO => 'rider',
+                self::TYPE_OS_ITEM_INFO => 'os',
+                default => 'admin',
+            };
+
+            $before = is_array($data['before'] ?? null) ? $data['before'] : null;
+            $after = is_array($data['after'] ?? null) ? $data['after'] : null;
+            if (! $after) {
+                $after = $this->resolveItemSnapshotFromData($order, $data);
+            }
+            if (! is_array($after)) {
+                continue;
+            }
+
+            // Item updates must have a real field change; creates always show.
+            if ($type !== self::TYPE_ITEM_CREATED
+                && ! $this->hasItemFieldChanges($before, $after, $role)) {
+                continue;
+            }
+
+            // Skip entries with no customer / money / photo detail to show.
+            $hasDetail = trim((string) ($after['customer_name'] ?? '')) !== ''
+                || trim((string) ($after['customer_phone'] ?? '')) !== ''
+                || trim((string) ($after['customer_address'] ?? '')) !== ''
+                || (float) ($after['deli_amount'] ?? 0) > 0
+                || (float) ($after['item_value'] ?? 0) > 0
+                || (int) ($after['photo_id'] ?? 0) > 0
+                || (int) ($after['weight'] ?? 0) > 0;
+            if (! $hasDetail) {
+                continue;
+            }
+
+            $itemId = (int) ($data['item_id'] ?? 0);
+            $itemCode = (string) ($data['item_code'] ?? ('#'.($itemId ?: '-')));
+            $photoUrl = null;
+            $photos = $this->photosFromData($order, $data);
+            if ($photos !== []) {
+                $photoUrl = $photos[0]['url'] ?? null;
+            }
+
+            $actorName = $this->resolveName(
+                $data['admin_name'] ?? null,
+                $data['rider_name'] ?? null,
+                $data['client_name'] ?? null,
+                $data['actor_name'] ?? null,
+                match ($role) {
+                    'rider' => $this->t('dispatch_audit_account_rider'),
+                    'os' => $this->t('dispatch_audit_account_os'),
+                    default => $this->t('dispatch_audit_account_admin'),
+                }
+            );
+
+            $presented = $this->presentHistory($history, $order);
+            $summary = $presented['summary'] ?? $presented['message'] ?? '';
+
+            $entries->push([
+                'type' => $type,
+                'title' => $this->t('dispatch_audit_title_details'),
+                'summary' => $summary,
+                'message' => $summary,
+                'time' => $this->formatTime($at),
+                'order_id' => (int) $order->id,
+                'item_id' => $itemId,
+                'item_code' => $itemCode,
+                'view_url' => $itemId > 0
+                    ? route('order.dispatch.item.view', [$order->id, $itemId])
+                    : null,
+                'actor' => $actorName,
+                'sort_at' => Carbon::parse($at)->timestamp,
+                'detail' => [
+                    'photo_url' => $photoUrl,
+                    'customer_name' => trim((string) ($after['customer_name'] ?? '')) ?: '—',
+                    'customer_phone' => trim((string) ($after['customer_phone'] ?? '')) ?: '—',
+                    'customer_address' => trim((string) ($after['customer_address'] ?? '')) ?: '—',
+                    'item_value' => $this->formatMoney((float) ($after['item_value'] ?? 0)),
+                    'deli_amount' => $this->formatMoney((float) ($after['deli_amount'] ?? 0)),
+                    'pay_mode' => $this->friendlyPayLabel($after),
+                    'size' => $this->friendlySizeLabel((int) ($after['weight'] ?? 0)),
+                ],
+            ]);
         }
 
         return $entries
@@ -829,6 +987,7 @@ class DispatchOrderAuditService
         if ($sizeLabel !== '—') {
             $actionParts[] = $this->t('dispatch_audit_field_size').' — '.$sizeLabel;
         }
+        $actionParts[] = $this->t('dispatch_audit_field_original_deli').' — '.$fromLabel;
         $actionParts[] = $this->t('dispatch_audit_field_deli_amount').' — '.$fromLabel.' → '.$toLabel;
 
         return [
@@ -840,12 +999,20 @@ class DispatchOrderAuditService
             'icon' => 'fa-solid fa-coins',
             'tone' => 'edit',
             'order_id' => (int) $order->id,
+            'item_id' => (int) ($data['item_id'] ?? 0),
+            'item_code' => $itemCode,
+            'original_deli' => $fromLabel,
+            'new_deli' => $toLabel,
+            'size' => ($sizeLabel !== '' && $sizeLabel !== '—') ? $sizeLabel : '',
+            'view_url' => (int) ($data['item_id'] ?? 0) > 0
+                ? route('order.dispatch.item.view', [$order->id, (int) $data['item_id']])
+                : null,
             'action' => implode(' · ', $actionParts),
             'action_parts' => $actionParts,
             'reason' => null,
             'changes' => [],
             'items' => [],
-            'photos' => [],
+            'photos' => $this->photosFromData($order, $data),
             'sort_at' => Carbon::parse($at)->timestamp,
         ];
     }
@@ -914,6 +1081,179 @@ class DispatchOrderAuditService
     /**
      * @return Collection<int, array{type:string,title:string,message:string,time:string,icon:string}>
      */
+    /**
+     * Follow Up Details for one parcel: order-level steps stay, other customers' item rows do not.
+     */
+    public function timelineForItem(Order $order, DispatchOrderItem $item): Collection
+    {
+        $itemId = (int) $item->id;
+        $code = trim((string) ($item->code ?: ''));
+        $order->loadMissing('dispatchItems');
+        $otherCodes = $order->dispatchItems
+            ->filter(fn (DispatchOrderItem $row) => (int) $row->id !== $itemId)
+            ->map(fn (DispatchOrderItem $row) => trim((string) ($row->code ?: '')))
+            ->filter(fn (string $rowCode) => $rowCode !== '' && $rowCode !== $code)
+            ->values()
+            ->all();
+
+        $itemTypes = [
+            self::TYPE_ADMIN_ITEM_INFO,
+            self::TYPE_RIDER_ITEM_INFO,
+            self::TYPE_OS_ITEM_INFO,
+            self::TYPE_ITEM_CREATED,
+            self::TYPE_ITEM_DELETED,
+            self::TYPE_PHOTO_UPLOADED,
+            self::TYPE_DELIVERY_ITEM_STATUS,
+            self::TYPE_DELI_AMOUNT,
+        ];
+
+        return $this->timelineForOrder($order)
+            ->filter(function (array $entry) use ($itemId, $code, $otherCodes, $itemTypes) {
+                return $this->auditEntryMatchesItem($entry, $itemId, $code, $otherCodes, $itemTypes);
+            })
+            ->map(function (array $entry) use ($code, $otherCodes) {
+                return $this->scopeAuditEntryToItem($entry, $code, $otherCodes);
+            })
+            ->filter(function (array $entry) use ($itemTypes) {
+                if (! in_array((string) ($entry['type'] ?? ''), $itemTypes, true)) {
+                    return true;
+                }
+                $summary = trim((string) ($entry['summary'] ?? $entry['message'] ?? ''));
+                $hasDetail = $summary !== ''
+                    || ! empty($entry['action_parts'])
+                    || ! empty($entry['photos'])
+                    || ! empty($entry['items']);
+
+                return $hasDetail;
+            })
+            ->values();
+    }
+
+    /**
+     * @param  array<string, mixed>  $entry
+     * @param  array<int, string>  $otherCodes
+     * @param  array<int, string>  $itemTypes
+     */
+    protected function auditEntryMatchesItem(array $entry, int $itemId, string $code, array $otherCodes, array $itemTypes): bool
+    {
+        $type = (string) ($entry['type'] ?? '');
+        $entryItemId = (int) ($entry['item_id'] ?? 0);
+        $entryCode = trim((string) ($entry['item_code'] ?? ''));
+        $hay = trim(
+            (string) ($entry['summary'] ?? '')
+            .' '.(string) ($entry['message'] ?? '')
+            .' '.(string) ($entry['action'] ?? '')
+        );
+
+        $matchesThis = ($entryItemId > 0 && $entryItemId === $itemId)
+            || ($entryCode !== '' && $code !== '' && $entryCode === $code)
+            || ($code !== '' && str_contains($hay, $code));
+
+        $matchesOther = ($entryItemId > 0 && $entryItemId !== $itemId)
+            || ($entryCode !== '' && $code !== '' && $entryCode !== $code);
+        if (! $matchesOther) {
+            foreach ($otherCodes as $other) {
+                if (str_contains($hay, $other) || ($entryCode !== '' && $entryCode === $other)) {
+                    $matchesOther = true;
+                    break;
+                }
+            }
+        }
+
+        if (in_array($type, $itemTypes, true)) {
+            return $matchesThis && ! ($entryItemId > 0 && $entryItemId !== $itemId);
+        }
+
+        return ! ($matchesOther && ! $matchesThis);
+    }
+
+    /**
+     * Drop sibling-parcel chips from a shared order event (pickup completed, etc.).
+     *
+     * @param  array<string, mixed>  $entry
+     * @param  array<int, string>  $otherCodes
+     * @return array<string, mixed>
+     */
+    protected function scopeAuditEntryToItem(array $entry, string $code, array $otherCodes): array
+    {
+        $parts = is_array($entry['action_parts'] ?? null) ? $entry['action_parts'] : [];
+        if ($parts !== [] && $code !== '') {
+            $itemLabel = $this->t('dispatch_audit_field_item');
+            $scoped = [];
+            $inside = null;
+            $sawItemHeader = false;
+            foreach ($parts as $part) {
+                $part = (string) $part;
+                $isHeader = str_contains($part, $itemLabel) && (
+                    str_contains($part, $code) || $this->partMentionsCode($part, $otherCodes)
+                );
+                if ($isHeader) {
+                    $sawItemHeader = true;
+                    $inside = str_contains($part, $code);
+                    if ($inside) {
+                        $scoped[] = $part;
+                    }
+                    continue;
+                }
+                if ($sawItemHeader) {
+                    if ($inside) {
+                        $scoped[] = $part;
+                    }
+                    continue;
+                }
+                if (! $this->partMentionsCode($part, $otherCodes)) {
+                    $scoped[] = $part;
+                }
+            }
+            $entry['action_parts'] = $scoped;
+            $entry['action'] = $scoped !== [] ? implode(' · ', $scoped) : null;
+        }
+
+        if (! empty($entry['photos']) && is_array($entry['photos'])) {
+            $entry['photos'] = array_values(array_filter($entry['photos'], function ($photo) use ($code, $otherCodes) {
+                $label = trim((string) (is_array($photo) ? ($photo['label'] ?? '') : ''));
+                if ($label === '') {
+                    return true;
+                }
+                if ($code !== '' && str_contains($label, $code)) {
+                    return true;
+                }
+
+                return ! $this->partMentionsCode($label, $otherCodes);
+            }));
+        }
+
+        if (! empty($entry['items']) && is_array($entry['items'])) {
+            $entry['items'] = array_values(array_filter($entry['items'], function ($card) use ($code, $otherCodes) {
+                $cardCode = trim((string) (is_array($card) ? ($card['code'] ?? '') : ''));
+                if ($cardCode === '') {
+                    return true;
+                }
+                if ($code !== '' && $cardCode === $code) {
+                    return true;
+                }
+
+                return ! in_array($cardCode, $otherCodes, true);
+            }));
+        }
+
+        return $entry;
+    }
+
+    /**
+     * @param  array<int, string>  $codes
+     */
+    protected function partMentionsCode(string $part, array $codes): bool
+    {
+        foreach ($codes as $other) {
+            if ($other !== '' && str_contains($part, $other)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function timelineForOrder(Order $order): Collection
     {
         $order->loadMissing(['orderHistoryasc', 'client', 'delivery_man', 'dispatchItems']);
@@ -1014,6 +1354,8 @@ class DispatchOrderAuditService
                 'title' => $this->t('dispatch_audit_title_photo_uploaded'),
                 'message' => $msg,
                 'summary' => $msg,
+                'item_id' => (int) $item->id,
+                'item_code' => $code,
                 'time' => $this->formatTime($photoAt),
                 'icon' => 'fa-solid fa-camera',
                 'tone' => 'success',
@@ -1217,7 +1559,7 @@ class DispatchOrderAuditService
         $summary = preg_replace('/\s*\([^)]*(?:ItemValue|DeliAmount|လုပ်ဆောင်ချက်|ရေးထားသောအကြောင်းရင်း)[^)]*\)\s*$/u', '', $message) ?? $message;
         $summary = trim(preg_replace('/\s{2,}/u', ' ', $summary) ?? $summary);
 
-        return [
+        $entry = [
             'type' => $type,
             'title' => $this->titleFor($type),
             'message' => $message,
@@ -1225,6 +1567,9 @@ class DispatchOrderAuditService
             'time' => $time,
             'icon' => $this->iconFor($type),
             'tone' => $this->toneFor($type),
+            'order_id' => (int) $order->id,
+            'item_id' => (int) ($data['item_id'] ?? 0),
+            'item_code' => trim((string) ($data['item_code'] ?? '')),
             'sort_at' => Carbon::parse($at)->timestamp,
             'action' => $panel['action'] ?? null,
             'action_parts' => $panel['action_parts'] ?? [],
@@ -1233,6 +1578,23 @@ class DispatchOrderAuditService
             'items' => $panel['items'] ?? [],
             'photos' => $panel['photos'] ?? [],
         ];
+
+        if ($type === self::TYPE_DELI_AMOUNT) {
+            $entry['original_deli'] = (string) ($data['from'] ?? $this->formatMoney((float) ($data['old_value'] ?? 0)));
+            $entry['new_deli'] = (string) ($data['to'] ?? $this->formatMoney((float) ($data['new_value'] ?? 0)));
+            $sizeLabel = trim((string) ($data['size'] ?? ''));
+            if ($sizeLabel === '' || $sizeLabel === '—') {
+                $sizeWeight = (int) ($data['weight'] ?? (is_array($data['after'] ?? null) ? ($data['after']['weight'] ?? 0) : 0));
+                $sizeLabel = $this->friendlySizeLabel($sizeWeight);
+            }
+            $entry['size'] = ($sizeLabel !== '' && $sizeLabel !== '—') ? $sizeLabel : '';
+            $itemId = (int) ($data['item_id'] ?? 0);
+            $entry['view_url'] = $itemId > 0
+                ? route('order.dispatch.item.view', [$order->id, $itemId])
+                : null;
+        }
+
+        return $entry;
     }
 
     /**
@@ -1308,6 +1670,7 @@ class DispatchOrderAuditService
                 if ($sizeLabel !== '' && $sizeLabel !== '—') {
                     $actionParts[] = $this->t('dispatch_audit_field_size').' — '.$sizeLabel;
                 }
+                $actionParts[] = $this->t('dispatch_audit_field_original_deli').' — '.$from;
                 $actionParts[] = $this->t('dispatch_audit_field_deli_amount').' — '.$from.' → '.$to;
             }
 
@@ -1330,7 +1693,31 @@ class DispatchOrderAuditService
                 );
             }
 
+            // Ensure Original Deli chip exists for older logs.
+            $hasOriginalPart = collect($actionParts)->contains(
+                fn ($p) => str_contains((string) $p, $this->t('dispatch_audit_field_original_deli'))
+                    || str_contains((string) $p, 'မူလ ပို့ခ')
+                    || str_contains((string) $p, 'Original Deli')
+            );
+            if (! $hasOriginalPart && $from !== '' && $from !== '—' && $from !== '0') {
+                $deliIdx = null;
+                foreach ($actionParts as $i => $part) {
+                    if (str_contains((string) $part, $this->t('dispatch_audit_field_deli_amount'))
+                        || str_contains((string) $part, 'ပို့ခ')) {
+                        $deliIdx = $i;
+                        break;
+                    }
+                }
+                $chip = $this->t('dispatch_audit_field_original_deli').' — '.$from;
+                if ($deliIdx === null) {
+                    $actionParts[] = $chip;
+                } else {
+                    array_splice($actionParts, $deliIdx, 0, [$chip]);
+                }
+            }
+
             $action = implode(' · ', $actionParts);
+            $photos = $this->photosFromData($order, $data);
         } elseif ($type === self::TYPE_PHOTO_UPLOADED) {
             $code = (string) ($data['item_code'] ?? ('#'.($data['item_id'] ?? '-')));
             $actionParts = [$this->t('dispatch_audit_field_item').' — '.$code];
@@ -1358,7 +1745,10 @@ class DispatchOrderAuditService
             array_unshift($actionParts, $base);
             $action = implode(' · ', $actionParts);
         } elseif ($type === self::TYPE_ITEM_DELETED) {
-            $base = (string) ($data['action'] ?? 'Item ဖျက်');
+            $base = (string) ($data['action'] ?? 'Cancelled');
+            if (in_array($base, ['Item ဖျက်', 'Item Deleted', 'Deleted', 'ဖျက်'], true)) {
+                $base = 'Cancelled';
+            }
             $code = (string) ($data['item_code'] ?? ('#'.($data['item_id'] ?? '')));
             $actionParts = $code !== '' && $code !== '#' ? [$base, 'Item: '.$code] : [$base];
             $action = implode(' · ', $actionParts);
@@ -2429,7 +2819,7 @@ class DispatchOrderAuditService
             self::TYPE_RESTORED => 'fa-solid fa-rotate-left',
             self::TYPE_USER_CHOICE => 'fa-solid fa-hand-pointer',
             self::TYPE_ITEM_CREATED => 'fa-solid fa-plus',
-            self::TYPE_ITEM_DELETED => 'fa-solid fa-trash',
+            self::TYPE_ITEM_DELETED => 'fa-solid fa-ban',
             self::TYPE_PHOTO_UPLOADED => 'fa-solid fa-camera',
             self::TYPE_PRE_PICKUP_MOVED => 'fa-solid fa-arrow-right-arrow-left',
             self::TYPE_MOVED_TO_ASSIGN_100 => 'fa-solid fa-list-check',

@@ -54,13 +54,22 @@ class NotificationDataTable extends DataTable
     public function query()
     {
         $userdata = auth()->user();
-        $notifications = $userdata->notifications;
+        $notifications = $userdata->notifications()->latest();
         $category = request()->get('category');
 
-        if (!empty($category) && $category !== 'all') {
-            $notifications = $notifications->filter(function ($notification) use ($category) {
-                $data = is_array($notification->data) ? $notification->data : [];
-                return inferNotificationCategory($data) === $category;
+        if (! empty($category) && $category !== 'all') {
+            $notifications->where(function ($q) use ($category) {
+                if ($category === 'user_messages') {
+                    $q->where('data->category', 'user_messages')
+                        ->orWhereIn('data->type', ['dispatch_item_message', 'customersupport']);
+                } elseif ($category === 'user_orders') {
+                    $q->where('data->category', 'user_orders')
+                        ->orWhereIn('data->type', [
+                            'create', 'draft', 'active', 'cancelled', 'bid_placed', 'payment_status_message',
+                        ]);
+                } else {
+                    $q->where('data->category', $category);
+                }
             });
         }
 

@@ -41,6 +41,7 @@ class OrderDetailResource extends JsonResource
             'client_id'                      => (int)$this->client_id,
             'client_name'                    => optional($this->client)->name,
             'date'                           => $this->date,
+            'description'                    => $this->description,
             'pickup_point'                   => $this->pickup_point,
             'delivery_point'                 => $this->delivery_point,
             'packaging_symbols'              => json_decode($this->packaging_symbols),

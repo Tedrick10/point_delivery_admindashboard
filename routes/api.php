@@ -25,6 +25,8 @@ Route::get('get-code', [API\RestApiController::class, 'getCount']);
 Route::post('new-register', [API\UserController::class, 'newregister']);
 Route::post('driver-register', [API\UserController::class, 'driverRegister']);
 Route::post('new-login', [API\UserController::class, 'newlogin']);
+Route::post('os-approval-check', [API\UserController::class, 'checkOsApprovalStatus']);
+Route::post('os-pending-push-token', [API\UserController::class, 'registerPendingPushToken']);
 Route::post('new-forget-password', [API\UserController::class, 'newforgetPassword']);
 Route::post('new-socialLogin', [API\UserController::class, 'newsocialLogin']);
 Route::get('user-list', [API\UserController::class, 'userList']);
@@ -271,6 +273,7 @@ Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function ()
     Route::post('profOfpicture-save', [API\ProfofPicturesController::class, 'profOfpictureSave']);
     Route::post('dispatch-order-item-update/{orderId}/{itemId}', [API\DispatchOrderItemController::class, 'updatePickupItem']);
     Route::post('dispatch-order-item-add/{orderId}', [API\DispatchOrderItemController::class, 'addPickupItem']);
+    Route::post('dispatch-order-item-delete/{orderId}/{itemId}', [API\DispatchOrderItemController::class, 'deletePickupItem']);
     Route::get('dispatch-order-item-list/{orderId}', [API\DispatchOrderItemController::class, 'listClientItems']);
     Route::get('dispatch-client-delivery-item-list', [API\DispatchOrderItemController::class, 'listClientDeliveryItems']);
     Route::get('dispatch-client-item-track', [API\DispatchOrderItemController::class, 'searchClientTrackItems']);
@@ -280,6 +283,7 @@ Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function ()
     Route::post('dispatch-order-item-client-update/{orderId}/{itemId}', [API\DispatchOrderItemController::class, 'updateClientItem']);
     Route::post('dispatch-order-item-client-delete/{orderId}/{itemId}', [API\DispatchOrderItemController::class, 'deleteClientItem']);
     Route::get('dispatch-delivery-item-list', [API\DispatchOrderItemController::class, 'listDeliveryItems']);
+    Route::get('dispatch-delivery-daily-tracking', [API\DispatchOrderItemController::class, 'listDailyTracking']);
     Route::get('dispatch-delivery-item/{itemId}', [API\DispatchOrderItemController::class, 'showDeliveryItem']);
     Route::get('dispatch-delivery-item-search', [API\DispatchOrderItemController::class, 'searchAssignableDeliveryItems']);
     Route::post('dispatch-delivery-item-assign/{itemId}', [API\DispatchOrderItemController::class, 'assignDeliveryItemToMe']);

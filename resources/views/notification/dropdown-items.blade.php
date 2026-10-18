@@ -3,7 +3,7 @@
 @endphp
 
 @if(isset($notifications) && count($notifications) > 0)
-    @foreach($notifications->sortByDesc('created_at')->take(5) as $notification)
+    @foreach($notifications as $notification)
         @php
             $data = is_array($notification->data) ? $notification->data : [];
             $category = inferNotificationCategory($data);
@@ -18,9 +18,12 @@
             $cardClass = 'pds-notify-card' . ($isUnread ? ' is-unread' : '');
         @endphp
         @if($route)
-            <a href="{{ $route }}" class="{{ $cardClass }}">
+            <a href="{{ $route }}"
+               class="{{ $cardClass }} js-notify-open"
+               data-notification-id="{{ $notification->id }}">
         @else
-            <div class="{{ $cardClass }}">
+            <div class="{{ $cardClass }} js-notify-open"
+                 data-notification-id="{{ $notification->id }}">
         @endif
             <div class="pds-notify-card__top">
                 <span class="pds-notification-category-badge pds-notification-category-badge--{{ $category }}">

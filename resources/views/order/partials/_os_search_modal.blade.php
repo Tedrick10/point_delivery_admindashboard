@@ -10,7 +10,7 @@
             <div class="pds-dispatch-modal-body">
                 <div class="pds-dispatch-field mb-4">
                     <label for="os_modal_search">{{ __('message.search') }}</label>
-                    <input type="text" id="os_modal_search" class="pds-dispatch-input" placeholder="{{ __('message.search') }}" autocomplete="off">
+                    <input type="text" id="os_modal_search" class="pds-dispatch-input" placeholder="{{ __('message.os_name') }} / {{ __('message.phone') }}" autocomplete="off">
                 </div>
                 <div class="pds-dispatch-table-wrap">
                     <table class="pds-dispatch-table" id="osSearchTable">

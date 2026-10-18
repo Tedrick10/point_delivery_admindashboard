@@ -33,7 +33,9 @@ class UserDetailResource extends JsonResource
             'branch_id'                => $this->branch_id,
             'branch_name'              => optional($this->branch)->name,
             'address'                  => $this->address,
-            'contact_number'           => $this->contact_number,
+            'contact_number'           => function_exists('normalizeContactNumber')
+                ? (normalizeContactNumber($this->contact_number) ?: $this->contact_number)
+                : $this->contact_number,
             'profile_image'            => getSingleMedia($this, 'profile_image', null),
             'login_type'               => $this->login_type,
             'latitude'                 => $this->latitude,

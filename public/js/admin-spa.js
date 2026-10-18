@@ -31,6 +31,10 @@
         if (el.target && el.target !== '' && el.target !== '_self') return true;
         if (el.hasAttribute('download')) return true;
         if (el.getAttribute('data-spa-ignore') != null) return true;
+        // Confirm / AJAX delete links must not be treated as SPA page navigations.
+        if (el.getAttribute('data--confirmation') === 'true') return true;
+        if (el.getAttribute('data--confirmation--restore') === 'true') return true;
+        if (el.getAttribute('data--ajax') === 'true') return true;
         if (el.classList.contains('loadRemoteModel')) return true;
         if (el.classList.contains('notifyList')) return true;
         if (el.getAttribute('data-toggle')) return true;
@@ -196,7 +200,20 @@
         }
     }
 
+    function releaseRiderDonePresence() {
+        // SPA nav does not fire beforeunload — without this, Rider Done heartbeats
+        // keep renewing the cache lock and Item Count stays blocked for everyone else.
+        try {
+            if (window.__pdsRiderDonePresence && typeof window.__pdsRiderDonePresence.release === 'function') {
+                window.__pdsRiderDonePresence.release();
+            }
+        } catch (e) {}
+        window.__pdsRiderDonePresence = null;
+        window.__pdsRiderDoneItemsLock = false;
+    }
+
     function destroyPageWidgets() {
+        releaseRiderDonePresence();
         destroyAllDataTables();
 
         if (window.__pdsPageLiveHandle && typeof window.__pdsPageLiveHandle.stop === 'function') {
@@ -624,11 +641,32 @@
             return runScriptList(contentScripts.concat(pageScripts)).always(function () {
                 afterContentSwap(finalUrl);
             });
-        }).fail(function (_xhr, textStatus) {
+        }).fail(function (xhr, textStatus) {
             if (textStatus === 'abort') return;
             if (window.console && console.warn) {
-                console.warn('[admin-spa] visit failed', textStatus, url);
+                console.warn('[admin-spa] visit failed', textStatus, url, xhr && xhr.status);
             }
+            // Rider Done presence busy — show message instead of a silent no-op.
+            if (xhr && xhr.status === 423) {
+                var busyMsg = (xhr.responseJSON && xhr.responseJSON.message)
+                    ? xhr.responseJSON.message
+                    : 'This order is currently being checked by another admin.';
+                if (window.Swal && typeof Swal.fire === 'function') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Rider Done is in use',
+                        text: busyMsg,
+                        confirmButtonColor: (window.pdsBrandColor || '#FE6F07'),
+                    });
+                } else if (window.SnackBar) {
+                    SnackBar({ message: busyMsg, status: 'error' });
+                } else {
+                    alert(busyMsg);
+                }
+                return;
+            }
+            // Other SPA failures previously did nothing (click appeared broken).
+            window.location.assign(url);
         }).always(function () {
             finishVisit();
         });

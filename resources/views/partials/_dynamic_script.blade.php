@@ -379,7 +379,8 @@
                                 $dispatchItemForm.attr('data-saved-township')
                                 || $dispatchItemForm.data('savedTownship')
                                 || ''
-                            ).trim()
+                            ).trim(),
+                            viewOnly: $dispatchItemForm.attr('data-view-only') === '1'
                         });
                     }
                     },
@@ -794,14 +795,45 @@
             var count = Number(unreadCount) || 0;
             if (unreadText) {
                 $('.pds-notify-unread-text').text(unreadText);
+            } else {
+                $('.pds-notify-unread-text').text(@json(__('message.you_have_unread_notification', ['number' => '__N__'])).replace('__N__', String(count)));
             }
-            $('.pds-notify-header-count').text(count);
+            var $headerCount = $('.pds-notify-header-count');
+            $headerCount.text(count);
             if (count > 0) {
+                $headerCount.removeClass('d-none');
                 $('.pds-notify-mark-read').removeClass('d-none');
             } else {
+                $headerCount.addClass('d-none');
                 $('.pds-notify-mark-read').addClass('d-none');
             }
+            if (typeof window.applyNotificationCount === 'function') {
+                window.applyNotificationCount(count);
+            } else {
+                var $badge = $('.pds-topbar-notify .notify_count').first();
+                if (count > 0) {
+                    $badge.addClass('notification_tag').text(count >= 100 ? '99+' : String(count)).removeClass('d-none');
+                } else {
+                    $badge.addClass('d-none').removeClass('notification_tag').text('');
+                }
+            }
         };
+
+        $(document).on('click', '.js-notify-open', function () {
+            var id = $(this).attr('data-notification-id');
+            if (!id) return;
+            $.ajax({
+                type: 'post',
+                url: "{{ url('notification') }}/" + encodeURIComponent(id) + "/read",
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                }
+            }).done(function (res) {
+                if (typeof res.unread_count !== 'undefined') {
+                    window.updateNotificationDropdownMeta(res.unread_count);
+                }
+            });
+        });
 
         window.notificationList = function(type, category) {
             type = type || '';
@@ -1401,9 +1433,13 @@
                     if(input) {
                         var iti = window.intlTelInput(input, {
                             hiddenInput: "contact_number",
-                            separateDialCode: true,  // Using separateDialCode for country code
-                            initialCountry: defaultCountryCode, // Set the initial country based on currency code
-                            utilsScript: "{{ asset('vendor/intlTelInput/js/utils.js') }}" // Just for formatting/placeholders etc
+                            // Local 09… only — no visible +95 country dial code.
+                            separateDialCode: false,
+                            nationalMode: true,
+                            allowDropdown: false,
+                            initialCountry: 'mm',
+                            onlyCountries: ['mm'],
+                            utilsScript: "{{ asset('vendor/intlTelInput/js/utils.js') }}"
                         });
 
                         input.addEventListener("countrychange", function() {

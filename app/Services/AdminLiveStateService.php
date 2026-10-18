@@ -112,10 +112,10 @@ class AdminLiveStateService
             return 0;
         }
 
+        // Light sync only — never load all notifications into memory on the live poll.
         syncUnreadDispatchItemMessageNotifications($user);
-        $user->unsetRelation('unreadNotifications');
 
-        return (int) ($user->unreadNotifications?->count() ?? 0);
+        return adminNotificationUnreadCount($user);
     }
 
     public function dashboardStats(Request $request): array

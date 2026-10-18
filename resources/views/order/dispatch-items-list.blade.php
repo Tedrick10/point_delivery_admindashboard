@@ -654,6 +654,12 @@
                 (function bootRiderDonePresence() {
                     var cfg = @json($riderDonePresence);
                     if (!cfg || !cfg.token || !cfg.heartbeat_url || !cfg.release_url) return;
+
+                    // Drop any prior SPA session heartbeat so locks cannot stick forever.
+                    if (window.__pdsRiderDonePresence && typeof window.__pdsRiderDonePresence.release === 'function') {
+                        try { window.__pdsRiderDonePresence.release(); } catch (e) {}
+                    }
+
                     window.__pdsRiderDoneItemsLock = true;
                     var released = false;
                     var timer = null;
@@ -666,7 +672,15 @@
                         if (released) return;
                         released = true;
                         window.__pdsRiderDoneItemsLock = false;
-                        if (timer) clearInterval(timer);
+                        if (timer) {
+                            clearInterval(timer);
+                            timer = null;
+                        }
+                        $(window).off('.riderDonePresence');
+                        $(document).off('.riderDonePresence');
+                        if (window.__pdsRiderDonePresence && window.__pdsRiderDonePresence.token === cfg.token) {
+                            window.__pdsRiderDonePresence = null;
+                        }
                         var body = new FormData();
                         body.append('_token', csrf());
                         body.append('token', cfg.token);
@@ -703,6 +717,13 @@
                                     var msg = (xhr.responseJSON && xhr.responseJSON.message)
                                         ? xhr.responseJSON.message
                                         : @json(__('message.admin_rider_done_busy', ['name' => __('message.admin')]));
+                                    released = true;
+                                    if (timer) {
+                                        clearInterval(timer);
+                                        timer = null;
+                                    }
+                                    window.__pdsRiderDoneItemsLock = false;
+                                    window.__pdsRiderDonePresence = null;
                                     if (window.Swal) {
                                         Swal.fire({
                                             icon: 'warning',
@@ -710,7 +731,11 @@
                                             text: msg,
                                             confirmButtonColor: (window.pdsBrandColor || '#FE6F07'),
                                         }).then(function () {
-                                            window.location.href = @json(route('order.index', ['orders_type' => 'list', 'dispatch_status' => 'rider_pick_up_done']));
+                                            if (typeof window.pdsAdminGo === 'function') {
+                                                window.pdsAdminGo(@json(route('order.index', ['orders_type' => 'list', 'dispatch_status' => 'rider_pick_up_done'])));
+                                            } else {
+                                                window.location.href = @json(route('order.index', ['orders_type' => 'list', 'dispatch_status' => 'rider_pick_up_done']));
+                                            }
                                         });
                                     } else {
                                         alert(msg);
@@ -720,6 +745,12 @@
                             },
                         });
                     }
+
+                    window.__pdsRiderDonePresence = {
+                        token: cfg.token,
+                        orderId: cfg.order_id || {{ (int) $order->id }},
+                        release: release,
+                    };
 
                     timer = setInterval(heartbeat, 25000);
                     $(window).on('beforeunload.riderDonePresence pagehide.riderDonePresence', release);

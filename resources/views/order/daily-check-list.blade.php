@@ -136,7 +136,10 @@
                             <option value="all" @selected($osFilter === 'all')>{{ __('message.all') }}</option>
                             <option value="0" @selected((string) $osFilter === '0')>{{ __('message.no_os') }}</option>
                             @foreach($osOptions as $option)
-                                <option value="{{ $option->id }}" @selected((string) $osFilter === (string) $option->id)>{{ $option->name }}</option>
+                                @php $osPhone = normalizeContactNumber($option->contact_number ?? ''); @endphp
+                                <option value="{{ $option->id }}"
+                                        data-phone="{{ $osPhone }}"
+                                        @selected((string) $osFilter === (string) $option->id)>{{ $option->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -145,7 +148,10 @@
                         <select name="rider_id" id="daily_check_rider" class="pds-dispatch-input pds-dispatch-select">
                             <option value="all" @selected($riderFilter === 'all')>{{ __('message.all') }}</option>
                             @foreach($riderOptions as $option)
-                                <option value="{{ $option->id }}" @selected((string) $riderFilter === (string) $option->id)>{{ $option->name }}</option>
+                                @php $riderPhone = normalizeContactNumber($option->contact_number ?? ''); @endphp
+                                <option value="{{ $option->id }}"
+                                        data-phone="{{ $riderPhone }}"
+                                        @selected((string) $riderFilter === (string) $option->id)>{{ $option->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -412,12 +418,24 @@
     </div>
 
     {{-- Inline boot so Item Count click works even if @section/@push is skipped by the layout component --}}
+    <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
     <script>
         (function bootDailyCheckList() {
             if (!window.jQuery) {
                 return setTimeout(bootDailyCheckList, 40);
             }
             var $ = window.jQuery;
+
+            if (typeof window.initNamePhoneFilterSelect === 'function') {
+                window.initNamePhoneFilterSelect('#daily_check_os', {
+                    placeholder: @json(__('message.select_name', ['select' => __('message.os_name')])),
+                    allowClear: false
+                });
+                window.initNamePhoneFilterSelect('#daily_check_rider', {
+                    placeholder: @json(__('message.select_name', ['select' => __('message.delivery_man')])),
+                    allowClear: false
+                });
+            }
 
             function portalDailyCheckModals() {
                 ['#dailyCheckDetailModal', '#dailyCheckRemitDateModal', '#dailyCheckRemitPhotoModal', '#dailyCheckItemMediaModal'].forEach(function (sel) {

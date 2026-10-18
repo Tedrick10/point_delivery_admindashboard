@@ -50,6 +50,15 @@
         var gateUrl = null;
         var $activeGateBtn = null;
 
+        function readGateNumber($btn, attrName, dataName) {
+            var raw = $btn.attr(attrName);
+            if (raw === undefined || raw === null || String(raw).trim() === '') {
+                raw = $btn.data(dataName);
+            }
+            var n = parseFloat(String(raw == null ? '' : raw).replace(/,/g, ''));
+            return isNaN(n) ? 0 : n;
+        }
+
         $(document).on('click', '.js-dispatch-item-gate', function (e) {
             e.preventDefault();
             e.stopPropagation();
@@ -57,8 +66,8 @@
             $activeGateBtn = $btn;
             gateUrl = $btn.attr('data-url') || $btn.data('url');
             $('#dispatchItemGateCustomer').text($btn.attr('data-customer') || $btn.data('customer') || '—');
-            $('#dispatchItemGateAmount').val($btn.attr('data-gate-amount') || $btn.data('gate-amount') || 0);
-            $('#dispatchItemGateOsPaid').val($btn.attr('data-gate-os') || $btn.data('gate-os') || 0);
+            $('#dispatchItemGateAmount').val(readGateNumber($btn, 'data-gate-amount', 'gate-amount'));
+            $('#dispatchItemGateOsPaid').val(readGateNumber($btn, 'data-gate-os', 'gate-os'));
             $('#dispatchItemGateRemark').val($btn.attr('data-remark') || $btn.data('remark') || '');
             $('#dispatchItemGateModal').modal('show');
         });

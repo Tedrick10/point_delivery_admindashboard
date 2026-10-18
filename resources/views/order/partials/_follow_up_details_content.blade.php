@@ -12,66 +12,78 @@
         ? \Carbon\Carbon::parse($item->received_date)->format('d-m-Y')
         : '-';
     $auditTimeline = $order
-        ? app(\App\Services\DispatchOrderAuditService::class)->timelineForOrder($order)
+        ? app(\App\Services\DispatchOrderAuditService::class)->timelineForItem($order, $item)
         : collect();
+    $custPaid = (float) $item->advance_paid == 0.0 ? '-' : number_format((float) $item->advance_paid);
+    $customerName = $item->customer_name ?: '-';
+    $voucherCode = $item->code ?? '-';
+    $deliveredPhotoUrl = function_exists('dispatchItemProofPhotoUrl')
+        ? dispatchItemProofPhotoUrl($item, 'delivered')
+        : null;
+    $deliveredType = trim((string) ($item->delivered_type ?? ''));
 @endphp
 
-<div class="pds-follow-up-details-grid">
-    <div class="pds-follow-up-details-item">
-        <span class="pds-follow-up-details-label">{{ __('message.order') }}</span>
-        <span class="pds-follow-up-details-value">{{ $orderDate }}</span>
+<section class="pds-follow-up-details-panel">
+    <div class="pds-follow-up-details-panel__head">
+        <span class="pds-follow-up-details-panel__badge">Order #{{ $order?->id ?? '—' }}</span>
+        @if($voucherCode !== '-')
+            <span class="pds-follow-up-details-panel__code">{{ $voucherCode }}</span>
+        @endif
     </div>
-    <div class="pds-follow-up-details-item">
-        <span class="pds-follow-up-details-label">{{ __('message.received_date') }}</span>
-        <span class="pds-follow-up-details-value">{{ $receivedDate }}</span>
-    </div>
-    <div class="pds-follow-up-details-item">
-        <span class="pds-follow-up-details-label">{{ __('message.voucher_code') }}</span>
-        <span class="pds-follow-up-details-value">{{ $item->code ?? '-' }}</span>
-    </div>
-    <div class="pds-follow-up-details-item">
-        <span class="pds-follow-up-details-label">{{ __('message.from_to') }}</span>
-        <span class="pds-follow-up-details-value">{{ $fromTo }}</span>
-    </div>
-    <div class="pds-follow-up-details-item">
-        <span class="pds-follow-up-details-label">{{ __('message.township') }}</span>
-        <span class="pds-follow-up-details-value">{{ $township }}</span>
-    </div>
-    <div class="pds-follow-up-details-item">
-        <span class="pds-follow-up-details-label">{{ __('message.cust_paid') }}</span>
-        <span class="pds-follow-up-details-value">{{ (float) $item->advance_paid == 0.0 ? '-' : number_format((float) $item->advance_paid) }}</span>
-    </div>
-    <div class="pds-follow-up-details-item pds-follow-up-details-item-wide">
-        <span class="pds-follow-up-details-label">{{ __('message.remark_label') }}</span>
-        <span class="pds-follow-up-details-value">
-            @include('order.partials._pending-remark-history', ['item' => $item, 'photoSize' => 120])
-        </span>
-    </div>
-    @php
-        $deliveredPhotoUrl = function_exists('dispatchItemProofPhotoUrl')
-            ? dispatchItemProofPhotoUrl($item, 'delivered')
-            : null;
-        $deliveredType = trim((string) ($item->delivered_type ?? ''));
-    @endphp
-    @if($deliveredPhotoUrl || $deliveredType !== '')
+
+    <div class="pds-follow-up-details-grid">
         <div class="pds-follow-up-details-item pds-follow-up-details-item-wide">
-            <span class="pds-follow-up-details-label">{{ __('message.delivered_image') }}</span>
+            <span class="pds-follow-up-details-label">{{ __('message.customer_name') }}</span>
+            <span class="pds-follow-up-details-value {{ $customerName === '-' ? 'is-empty' : '' }}">{{ $customerName }}</span>
+        </div>
+        <div class="pds-follow-up-details-item">
+            <span class="pds-follow-up-details-label">{{ __('message.order') }}</span>
+            <span class="pds-follow-up-details-value {{ $orderDate === '-' ? 'is-empty' : '' }}">{{ $orderDate }}</span>
+        </div>
+        <div class="pds-follow-up-details-item">
+            <span class="pds-follow-up-details-label">{{ __('message.received_date') }}</span>
+            <span class="pds-follow-up-details-value {{ $receivedDate === '-' ? 'is-empty' : '' }}">{{ $receivedDate }}</span>
+        </div>
+        <div class="pds-follow-up-details-item">
+            <span class="pds-follow-up-details-label">{{ __('message.from_to') }}</span>
+            <span class="pds-follow-up-details-value">{{ $fromTo }}</span>
+        </div>
+        <div class="pds-follow-up-details-item">
+            <span class="pds-follow-up-details-label">{{ __('message.township') }}</span>
+            <span class="pds-follow-up-details-value {{ $township === '-' ? 'is-empty' : '' }}">{{ $township }}</span>
+        </div>
+        <div class="pds-follow-up-details-item">
+            <span class="pds-follow-up-details-label">{{ __('message.cust_paid') }}</span>
+            <span class="pds-follow-up-details-value {{ $custPaid === '-' ? 'is-empty' : '' }}">{{ $custPaid }}</span>
+        </div>
+        <div class="pds-follow-up-details-item pds-follow-up-details-item-wide">
+            <span class="pds-follow-up-details-label">{{ __('message.remark_label') }}</span>
             <span class="pds-follow-up-details-value">
-                @if($deliveredType === 'gate')
-                    {{ __('message.delivered_type_gate') }}
-                    · {{ __('message.transport_fee') }} {{ number_format((float) ($item->gate_amount ?? 0)) }}
-                @elseif($deliveredType === 'other')
-                    {{ __('message.delivered_type_other') }}
-                @endif
-                @if($deliveredPhotoUrl)
-                    <a href="{{ $deliveredPhotoUrl }}" target="_blank" rel="noopener" class="pds-follow-up-pending-photo d-block mt-2">
-                        <img src="{{ $deliveredPhotoUrl }}" alt="{{ __('message.delivered_image') }}" style="max-width: 160px; max-height: 120px; border-radius: 10px; object-fit: cover; border: 1px solid #e5e7eb;">
-                    </a>
-                @endif
+                @include('order.partials._pending-remark-history', ['item' => $item, 'photoSize' => 120])
             </span>
         </div>
-    @endif
-</div>
+        @if($deliveredPhotoUrl || $deliveredType !== '')
+            <div class="pds-follow-up-details-item pds-follow-up-details-item-wide">
+                <span class="pds-follow-up-details-label">{{ __('message.delivered_image') }}</span>
+                <span class="pds-follow-up-details-value">
+                    @if($deliveredType === 'gate')
+                        <span class="pds-follow-up-details-note">
+                            {{ __('message.delivered_type_gate') }}
+                            · {{ __('message.transport_fee') }} {{ number_format((float) ($item->gate_amount ?? 0)) }}
+                        </span>
+                    @elseif($deliveredType === 'other')
+                        <span class="pds-follow-up-details-note">{{ __('message.delivered_type_other') }}</span>
+                    @endif
+                    @if($deliveredPhotoUrl)
+                        <a href="{{ $deliveredPhotoUrl }}" target="_blank" rel="noopener" class="pds-follow-up-pending-photo pds-follow-up-details-deliver-photo">
+                            <img src="{{ $deliveredPhotoUrl }}" alt="{{ __('message.delivered_image') }}" loading="lazy">
+                        </a>
+                    @endif
+                </span>
+            </div>
+        @endif
+    </div>
+</section>
 
 <div class="pds-follow-up-audit">
     <div class="pds-follow-up-audit-header">
@@ -130,7 +142,7 @@
                                                         [$detailLabel, $detailValue] = array_map('trim', explode(': ', $detailValue, 2));
                                                     }
                                                 @endphp
-                                                <li>
+                                                <li class="{{ $detailLabel ? 'has-label' : 'is-plain' }}">
                                                     @if($detailLabel)
                                                         <span class="is-label">{{ $detailLabel }}</span>
                                                     @endif

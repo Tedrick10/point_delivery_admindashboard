@@ -42,6 +42,30 @@ class DispatchOrderItemController extends Controller
         return $order;
     }
 
+    /**
+     * Order statuses where the assigned rider may still edit pickup parcels
+     * (size / pay / photos / ထပ်တိုး add-delete). Includes pickup_error so
+     * retrying from Pick Up Error → Completed works the same as Pick Up.
+     *
+     * @return list<string>
+     */
+    protected function riderPickupEditableStatuses(bool $includePickedUp = false): array
+    {
+        $statuses = [
+            'courier_assigned',
+            'courier_arrived',
+            'pickup_error',
+            'active',
+            'create',
+        ];
+
+        if ($includePickedUp) {
+            $statuses[] = 'courier_picked_up';
+        }
+
+        return $statuses;
+    }
+
     public function updatePickupItem(Request $request, $orderId, $itemId)
     {
         $request->validate([
@@ -75,14 +99,7 @@ class DispatchOrderItemController extends Controller
             ], 422);
         }
 
-        if (! in_array($order->status, [
-            'courier_assigned',
-            'courier_arrived',
-            'courier_picked_up',
-            'pickup_error',
-            'active',
-            'create',
-        ], true)) {
+        if (! in_array($order->status, $this->riderPickupEditableStatuses(includePickedUp: true), true)) {
             return json_custom_response([
                 'status' => false,
                 'message' => __('message.order_not_editable'),
@@ -154,6 +171,14 @@ class DispatchOrderItemController extends Controller
         if (! empty($fill)) {
             $item->forceFill($fill)->save();
             $audit->logRiderItemInfo($order, $item->fresh(), null, $before);
+
+            // Keep Order List DELIAMOUNT / orders.total_amount aligned with item edits.
+            $order->forceFill([
+                'total_amount' => (float) $order->dispatchItems()->sum('deli_amount'),
+            ])->save();
+            if (function_exists('forgetAdminOrderListLiveVersion')) {
+                forgetAdminOrderListLiveVersion();
+            }
         }
 
         $item->load(['fromBranch', 'toBranch', 'photoMedia']);
@@ -198,7 +223,7 @@ class DispatchOrderItemController extends Controller
             ], 422);
         }
 
-        if (! in_array($order->status, ['courier_assigned', 'courier_arrived', 'active', 'create'], true)) {
+        if (! in_array($order->status, $this->riderPickupEditableStatuses(), true)) {
             return json_custom_response([
                 'status' => false,
                 'message' => __('message.order_not_editable'),
@@ -326,6 +351,84 @@ class DispatchOrderItemController extends Controller
             'status' => true,
             'message' => __('message.save_form', ['form' => __('message.item')]),
             'data' => (new DispatchOrderItemResource($item))->resolve(),
+        ]);
+    }
+
+    /**
+     * Rider removes an ထပ်တိုး (rider_added) parcel before pickup is completed.
+     */
+    public function deletePickupItem(Request $request, $orderId, $itemId)
+    {
+        $order = $this->resolveRiderPickupOrder($orderId);
+        if (! $order instanceof Order) {
+            return $order;
+        }
+
+        $pickupService = app(PickupParcelDispatchService::class);
+        if (! $pickupService->isDispatchPickupOrder($order)) {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.not_found_entry', ['name' => __('message.order')]),
+            ], 422);
+        }
+
+        if (! in_array($order->status, $this->riderPickupEditableStatuses(), true)) {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.order_not_editable'),
+            ], 422);
+        }
+
+        $item = DispatchOrderItem::query()
+            ->where('order_id', $order->id)
+            ->where('id', $itemId)
+            ->where('status', 'collected')
+            ->where('remark', 'rider_added')
+            ->first();
+
+        if (! $item) {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.not_found_entry', ['name' => __('message.item')]),
+            ], 404);
+        }
+
+        $audit = app(DispatchOrderAuditService::class);
+        $itemMeta = [
+            'id' => $item->id,
+            'code' => $item->code,
+            'snapshot' => $audit->itemSnapshot($item),
+        ];
+        $item->delete();
+
+        try {
+            $audit->logItemDeleted($order, $itemMeta, 'rider');
+        } catch (\Throwable $e) {
+            \Log::warning('dispatch audit failed after rider item delete', [
+                'order_id' => $order->id,
+                'item_id' => $itemMeta['id'],
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $collectedCount = DispatchOrderItem::query()
+            ->where('order_id', $order->id)
+            ->where('status', 'collected')
+            ->count();
+
+        $order->forceFill([
+            'total_parcel' => max(1, $collectedCount),
+            'total_amount' => (float) $order->dispatchItems()->sum('deli_amount'),
+        ])->save();
+        $order->touch();
+
+        app(DispatchOrderWorkflowService::class)->syncOrderWorkflow($order->fresh());
+
+        return json_custom_response([
+            'status' => true,
+            'message' => __('message.delete_form', ['form' => __('message.item_name')]),
+            'item_count' => $collectedCount,
+            'total_parcel' => max(1, $collectedCount),
         ]);
     }
 
@@ -785,9 +888,9 @@ class DispatchOrderItemController extends Controller
             ->where($riderScope)
             ->whereIn('status', $statuses)
             ->whereNull('admin_completed_at')
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
-            ->orderByDesc('assigned_at')
-            ->orderByDesc('id');
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man', 'kyoShinItem']);
+        // Route order: first status tap → first in list (any tab).
+        $this->applyRiderDeliveryRouteOrder($query);
         if ($hasDateFilter) {
             $this->applyRiderDeliveryListDayFilter($query, $fromDay, $toDay);
         }
@@ -829,6 +932,68 @@ class DispatchOrderItemController extends Controller
             'pagination' => json_pagination_response($items),
             'data' => $items,
             'counts' => $counts,
+            'from_date' => $fromDay,
+            'to_date' => $toDay,
+        ]);
+    }
+
+    /**
+     * Rider Daily Tracking — this rider's ways that moved Delivered → Completed.
+     * No dates = all. Optional from_date / to_date filters by Completed day (Yangon).
+     */
+    public function listDailyTracking(Request $request)
+    {
+        $user = auth()->user();
+        if (! $user || $user->user_type !== 'delivery_man') {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.demo_permission_denied'),
+            ], 403);
+        }
+
+        $hasDateFilter = $request->filled('from_date') || $request->filled('to_date');
+        $fromDay = null;
+        $toDay = null;
+        if ($hasDateFilter) {
+            $yangonToday = Carbon::now('Asia/Yangon')->toDateString();
+            $fromDay = $this->parseDeliveryListDay($request->get('from_date')) ?? $yangonToday;
+            $toDay = $this->parseDeliveryListDay($request->get('to_date')) ?? $fromDay;
+            if ($toDay < $fromDay) {
+                $toDay = $fromDay;
+            }
+        }
+
+        $query = DispatchOrderItem::query()
+            ->where('delivery_man_id', $user->id)
+            ->where('status', 'completed')
+            ->whereNotNull('delivered_at')
+            ->whereNotNull('admin_completed_at')
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man', 'kyoShinItem'])
+            ->orderByDesc('admin_completed_at')
+            ->orderByDesc('id');
+
+        if ($hasDateFilter) {
+            $start = Carbon::parse($fromDay, 'Asia/Yangon')->startOfDay()->utc();
+            $end = Carbon::parse($toDay, 'Asia/Yangon')->endOfDay()->utc();
+            $query->where('admin_completed_at', '>=', $start)
+                ->where('admin_completed_at', '<=', $end);
+        }
+
+        $perPage = config('constant.PER_PAGE_LIMIT', 20);
+        if ($request->filled('per_page') && is_numeric($request->per_page)) {
+            $perPage = (int) $request->per_page;
+        }
+        if ((int) $request->get('per_page') === -1) {
+            $perPage = max(1, (clone $query)->count());
+        }
+
+        $page = $query->paginate($perPage);
+        $items = DispatchOrderItemResource::collection($page);
+
+        return json_custom_response([
+            'pagination' => json_pagination_response($items),
+            'data' => $items,
+            'total' => $page->total(),
             'from_date' => $fromDay,
             'to_date' => $toDay,
         ]);
@@ -886,7 +1051,7 @@ class DispatchOrderItemController extends Controller
             ->whereHas('order', function ($q) use ($user) {
                 $q->where('client_id', $user->id);
             })
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man', 'kyoShinItem'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
         $this->applyClientDeliveryListDayFilter($query, $fromDay, $toDay);
@@ -974,7 +1139,7 @@ class DispatchOrderItemController extends Controller
         }
 
         $items = $query
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man', 'kyoShinItem'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id')
             ->get();
@@ -1020,7 +1185,7 @@ class DispatchOrderItemController extends Controller
             ->whereHas('order', function ($q) use ($user) {
                 $q->where('client_id', $user->id);
             })
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man', 'kyoShinItem'])
             ->first();
 
         if (! $item) {
@@ -1055,7 +1220,7 @@ class DispatchOrderItemController extends Controller
             ->where('id', $itemId)
             ->where('delivery_man_id', $user->id)
             ->whereIn('status', $statuses)
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man', 'kyoShinItem'])
             ->first();
 
         if (! $item) {
@@ -1094,6 +1259,17 @@ class DispatchOrderItemController extends Controller
         } catch (\Throwable $e) {
             return null;
         }
+    }
+
+    /**
+     * Rider Delivery list order for route planning:
+     * first status tap (Assigned / On Way / Pending / Delivered / …) → first row.
+     */
+    protected function applyRiderDeliveryRouteOrder(Builder $query): void
+    {
+        $query->orderByRaw('CASE WHEN status_ordered_at IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('status_ordered_at')
+            ->orderBy('id');
     }
 
     /**
@@ -1162,7 +1338,7 @@ class DispatchOrderItemController extends Controller
 
     /**
      * Rider updates a single Assign-100 delivery item status.
-     * On Way → Pending requires remark + pending_photo (multipart).
+     * On Way → Assigned is allowed. On Way → Pending requires remark + pending_photo.
      */
     public function updateDeliveryItemStatus(Request $request, $itemId)
     {
@@ -1175,8 +1351,13 @@ class DispatchOrderItemController extends Controller
         }
 
         $toStatus = (string) $request->input('status', '');
+        if ($request->exists('gate_amount')) {
+            $request->merge([
+                'gate_amount' => parseDispatchMoney($request->input('gate_amount')),
+            ]);
+        }
         $rules = [
-            'status' => 'required|string|in:courier_departed,pending,completed,return,os_returned',
+            'status' => 'required|string|in:courier_assigned,courier_departed,pending,completed,return,os_returned',
             'remark' => 'nullable|string|max:1000',
             'pending_photo' => 'nullable|image|max:10240',
             'delivered_photo' => 'nullable|image|max:10240',
@@ -1191,7 +1372,7 @@ class DispatchOrderItemController extends Controller
             $rules['delivered_type'] = 'required|string|in:gate,other';
             $rules['delivered_photo'] = 'required|image|max:10240';
             if ((string) $request->input('delivered_type') === 'gate') {
-                $rules['gate_amount'] = 'required|numeric|min:0';
+                $rules['gate_amount'] = 'required|numeric|gt:0';
             }
         }
         $request->validate($rules);
@@ -1221,7 +1402,14 @@ class DispatchOrderItemController extends Controller
         }
 
         $fromStatus = (string) $item->status;
-        $fill = ['status' => $toStatus];
+        $fill = [
+            'status' => $toStatus,
+            // Every status tap stamps route order (1st click → 1st in that list).
+            'status_ordered_at' => now(),
+        ];
+        if (in_array($toStatus, ['courier_assigned', 'courier_departed', 'pending'], true)) {
+            $fill['delivery_locked'] = false;
+        }
         if ($toStatus === 'pending' && $remark !== null && $remark !== '') {
             $fill['remark'] = $remark;
         }
@@ -1249,7 +1437,7 @@ class DispatchOrderItemController extends Controller
             }
             $fill['delivered_photo_id'] = $deliveredPhotoId;
             if ($deliveredType === 'gate') {
-                $fill['gate_amount'] = round((float) $request->input('gate_amount', 0), 2);
+                $fill['gate_amount'] = parseDispatchMoney($request->input('gate_amount'));
             }
         }
 
@@ -1283,6 +1471,24 @@ class DispatchOrderItemController extends Controller
         }
 
         $item->forceFill($fill)->save();
+        if ($toStatus === 'completed') {
+            try {
+                $remitDay = normalizeYangonDateOnly($item->rider_remit_date) ?? '';
+                if ($remitDay !== '') {
+                    $branchId = (int) ($item->from_branch_id ?: $item->to_branch_id ?: 0);
+                    app(\App\Services\RiderRemitService::class)->ensureOpenRemitDefaults(
+                        $remitDay,
+                        $branchId > 0 ? $branchId : null,
+                        (int) $user->id
+                    );
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('rider remit gate sync failed after rider delivered', [
+                    'item_id' => $item->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
         if ($toStatus === 'pending') {
             recordDispatchItemPendingRemark(
                 $item,
@@ -1306,7 +1512,7 @@ class DispatchOrderItemController extends Controller
                 ]);
             }
         }
-        $item = $item->fresh(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city']);
+        $item = $item->fresh(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man']);
 
         $order = $item->order;
         if ($order) {
@@ -1430,7 +1636,7 @@ class DispatchOrderItemController extends Controller
             'deliveredPhotoMedia',
             'pendingRemarks.photoMedia',
             'deliveryMan',
-            'order.city',
+            'order.city', 'order.delivery_man',
         ])
             ->orderByDesc('updated_at')
             ->orderByDesc('id');
@@ -1499,7 +1705,7 @@ class DispatchOrderItemController extends Controller
             'deliveredPhotoMedia',
             'pendingRemarks.photoMedia',
             'deliveryMan',
-            'order.city',
+            'order.city', 'order.delivery_man',
         ])
             ->orderByDesc('updated_at')
             ->orderByDesc('id');
@@ -1567,7 +1773,7 @@ class DispatchOrderItemController extends Controller
                         ->orWhere('to_branch_id', $riderBranchId);
                 });
             })
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'deliveryMan', 'order.city', 'kyoShinItem'])
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man', 'kyoShinItem'])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
 
@@ -1665,7 +1871,7 @@ class DispatchOrderItemController extends Controller
                 'status' => true,
                 'already_assigned' => true,
                 'message' => __('message.assign_100_already_yours'),
-                'data' => new DispatchOrderItemResource($item->fresh(['fromBranch', 'toBranch', 'photoMedia', 'deliveryMan', 'order.city'])),
+                'data' => new DispatchOrderItemResource($item->fresh(['fromBranch', 'toBranch', 'photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man'])),
             ]);
         }
 
@@ -1697,6 +1903,7 @@ class DispatchOrderItemController extends Controller
                 'status' => 'courier_assigned',
                 'delivery_man_id' => $user->id,
                 'assigned_at' => now(),
+                'status_ordered_at' => now(),
                 // Keep original received_date (OS submission day). Rider day lists use assigned_at / received_date fallback.
             ]);
 
@@ -1707,7 +1914,7 @@ class DispatchOrderItemController extends Controller
             ], 422);
         }
 
-        $item = $item->fresh(['fromBranch', 'toBranch', 'photoMedia', 'deliveryMan', 'order.city']);
+        $item = $item->fresh(['fromBranch', 'toBranch', 'photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man']);
         $order = $item?->order;
 
         if ($order) {

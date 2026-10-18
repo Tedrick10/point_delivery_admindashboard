@@ -155,7 +155,7 @@ class ClientOrderDataTable extends DataTable
             })
             ->filterColumn('client_id', function($query, $keyword) {
                 return $query->orWhereHas('client', function($q) use($keyword) {
-                    $q->where('name', 'like', "%{$keyword}%");
+                    applyOnlineShopNameOrPhoneSearch($q, $keyword, 'name', 'contact_number');
                 });
             })
 

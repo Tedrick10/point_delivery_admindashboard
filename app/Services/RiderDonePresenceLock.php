@@ -135,6 +135,22 @@ class RiderDonePresenceLock
             return null;
         }
 
+        // Drop zombie locks whose locked_at is older than TTL (cache TTL missed / stuck entry).
+        $lockedAt = $raw['locked_at'] ?? null;
+        if (is_string($lockedAt) && $lockedAt !== '') {
+            try {
+                $age = now()->getTimestamp() - \Carbon\Carbon::parse($lockedAt)->getTimestamp();
+                if ($age > self::TTL_SECONDS) {
+                    Cache::forget($this->cacheKey($orderId));
+                    $this->indexRemove($orderId);
+
+                    return null;
+                }
+            } catch (\Throwable $e) {
+                // keep lock if timestamp unreadable
+            }
+        }
+
         return $raw;
     }
 

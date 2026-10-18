@@ -169,7 +169,9 @@
                                                     : '';
                                                 $riderLabel = trim($rider->name . ($riderPhone !== '' ? ' · ' . $riderPhone : ''));
                                             @endphp
-                                            <option value="{{ $rider->id }}" @selected((string) $riderId === (string) $rider->id)>{{ $riderLabel }}</option>
+                                            <option value="{{ $rider->id }}"
+                                                    data-phone="{{ $riderPhone }}"
+                                                    @selected((string) $riderId === (string) $rider->id)>{{ $riderLabel }}</option>
                                         @endforeach
                                         @if($riderId && !($pickupRiders ?? collect())->contains('id', (int) $riderId))
                                             <option value="{{ $riderId }}" selected>{{ $riderName ?: $riderId }}</option>
@@ -223,7 +225,7 @@
         @include('order.partials._os_search_modal')
 
         @section('bottom_script')
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=8"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
         <script>
             $(document).ready(function () {
                 if ($.fn.magnificPopup && $('.pds-gate-pass-showcase').length) {
@@ -511,13 +513,35 @@
                     var $el = $('#delivery_man_id');
                     var placeholder = @json(__('message.select_name', ['select' => __('message.pickup_rider')]));
                     var currentId = getSavedPickupRiderId();
+                    var matchFn = typeof window.pdsMatchNameOrPhone === 'function'
+                        ? window.pdsMatchNameOrPhone
+                        : function (term, name, phone) {
+                            var q = String(term || '').toLowerCase().trim();
+                            if (!q) return true;
+                            return String(name || '').toLowerCase().indexOf(q) !== -1
+                                || String(phone || '').toLowerCase().indexOf(q) !== -1;
+                        };
 
                     $el.select2({
                         width: '100%',
                         placeholder: placeholder,
                         allowClear: false,
                         dropdownParent: $(document.body),
-                        minimumResultsForSearch: 0
+                        minimumResultsForSearch: 0,
+                        matcher: function (params, data) {
+                            if ($.trim(params.term || '') === '') {
+                                return data;
+                            }
+                            if (!data.id && data.id !== 0) {
+                                return null;
+                            }
+                            var phone = data.element
+                                ? ($(data.element).attr('data-phone') || $(data.element).data('phone') || '')
+                                : '';
+                            return matchFn(params.term, data.text || '', phone || data.text || '')
+                                ? data
+                                : null;
+                        }
                     });
 
                     $el.on('select2:open.dispatchPickupRider', function () {

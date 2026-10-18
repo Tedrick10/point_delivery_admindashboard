@@ -77,7 +77,7 @@ class DailyCheckListController extends Controller
             ->where('user_type', 'client')
             ->where('status', 1)
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'contact_number']);
 
         $riderOptions = User::query()
             ->where('user_type', 'delivery_man')
@@ -85,7 +85,7 @@ class DailyCheckListController extends Controller
             ->visibleOnAdminRiderList(auth()->user())
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'contact_number']);
 
         $pageTitle = __('message.daily_check_list');
         $assets = [];

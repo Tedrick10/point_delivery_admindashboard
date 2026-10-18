@@ -6,9 +6,10 @@
     $heartbeatUrl = (string) ($riderDoneHeartbeatUrl ?? '');
     $releaseUrl = (string) ($riderDoneReleaseUrl ?? '');
 @endphp
-<div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable pds-admin-rider-done-wrap" role="document">
+<div class="modal-dialog modal-dialog-centered modal-lg pds-admin-rider-done-wrap" role="document">
     <div class="modal-content pds-admin-rider-done-modal">
         <form id="admin_mark_rider_done_form"
+              class="pds-ard-form"
               method="POST"
               enctype="multipart/form-data"
               action="{{ route('order.dispatch.mark-rider-done', $orderId) }}"

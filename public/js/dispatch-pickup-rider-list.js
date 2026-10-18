@@ -51,6 +51,41 @@
         }
     }
 
+    function matchNameOrPhone(term, name, phone) {
+        if (typeof window.pdsMatchNameOrPhone === 'function') {
+            return window.pdsMatchNameOrPhone(term, name, phone);
+        }
+        var query = String(term || '').toLowerCase().trim();
+        if (!query) {
+            return true;
+        }
+        if (String(name || '').toLowerCase().indexOf(query) !== -1) {
+            return true;
+        }
+        var rowPhone = String(phone || name || '');
+        if (rowPhone.toLowerCase().indexOf(query) !== -1) {
+            return true;
+        }
+        var qDigits = String(query).replace(/\D+/g, '');
+        while (qDigits.indexOf('95') === 0 && qDigits.length >= 10) {
+            qDigits = qDigits.slice(2);
+        }
+        if (qDigits.charAt(0) === '0') {
+            qDigits = qDigits.replace(/^0+/, '');
+        }
+        if (qDigits.length < 3) {
+            return false;
+        }
+        var rowDigits = String(rowPhone).replace(/\D+/g, '');
+        while (rowDigits.indexOf('95') === 0 && rowDigits.length >= 10) {
+            rowDigits = rowDigits.slice(2);
+        }
+        if (rowDigits.charAt(0) === '0') {
+            rowDigits = rowDigits.replace(/^0+/, '');
+        }
+        return rowDigits.indexOf(qDigits) !== -1;
+    }
+
     function initPickupRiderSelect($select, config) {
         if (!$select.length) {
             return;
@@ -66,7 +101,24 @@
             placeholder: placeholder,
             allowClear: false,
             dropdownParent: $(document.body),
-            minimumResultsForSearch: 0
+            minimumResultsForSearch: 0,
+            matcher: function (params, data) {
+                if ($.trim(params.term || '') === '') {
+                    return data;
+                }
+                if (!data.id && data.id !== 0) {
+                    return null;
+                }
+                var phone = '';
+                if (data.element) {
+                    phone = $(data.element).attr('data-phone')
+                        || $(data.element).data('phone')
+                        || '';
+                }
+                return matchNameOrPhone(params.term, data.text || '', phone || data.text || '')
+                    ? data
+                    : null;
+            }
         });
 
         $select.on('select2:open.pickupRider', function () {

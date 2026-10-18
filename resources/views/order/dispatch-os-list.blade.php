@@ -40,7 +40,10 @@
                             <option value="all" @selected($osFilter === 'all')>{{ __('message.all') }}</option>
                             <option value="0" @selected((string) $osFilter === '0')>{{ __('message.no_os') }}</option>
                             @foreach($osOptions as $option)
-                                <option value="{{ $option->id }}" @selected((string) $osFilter === (string) $option->id)>{{ $option->name }}</option>
+                                @php $osPhone = normalizeContactNumber($option->contact_number ?? ''); @endphp
+                                <option value="{{ $option->id }}"
+                                        data-phone="{{ $osPhone }}"
+                                        @selected((string) $osFilter === (string) $option->id)>{{ $option->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -278,8 +281,16 @@
 
     @section('bottom_script')
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
         <script>
             $(document).ready(function () {
+                if (typeof window.initOnlineShopFilterSelect === 'function') {
+                    window.initOnlineShopFilterSelect('#os_list_os', {
+                        placeholder: @json(__('message.select_name', ['select' => __('message.os_name')])),
+                        allowClear: false
+                    });
+                }
+
                 var filterFrom = @json($filterFromDate);
                 var filterTo = @json($filterToDate);
                 var filterBranchId = @json($branchFilter ?? 'all');

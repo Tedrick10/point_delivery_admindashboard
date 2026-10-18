@@ -10,15 +10,16 @@ class ResyncRiderRemitFuelCommand extends Command
 {
     protected $signature = 'rider-remit:resync-fuel {--day= : Optional remit day Y-m-d (default: all open remits)}';
 
-    protected $description = 'Re-apply ဆီဖိုး rules on open remits and sync Expense Rider fuel (drops foreign-rider phantom fuel).';
+    protected $description = 'Re-apply ဆီဖိုး / တန်ဆာခ rules on open remits and sync Expense Rider fuel (drops sticky phantom amounts).';
 
     public function handle(RiderRemitService $remitService, ExpenseRiderFuelSyncService $fuelSync): int
     {
         $day = $this->option('day');
         if ($day) {
-            $updated = $remitService->ensureOpenRemitDefaults((string) $day, null, null);
+            $defaults = $remitService->ensureOpenRemitDefaults((string) $day, null, null);
+            $updated = $remitService->resyncOpenRemitFuel(null, (string) $day);
             $fuelSync->syncExpenseDate((string) $day, null, null);
-            $this->info("Resynced {$day}: {$updated} remit row(s) updated.");
+            $this->info("Resynced {$day}: {$defaults} default row(s), {$updated} open remit fuel/fee row(s).");
 
             return self::SUCCESS;
         }

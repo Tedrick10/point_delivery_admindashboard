@@ -209,6 +209,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
 
     Route::get('notification-list', [NotificationController::class, 'notificationList'])->name('notification.list');
     Route::get('notification-counts', [NotificationController::class, 'notificationCounts'])->name('notification.counts');
+    Route::post('notification/{id}/read', [NotificationController::class, 'markRead'])->name('notification.read');
     Route::get('notification', [NotificationController::class, 'index'])->name('notification.index');
 
     Route::post('remove-file', [HomeController::class, 'removeFile'])->name('remove.file');
@@ -379,6 +380,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('dispatch-os-list/{osId}/items', [OrderController::class, 'dispatchOsItems'])->name('order.dispatch.os-items');
     Route::post('dispatch-os-list/{osId}/items/bulk-update', [OrderController::class, 'dispatchOsItemsBulkUpdate'])->name('order.dispatch.os-items.bulk-update');
     Route::get('dispatch-order/deli-audit', [OrderController::class, 'dispatchDeliAudit'])->name('order.dispatch.deli-audit');
+    Route::get('dispatch-order/details-audit', [OrderController::class, 'dispatchDetailsAudit'])->name('order.dispatch.details-audit');
     Route::get('dispatch-order/{id}/items/live-version', [OrderController::class, 'liveItemsVersion'])->name('order.dispatch.items.live-version');
     Route::get('dispatch-order/{id}/items/deli-audit', [OrderController::class, 'dispatchItemsDeliAudit'])->name('order.dispatch.items.deli-audit');
     Route::get('dispatch-order/{id}/items/export', [OrderController::class, 'dispatchItemsExport'])->name('order.dispatch.items.export');
@@ -387,6 +389,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('dispatch-order/{id}/item/create', [OrderController::class, 'dispatchItemCreate'])->name('order.dispatch.item.create');
     Route::post('dispatch-order/{id}/item', [OrderController::class, 'dispatchItemStore'])->name('order.dispatch.item.store');
     Route::get('dispatch-order/{orderId}/item/{itemId}/edit', [OrderController::class, 'dispatchItemEdit'])->name('order.dispatch.item.edit');
+    Route::get('dispatch-order/{orderId}/item/{itemId}/view', [OrderController::class, 'dispatchItemView'])->name('order.dispatch.item.view');
     Route::patch('dispatch-order/{orderId}/item/{itemId}', [OrderController::class, 'dispatchItemUpdate'])->name('order.dispatch.item.update');
     Route::post('dispatch-order/{orderId}/item/{itemId}/gate', [OrderController::class, 'dispatchItemUpdateGate'])->name('order.dispatch.item.update-gate');
     Route::delete('dispatch-order/{orderId}/item/{itemId}', [OrderController::class, 'dispatchItemDestroy'])->name('order.dispatch.item.destroy');

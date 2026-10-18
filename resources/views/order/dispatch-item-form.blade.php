@@ -1,5 +1,6 @@
 @php
     $isEdit = isset($item);
+    $isViewOnly = !empty($isViewOnly);
     $orderId = $order->id;
     $branchCities = $cities;
     $deliveryCities = $deliveryCities ?? config('dispatch_item_cities.cities', []);
@@ -109,24 +110,31 @@
     }
 @endphp
 
-<div class="modal-dialog modal-xl pds-dispatch-item-modal-wrap @if($isPhotoItem) is-photo-item-modal @endif" role="document">
-    <div class="modal-content pds-dispatch-item-modal @if($isPhotoItem) is-photo-item-modal @endif">
+<div class="modal-dialog modal-xl pds-dispatch-item-modal-wrap @if($isPhotoItem) is-photo-item-modal @endif @if($isViewOnly) is-view-only @endif" role="document">
+    <div class="modal-content pds-dispatch-item-modal @if($isPhotoItem) is-photo-item-modal @endif @if($isViewOnly) is-view-only @endif">
         <form id="dispatch_item_form" method="POST" novalidate data-dispatch-item-form="1"
+              data-view-only="{{ $isViewOnly ? '1' : '0' }}"
               data-default-township="{{ $defaultTownship }}"
               data-saved-township="{{ $township }}"
               data-default-delivery-city="{{ $defaultDeliveryCity }}"
               data-apply-default-township="0"
               data-disable-os-credit="{{ $disableOsCredit ? '1' : '0' }}"
-              action="{{ $isEdit ? route('order.dispatch.item.update', [$orderId, $item->id]) : route('order.dispatch.item.store', $orderId) }}">
-            @csrf
-            @if($isEdit)
-                @method('PATCH')
-            @endif
+              @if($isViewOnly)
+              onsubmit="return false;"
+              @else
+              action="{{ $isEdit ? route('order.dispatch.item.update', [$orderId, $item->id]) : route('order.dispatch.item.store', $orderId) }}"
+              @endif>
+            @unless($isViewOnly)
+                @csrf
+                @if($isEdit)
+                    @method('PATCH')
+                @endif
+            @endunless
 
             <div class="pds-dispatch-item-modal-topbar">
                 <div class="pds-dispatch-item-modal-heading">
                     <span class="pds-dispatch-items-badge">{{ __('message.order') }} #{{ $orderId }}</span>
-                    <h5 class="pds-dispatch-items-heading">{{ __('message.add_or_update_item') }}</h5>
+                    <h5 class="pds-dispatch-items-heading">{{ $isViewOnly ? __('message.item_details') : __('message.add_or_update_item') }}</h5>
                 </div>
                 <button type="button" class="pds-dispatch-items-btn-close" data-dismiss="modal" aria-label="Close">
                     <i class="fas fa-times"></i>
@@ -242,14 +250,16 @@
                 </div>
                 <div class="pds-dispatch-item-footer-actions">
                     <button type="button" class="pds-dispatch-btn pds-dispatch-btn-ghost" data-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="submit"
-                            id="dispatch_item_save_btn"
-                            class="pds-dispatch-btn pds-dispatch-btn-primary"
-                            data-dispatch-item-save="1"
-                            onclick="return window.__pdsSaveDispatchItem ? window.__pdsSaveDispatchItem(event) : true;">
-                        <i class="fas fa-check"></i>
-                        {{ $isEdit ? __('message.update') : __('message.save') }}
-                    </button>
+                    @unless($isViewOnly)
+                        <button type="submit"
+                                id="dispatch_item_save_btn"
+                                class="pds-dispatch-btn pds-dispatch-btn-primary"
+                                data-dispatch-item-save="1"
+                                onclick="return window.__pdsSaveDispatchItem ? window.__pdsSaveDispatchItem(event) : true;">
+                            <i class="fas fa-check"></i>
+                            {{ $isEdit ? __('message.update') : __('message.save') }}
+                        </button>
+                    @endunless
                 </div>
             </div>
         </form>
@@ -258,6 +268,7 @@
 
 <script>
     (function () {
+        var isViewOnly = @json($isViewOnly);
         var opts = {
             nrcDataUrl: "{{ asset('data/myanmar-nrc.json') }}",
             townshipsUrl: "{{ route('delivery-route-locations.townships') }}",
@@ -265,10 +276,37 @@
             townshipsStoreUrl: "{{ route('delivery-route-locations.townships.store') }}",
             branchesStoreUrl: "{{ route('delivery-route-locations.branches.store') }}",
             modalParent: '#remoteModelData',
-            savedTownship: @json($township)
+            savedTownship: @json($township),
+            viewOnly: isViewOnly
         };
-        var formSrc = "{{ asset('js/dispatch-item-form.js') }}?v=37";
+        var formSrc = "{{ asset('js/dispatch-item-form.js') }}?v=38";
         var zoomSrc = "{{ asset('js/pds-photo-zoom.js') }}?v=3";
+
+        function lockViewOnlyFields() {
+            var $form = $('#dispatch_item_form');
+            if (!$form.length || $form.attr('data-view-only') !== '1') {
+                return;
+            }
+            $form.addClass('is-view-only');
+            $form.find('input, select, textarea').each(function () {
+                var $el = $(this);
+                if ($el.is('[type="hidden"]')) {
+                    return;
+                }
+                $el.prop('disabled', true).attr('readonly', true);
+            });
+            $form.find('.select2-hidden-accessible').each(function () {
+                var $sel = $(this);
+                if ($sel.data('select2')) {
+                    $sel.prop('disabled', true).trigger('change.select2');
+                }
+            });
+            $form.find('[data-dispatch-item-save], [type="submit"]').prop('disabled', true).addClass('d-none');
+            // Size / credit pills stay visible but non-interactive.
+            $form.find('.pds-dispatch-item-credit-pill, .pds-dispatch-item-size-btn, .pds-dispatch-item-pay-pill')
+                .addClass('is-disabled')
+                .css('pointer-events', 'none');
+        }
 
         function mountPhotoZoom() {
             if (window.PdsPhotoZoom && typeof window.PdsPhotoZoom.mountInlinePhoto === 'function') {
@@ -293,7 +331,8 @@
                 window.initDispatchItemForm(opts);
             }
             mountPhotoZoom();
-            $('#remoteModelData').addClass('has-photo-item-modal');
+            lockViewOnlyFields();
+            $('#remoteModelData').addClass('has-photo-item-modal' + (isViewOnly ? ' is-view-only-item-modal' : ''));
         }
 
         function loadForm() {
@@ -311,7 +350,7 @@
         }
 
         $(document).off('hidden.bs.modal.pdsPhotoItem').on('hidden.bs.modal.pdsPhotoItem', '#remoteModelData', function () {
-            $(this).removeClass('has-photo-item-modal');
+            $(this).removeClass('has-photo-item-modal is-view-only-item-modal');
             window.__pdsInlinePhotoRotation = 0;
         });
     })();

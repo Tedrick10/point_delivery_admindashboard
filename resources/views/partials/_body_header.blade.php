@@ -69,7 +69,7 @@
                                     <div class="pds-notify-menu__header">
                                         <span>{{ __('message.notification') }}</span>
                                         <div class="pds-notify-menu__header-actions">
-                                            <small class="badge badge-light pds-notify-header-count notification_count notification_tag">0</small>
+                                            <small class="badge badge-light pds-notify-header-count notification_count notification_tag d-none">0</small>
                                             <button type="button" class="pds-notify-close" onclick="return window.pdsCloseNotificationDropdown(event);" aria-label="{{ __('message.close') }}">
                                                 <i class="ri-close-line" aria-hidden="true"></i>
                                             </button>

@@ -1192,7 +1192,8 @@ class DispatchOrderWorkflowService
 
     /**
      * Allowed next statuses for Rider Delivery text buttons.
-     * Assigned → On Way; On Way → Delivered / Pending(+remark);
+     * Assigned → On Way / Delivered / Pending(+remark);
+     * On Way → Assigned / Delivered / Pending(+remark);
      * Pending → Delivered only; any path to Delivered is final (no further changes).
      * No-fee Return cycle: Assigned → Pending / Os Returned; Pending → Os Returned.
      */
@@ -1224,7 +1225,8 @@ class DispatchOrderWorkflowService
             'assigned' => ! empty($item->hub_user_id) ? ['courier_departed', 'pending', 'completed'] : [],
             // Assigned may jump to On Way, Pending, or Delivered (no On Way required first).
             'courier_assigned' => ['courier_departed', 'pending', 'completed'],
-            'courier_departed' => ['completed', 'pending'],
+            // On Way may go back to Assigned, or forward to Pending / Delivered.
+            'courier_departed' => ['courier_assigned', 'completed', 'pending'],
             'pending' => ['completed'],
             default => [],
         };

@@ -159,6 +159,7 @@ class UserController extends Controller
             'email' => $request->has('email') ? $this->decryptData($request->input('email')) : '',
             'password' => $this->decryptData($request->input('password')),
             'player_id' => $request->has('player_id') ? $this->decryptData($request->input('player_id')) : '',
+            'fcm_token' => $request->has('fcm_token') ? $this->decryptData($request->input('fcm_token')) : '',
             'partner_referral_code' => $request->has('partner_referral_code') ? $this->decryptData($request->input('partner_referral_code')) : '',
             'branch_id' => $request->has('branch_id') ? $this->decryptData($request->input('branch_id')) : null,
             'date_of_birth' => $request->has('date_of_birth') ? $this->decryptData($request->input('date_of_birth')) : '',
@@ -190,9 +191,10 @@ class UserController extends Controller
                     }
                 },
             ],
+            // Client app has no Email field — synthetic email is assigned server-side.
             'email' => $isDeliveryMan
                 ? 'required|email|unique:users,email,'.$user_id
-                : 'sometimes|nullable|email|unique:users,email,'.$user_id,
+                : ($isClient ? 'sometimes|nullable|email' : 'sometimes|nullable|email|unique:users,email,'.$user_id),
             'contact_number' => [
                 ($isClient || $isDeliveryMan) ? 'required' : 'sometimes',
                 'max:20',
@@ -217,6 +219,7 @@ class UserController extends Controller
         ], [
             'username.regex' => __('message.username_invalid'),
             'username.min' => __('message.username_invalid'),
+            'contact_number.unique' => __('message.contact_number_already_taken'),
         ]);
 
         // Handle Validation Failure
@@ -239,7 +242,10 @@ class UserController extends Controller
         $phone = $input['contact_number'] ?? '';
         $input['username'] = sanitizeRegistrationUsername($input['username'] ?? '')
             ?: registrationUsernameFromPhone($phone);
-        $input['email'] = $input['email'] ?: registrationEmailFromPhone($phone);
+        // Always assign a unique synthetic email for clients (no Email UI).
+        $input['email'] = $isClient
+            ? ensureUniqueRegistrationEmail($phone, $input['email'] ?? null)
+            : (($input['email'] ?? '') ?: registrationEmailFromPhone($phone));
         $input['os_profile'] = buildUserOsProfileFromArray($input);
         $input['address'] = buildUserAddressFromProfile($input['os_profile']);
 
@@ -281,6 +287,29 @@ class UserController extends Controller
             }
         }
         unset($input['partner_referral_code']);
+
+        // Keep plain password in os_profile so Admin edit can show လက်ရှိ password.
+        $plainLoginPassword = (string) ($input['password'] ?? '');
+        if (($input['user_type'] ?? '') === 'client') {
+            $input['os_profile'] = rememberOsLoginPassword(
+                is_array($input['os_profile'] ?? null) ? $input['os_profile'] : [],
+                $plainLoginPassword
+            );
+        }
+
+        $fcmToken = trim((string) ($input['fcm_token'] ?? ''));
+        if ($fcmToken !== '') {
+            $input['fcm_token'] = $fcmToken;
+        } else {
+            unset($input['fcm_token']);
+        }
+
+        $playerId = trim((string) ($input['player_id'] ?? ''));
+        if ($playerId !== '') {
+            $input['player_id'] = $playerId;
+        } else {
+            unset($input['player_id']);
+        }
 
         $input['password'] = Hash::make($input['password']);
 
@@ -359,7 +388,7 @@ class UserController extends Controller
         }
 
         $message = __('message.save_form', ['form' => __('message.'.$input['user_type'])]);
-        $user->api_token = $user->createToken('auth_token')->plainTextToken;
+        $user->api_token = $this->createAuthToken($user);
         $user->profile_image = getSingleMedia($user, 'profile_image', null);
 
         $user_detail = User::where('id', $user->id)->first();
@@ -651,11 +680,19 @@ class UserController extends Controller
 
         if ($request->is('api*')) {
             $clear = request('clear');
-            if ($clear != null) {
+            if ($clear != null && $user) {
                 $user->$clear = null;
             }
-            $user->fcm_token = null;
-            $user->save();
+            if ($user) {
+                $user->fcm_token = null;
+                $user->save();
+                // Drop this device's Sanctum token (and all rider tokens if single-device).
+                if ($user->user_type === 'delivery_man') {
+                    $user->tokens()->delete();
+                } elseif ($request->user()?->currentAccessToken()) {
+                    $request->user()->currentAccessToken()->delete();
+                }
+            }
 
             return json_message_response('Logout successfully');
         }
@@ -1022,7 +1059,7 @@ class UserController extends Controller
             $user_data = User::where('id',$user->id)->first();
             $message = __('message.save_form',['form' => $input['user_type'] ]);
         }
-        $user_data['api_token'] = $user_data->createToken('auth_token')->plainTextToken;
+        $user_data['api_token'] = $this->createAuthToken($user_data);
         $user_data['profile_image'] = getSingleMedia($user_data,'profile_image',null);
         $response = [
             'status' => true,
@@ -1420,10 +1457,23 @@ class UserController extends Controller
             ->first();
     }
 
+    /**
+     * Issue a Sanctum token. Rider (delivery_man) accounts are single-device:
+     * logging in elsewhere revokes every previous token so the old phone is forced out.
+     */
+    private function createAuthToken(User $user): string
+    {
+        if ($user->user_type === 'delivery_man') {
+            $user->tokens()->delete();
+        }
+
+        return $user->createToken('auth_token')->plainTextToken;
+    }
+
     private function buildLoginPayload(User $user): array
     {
         $success = $user->toArray();
-        $success['api_token'] = $user->createToken('auth_token')->plainTextToken;
+        $success['api_token'] = $this->createAuthToken($user);
         $success['profile_image'] = getSingleMedia($user, 'profile_image', null);
         $success['document_verified_at'] = $user->document_verified_at;
         $is_verified_delivery_man = false;
@@ -1794,5 +1844,100 @@ class UserController extends Controller
             'message' => __('message.save_form', ['form' => __('message.point_account')]),
             'data' => new UserResource($user),
         ]);
+    }
+
+    /**
+     * Pending OS signup: attach FCM token before login is allowed.
+     * Body: encrypted username + fcm_token (or plain fcm_token).
+     */
+    public function registerPendingPushToken(Request $request)
+    {
+        $username = sanitizeRegistrationUsername(
+            (string) ($this->decryptData($request->input('username')) ?: $request->input('username'))
+        );
+        $fcmToken = trim((string) (
+            $this->decryptData($request->input('fcm_token'))
+            ?: $request->input('fcm_token')
+            ?: ''
+        ));
+
+        if ($username === '' || $fcmToken === '') {
+            return json_custom_response([
+                'status' => false,
+                'message' => 'username and fcm_token required',
+            ], 422);
+        }
+
+        $user = User::query()
+            ->where('user_type', 'client')
+            ->where('username', $username)
+            ->whereIn('approval_status', [User::APPROVAL_PENDING, User::APPROVAL_APPROVED])
+            ->first();
+
+        if (! $user) {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.not_found_entry', ['name' => __('message.online_shop')]),
+            ], 404);
+        }
+
+        $user->forceFill(['fcm_token' => $fcmToken])->save();
+
+        return json_custom_response([
+            'status' => true,
+            'approval_status' => $user->approval_status,
+        ]);
+    }
+
+    /**
+     * Login-screen poller for pending OS accounts waiting on admin approve.
+     * Returns credentials once approved so the app can show a local notification
+     * even when FCM/OneSignal credentials are missing on the server.
+     */
+    public function checkOsApprovalStatus(Request $request)
+    {
+        $username = sanitizeRegistrationUsername(
+            (string) ($this->decryptData($request->input('username')) ?: $request->input('username'))
+        );
+
+        if ($username === '') {
+            return json_custom_response([
+                'status' => false,
+                'message' => 'username required',
+            ], 422);
+        }
+
+        $user = User::query()
+            ->where('user_type', 'client')
+            ->where('username', $username)
+            ->first();
+
+        if (! $user) {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.not_found_entry', ['name' => __('message.online_shop')]),
+            ], 404);
+        }
+
+        $approval = (string) ($user->approval_status ?? User::APPROVAL_PENDING);
+        $payload = [
+            'status' => true,
+            'approval_status' => $approval,
+            'username' => $user->username,
+        ];
+
+        if ($approval === User::APPROVAL_APPROVED) {
+            $password = osLoginPasswordFromProfile($user);
+            if ($password !== '') {
+                $payload['password'] = $password;
+            }
+            $payload['message'] = trans('message.push_os_approved_body', [
+                'username' => $user->username,
+                'password' => $password !== '' ? $password : '—',
+            ], 'my');
+            $payload['subject'] = trans('message.push_os_approved_title', [], 'my');
+        }
+
+        return json_custom_response($payload);
     }
 }

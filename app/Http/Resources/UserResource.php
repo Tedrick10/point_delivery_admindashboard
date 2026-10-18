@@ -51,8 +51,12 @@ class UserResource extends JsonResource
             'branch_id'                 => $this->branch_id,
             'branch_name'               => optional($this->branch)->name,
             'address'                   => $this->address,
-            'contact_number'            => $this->contact_number,
-            'daily_contact_number'      => $this->daily_contact_number,
+            'contact_number'            => function_exists('normalizeContactNumber')
+                ? (normalizeContactNumber($this->contact_number) ?: $this->contact_number)
+                : $this->contact_number,
+            'daily_contact_number'      => function_exists('normalizeContactNumber')
+                ? (normalizeContactNumber($this->daily_contact_number) ?: $this->daily_contact_number)
+                : $this->daily_contact_number,
             'daily_contact_date'        => $this->daily_contact_date
                 ? \Carbon\Carbon::parse($this->daily_contact_date)->toDateString()
                 : null,

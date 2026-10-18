@@ -29,6 +29,7 @@ class SystemSettingsController extends Controller
             'activeBrandFont' => brandFontId(),
             'themePacks' => array_values(uiThemePacks()),
             'activeTheme' => uiThemePackId(),
+            'walkthrough' => walkthroughSlides(),
         ];
     }
 
@@ -259,12 +260,66 @@ class SystemSettingsController extends Controller
 
         uploadMediaFile($res, $request->site_logo, 'site_logo');
         uploadMediaFile($res, $request->site_favicon, 'site_favicon');
+        $this->saveWalkthrough($request);
 
         appSettingData('set');
 
         return redirect()
             ->route('super-admin.screens.show', 'general-setting')
             ->with('success', __('message.updated'));
+    }
+
+    private function saveWalkthrough(Request $request): void
+    {
+        $dir = public_path('images/walkthrough');
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        for ($index = 1; $index <= 3; $index++) {
+            $title = trim((string) $request->input('walkthrough_title_'.$index, ''));
+            $subtitle = trim((string) $request->input('walkthrough_subtitle_'.$index, ''));
+            Setting::updateOrCreate(
+                ['type' => 'WALKTHROUGH', 'key' => 'title_'.$index],
+                ['value' => $title !== '' ? $title : null]
+            );
+            Setting::updateOrCreate(
+                ['type' => 'WALKTHROUGH', 'key' => 'subtitle_'.$index],
+                ['value' => $subtitle !== '' ? $subtitle : null]
+            );
+
+            if ($request->boolean('walkthrough_clear_'.$index)) {
+                $this->deleteCustomWalkthroughImage($index);
+                Setting::updateOrCreate(
+                    ['type' => 'WALKTHROUGH', 'key' => 'image_'.$index],
+                    ['value' => null]
+                );
+            }
+
+            $file = $request->file('walkthrough_image_'.$index);
+            if (! $file || ! $file->isValid()) {
+                continue;
+            }
+            $ext = strtolower((string) $file->getClientOriginalExtension());
+            if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'], true)) {
+                continue;
+            }
+            $this->deleteCustomWalkthroughImage($index);
+            $file->move($dir, 'custom-'.$index.'.'.$ext);
+            Setting::updateOrCreate(
+                ['type' => 'WALKTHROUGH', 'key' => 'image_'.$index],
+                ['value' => 'images/walkthrough/custom-'.$index.'.'.$ext]
+            );
+        }
+    }
+
+    private function deleteCustomWalkthroughImage(int $index): void
+    {
+        foreach (glob(public_path('images/walkthrough/custom-'.$index.'.*')) ?: [] as $path) {
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
     }
 
     public function updateApiServer(Request $request): RedirectResponse

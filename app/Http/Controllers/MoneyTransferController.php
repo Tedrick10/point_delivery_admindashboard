@@ -54,7 +54,7 @@ class MoneyTransferController extends Controller
             ->where('user_type', 'client')
             ->where('status', 1)
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'contact_number']);
 
         $pageTitle = __('message.money_transfer_list');
         $assets = [];

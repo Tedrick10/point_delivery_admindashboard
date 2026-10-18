@@ -72,7 +72,7 @@ class DeliverymanDataTable extends DataTable
                     . '</div>';
             })
             ->filterColumn('deliveryman', function($query, $keyword) {
-                return $query->where('name', 'like', "%{$keyword}%");
+                applyNameOrPhoneSearch($query, $keyword, 'name', 'contact_number');
             })
             ->editColumn('contact_number', function ($query) {
                 $raw = trim((string) ($query->contact_number ?? ''));

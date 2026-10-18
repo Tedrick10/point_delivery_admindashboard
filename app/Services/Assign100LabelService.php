@@ -5,11 +5,15 @@ namespace App\Services;
 use App\Models\DispatchOrderItem;
 use App\Models\Order;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class Assign100LabelService
 {
     public const QR_PREFIX = 'PDS1';
+
+    /** @var array{company: string, hotline: string, logo_url: string}|null */
+    protected ?array $sharedMeta = null;
 
     public function payload(DispatchOrderItem $item): string
     {
@@ -52,7 +56,18 @@ class Assign100LabelService
 
     public function qrSvg(string $payload, int $size = 132): string
     {
-        return (string) QrCode::size($size)->margin(0)->errorCorrection('M')->generate($payload);
+        return (string) QrCode::format('svg')->size($size)->margin(0)->errorCorrection('M')->generate($payload);
+    }
+
+    /**
+     * @param  iterable<int, DispatchOrderItem>  $items
+     * @return Collection<int, object>
+     */
+    public function buildMany(iterable $items): Collection
+    {
+        $this->sharedMeta = $this->sharedLabelMeta();
+
+        return collect($items)->map(fn (DispatchOrderItem $item) => $this->build($item))->values();
     }
 
     /**
@@ -74,11 +89,12 @@ class Assign100LabelService
      *     receiver_address: string,
      *     item_value: string,
      *     deli_amount: string,
-     *     remark: string
+     *     customer_to_get: string
      * }
      */
     public function build(DispatchOrderItem $item): object
     {
+        $meta = $this->sharedMeta ?? $this->sharedLabelMeta();
         $order = $item->relationLoaded('order') ? $item->order : $item->order()->with(['client.city'])->first();
         $payload = $this->payload($item);
         $osName = resolveDispatchOsName($order);
@@ -95,9 +111,16 @@ class Assign100LabelService
 
         $itemValue = (float) ($item->item_value ?? 0);
         $deli = (float) ($item->deli_amount ?? 0);
-        $remark = trim((string) ($item->remark ?? ''));
-        if ($remark === '' && ($itemValue + $deli) > 0) {
-            $remark = 'COD '.number_format($itemValue + $deli);
+        $custGet = (float) ($item->cust_get ?? 0);
+        if ($custGet <= 0 && ($itemValue > 0 || $deli > 0)) {
+            $amounts = DispatchOrderItem::computeAmounts(
+                $itemValue,
+                $deli,
+                (float) ($item->advance_paid ?? 0),
+                (float) ($item->os_paid ?? 0),
+                (string) ($item->credit_to ?? 'customer')
+            );
+            $custGet = (float) ($amounts['cust_get'] ?? 0);
         }
 
         $create = $item->received_date
@@ -106,18 +129,14 @@ class Assign100LabelService
             ? Carbon::parse((string) $create, 'Asia/Yangon')->timezone('Asia/Yangon')->format('d-m-Y')
             : now('Asia/Yangon')->format('d-m-Y');
 
-        $company = trim((string) (SettingData('order_invoice', 'company_name') ?: config('app.name') ?: 'Point Delivery'));
-        $hotline = companyHotlinePhone();
-        $logoUrl = $this->labelLogoDataUri();
-
         return (object) [
             'item' => $item,
             'payload' => $payload,
             'qr_svg' => $this->qrSvg($payload, 148),
             'printed_at' => now('Asia/Yangon')->format('d M Y · g:i A'),
-            'company' => $company !== '' ? $company : 'Point Delivery',
-            'hotline' => $hotline,
-            'logo_url' => $logoUrl,
+            'company' => $meta['company'],
+            'hotline' => $meta['hotline'],
+            'logo_url' => $meta['logo_url'],
             'create_date' => $createDate,
             'code' => trim((string) ($item->code ?? '')) ?: (string) $item->id,
             'sender' => $senderDisplay !== '' ? $senderDisplay : '-',
@@ -130,9 +149,82 @@ class Assign100LabelService
             'township' => $township !== '' && $township !== '-' ? $township : '-',
             'receiver_address' => trim((string) ($item->customer_address ?? '')) ?: '-',
             'item_value' => number_format($itemValue),
-            'deli_amount' => number_format($deli),
-            'remark' => $remark !== '' ? $remark : '-',
+            'deli_amount' => formatDispatchDeliAmount($item, $deli),
+            'customer_to_get' => number_format($custGet),
         ];
+    }
+
+    /**
+     * @return array{company: string, hotline: string, logo_url: string}
+     */
+    protected function sharedLabelMeta(): array
+    {
+        $info = slipCompanyInfo();
+        $company = trim((string) ($info['name'] ?? ''));
+        if ($company === '') {
+            $company = 'Point Delivery';
+        }
+
+        return [
+            'company' => $company,
+            'hotline' => (string) ($info['hotline'] ?? companyHotlinePhone()),
+            'logo_url' => $this->labelLogoUrl(),
+        ];
+    }
+
+    /**
+     * Prefer a tiny cached PNG URL (browser-cacheable) over a base64 data URI.
+     */
+    protected function labelLogoUrl(): string
+    {
+        $cached = $this->ensureCachedLogoFile();
+        if ($cached !== null) {
+            // Relative URL so local / production hosts both hit the same origin as the print iframe.
+            return '/images/'.$cached.'?v='.filemtime(public_path('images/'.$cached));
+        }
+
+        return $this->labelLogoDataUri();
+    }
+
+    protected function ensureCachedLogoFile(): ?string
+    {
+        $source = public_path('images/point-logo-circle.png');
+        $cachedName = 'airway-bill-logo.png';
+        $cachedPath = public_path('images/'.$cachedName);
+
+        if (! is_file($source)) {
+            return is_file($cachedPath) ? $cachedName : null;
+        }
+
+        $needsRebuild = ! is_file($cachedPath) || filemtime($cachedPath) < filemtime($source);
+        if (! $needsRebuild) {
+            return $cachedName;
+        }
+
+        if (! function_exists('imagecreatefrompng')) {
+            return null;
+        }
+
+        $src = @imagecreatefrompng($source);
+        if ($src === false) {
+            return null;
+        }
+
+        $tw = 128;
+        $th = 128;
+        $dst = imagecreatetruecolor($tw, $th);
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+        imagefilledrectangle($dst, 0, 0, $tw, $th, $transparent);
+        imagealphablending($dst, true);
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $tw, $th, imagesx($src), imagesy($src));
+        imagesavealpha($dst, true);
+        $ok = @imagepng($dst, $cachedPath, 6);
+        imagedestroy($src);
+        imagedestroy($dst);
+
+        return ($ok && is_file($cachedPath)) ? $cachedName : null;
     }
 
     protected function labelLogoDataUri(): string
@@ -143,44 +235,10 @@ class Assign100LabelService
         }
 
         try {
-            $cleanLogo = public_path('images/point-logo-circle.png');
-            if (is_file($cleanLogo) && function_exists('imagecreatefrompng')) {
-                $src = @imagecreatefrompng($cleanLogo);
-                if ($src !== false) {
-                    $tw = 128;
-                    $th = 128;
-                    $dst = imagecreatetruecolor($tw, $th);
-                    imagealphablending($dst, false);
-                    imagesavealpha($dst, true);
-                    $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
-                    imagefilledrectangle($dst, 0, 0, $tw, $th, $transparent);
-                    imagealphablending($dst, true);
-                    imagecopyresampled(
-                        $dst,
-                        $src,
-                        0,
-                        0,
-                        0,
-                        0,
-                        $tw,
-                        $th,
-                        imagesx($src),
-                        imagesy($src)
-                    );
-                    ob_start();
-                    imagesavealpha($dst, true);
-                    imagepng($dst, null, 6);
-                    $bytes = ob_get_clean();
-                    imagedestroy($src);
-                    imagedestroy($dst);
-                    if (is_string($bytes) && $bytes !== '') {
-                        return $cached = 'data:image/png;base64,'.base64_encode($bytes);
-                    }
-                }
-            }
-
-            if (is_file($cleanLogo)) {
-                $bytes = file_get_contents($cleanLogo);
+            $file = $this->ensureCachedLogoFile();
+            $path = $file ? public_path('images/'.$file) : public_path('images/point-logo-circle.png');
+            if (is_file($path)) {
+                $bytes = file_get_contents($path);
                 if ($bytes !== false && $bytes !== '') {
                     return $cached = 'data:image/png;base64,'.base64_encode($bytes);
                 }

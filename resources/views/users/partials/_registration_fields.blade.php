@@ -91,6 +91,7 @@
                            placeholder="{{ __('message.reg_placeholder_new_password') }}" autocomplete="new-password">
                     <button type="button" class="pds-os-password-toggle" tabindex="-1"><i class="fas fa-eye-slash"></i></button>
                 </div>
+                <small class="form-text text-muted">{{ __('message.leave_blank_to_keep_current_password') }}</small>
             </div>
 
             <div class="pds-dispatch-field">

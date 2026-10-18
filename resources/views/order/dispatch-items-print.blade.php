@@ -105,9 +105,8 @@
         <tbody>
             @forelse($items as $index => $item)
                 @php
-                    $remark = trim((string) ($item->remark ?? ''));
-                    $normalized = strtolower(preg_replace('/\s+/', '_', $remark) ?? '');
-                    $isDone = $remark === '' || $remark === '-' || $normalized === 'rider_added' || $normalized === 'rider_done';
+                    $isDone = ! empty($item->admin_updated_at);
+                    $remark = $isDone ? __('message.done') : '-';
                 @endphp
                 <tr>
                     <td>{{ $index + 1 }}</td>

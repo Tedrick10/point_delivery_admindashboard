@@ -103,6 +103,11 @@ if (window.PDS_MYANMAR_NRC_DATA_URL) {
             errorPlacement: function(error, element) {
                 if (element.hasClass('select2js')) {
                     error.insertAfter(element.next('.select2-container'));
+                } else if (element.closest('.input-group').length) {
+                    // Keep eye/addon buttons beside the input — do not inject error into the group.
+                    error.insertAfter(element.closest('.input-group'));
+                } else if (element.closest('.pds-os-password-wrap').length) {
+                    error.insertAfter(element.closest('.pds-os-password-wrap'));
                 } else {
                     error.insertAfter(element);
                 }

@@ -34,8 +34,9 @@
                 $url = $item->url();
                 $isHash = is_string($url) && str_starts_with((string) $url, '#');
                 $active = !empty($item->isActive) ? 'is-active' : '';
+                $navPin = (bool) $item->data('nav_pin');
             @endphp
-            <li class="pds-main-nav__item {{ $hasChildren ? 'has-dropdown' : '' }} {{ $active }}">
+            <li class="pds-main-nav__item {{ $hasChildren ? 'has-dropdown' : '' }} {{ $active }}{{ $navPin ? ' pds-main-nav__item--pin' : '' }}">
                 @if($hasChildren)
                     <button type="button" class="pds-main-nav__link pds-main-nav__link--dropdown {{ $active }}" aria-expanded="false">
                         <span class="pds-main-nav__label">{!! $titleHtml !!}</span>
@@ -115,14 +116,35 @@
             moreItem.hidden = true;
         }
 
+        function ensureMoreAdminGroup() {
+            var group = moreInner.querySelector(':scope > .pds-main-nav__more-group[data-pds-more-admin="1"]');
+            if (group) return group;
+            group = document.createElement('div');
+            group.className = 'pds-main-nav__more-group';
+            group.setAttribute('data-pds-more-admin', '1');
+            var title = document.createElement('div');
+            title.className = 'pds-main-nav__more-title';
+            title.textContent = 'Admin';
+            group.appendChild(title);
+            // Flat overflow items sit after Settlement groups — append at end.
+            moreInner.appendChild(group);
+            return group;
+        }
+
         function moveItemToMore(item) {
             if (!item || !moreInner) return;
             item.classList.add('is-overflow-hidden');
 
             var labelEl = item.querySelector('.pds-main-nav__label');
             var labelText = 'Item';
+            var iconHtml = '';
             if (labelEl) {
                 var labelClone = labelEl.cloneNode(true);
+                var iconEl = labelClone.querySelector('i, .fas, .fa, .far, .fab');
+                if (iconEl) {
+                    iconHtml = iconEl.outerHTML;
+                    iconEl.remove();
+                }
                 labelClone.querySelectorAll('.badge').forEach(function (b) { b.remove(); });
                 labelText = (labelClone.textContent || '').replace(/\s+/g, ' ').trim() || 'Item';
             }
@@ -156,13 +178,24 @@
             var a = document.createElement('a');
             a.className = 'pds-main-nav__sublink' + (item.classList.contains('is-active') || (link && link.classList.contains('is-active')) ? ' is-active' : '');
             a.href = link ? link.getAttribute('href') : 'javascript:void(0)';
+            if (iconHtml) {
+                a.insertAdjacentHTML('afterbegin', iconHtml);
+            }
             var name = document.createElement('span');
             name.textContent = labelText;
             a.appendChild(name);
             if (badgeHtml) {
                 a.insertAdjacentHTML('beforeend', badgeHtml);
             }
-            moreInner.insertBefore(a, moreInner.firstChild);
+            // Branch / Account Creation / My Salary → one Admin section (less wall of text).
+            // Insert after the section title so overflow-from-end keeps natural order.
+            var adminGroup = ensureMoreAdminGroup();
+            var adminTitle = adminGroup.querySelector('.pds-main-nav__more-title');
+            if (adminTitle && adminTitle.nextSibling) {
+                adminGroup.insertBefore(a, adminTitle.nextSibling);
+            } else {
+                adminGroup.appendChild(a);
+            }
         }
 
         function fitNavOverflow() {
@@ -180,7 +213,7 @@
                 return;
             }
 
-            // 2) Only then enable More and spill from the end.
+            // 2) Only then enable More and spill from the end (never move pinned items).
             moreItem.hidden = false;
             moreItem.classList.remove('is-empty');
 
@@ -188,7 +221,17 @@
             var safety = 0;
             while (list.scrollWidth > list.clientWidth + 1 && items.length > 1 && safety < 40) {
                 safety += 1;
-                moveItemToMore(items.pop());
+                var moveIdx = -1;
+                for (var i = items.length - 1; i >= 0; i--) {
+                    if (!items[i].classList.contains('pds-main-nav__item--pin')) {
+                        moveIdx = i;
+                        break;
+                    }
+                }
+                if (moveIdx < 0) {
+                    break;
+                }
+                moveItemToMore(items.splice(moveIdx, 1)[0]);
             }
 
             if (!moreInner.childElementCount) {

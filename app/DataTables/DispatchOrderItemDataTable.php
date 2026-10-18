@@ -165,16 +165,15 @@ class DispatchOrderItemDataTable extends DataTable
                 return stringLong($row->item_name ?? '', 'title', 20) ?: '-';
             })
             ->editColumn('remark', function ($row) {
-                $remark = trim((string) ($row->remark ?? ''));
-                $normalized = strtolower(preg_replace('/\s+/', '_', $remark) ?? '');
-                // Empty / system "rider_added" (Rider Done) → green Done badge.
-                if ($remark === '' || $remark === '-' || $normalized === 'rider_added' || $normalized === 'rider_done') {
+                // Item Detail List: never show free-text remark (that belongs on Order List).
+                // Green Done only after Admin Update.
+                if (! empty($row->admin_updated_at)) {
                     return '<span class="pds-dispatch-item-remark pds-dispatch-item-remark--done">'
                         . e(__('message.done'))
                         . '</span>';
                 }
 
-                return e(stringLong($remark, 'title', 16) ?: $remark);
+                return e('-');
             })
             ->editColumn('weight', function ($row) {
                 return formatDispatchItemSize($row->weight);

@@ -89,6 +89,9 @@ class DispatchOrderItemResource extends JsonResource
                 : false,
             'assigned_name' => optional($this->deliveryMan)->name,
             'assigned_phone' => optional($this->deliveryMan)->riderAssignedPhone(),
+            // Order-level pickup rider (who tapped Pick Up Completed).
+            'pickup_rider_name' => optional(optional($this->order)->delivery_man)->name,
+            'pickup_rider_phone' => optional(optional($this->order)->delivery_man)?->riderAssignedPhone(),
             'delivery_man_id' => $this->delivery_man_id ? (int) $this->delivery_man_id : null,
             'can_rate_rider' => $this->resolveCanRateRider($request),
             'my_rider_rating' => $this->resolveMyRiderRating($request),
@@ -100,6 +103,9 @@ class DispatchOrderItemResource extends JsonResource
             'code' => $this->code,
             'received_date' => $this->received_date
                 ? \Carbon\Carbon::parse($this->received_date)->format('d-m-Y')
+                : null,
+            'completed_at' => $this->admin_completed_at
+                ? \Carbon\Carbon::parse($this->admin_completed_at)->timezone('Asia/Yangon')->format('d-m-Y')
                 : null,
             'updated_at' => $this->updated_at
                 ? \Carbon\Carbon::parse($this->updated_at)->toIso8601String()
@@ -119,15 +125,27 @@ class DispatchOrderItemResource extends JsonResource
                 $rider = $this->relationLoaded('deliveryMan')
                     ? $this->deliveryMan
                     : null;
+                $pickupRider = $order->delivery_man;
 
                 return [
                     'id' => (int) $order->id,
                     'os_name' => $pickup['name'] ?? null,
-                    'os_phone' => $pickup['contact_number'] ?? ($pickup['phone'] ?? null),
+                    'os_phone' => (function () use ($pickup) {
+                        $raw = $pickup['contact_number'] ?? ($pickup['phone'] ?? null);
+                        if ($raw === null || $raw === '') {
+                            return null;
+                        }
+
+                        return function_exists('normalizeContactNumber')
+                            ? (normalizeContactNumber($raw) ?: $raw)
+                            : $raw;
+                    })(),
                     'os_address' => $pickup['address'] ?? null,
                     'order_count' => (int) ($order->total_parcel ?? 0),
                     'assigned_name' => $rider?->name,
                     'assigned_phone' => $rider?->riderAssignedPhone(),
+                    'pickup_rider_name' => $pickupRider?->name,
+                    'pickup_rider_phone' => $pickupRider?->riderAssignedPhone(),
                     'region' => DispatchOrderItem::deliveryCityLabel($this->delivery_city)
                         ?: (optional($order->city)->name),
                     'status' => $order->status,

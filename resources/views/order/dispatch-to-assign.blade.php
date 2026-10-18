@@ -47,8 +47,8 @@
                     <div class="pds-dispatch-field pds-dispatch-field-sm pds-follow-up-filter-status">
                         <label for="to_assign_status">{{ __('message.status') }}</label>
                         <select id="to_assign_status" class="pds-dispatch-input pds-dispatch-select">
-                            <option value="">{{ __('message.all') }}</option>
-                            <option value="pick_up" selected>{{ __('message.follow_up_status_pick_up') }}</option>
+                            <option value="" selected>{{ __('message.all') }}</option>
+                            <option value="pick_up">{{ __('message.follow_up_status_pick_up') }}</option>
                             <option value="assigned">{{ __('message.follow_up_status_assigned') }}</option>
                             <option value="assigned_100">{{ __('message.follow_up_status_assigned_100') }}</option>
                             <option value="on_way">{{ __('message.follow_up_status_on_way') }}</option>
@@ -63,7 +63,7 @@
                         <div class="pds-dispatch-field pds-dispatch-field-sm">
                             <label for="to_assign_os_name">{{ __('message.os_name') }}</label>
                             <div class="pds-follow-up-os-input-wrap">
-                                <input type="text" id="to_assign_os_name" class="pds-dispatch-input" placeholder="{{ __('message.os_name') }}" autocomplete="off">
+                                <input type="text" id="to_assign_os_name" class="pds-dispatch-input" placeholder="{{ __('message.os_name') }} / {{ __('message.phone') }}" autocomplete="off">
                                 <button type="button" class="pds-dispatch-to-assign-os-search-btn" id="openToAssignOsSearch" title="{{ __('message.to_find_os_name') }}">
                                     <i class="fas fa-search"></i>
                                 </button>
@@ -72,7 +72,7 @@
                     </div>
                     <div class="pds-dispatch-field pds-dispatch-field-sm">
                         <label for="to_assign_pickup_rider">{{ __('message.pickup_rider') }}</label>
-                        <input type="text" id="to_assign_pickup_rider" class="pds-dispatch-input" placeholder="{{ __('message.pickup_rider') }}" autocomplete="off">
+                                <input type="text" id="to_assign_pickup_rider" class="pds-dispatch-input" placeholder="{{ __('message.pickup_rider') }} / {{ __('message.phone') }}" autocomplete="off">
                     </div>
                     <div class="pds-dispatch-field pds-dispatch-field-sm pds-follow-up-filter-customer">
                         <label for="to_assign_customer_search">{{ __('message.customer_name') }} / {{ __('message.phone') }}</label>
@@ -128,8 +128,10 @@
                                     @php
                                         $order = $item->order;
                                         $osName = resolveDispatchOsName($order);
+                                        $osPhone = resolveDispatchOsPhone($order);
                                         $osAddress = resolveDispatchOsAddress($order);
                                         $pickupRider = optional($order?->delivery_man)->name ?? '-';
+                                        $pickupRiderPhone = optional($order?->delivery_man)->riderAssignedPhone() ?: '';
                                         $deliveryRider = optional($item->deliveryMan)->name ?? '-';
                                         $fromTo = trim((optional($item->fromBranch)->name ?? '-') . ' - ' . (optional($item->toBranch)->name ?? '-'));
                                         $township = \App\Models\DispatchOrderItem::deliveryCityLabel($item->delivery_city);
@@ -148,7 +150,9 @@
                                     <tr
                                         data-item-id="{{ $item->id }}"
                                         data-os-name="{{ $osName !== '-' ? $osName : '' }}"
+                                        data-os-phone="{{ $osPhone !== '-' ? $osPhone : '' }}"
                                         data-pickup-rider="{{ $pickupRider !== '-' ? $pickupRider : '' }}"
+                                        data-pickup-rider-phone="{{ $pickupRiderPhone }}"
                                         data-customer-name="{{ $item->customer_name ?: '' }}"
                                         data-customer-phone="{{ $item->customer_phone ?: '' }}"
                                         data-follow-up-status="{{ $followUpStatus }}"
@@ -248,7 +252,7 @@
 
 
     @section('bottom_script')
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=8"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
         <script>
             (function () {
                 var osSearchRoute = "{{ route('ajax-list', ['type' => 'os_dispatch_search']) }}";
@@ -295,13 +299,24 @@
                 }
 
                 function filterRiders(term) {
-                    var query = String(term || '').toLowerCase().trim();
+                    var query = String(term || '').trim();
                     if (!query) return riderCache;
+                    var matchFn = typeof window.pdsMatchNameOrPhone === 'function'
+                        ? window.pdsMatchNameOrPhone
+                        : null;
                     return riderCache.filter(function (row) {
-                        return (row.name || row.text || '').toLowerCase().indexOf(query) !== -1
-                            || String(row.phone || '').toLowerCase().indexOf(query) !== -1
-                            || String(row.city || '').toLowerCase().indexOf(query) !== -1
-                            || String(row.branch || '').toLowerCase().indexOf(query) !== -1;
+                        var name = row.name || row.text || '';
+                        var phone = row.phone || '';
+                        if (matchFn) {
+                            return matchFn(query, name, phone)
+                                || String(row.city || '').toLowerCase().indexOf(query.toLowerCase()) !== -1
+                                || String(row.branch || '').toLowerCase().indexOf(query.toLowerCase()) !== -1;
+                        }
+                        var q = query.toLowerCase();
+                        return String(name).toLowerCase().indexOf(q) !== -1
+                            || String(phone).toLowerCase().indexOf(q) !== -1
+                            || String(row.city || '').toLowerCase().indexOf(q) !== -1
+                            || String(row.branch || '').toLowerCase().indexOf(q) !== -1;
                     });
                 }
 
@@ -395,22 +410,34 @@
                 }
 
                 function applyToAssignFilters() {
-                    var osTerm = normalizeFilterValue($('#to_assign_os_name').val());
-                    var riderTerm = normalizeFilterValue($('#to_assign_pickup_rider').val());
+                    var osTerm = String($('#to_assign_os_name').val() || '').trim();
+                    var riderTerm = String($('#to_assign_pickup_rider').val() || '').trim();
                     var customerTerm = normalizeFilterValue($('#to_assign_customer_search').val());
                     var statusTerm = String($('#to_assign_status').val() || '').trim();
                     var visibleCount = 0;
+                    var matchNamePhone = typeof window.pdsMatchNameOrPhone === 'function'
+                        ? window.pdsMatchNameOrPhone
+                        : (typeof window.pdsMatchOsTerm === 'function'
+                            ? window.pdsMatchOsTerm
+                            : function (term, name, phone) {
+                                var q = String(term || '').toLowerCase();
+                                return !q
+                                    || String(name || '').toLowerCase().indexOf(q) !== -1
+                                    || String(phone || '').toLowerCase().indexOf(q) !== -1;
+                            });
 
                     $('#toAssignTable tbody tr').each(function () {
                         var $row = $(this);
-                        var rowOsName = normalizeFilterValue($row.data('os-name'));
-                        var rowPickupRider = normalizeFilterValue($row.data('pickup-rider'));
+                        var rowOsName = String($row.data('os-name') || '');
+                        var rowOsPhone = String($row.data('os-phone') || '');
+                        var rowPickupRider = String($row.data('pickup-rider') || '');
+                        var rowPickupRiderPhone = String($row.data('pickup-rider-phone') || '');
                         var rowCustomerName = normalizeFilterValue($row.data('customer-name'));
                         var rowCustomerPhone = normalizeFilterValue($row.data('customer-phone'));
                         var rowStatus = String($row.data('follow-up-status') || '');
                         var statusMatch = !statusTerm || rowStatus === statusTerm;
-                        var isMatch = (!osTerm || rowOsName.indexOf(osTerm) !== -1)
-                            && (!riderTerm || rowPickupRider.indexOf(riderTerm) !== -1)
+                        var isMatch = (!osTerm || matchNamePhone(osTerm, rowOsName, rowOsPhone))
+                            && (!riderTerm || matchNamePhone(riderTerm, rowPickupRider, rowPickupRiderPhone))
                             && (!customerTerm || rowCustomerName.indexOf(customerTerm) !== -1 || rowCustomerPhone.indexOf(customerTerm) !== -1)
                             && statusMatch;
 

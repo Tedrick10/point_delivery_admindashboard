@@ -36,7 +36,7 @@
                             </div>
                             <label class="pds-dm-toolbar__search">
                                 <span>{{ __('message.search') }}:</span>
-                                <input type="search" id="pds-dm-search" placeholder="" autocomplete="off">
+                                <input type="search" id="pds-dm-search" placeholder="{{ __('message.delivery_man') }} / {{ __('message.phone') }}" autocomplete="off">
                             </label>
                         </div>
 

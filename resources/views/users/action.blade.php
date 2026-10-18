@@ -11,16 +11,20 @@
                 ->html('<i class="ri-refresh-line" style="font-size:18px"></i>') !!}
         @endif
 
-        {!! html()->form('DELETE', route('users.force.delete', ['id' => $id, 'type' => 'forcedelete']))->attribute('data--submit', 'users' . $id)->open() !!}
+        {!! html()->form('DELETE', route('users.force.delete', ['id' => $id, 'type' => 'forcedelete']))->attribute('data--submit', 'users' . $id)->attribute('data-spa-ignore', '1')->open() !!}
             @if($auth_user->can('users-delete'))
-                {!! html()->a('javascript:void(0)')
-                    ->class('mr-2 text-danger')
-                    ->attribute('data--submit', 'users' . $id)
-                    ->attribute('data--confirmation', 'true')
-                    ->attribute('data-title', __('message.delete_form_title', ['form' => __('message.online_shop')]))
-                    ->attribute('title', __('message.force_delete_form_title', ['form' => __('message.online_shop')]))
-                    ->attribute('data-message', __('message.force_delete_msg'))
-                    ->html('<i class="ri-delete-bin-2-fill" style="font-size:18px"></i>') !!}
+                <a href="javascript:void(0)"
+                   class="mr-2 text-danger"
+                   data--submit="users{{ $id }}"
+                   data--confirmation="true"
+                   data--ajax="true"
+                   data-method="DELETE"
+                   data-spa-ignore="1"
+                   data-title="{{ __('message.delete_form_title', ['form' => __('message.online_shop')]) }}"
+                   title="{{ __('message.force_delete_form_title', ['form' => __('message.online_shop')]) }}"
+                   data-message="{{ __('message.force_delete_msg') }}">
+                    <i class="ri-delete-bin-2-fill" style="font-size:18px"></i>
+                </a>
             @endif
         {!! html()->form()->close() !!}
     </div>
@@ -88,17 +92,19 @@
             @endif
 
             @if($auth_user->can('users-delete'))
-                {!! html()->form('DELETE', route('users.destroy', $id))->attribute('data--submit', 'users' . $id)->class('d-inline')->open() !!}
-                    {!! html()->a(route('users.destroy', $id))
-                        ->class('pds-os-row-action is-delete')
-                        ->attribute('data--submit', 'users' . $id)
-                        ->attribute('data--confirmation', 'true')
-                        ->attribute('data--ajax', 'true')
-                        ->attribute('data-method', 'DELETE')
-                        ->attribute('data-title', __('message.delete_form_title', ['form' => __('message.online_shop')]))
-                        ->attribute('title', __('message.delete_form_title', ['form' => __('message.online_shop')]))
-                        ->attribute('data-message', __('message.delete_msg'))
-                        ->html('<i class="fas fa-trash-alt"></i>') !!}
+                {!! html()->form('DELETE', route('users.destroy', $id))->attribute('data--submit', 'users' . $id)->class('d-inline')->attribute('data-spa-ignore', '1')->open() !!}
+                    <a href="javascript:void(0)"
+                       class="pds-os-row-action is-delete"
+                       data--submit="users{{ $id }}"
+                       data--confirmation="true"
+                       data--ajax="true"
+                       data-method="DELETE"
+                       data-spa-ignore="1"
+                       data-title="{{ __('message.delete_form_title', ['form' => __('message.online_shop')]) }}"
+                       title="{{ __('message.delete_form_title', ['form' => __('message.online_shop')]) }}"
+                       data-message="{{ __('message.delete_msg') }}">
+                        <i class="fas fa-trash-alt"></i>
+                    </a>
                 {!! html()->form()->close() !!}
             @endif
         </div>

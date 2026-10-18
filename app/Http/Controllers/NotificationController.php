@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\DataTables\NotificationDataTable;
-use App\Models\Notification;
+
 class NotificationController extends Controller
 {
     /**
@@ -32,26 +32,51 @@ class NotificationController extends Controller
         if ($type == 'markas_read') {
             $user->last_notification_seen = now();
             $user->save();
-
-            if (count($user->unreadNotifications) > 0) {
-                $user->unreadNotifications->markAsRead();
-            }
+            $user->unreadNotifications()->update(['read_at' => now()]);
         }
 
         // Keep Notification "User Messages" in sync with Message menu unread chats.
+        clearNoisyAdminUnreadNotifications($user);
         syncUnreadDispatchItemMessageNotifications($user);
-        $user->unsetRelation('notifications');
-        $user->unsetRelation('unreadNotifications');
 
-        $notifications = $user->notifications;
+        $query = $user->notifications()->latest();
         if ($category !== 'all') {
-            $notifications = $notifications->filter(function ($notification) use ($category) {
-                $data = is_array($notification->data) ? $notification->data : [];
-                return inferNotificationCategory($data) === $category;
+            $query->where(function ($q) use ($category) {
+                if ($category === 'user_messages') {
+                    $q->where('data->category', 'user_messages')
+                        ->orWhereIn('data->type', ['dispatch_item_message', 'customersupport']);
+                } elseif ($category === 'user_orders') {
+                    $q->where('data->category', 'user_orders')
+                        ->orWhereIn('data->type', [
+                            'create', 'draft', 'active', 'cancelled', 'bid_placed', 'payment_status_message',
+                        ]);
+                } else {
+                    $q->where('data->category', $category);
+                }
             });
         }
 
-        $all_unread_count = isset($user->unreadNotifications) ? $user->unreadNotifications->count() : 0;
+        // Fetch a small recent window, then de-dupe message threads for the dropdown.
+        $fetched = $query->limit(40)->get();
+        $seenMessageItems = [];
+        $notifications = $fetched->filter(function ($notification) use (&$seenMessageItems) {
+            $data = is_array($notification->data) ? $notification->data : [];
+            if (($data['type'] ?? '') !== 'dispatch_item_message') {
+                return true;
+            }
+            $itemId = (int) ($data['dispatch_order_item_id'] ?? 0);
+            if ($itemId <= 0) {
+                return true;
+            }
+            if (isset($seenMessageItems[$itemId])) {
+                return false;
+            }
+            $seenMessageItems[$itemId] = true;
+
+            return true;
+        })->take(5)->values();
+
+        $all_unread_count = adminNotificationUnreadCount($user);
         $active_category = $category;
         $response = [
             'status'     => true,
@@ -69,22 +94,30 @@ class NotificationController extends Controller
     {
         $user = auth()->user();
 
+        clearNoisyAdminUnreadNotifications($user);
         syncUnreadDispatchItemMessageNotifications($user);
-        $user->unsetRelation('unreadNotifications');
 
-        $unread_count = 0;
-        $unread_total_count = 0;
-
-        if(isset($user->unreadNotifications)){
-            $unread_count = $user->unreadNotifications->count();
-            $unread_total_count = $unread_count;
-        }
+        $unread_count = adminNotificationUnreadCount($user);
         $response = [
             'status'            => true,
             'counts'            => $unread_count,
-            'unread_total_count'=> $unread_total_count
+            'unread_total_count'=> $unread_count,
         ];
 
         return json_custom_response($response);
+    }
+
+    public function markRead(Request $request, string $id)
+    {
+        $user = auth()->user();
+        $notification = $user->notifications()->where('id', $id)->first();
+        if ($notification && $notification->read_at === null) {
+            $notification->markAsRead();
+        }
+
+        return json_custom_response([
+            'status' => true,
+            'unread_count' => adminNotificationUnreadCount($user),
+        ]);
     }
 }

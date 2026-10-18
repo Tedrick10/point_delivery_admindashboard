@@ -32,9 +32,8 @@
                 <label for="customer_phone">{{ $contactPhoneLabel }}</label>
                 <input type="text" name="customer_phone" id="customer_phone" class="pds-dispatch-input"
                        value="{{ normalizeContactNumber($customerPhone) }}"
-                       placeholder="{{ __('message.customer_phone_dual_hint') }}"
+                       placeholder="{{ __('message.contact_number') }}"
                        autocomplete="off">
-                <small class="pds-field-hint">{{ __('message.customer_phone_dual_hint') }}</small>
             </div>
             <div class="pds-dispatch-field pds-dispatch-grid-span-2">
                 <label for="customer_address">{{ $contactAddressLabel }}</label>

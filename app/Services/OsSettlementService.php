@@ -336,15 +336,56 @@ class OsSettlementService
         return $draft;
     }
 
-    public function getDraftKpayPath(int $osId, string $fromDay, string $toDay): ?string
+    public function getDraft(int $osId, string $fromDay, string $toDay): ?OsSettlementDraft
     {
-        $draft = OsSettlementDraft::query()
+        return OsSettlementDraft::query()
             ->where('os_user_id', $osId)
-            ->where('from_date', $fromDay)
-            ->where('to_date', $toDay)
+            ->whereDate('from_date', Carbon::parse($fromDay)->toDateString())
+            ->whereDate('to_date', Carbon::parse($toDay)->toDateString())
             ->first();
+    }
 
-        return $draft?->kpay_slip_path;
+    /**
+     * A proof belongs to the sheet day it was uploaded on.
+     * Later list days (next ငွေရှင်းတမ်း) must not inherit that screenshot.
+     */
+    public function draftSlipAppliesToItems(?OsSettlementDraft $draft, $items): bool
+    {
+        if (! $draft || trim((string) $draft->kpay_slip_path) === '') {
+            return false;
+        }
+
+        $items = collect($items);
+        if ($items->isEmpty() || empty($draft->updated_at)) {
+            return false;
+        }
+
+        $newestDay = $items
+            ->map(static fn ($item) => osSettlementListDateForItem($item)->toDateString())
+            ->filter()
+            ->sort()
+            ->last();
+        if (! $newestDay) {
+            return false;
+        }
+
+        $slipDay = resolveRiderRemitDate(null, Carbon::parse($draft->updated_at));
+
+        return $newestDay <= $slipDay;
+    }
+
+    public function getDraftKpayPath(int $osId, string $fromDay, string $toDay, $items = null): ?string
+    {
+        $draft = $this->getDraft($osId, $fromDay, $toDay);
+        if (! $draft) {
+            return null;
+        }
+
+        if ($items !== null && ! $this->draftSlipAppliesToItems($draft, $items)) {
+            return null;
+        }
+
+        return $draft->kpay_slip_path;
     }
 
     public function filterItemsBySettlementSide($items, ?string $settlementSide)
@@ -474,7 +515,7 @@ class OsSettlementService
         }
 
         $paymentMethod = in_array($paymentMethod, ['kpay', 'cash'], true) ? $paymentMethod : ($isKyoShinSide ? 'cash' : 'kpay');
-        $kpayPath = $this->getDraftKpayPath($osId, $fromDay, $toDay);
+        $kpayPath = $isKyoShinSide ? null : $this->getDraftKpayPath($osId, $fromDay, $toDay, $items);
         if ($kpayPath && ! Storage::disk('public')->exists($kpayPath)) {
             $kpayPath = null;
         }
@@ -524,13 +565,16 @@ class OsSettlementService
 
         app(\App\Services\KyoShinService::class)->syncFinishedForItemIds($itemIds, $finishedBy);
 
-        // Keep draft if the other settlement side still has unfinished items for this OS.
-        if (! $this->hasUnfinishedCompletedItems($osId, $fromDay, $toDay)) {
-            OsSettlementDraft::query()
-                ->where('os_user_id', $osId)
-                ->where('from_date', $fromDay)
-                ->where('to_date', $toDay)
-                ->delete();
+        // Drop the proof once this period is finished. If the other side on the
+        // same sheet day is still open, keep the slip. A later list day must not
+        // inherit yesterday's screenshot.
+        $remaining = $this->completedItemsForPeriod($osId, $fromDay, $toDay);
+        $draft = $this->getDraft($osId, $fromDay, $toDay);
+        if ($remaining->isEmpty()) {
+            $draft?->delete();
+        } elseif ($draft && ! $this->draftSlipAppliesToItems($draft, $remaining)) {
+            $draft->kpay_slip_path = null;
+            $draft->save();
         }
 
         $isReceiveSide = $settlementSide === 'receive';

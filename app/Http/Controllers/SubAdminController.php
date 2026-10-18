@@ -15,11 +15,13 @@ class SubAdminController extends Controller
     public function __construct()
     {
         $this->middleware(function ($request, $next) {
-            if (! isSuperAdmin(auth()->user())) {
-                return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
+            $user = auth()->user();
+            // Super Admin always; Managers / staff need Account Creation permission.
+            if (isSuperAdmin($user) || ($user && $user->can('subadmin-list'))) {
+                return $next($request);
             }
 
-            return $next($request);
+            return redirect()->route('home')->withErrors(__('message.demo_permission_denied'));
         });
     }
 
@@ -30,16 +32,16 @@ class SubAdminController extends Controller
      */
     public function index(SubAdminDataTable $dataTable)
     {
-        $pageTitle = __('message.list_form_title', ['form' => __('message.sub_admin')]);
+        $pageTitle = __('message.list_form_title', ['form' => __('message.account_creation')]);
         $employeeType = null;
         $roleFilter = request('role');
 
         if (request('employee_type')) {
             $employeeType = EmployeeType::find(request('employee_type'));
             if ($employeeType) {
-                $pageTitle = $employeeType->name . ' - ' . __('message.list_form_title', ['form' => __('message.sub_admin')]);
+                $pageTitle = $employeeType->name . ' - ' . __('message.list_form_title', ['form' => __('message.account_creation')]);
                 if ($roleFilter) {
-                    $pageTitle = $employeeType->name . ' / ' . ucfirst($roleFilter) . ' - ' . __('message.list_form_title', ['form' => __('message.sub_admin')]);
+                    $pageTitle = $employeeType->name . ' / ' . ucfirst($roleFilter) . ' - ' . __('message.list_form_title', ['form' => __('message.account_creation')]);
                 }
             }
         }
@@ -51,7 +53,7 @@ class SubAdminController extends Controller
             'employee_type' => request('employee_type'),
             'role' => $roleFilter,
         ]));
-        $button = $auth_user->can('subadmin-add') ? '<a href="' . $createRoute . '" class="float-right btn btn-sm btn-primary"><i class="fa fa-plus-circle"></i> ' . __('message.add_form_title', ['form' => __('message.sub_admin')]) . '</a>' : '';
+        $button = $auth_user->can('subadmin-add') ? '<a href="' . $createRoute . '" class="float-right btn btn-sm btn-primary"><i class="fa fa-plus-circle"></i> ' . __('message.add_form_title', ['form' => __('message.account_creation')]) . '</a>' : '';
         return $dataTable->render('subadmin.index', compact('assets', 'pageTitle', 'button', 'auth_user','multi_checkbox_delete', 'employeeType', 'roleFilter'));
     }
 

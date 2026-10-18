@@ -139,10 +139,22 @@ class DispatchOrderDataTable extends OrderDataTable
                 return '<a href="' . e($url) . '" class="pds-dispatch-item-count is-link" title="' . e(__('message.order_detail_list')) . '">' . e($label) . '</a>';
             })
             ->addColumn('deli_amount', function ($row) use ($workflow) {
-                // Sum item DeliAmount across visible statuses (not only collected).
+                // Always sum live item DeliAmount (Audit Log changes) — never trust stale orders.total_amount.
                 $amount = (float) $row->dispatchItems()
                     ->whereIn('status', $workflow->clientVisibleItemStatuses())
                     ->sum('deli_amount');
+
+                // Self-heal orders.total_amount so footer/sort/other screens match the list.
+                if (abs((float) ($row->total_amount ?? 0) - $amount) >= 0.001) {
+                    try {
+                        $row->forceFill(['total_amount' => $amount])->saveQuietly();
+                        if (function_exists('forgetAdminOrderListLiveVersion')) {
+                            forgetAdminOrderListLiveVersion();
+                        }
+                    } catch (\Throwable $e) {
+                        // Display the live sum even if persist fails.
+                    }
+                }
 
                 return number_format($amount);
             })

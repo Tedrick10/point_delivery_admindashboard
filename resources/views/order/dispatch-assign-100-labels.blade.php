@@ -639,8 +639,8 @@
                         <b>{{ $label->deli_amount }}</b>
                     </div>
                     <div class="stat">
-                        <span>Remark</span>
-                        <b>{{ $label->remark !== '' ? $label->remark : '—' }}</b>
+                        <span>Total</span>
+                        <b>{{ $label->customer_to_get }}</b>
                     </div>
                 </div>
 

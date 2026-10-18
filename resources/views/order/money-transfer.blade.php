@@ -78,7 +78,10 @@
                             <option value="all" @selected($osFilter === 'all')>{{ __('message.all') }}</option>
                             <option value="0" @selected((string) $osFilter === '0')>{{ __('message.no_os') }}</option>
                             @foreach($osOptions as $option)
-                                <option value="{{ $option->id }}" @selected((string) $osFilter === (string) $option->id)>{{ $option->name }}</option>
+                                @php $osPhone = normalizeContactNumber($option->contact_number ?? ''); @endphp
+                                <option value="{{ $option->id }}"
+                                        data-phone="{{ $osPhone }}"
+                                        @selected((string) $osFilter === (string) $option->id)>{{ $option->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -389,12 +392,20 @@
         </div>
     </div>
 
+    <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
     <script>
         (function bootMoneyTransfer() {
             if (!window.jQuery) {
                 return setTimeout(bootMoneyTransfer, 40);
             }
             var $ = window.jQuery;
+
+            if (typeof window.initOnlineShopFilterSelect === 'function') {
+                window.initOnlineShopFilterSelect('#mt_os', {
+                    placeholder: @json(__('message.select_name', ['select' => __('message.os_name')])),
+                    allowClear: false
+                });
+            }
 
             (function bindFrozenMoneyTransferScroll() {
                 var root = document.getElementById('moneyTransferFrozen');

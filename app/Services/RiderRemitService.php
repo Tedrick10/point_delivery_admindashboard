@@ -67,45 +67,57 @@ class RiderRemitService
     /**
      * Re-apply ဆီဖိုး on unsubmitted remits using the current min-way rule.
      */
-    public function resyncOpenRemitFuel(?int $userId = null): int
+    public function resyncOpenRemitFuel(?int $userId = null, ?string $day = null): int
     {
-        $rows = RiderRemit::query()->whereNull('submitted_at')->get();
+        $rows = RiderRemit::query()
+            ->whereNull('submitted_at')
+            ->when($day, fn ($q) => $q->whereDate('remit_date', Carbon::parse($day)->toDateString()))
+            ->get();
         $updated = 0;
         $dueCache = [];
         $touchedDays = [];
         $actor = $userId ?? auth()->id();
 
         foreach ($rows as $row) {
-            $day = $row->remit_date instanceof Carbon
+            $remitDay = $row->remit_date instanceof Carbon
                 ? $row->remit_date->toDateString()
                 : (string) $row->remit_date;
             $branchId = (int) $row->branch_id;
-            $cacheKey = $branchId.'|'.$day;
+            $cacheKey = $branchId.'|'.$remitDay;
             if (! isset($dueCache[$cacheKey])) {
-                $dueCache[$cacheKey] = $this->dueByRider($branchId > 0 ? $branchId : null, $day);
+                $dueCache[$cacheKey] = $this->dueByRider($branchId > 0 ? $branchId : null, $remitDay);
             }
             $dues = $dueCache[$cacheKey];
             $riderId = (int) $row->delivery_man_id;
             $fuelWayCount = (int) ($dues->get($riderId)?->fuel_way_count ?? 0);
+            $gate = (float) ($dues->get($riderId)?->gate ?? 0);
+            $agent = (float) ($dues->get($riderId)?->agent ?? 0);
+            $isOtherBranch = $this->isOtherBranchRemit($branchId);
             $fuel = $this->resolveFuelAmount(
                 $riderId,
                 (float) $row->fuel_amount,
                 $fuelWayCount,
-                $this->isOtherBranchRemit($branchId),
+                $isOtherBranch,
                 $branchId > 0 ? $branchId : null
             );
-            if (abs((float) $row->fuel_amount - $fuel) < 0.001) {
+            $fee = $this->resolveFeeAmount(
+                $row->fee_amount,
+                $isOtherBranch ? $agent : $gate,
+                $isOtherBranch
+            );
+            if (abs((float) $row->fuel_amount - $fuel) < 0.001 && abs((float) $row->fee_amount - $fee) < 0.001) {
                 continue;
             }
             $row->fuel_amount = $fuel;
+            $row->fee_amount = $fee;
             $row->updated_by = $actor;
             $row->save();
             $updated++;
-            $touchedDays[$day] = true;
+            $touchedDays[$remitDay] = true;
         }
 
-        foreach (array_keys($touchedDays) as $day) {
-            app(ExpenseRiderFuelSyncService::class)->syncDate($day, $actor);
+        foreach (array_keys($touchedDays) as $touchedDay) {
+            app(ExpenseRiderFuelSyncService::class)->syncDate($touchedDay, $actor);
         }
 
         return $updated;
@@ -382,6 +394,8 @@ class RiderRemitService
         bool $isOtherBranch = false,
         ?int $remitBranchId = null
     ): float {
+        // $savedFuel kept for call-site BC. ဆီဖိုး is system-controlled (SA default /
+        // per-rider) — never sticky from an old remit row after default becomes 0.
         if ($isOtherBranch || $this->isForeignRiderOnRemit($riderId, $remitBranchId)) {
             return 0.0;
         }
@@ -391,27 +405,15 @@ class RiderRemitService
             return 0.0;
         }
 
-        $saved = round((float) ($savedFuel ?? 0), 2);
-        if ($saved > 0) {
-            return $saved;
-        }
-
         return $this->riderFuelAmount($riderId);
     }
 
     /**
      * Local MDY/YGN: တန်ဆာခ from Gate. Half Deli sheets: Agent ရငွေ.
+     * Always live from $gateOrAgent — fee is read-only (no sticky saved fee).
      */
     protected function resolveFeeAmount($savedFee, float $gateOrAgent, bool $isOtherBranch = false): float
     {
-        if ($isOtherBranch) {
-            return round($gateOrAgent, 2);
-        }
-
-        if ($savedFee !== null && (float) $savedFee > 0) {
-            return round((float) $savedFee, 2);
-        }
-
         return round($gateOrAgent, 2);
     }
 
@@ -549,7 +551,9 @@ class RiderRemitService
                 $isOtherBranch ? $agent : $gate,
                 $isOtherBranch
             );
-            $nextDue = $savedDue > 0 ? $savedDue : $due;
+            // Always refresh open (unsubmitted) due from live Delivered amounts
+            // so Os Paid (pay_done) stays included when parcels change.
+            $nextDue = $due;
 
             if ($open && abs($savedFuel - $fuel) < 0.001 && abs((float) $savedFee - $fee) < 0.001 && abs($savedDue - $nextDue) < 0.001) {
                 continue;
@@ -648,6 +652,7 @@ class RiderRemitService
             }
 
             $due = (float) ($dues->get($riderId)?->due ?? 0);
+            $osPaidAmount = (float) ($dues->get($riderId)?->os_paid ?? 0);
             $gate = (float) ($dues->get($riderId)?->gate ?? 0);
             $agent = (float) ($dues->get($riderId)?->agent ?? 0);
             $itemCount = (int) ($dues->get($riderId)?->item_count ?? 0);
@@ -687,6 +692,7 @@ class RiderRemitService
                 'phone' => trim((string) ($user?->contact_number ?? '')),
                 'item_count' => $itemCount,
                 'due_amount' => $due,
+                'os_paid_amount' => $osPaidAmount,
                 'gate_amount' => $gate,
                 'agent_amount' => $agent,
                 'prepaid_amount' => $prepaid,
@@ -720,6 +726,7 @@ class RiderRemitService
             'summary' => (object) [
                 'rider_count' => $riders->count(),
                 'due_total' => round($riders->sum('due_amount'), 2),
+                'os_paid_total' => round($riders->sum('os_paid_amount'), 2),
                 'prepaid_total' => round($riders->sum('prepaid_amount'), 2),
                 'fuel_total' => round($riders->sum('fuel_amount'), 2),
                 'fee_total' => round($riders->sum('fee_amount'), 2),
@@ -884,6 +891,7 @@ class RiderRemitService
             'phone' => trim((string) ($user?->contact_number ?? '')),
             'item_count' => 0,
             'due_amount' => 0,
+            'os_paid_amount' => 0,
             'gate_amount' => 0,
             'prepaid_amount' => 0,
             'fuel_amount' => 0,
@@ -1273,12 +1281,16 @@ class RiderRemitService
             // ကြိုရှင်း Os Returned is a separate additive row.
             // ဆီဖိုး ways = completed Delivered only (no-fee Os Returned does not earn fuel).
 
+            $custGet = round($doneGroup->sum(fn (DispatchOrderItem $i) => (float) ($i->cust_get ?? 0)), 2);
+            $osPaid = round($doneGroup->sum(fn (DispatchOrderItem $i) => (float) ($i->os_paid ?? 0)), 2);
+
             return [
                 (int) $riderId => (object) [
                     'delivery_man_id' => (int) $riderId,
-                    'due' => round($doneGroup->sum(function (DispatchOrderItem $i) {
-                        return (float) ($i->cust_get ?? 0) + (float) ($i->os_paid ?? 0);
-                    }), 2),
+                    // အပ်ရမည့်ငွေ = Delivered cust_get + Os Paid (pay_done).
+                    'due' => round($custGet + $osPaid, 2),
+                    'cust_get' => $custGet,
+                    'os_paid' => $osPaid,
                     'gate' => round($doneGroup->sum(fn (DispatchOrderItem $i) => (float) ($i->gate_amount ?? 0)), 2),
                     'agent' => round($doneGroup->sum(fn (DispatchOrderItem $i) => (float) ($i->agent_amount ?? 0)), 2),
                     'item_count' => $doneGroup->count() + $kyoGroup->count(),

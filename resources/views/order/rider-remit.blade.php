@@ -144,6 +144,17 @@
                                         <span class="pds-rider-remit-read js-rr-due-total">{{ number_format($summary->due_total) }}</span>
                                     </td>
                                 </tr>
+                                <tr class="pds-rider-remit-row is-os-paid">
+                                    <th class="pds-rider-remit-label">{{ __('message.rider_remit_os_paid') }}</th>
+                                    @foreach($riders as $rider)
+                                        <td data-rider="{{ $rider->delivery_man_id }}" data-rr-os-paid="{{ (float) ($rider->os_paid_amount ?? 0) }}">
+                                            <span class="pds-rider-remit-read">{{ number_format((float) ($rider->os_paid_amount ?? 0)) }}</span>
+                                        </td>
+                                    @endforeach
+                                    <td class="pds-rider-remit-total-cell">
+                                        <span class="pds-rider-remit-read js-rr-os-paid-total">{{ number_format($summary->os_paid_total ?? 0) }}</span>
+                                    </td>
+                                </tr>
                                 <tr class="pds-rider-remit-row is-kyo-os-return">
                                     <th class="pds-rider-remit-label">
                                         <span>{{ __('message.rider_remit_kyo_shin_os_return') }}</span>
@@ -327,8 +338,12 @@
                 return setTimeout(bootRiderRemit, 40);
             }
             var $ = window.jQuery;
-            if (window.__pdsRiderRemitBound) return;
-            window.__pdsRiderRemitBound = true;
+            // SPA / live soft-replace destroy handlers; must re-bind every time this page mounts.
+            // Do not use a one-shot __pdsRiderRemitBound flag — it left the grid dead after in-app navigation.
+
+            function initRiderRemitPage() {
+                $(document).off('.pdsRiderRemit');
+                $('#rrAuditBtn, #rrAuditModal, #riderRemitGrid, #rrReturnInfoModal').off('.pdsRiderRemit');
 
                 if (typeof flatpickr !== 'undefined') {
                     flatpickr('.dispatch-datepicker', { dateFormat: 'd-m-Y', allowInput: true });
@@ -393,12 +408,12 @@
                         });
                     }
 
-                    $btn.on('click', function (e) {
+                    $btn.on('click.pdsRiderRemit', function (e) {
                         e.preventDefault();
                         openAudit();
                     });
-                    $modal.on('click', '[data-rr-audit-close]', closeAudit);
-                    $(document).on('keydown.rrAudit', function (e) {
+                    $modal.on('click.pdsRiderRemit', '[data-rr-audit-close]', closeAudit);
+                    $(document).on('keydown.pdsRiderRemit', function (e) {
                         if (e.key === 'Escape' && ! $modal.is('[hidden]')) {
                             closeAudit();
                         }
@@ -568,11 +583,11 @@
                     timers[riderId] = setTimeout(function () { saveRider(riderId); }, 450);
                 }
 
-                $grid.on('input change', '.js-rr-field, .js-rr-denom', function () {
+                $grid.on('input.pdsRiderRemit change.pdsRiderRemit', '.js-rr-field, .js-rr-denom', function () {
                     schedule($(this).data('rider'));
                 });
 
-                $grid.on('keydown', '.js-rr-field, .js-rr-denom', function (e) {
+                $grid.on('keydown.pdsRiderRemit', '.js-rr-field, .js-rr-denom', function (e) {
                     if (e.key !== 'Enter') return;
                     e.preventDefault();
                     var $el = $(this);
@@ -606,9 +621,9 @@
                     $returnModal.attr('hidden', true);
                 }
 
-                $(document).on('click', '[data-rr-return-close]', closeReturnInfo);
+                $(document).on('click.pdsRiderRemit', '[data-rr-return-close]', closeReturnInfo);
 
-                $grid.on('click', '.js-rr-return-info', function () {
+                $grid.on('click.pdsRiderRemit', '.js-rr-return-info', function () {
                     var $btn = $(this);
                     var parcels = $btn.data('parcels');
                     if (typeof parcels === 'string') {
@@ -644,6 +659,12 @@
                 });
 
                 refreshSummary();
+            }
+
+            initRiderRemitPage();
+            $(document)
+                .off('admin-live:replaced.pdsRiderRemitBoot')
+                .on('admin-live:replaced.pdsRiderRemitBoot', initRiderRemitPage);
         })();
         </script>
 

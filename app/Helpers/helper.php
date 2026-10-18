@@ -113,6 +113,11 @@ function pickupErrorExpressAvailable(?Carbon $errorAt, ?Carbon $now = null): boo
  */
 function slipCompanyInfo(): array
 {
+    static $cached = null;
+    if (is_array($cached)) {
+        return $cached;
+    }
+
     $app = appSettingData('get');
     $companyName = trim((string) (SettingData('order_invoice', 'company_name') ?: ''))
         ?: trim((string) ($app->site_name ?? ''))
@@ -140,7 +145,7 @@ function slipCompanyInfo(): array
         $logoUrl = getSingleMedia($app, 'site_logo', null);
     }
 
-    return [
+    return $cached = [
         'name' => $companyName,
         'phone' => $companyPhone,
         'address' => $companyAddress,
@@ -722,6 +727,18 @@ function authSession($force = false)
 }
 
 /**
+ * Bust Order List live-refresh fingerprint (e.g. after DeliAmount edits).
+ */
+function forgetAdminOrderListLiveVersion(): void
+{
+    try {
+        cache()->forget('admin_order_list_live_version');
+    } catch (\Throwable $e) {
+        // ignore cache backend failures
+    }
+}
+
+/**
  * Fingerprint of order list data for Admin live refresh polling.
  * Changes when users place orders, riders complete pickup, items change, etc.
  * Cached briefly so polling does not block PHP's single-threaded artisan serve.
@@ -732,10 +749,14 @@ function adminOrderListLiveVersion(): string
         $orderCount = Order::query()->count();
         $orderMaxId = (int) (Order::query()->max('id') ?? 0);
         $orderUpdated = (string) (Order::query()->max('updated_at') ?? '');
+        $orderDeliTotal = (string) (Order::query()->sum('total_amount') ?? '0');
 
         $itemCount = \App\Models\DispatchOrderItem::query()->count();
         $itemMaxId = (int) (\App\Models\DispatchOrderItem::query()->max('id') ?? 0);
         $itemUpdated = (string) (\App\Models\DispatchOrderItem::query()->max('updated_at') ?? '');
+        // Explicit DeliAmount fingerprint — item.updated_at alone can miss same-second edits
+        // and left Order List DELIAMOUNT stale while DeliAmount Audit Log already showed the change.
+        $itemDeliTotal = (string) (\App\Models\DispatchOrderItem::query()->sum('deli_amount') ?? '0');
 
         $historyUpdated = (string) (OrderHistory::query()->max('updated_at') ?? '');
 
@@ -743,9 +764,11 @@ function adminOrderListLiveVersion(): string
             $orderCount,
             $orderMaxId,
             $orderUpdated,
+            $orderDeliTotal,
             $itemCount,
             $itemMaxId,
             $itemUpdated,
+            $itemDeliTotal,
             $historyUpdated,
         ]));
     });
@@ -1305,6 +1328,51 @@ function getFileExistsCheck($media)
         }
     }
     return $mediaCondition;
+}
+
+function walkthroughDefaults(): array
+{
+    return [
+        1 => [
+            'title' => 'Select pickup location',
+            'subtitle' => 'It helps us to get package from your doorstep..',
+            'file' => 'slide-1.svg',
+        ],
+        2 => [
+            'title' => 'Select drop location',
+            'subtitle' => 'So that we can deliver the package to the correct person quickly.',
+            'file' => 'slide-2.svg',
+        ],
+        3 => [
+            'title' => 'Confirm and relax',
+            'subtitle' => 'We will deliver your package on time and in perfect condition.',
+            'file' => 'slide-3.svg',
+        ],
+    ];
+}
+
+function walkthroughSlides(): array
+{
+    $slides = [];
+    foreach (walkthroughDefaults() as $index => $default) {
+        $title = trim((string) (SettingData('WALKTHROUGH', 'title_'.$index) ?: ''));
+        $subtitle = trim((string) (SettingData('WALKTHROUGH', 'subtitle_'.$index) ?: ''));
+        $imageRel = trim((string) (SettingData('WALKTHROUGH', 'image_'.$index) ?: ''));
+        $isCustom = $imageRel !== '' && is_file(public_path($imageRel));
+        if (! $isCustom) {
+            $imageRel = 'images/walkthrough/'.$default['file'];
+        }
+
+        $slides[] = [
+            'index' => $index,
+            'title' => $title !== '' ? $title : $default['title'],
+            'subtitle' => $subtitle !== '' ? $subtitle : $default['subtitle'],
+            'image' => url($imageRel),
+            'is_custom' => $isCustom,
+        ];
+    }
+
+    return $slides;
 }
 
 function uploadMediaFile($model, $file, $name)
@@ -2026,14 +2094,19 @@ function brandFontSizeScale(?string $id = null): float
 
 function SettingData($type, $key = null)
 {
+    static $cache = [];
+    $cacheKey = $type.'|'.(string) $key;
+    if (array_key_exists($cacheKey, $cache)) {
+        return $cache[$cacheKey];
+    }
+
     $setting = Setting::where('type', $type);
 
     $setting->when($key != null, function ($q) use ($key) {
         return $q->where('key', $key);
     });
 
-    $setting_data = $setting->pluck('value')->first();
-    return $setting_data;
+    return $cache[$cacheKey] = $setting->pluck('value')->first();
 }
 
 function appCopyNormalizeLocale(?string $locale = null): string
@@ -2970,14 +3043,13 @@ function notifyAdminsDispatchItemMessage(array $notification_data): void
     $payload['category'] = 'user_messages';
 
     getPanelStaffUsers()->each(function ($admin) use ($payload) {
-        // Prefer one unread notification per parcel thread.
-        $existing = $admin->unreadNotifications
-            ->first(function ($notification) use ($payload) {
-                $data = is_array($notification->data) ? $notification->data : [];
-
-                return ($data['type'] ?? '') === 'dispatch_item_message'
-                    && (int) ($data['dispatch_order_item_id'] ?? 0) === (int) ($payload['dispatch_order_item_id'] ?? 0);
-            });
+        // Prefer one unread notification per parcel thread (query — never load all unread).
+        $itemId = (int) ($payload['dispatch_order_item_id'] ?? 0);
+        $existing = $admin->unreadNotifications()
+            ->where('data->type', 'dispatch_item_message')
+            ->when($itemId > 0, fn ($q) => $q->where('data->dispatch_order_item_id', $itemId))
+            ->latest()
+            ->first();
 
         if ($existing) {
             $existing->forceFill([
@@ -2991,6 +3063,57 @@ function notifyAdminsDispatchItemMessage(array $notification_data): void
 
         $admin->notify(new \App\Notifications\CustomerSupportNotification($payload));
     });
+}
+
+/**
+ * Unread badge count — actionable only (User Messages / User Orders).
+ * Admin Changes stay in the list/filters but do not flood the bell badge.
+ */
+function adminNotificationUnreadCount(?\App\Models\User $user = null): int
+{
+    $user = $user ?? auth()->user();
+    if (! $user) {
+        return 0;
+    }
+
+    return (int) $user->unreadNotifications()
+        ->where(function ($q) {
+            $q->whereIn('data->category', ['user_messages', 'user_orders'])
+                ->orWhereIn('data->type', [
+                    'dispatch_item_message',
+                    'customersupport',
+                    'create',
+                    'draft',
+                    'active',
+                    'cancelled',
+                    'bid_placed',
+                    'payment_status_message',
+                ]);
+        })
+        ->count();
+}
+
+/**
+ * Clear noisy unread Admin Changes so the panel stays usable.
+ */
+function clearNoisyAdminUnreadNotifications(?\App\Models\User $user = null): void
+{
+    $user = $user ?? auth()->user();
+    if (! $user || ! isAdminPanelUser($user)) {
+        return;
+    }
+
+    $noisy = (int) $user->unreadNotifications()
+        ->where('data->category', 'admin_changes')
+        ->count();
+
+    if ($noisy < 20) {
+        return;
+    }
+
+    $user->unreadNotifications()
+        ->where('data->category', 'admin_changes')
+        ->update(['read_at' => now()]);
 }
 
 /**
@@ -3012,27 +3135,28 @@ function syncUnreadDispatchItemMessageNotifications(?\App\Models\User $user = nu
         ->where('sender_type', 'client')
         ->whereNull('read_at')
         ->groupBy('dispatch_order_item_id')
+        ->limit(100)
         ->get();
 
     if ($unreadRows->isEmpty()) {
         return;
     }
 
+    $itemIds = $unreadRows->pluck('dispatch_order_item_id')->map(fn ($id) => (int) $id)->filter()->values();
     $existingByItem = [];
-    foreach ($user->notifications as $notification) {
-        $data = is_array($notification->data) ? $notification->data : [];
-        if (($data['type'] ?? '') !== 'dispatch_item_message') {
-            continue;
-        }
-        $itemId = (int) ($data['dispatch_order_item_id'] ?? 0);
-        if ($itemId <= 0) {
-            continue;
-        }
-        $ts = optional($notification->created_at)->timestamp ?? 0;
-        if (! isset($existingByItem[$itemId]) || $ts > $existingByItem[$itemId]) {
-            $existingByItem[$itemId] = $ts;
-        }
-    }
+    $user->notifications()
+        ->where('data->type', 'dispatch_item_message')
+        ->whereIn('data->dispatch_order_item_id', $itemIds->all())
+        ->orderByDesc('created_at')
+        ->get(['id', 'data', 'created_at'])
+        ->each(function ($notification) use (&$existingByItem) {
+            $data = is_array($notification->data) ? $notification->data : [];
+            $itemId = (int) ($data['dispatch_order_item_id'] ?? 0);
+            if ($itemId <= 0 || isset($existingByItem[$itemId])) {
+                return;
+            }
+            $existingByItem[$itemId] = optional($notification->created_at)->timestamp ?? 0;
+        });
 
     $lastMessages = \App\Models\DispatchItemMessage::query()
         ->with(['sender', 'media'])
@@ -3041,7 +3165,7 @@ function syncUnreadDispatchItemMessageNotifications(?\App\Models\User $user = nu
         ->keyBy('id');
 
     $items = \App\Models\DispatchOrderItem::query()
-        ->whereIn('id', $unreadRows->pluck('dispatch_order_item_id')->all())
+        ->whereIn('id', $itemIds->all())
         ->get()
         ->keyBy('id');
 
@@ -3090,16 +3214,10 @@ function markDispatchItemMessageNotificationsRead(\App\Models\User $user, int $d
         return;
     }
 
-    $user->unreadNotifications
-        ->filter(function ($notification) use ($dispatchOrderItemId) {
-            $data = is_array($notification->data) ? $notification->data : [];
-
-            return ($data['type'] ?? '') === 'dispatch_item_message'
-                && (int) ($data['dispatch_order_item_id'] ?? 0) === $dispatchOrderItemId;
-        })
-        ->each(function ($notification) {
-            $notification->markAsRead();
-        });
+    $user->unreadNotifications()
+        ->where('data->type', 'dispatch_item_message')
+        ->where('data->dispatch_order_item_id', $dispatchOrderItemId)
+        ->update(['read_at' => now()]);
 }
 
 function notifyUserCustomerSupport(User $user, array $notification_data): void
@@ -4082,7 +4200,16 @@ function saveOrderHistory($data)
                 && $send === 'client'
                 && ($data['history_type'] ?? '') === 'completed';
 
-            if (! $skipClientCompletedDb) {
+            // Admin bell is for User Messages / User Orders — skip routine ops noise.
+            $adminSkipDbTypes = [
+                'courier_picked_up', 'courier_departed', 'courier_arrived', 'courier_assigned',
+                'courier_transfer', 'completed', 'on_way', 'pickup_error', 'delayed',
+                'return', 'returned', 'shipped', 'in_transit',
+            ];
+            $skipAdminDb = $send === 'admin'
+                && in_array((string) ($data['history_type'] ?? ''), $adminSkipDbTypes, true);
+
+            if (! $skipClientCompletedDb && ! $skipAdminDb) {
                 $user->notify(new OrderNotification($notification_data));
             }
 
@@ -6052,6 +6179,67 @@ function osLoginPasswordFromProfile($userOrProfile): string
     return trim((string) ($profile['login_password'] ?? ''));
 }
 
+/**
+ * First-time OS client approval: ensure login credentials + push notify User App.
+ *
+ * @return array{username: string, password: string}|null
+ */
+function finalizeOsClientFirstApproval(\App\Models\User $user, string $previousApproval): ?array
+{
+    if (($user->user_type ?? '') !== 'client') {
+        return null;
+    }
+
+    if (($user->approval_status ?? '') !== \App\Models\User::APPROVAL_APPROVED) {
+        return null;
+    }
+
+    if ($previousApproval === \App\Models\User::APPROVAL_APPROVED) {
+        return null;
+    }
+
+    $username = sanitizeRegistrationUsername((string) ($user->username ?? ''));
+    if ($username === '') {
+        $username = registrationUsernameFromPhone((string) ($user->contact_number ?? ''));
+        if ($username !== '') {
+            $user->username = $username;
+        }
+    }
+
+    // Prefer signup password stored in os_profile; otherwise generate a temp password.
+    $plainPassword = osLoginPasswordFromProfile($user);
+    if ($plainPassword === '') {
+        $plainPassword = generateOsLoginPassword();
+        $user->password = bcrypt($plainPassword);
+        $user->is_temp_password = 1;
+    }
+
+    $user->os_profile = rememberOsLoginPassword(
+        is_array($user->os_profile) ? $user->os_profile : [],
+        $plainPassword
+    );
+    $user->save();
+
+    if ($username === '' || $plainPassword === '') {
+        return null;
+    }
+
+    try {
+        app(\App\Services\AppPushService::class)->notifyOsAccountApproved(
+            $user->fresh(),
+            $username,
+            $plainPassword
+        );
+    } catch (\Throwable $e) {
+        report($e);
+    }
+
+    return [
+        'username' => $username,
+        'password' => $plainPassword,
+    ];
+}
+
 function buildUserAddressFromProfile(array $osProfile): string
 {
     return implode(', ', array_filter([
@@ -6067,6 +6255,36 @@ function registrationEmailFromPhone(string $phone): string
     $digits = preg_replace('/\D+/', '', $phone);
 
     return ($digits ?: 'user').'@pointdelivery.local';
+}
+
+/**
+ * OS / app signup has no Email field — generate a unique synthetic address from phone.
+ * If the base address is already used (incl. soft-deleted), append a uniqid suffix.
+ */
+function ensureUniqueRegistrationEmail(?string $phone, ?string $preferredEmail = null): string
+{
+    $preferredEmail = trim((string) $preferredEmail);
+    $base = $preferredEmail !== ''
+        ? $preferredEmail
+        : registrationEmailFromPhone((string) $phone);
+
+    if ($base === '' || ! str_contains($base, '@')) {
+        $base = registrationEmailFromPhone((string) $phone);
+    }
+
+    $exists = \App\Models\User::withTrashed()->where('email', $base)->exists();
+    if (! $exists) {
+        return $base;
+    }
+
+    // Real emails (not @pointdelivery.local) that collide stay as-is for validation to reject.
+    if (! str_ends_with(strtolower($base), '@pointdelivery.local')) {
+        return $base;
+    }
+
+    $digits = preg_replace('/\D+/', '', (string) $phone) ?: 'user';
+
+    return $digits.'.'.uniqid('os', false).'@pointdelivery.local';
 }
 
 function normalizeMyanmarLocalDigits(string $local): string
@@ -6145,6 +6363,69 @@ function normalizeContactNumber(?string $phone): string
     }
 
     return normalizeSingleContactNumber($phone);
+}
+
+/**
+ * Apply name and/or contact-phone search (Online Shop, Rider, etc.).
+ * Matches 09… / +95… / partial digits and dual-number storage.
+ *
+ * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $query
+ */
+function applyNameOrPhoneSearch($query, ?string $term, string $nameColumn = 'name', string $phoneColumn = 'contact_number'): void
+{
+    $term = trim((string) $term);
+    if ($term === '') {
+        return;
+    }
+
+    // URL / query artifacts: "Zin+Min+Oo" must become "Zin Min Oo" for name search.
+    // Keep plus signs when the term looks like a phone (+95…).
+    $phoneDigitsProbe = preg_replace('/\D+/', '', $term) ?? '';
+    if ($phoneDigitsProbe === '' && str_contains($term, '+')) {
+        $term = trim(preg_replace('/\s+/u', ' ', str_replace('+', ' ', $term)) ?? $term);
+    }
+    if ($term === '') {
+        return;
+    }
+
+    $phoneVariants = contactNumberLookupVariants($term);
+    $phoneDigits = preg_replace('/\D+/', '', $term) ?? '';
+    if (str_starts_with($phoneDigits, '95') && strlen($phoneDigits) >= 10) {
+        $phoneDigits = substr($phoneDigits, 2);
+    }
+    if (str_starts_with($phoneDigits, '0') && strlen($phoneDigits) > 1) {
+        $phoneDigits = substr($phoneDigits, 1);
+    }
+
+    $words = preg_split('/\s+/u', $term, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+    $query->where(function ($inner) use ($term, $words, $phoneVariants, $phoneDigits, $nameColumn, $phoneColumn) {
+        $inner->where($nameColumn, 'LIKE', '%'.$term.'%')
+            ->orWhere($phoneColumn, 'LIKE', '%'.$term.'%');
+
+        // Multi-word names: all tokens must appear in name (order-independent).
+        if (count($words) > 1) {
+            $inner->orWhere(function ($allWords) use ($words, $nameColumn) {
+                foreach ($words as $word) {
+                    $allWords->where($nameColumn, 'LIKE', '%'.$word.'%');
+                }
+            });
+        }
+
+        foreach ($phoneVariants as $variant) {
+            $inner->orWhere($phoneColumn, 'LIKE', '%'.$variant.'%');
+        }
+
+        if (strlen($phoneDigits) >= 6) {
+            $inner->orWhere($phoneColumn, 'LIKE', '%'.$phoneDigits.'%');
+        }
+    });
+}
+
+/** @deprecated Use applyNameOrPhoneSearch() */
+function applyOnlineShopNameOrPhoneSearch($query, ?string $term, string $nameColumn = 'name', string $phoneColumn = 'contact_number'): void
+{
+    applyNameOrPhoneSearch($query, $term, $nameColumn, $phoneColumn);
 }
 
 /**
@@ -6570,6 +6851,38 @@ function dispatchItemProofPhotoUrl($item, string $kind = 'pending'): ?string
     }
 
     return mediaAbsoluteUrl($media);
+}
+
+/**
+ * Money typed in Admin or the Rider App, including Myanmar digits (၁၅၀၀).
+ */
+function parseDispatchMoney(mixed $value): float
+{
+    $raw = trim((string) ($value ?? ''));
+    if ($raw === '') {
+        return 0.0;
+    }
+
+    $raw = strtr($raw, [
+        '၀' => '0',
+        '၁' => '1',
+        '၂' => '2',
+        '၃' => '3',
+        '၄' => '4',
+        '၅' => '5',
+        '၆' => '6',
+        '၇' => '7',
+        '၈' => '8',
+        '၉' => '9',
+        ',' => '',
+        ' ' => '',
+    ]);
+
+    if ($raw === '' || ! is_numeric($raw)) {
+        return 0.0;
+    }
+
+    return round((float) $raw, 2);
 }
 
 /**

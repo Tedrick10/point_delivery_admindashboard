@@ -231,6 +231,18 @@
                 ->prepend('<i class="fas fa-motorcycle"></i>')
                 ->link->attr(['class' => '']);
 
+            // Account Creation — right after Rider List (Managers with subadmin-list)
+            if (\Illuminate\Support\Facades\Route::has('sub-admin.index')) {
+                $menu
+                    ->add('<span>' . __('message.account_creation') . '</span>', [
+                        'route' => 'sub-admin.index',
+                    ])
+                    ->data('permission', 'subadmin-list')
+                    ->data('nav_pin', true)
+                    ->prepend('<i class="fas fa-user-plus"></i>')
+                    ->link->attr(['class' => '']);
+            }
+
             // Online Shop List
             $menu
                 ->add('<span>' . __('message.list_form_title', ['form' => __('message.online_shop')]) . '</span>', [
@@ -255,12 +267,13 @@
                 ->link->href('javascript:void(0)')
                 ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
 
-            // Settlement / Finance (group)
+            // Settlement / Finance (group) — pin in header so it stays outside More
             $menu
                 ->add('<span>' . __('message.settlement') . '</span>', ['class' => ''])
                 ->prepend('<i class="fas fa-hand-holding-usd"></i>')
                 ->nickname('settlement')
                 ->data('permission', 'order-list')
+                ->data('nav_pin', true)
                 ->link->attr(['class' => ''])
                 ->href('#settlement');
 
@@ -418,8 +431,6 @@
                 ->data('permission', 'hr-payroll-list')
                 ->prepend('<i class="fas fa-motorcycle"></i>')
                 ->link->attr(['class' => '']);
-
-            // Account Creation + Roles & Permission — Super Admin panel only
 
             $menu
                 ->add('<span>' . __('message.nav_system') . '</span>', ['class' => 'pds-nav-section'])

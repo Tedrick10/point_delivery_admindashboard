@@ -571,6 +571,7 @@ class HomeController extends Controller
 
             case 'user':
                 $user = User::find($request->id);
+                $previousApproval = (string) ($user->approval_status ?? '');
                 if ($request->status != null) {
                     $user->status = $request->status;
                     if (($user->user_type ?? '') === 'client') {
@@ -603,6 +604,9 @@ class HomeController extends Controller
                 }
 
                 $user->save();
+                if (($user->user_type ?? '') === 'client') {
+                    finalizeOsClientFirstApproval($user->fresh(), $previousApproval);
+                }
                 if ($user->status == 0) {
                     $user->tokens()->delete();
                 }
@@ -826,14 +830,17 @@ class HomeController extends Controller
                     ->whereStatus(1)
                     ->visibleOnAdminRiderList(auth()->user());
                 if ($value != '') {
-                    $items->where('name', 'LIKE', '%' . $value . '%');
+                    applyNameOrPhoneSearch($items, $value, 'name', 'contact_number');
                 }
                 $items = $items->get()->map(function ($user) {
+                    $phone = normalizeContactNumber($user->contact_number);
+                    $name = (string) $user->text;
+
                     return [
                         'id' => $user->id,
-                        'text' => $user->text,
-                        'name' => $user->text,
-                        'phone' => normalizeContactNumber($user->contact_number),
+                        'text' => $phone !== '' ? ($name.' · '.$phone) : $name,
+                        'name' => $name,
+                        'phone' => $phone,
                     ];
                 });
                 break;
@@ -886,14 +893,17 @@ class HomeController extends Controller
                     }
                 }
                 if ($value != '') {
-                    $items->where('name', 'LIKE', '%' . $value . '%');
+                    applyNameOrPhoneSearch($items, $value, 'name', 'contact_number');
                 }
                 $items = $items->orderBy('name')->get()->map(function ($user) {
+                    $phone = normalizeContactNumber($user->contact_number);
+                    $name = (string) $user->text;
+
                     return [
                         'id' => $user->id,
-                        'text' => $user->text,
-                        'name' => $user->text,
-                        'phone' => normalizeContactNumber($user->contact_number),
+                        'text' => $phone !== '' ? ($name.' · '.$phone) : $name,
+                        'name' => $name,
+                        'phone' => $phone,
                         'city' => optional($user->city)->name,
                         'branch' => optional($user->branch)->name,
                         'branch_id' => $user->branch_id ? (int) $user->branch_id : null,
@@ -906,7 +916,7 @@ class HomeController extends Controller
                     ->whereStatus(1);
                 applyClientBranchScope($items);
                 if ($value != '') {
-                    $items->where('name', 'LIKE', '%' . $value . '%');
+                    applyOnlineShopNameOrPhoneSearch($items, $value, 'name', 'contact_number');
                 }
                 $items = $items->get()->map(function ($user) {
                     return [
@@ -926,10 +936,7 @@ class HomeController extends Controller
                 if ($request->filled('id')) {
                     $items->where('id', $request->id);
                 } elseif ($value != '') {
-                    $items->where(function ($query) use ($value) {
-                        $query->where('name', 'LIKE', '%' . $value . '%')
-                            ->orWhere('contact_number', 'LIKE', '%' . $value . '%');
-                    });
+                    applyOnlineShopNameOrPhoneSearch($items, $value, 'name', 'contact_number');
                 }
                 $items = $items->orderBy('name');
                 if (!$request->filled('id') && ($request->boolean('list_all') || $value === null || $value === '')) {

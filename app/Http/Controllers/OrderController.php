@@ -169,6 +169,37 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.demo_permission_denied')], 403);
         }
 
+        [$fromRaw, $toRaw, $fromDay, $toDay] = $this->resolveDispatchAuditDateRange($request);
+        $entries = $audit->deliAmountTimelineForRange($fromDay, $toDay);
+
+        return response()->json([
+            'from_date' => $fromRaw,
+            'to_date' => $toRaw,
+            'entries' => $entries->values(),
+        ]);
+    }
+
+    public function dispatchDetailsAudit(Request $request, DispatchOrderAuditService $audit)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        [$fromRaw, $toRaw, $fromDay, $toDay] = $this->resolveDispatchAuditDateRange($request);
+        $entries = $audit->detailsTimelineForRange($fromDay, $toDay);
+
+        return response()->json([
+            'from_date' => $fromRaw,
+            'to_date' => $toRaw,
+            'entries' => $entries->values(),
+        ]);
+    }
+
+    /**
+     * @return array{0:string,1:string,2:string,3:string} fromRaw, toRaw, fromDay, toDay
+     */
+    private function resolveDispatchAuditDateRange(Request $request): array
+    {
         $yangonToday = now('Asia/Yangon')->format('d-m-Y');
         $fromRaw = trim((string) $request->get('from_date', $yangonToday));
         $toRaw = trim((string) $request->get('to_date', $fromRaw !== '' ? $fromRaw : $yangonToday));
@@ -186,13 +217,7 @@ class OrderController extends Controller
             $toRaw = $fromRaw;
         }
 
-        $entries = $audit->deliAmountTimelineForRange($fromDay, $toDay);
-
-        return response()->json([
-            'from_date' => $fromRaw,
-            'to_date' => $toRaw,
-            'entries' => $entries->values(),
-        ]);
+        return [$fromRaw, $toRaw, $fromDay, $toDay];
     }
 
     public function orderprintindex(OrderPrintDataTable $dataTable)
@@ -273,10 +298,12 @@ class OrderController extends Controller
         [$pickupDatetime, $deliveryDatetime] = $this->resolveDispatchSchedule($request, $receivedDate);
         $orderCount = max(1, (int) $request->order_count);
 
+        $remark = trim((string) ($request->remark ?? ''));
         $pickupPoint = [
             'name' => $request->os_name,
             'contact_number' => normalizeContactNumber($request->os_phone),
             'address' => $request->os_address,
+            'instruction' => $remark !== '' ? $remark : null,
         ];
         $pickupPoint = $this->stampHubOriginOnPickupPoint($pickupPoint);
 
@@ -301,7 +328,7 @@ class OrderController extends Controller
             'total_weight' => 1,
             'total_parcel' => $orderCount,
             'payment_collect_from' => 'on_pickup',
-            'description' => $request->remark,
+            'description' => $remark !== '' ? $remark : null,
             'delivery_man_id' => (int) $request->delivery_man_id,
             'status' => 'courier_assigned',
             'country_id' => $client->country_id,
@@ -484,6 +511,17 @@ class OrderController extends Controller
             $acquire = $presence->acquire(auth()->user(), (int) $order->id);
             if (! $acquire['ok']) {
                 $busyMessage = $acquire['message'] ?? __('message.admin_rider_done_busy', ['name' => __('message.admin')]);
+                // SPA navigations must not follow a silent redirect back to the list —
+                // that looked like "Item Count won't open".
+                if ($request->headers->get('X-Admin-Spa') === '1'
+                    || $request->expectsJson()
+                    || $request->ajax()) {
+                    return response()->json([
+                        'message' => $busyMessage,
+                        'busy' => true,
+                        'holder' => $acquire['lock']['user_name'] ?? null,
+                    ], 423);
+                }
                 $fallback = [
                     'orders_type' => 'list',
                     'dispatch_status' => 'rider_pick_up_done',
@@ -749,6 +787,7 @@ class OrderController extends Controller
         foreach ($items as $item) {
             $fromStatus = (string) $item->status;
             $itemPayload = $payloadBase;
+            $itemPayload['status_ordered_at'] = now()->addMilliseconds($updated * 10);
 
             if ($fromStatus === 'return') {
                 $itemPayload['admin_completed_at'] = null;
@@ -1424,8 +1463,6 @@ class OrderController extends Controller
                 ->withErrors(__('message.max_assign_100_items'));
         }
 
-        app(DispatchOrderWorkflowService::class)->reclaimPrematureAssign100Items();
-
         $hubService = app(\App\Services\DispatchHubService::class);
         $authUser = auth()->user();
         $query = DispatchOrderItem::query()
@@ -1439,7 +1476,12 @@ class OrderController extends Controller
             $hubService->applyMdyPool($query);
         }
 
-        $items = $query->orderBy('id')->get();
+        // Keep selected print order (ids order), not DB id order.
+        $items = $query->get()->sortBy(function (DispatchOrderItem $item) use ($ids) {
+            $pos = array_search((int) $item->id, $ids, true);
+
+            return $pos === false ? PHP_INT_MAX : $pos;
+        })->values();
         if ($items->isEmpty()) {
             return redirect()
                 ->route('order.dispatch.assign-100')
@@ -1447,7 +1489,7 @@ class OrderController extends Controller
         }
 
         $labelService = app(\App\Services\Assign100LabelService::class);
-        $labels = $items->map(fn (DispatchOrderItem $item) => $labelService->build($item));
+        $labels = $labelService->buildMany($items);
         $autoprint = $request->boolean('autoprint');
         $embed = $request->boolean('embed');
 
@@ -2010,6 +2052,7 @@ class OrderController extends Controller
                 'status' => 'courier_assigned',
                 'delivery_man_id' => $rider->id,
                 'assigned_at' => now(),
+                'status_ordered_at' => now(),
                 'received_date' => Carbon::now('Asia/Yangon')->toDateString(),
             ]);
 
@@ -2200,6 +2243,8 @@ class OrderController extends Controller
         }
 
         $statuses = ['courier_assigned', 'courier_departed', 'pending', 'completed', 'return', 'os_returned'];
+        $riderSearch = trim((string) $request->get('q', ''));
+        // Legacy rider_id dropdown support.
         $riderFilter = trim((string) $request->get('rider_id', 'all'));
         if ($riderFilter === '') {
             $riderFilter = 'all';
@@ -2299,7 +2344,9 @@ class OrderController extends Controller
             ->withCount('rating as ratings_count')
             ->orderBy('name');
 
-        if ($riderFilter !== 'all' && is_numeric($riderFilter)) {
+        if ($riderSearch !== '') {
+            applyNameOrPhoneSearch($riderQuery, $riderSearch, 'name', 'contact_number');
+        } elseif ($riderFilter !== 'all' && is_numeric($riderFilter)) {
             $riderQuery->where('id', (int) $riderFilter);
         }
 
@@ -2329,10 +2376,6 @@ class OrderController extends Controller
             ];
         })->sortBy('name')->values();
 
-        $riderOptions = (clone $branchRiderQuery)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-
         $pageTitle = __('message.rider_list');
         $assets = [];
         $riderOfMonthUrl = route('deliveryman.rider-of-month');
@@ -2341,7 +2384,7 @@ class OrderController extends Controller
             'pageTitle',
             'assets',
             'riders',
-            'riderOptions',
+            'riderSearch',
             'riderFilter',
             'hasDateFilter',
             'riderOfMonthUrl',
@@ -2733,6 +2776,7 @@ class OrderController extends Controller
         $syncedExpenseDays = [];
         foreach ($items as $item) {
             $itemPayload = $payload;
+            $itemPayload['status_ordered_at'] = now()->addMilliseconds($updated * 10);
             if ($fromStatus === 'return') {
                 $itemPayload['admin_completed_at'] = null;
                 if ($item->isNormalReturn()) {
@@ -2919,6 +2963,11 @@ class OrderController extends Controller
         }
 
         $toStatus = trim((string) $request->input('to_status', ''));
+        if ($request->exists('gate_amount')) {
+            $request->merge([
+                'gate_amount' => parseDispatchMoney($request->input('gate_amount')),
+            ]);
+        }
         $rules = [
             'item_ids' => 'required|array|min:1',
             'item_ids.*' => 'integer',
@@ -2957,7 +3006,7 @@ class OrderController extends Controller
             } else {
                 $rules['delivered_type'] = 'required|string|in:gate,other';
                 if ((string) $request->input('delivered_type') === 'gate') {
-                    $rules['gate_amount'] = 'required|numeric|min:0';
+                    $rules['gate_amount'] = 'required|numeric|gt:0';
                 }
             }
         }
@@ -3317,6 +3366,8 @@ class OrderController extends Controller
             if ((int) ($item->delivery_man_id ?? 0) <= 0) {
                 $fill['delivery_man_id'] = $rider->id;
             }
+            // Every status change stamps route order (bulk keeps selection order).
+            $fill['status_ordered_at'] = now()->addMilliseconds($updated * 10);
             if ($toStatus === 'courier_assigned') {
                 $fill['assigned_at'] = $item->assigned_at ?: now();
                 $fill['delivery_locked'] = false;
@@ -3344,7 +3395,7 @@ class OrderController extends Controller
                 $fill['delivered_at'] = now();
                 $fill['rider_remit_date'] = resolveRiderRemitDate((int) ($item->delivery_man_id ?? 0));
                 if ($deliveredType === 'gate' && $gateAmount !== null) {
-                    $fill['gate_amount'] = $gateAmount;
+                    $fill['gate_amount'] = parseDispatchMoney($gateAmount);
                 }
                 if ($deliveredType === 'intercity') {
                     $fill['point_amount'] = $pointAmount ?? 0;
@@ -3412,6 +3463,22 @@ class OrderController extends Controller
                         'error' => $e->getMessage(),
                     ]);
                 }
+            }
+        }
+
+        if ($toStatus === 'completed' && $updated > 0) {
+            try {
+                $branchId = (int) ($rider->branch_id ?? 0);
+                app(\App\Services\RiderRemitService::class)->ensureOpenRemitDefaults(
+                    resolveRiderRemitDate((int) $rider->id),
+                    $branchId > 0 ? $branchId : null,
+                    (int) ($admin->id ?? 0) ?: null
+                );
+            } catch (\Throwable $e) {
+                \Log::warning('rider remit gate sync failed after admin delivered', [
+                    'rider_id' => $rider->id,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 
@@ -3642,7 +3709,9 @@ class OrderController extends Controller
                 ? -1 * (float) $itemGroup->sum(static fn ($item) => $item->kyoShinPayAmount())
                 : (float) $itemGroup->sum(static fn ($item) => $item->settlementOsToPay());
             $draft = $drafts->get($osId);
-            $kpaySlipUrl = $draft && $draft->kpay_slip_path
+            $slipApplies = $amountMode !== 'kyo_shin'
+                && $settlementService->draftSlipAppliesToItems($draft, $itemGroup);
+            $kpaySlipUrl = $slipApplies && $draft && $draft->kpay_slip_path
                 ? Storage::disk('public')->url($draft->kpay_slip_path)
                 : null;
             $kpayName = $client ? $settlementService->kpayNameFromUser($client) : '';
@@ -3712,7 +3781,7 @@ class OrderController extends Controller
             ->where('user_type', 'client')
             ->where('status', 1);
         applyClientBranchScope($osOptions);
-        $osOptions = $osOptions->orderBy('name')->get(['id', 'name']);
+        $osOptions = $osOptions->orderBy('name')->get(['id', 'name', 'contact_number']);
 
         $pageTitle = __('message.os_list');
         $assets = [];
@@ -3892,15 +3961,11 @@ class OrderController extends Controller
             $settlementSide === 'kyo_shin'
         );
         $slipSender = $settlementService->resolveSlipSender($osClient ?? new User(), $items, $osName);
-        $draft = OsSettlementDraft::query()
-            ->where('os_user_id', $osId)
-            ->where('from_date', $fromDay)
-            ->where('to_date', $toDay)
-            ->first();
+        $draft = $settlementService->getDraft($osId, $fromDay, $toDay);
         $kpayImageUrl = null;
         if ($batch && $batch->kpay_slip_path) {
             $kpayImageUrl = Storage::disk('public')->url($batch->kpay_slip_path);
-        } elseif ($draft?->kpay_slip_path) {
+        } elseif ($settlementService->draftSlipAppliesToItems($draft, $items) && $draft?->kpay_slip_path) {
             $kpayImageUrl = Storage::disk('public')->url($draft->kpay_slip_path);
         }
 
@@ -4096,7 +4161,21 @@ class OrderController extends Controller
             $itemIds = array_values(array_filter(array_map('intval', (array) ($itemPayload['item_ids'] ?? []))));
 
             if ($settlementSide !== 'kyo_shin') {
-                $kpayPath = $settlementService->getDraftKpayPath($osId, $fromDay, $toDay);
+                $kpayPath = $settlementService->getDraftKpayPath($osId, $fromDay, $toDay, null);
+                if ($kpayPath) {
+                    $pendingItems = $settlementService->filterItemsBySettlementSide(
+                        $settlementService->completedItemsForPeriod($osId, $fromDay, $toDay, $branchId),
+                        $settlementSide
+                    );
+                    if ($itemIds !== []) {
+                        $pendingItems = $pendingItems
+                            ->filter(static fn ($item) => in_array((int) $item->id, $itemIds, true))
+                            ->values();
+                    }
+                    if (! $settlementService->draftSlipAppliesToItems($settlementService->getDraft($osId, $fromDay, $toDay), $pendingItems)) {
+                        $kpayPath = null;
+                    }
+                }
                 if (! $kpayPath) {
                     $errors[] = __('message.os_settlement_kpay_missing_for_os', [
                         'name' => $this->resolveOsListDisplayName($osId, $clients->get($osId)),
@@ -4442,6 +4521,24 @@ class OrderController extends Controller
         return view('order.dispatch-item-form', compact('order', 'item', 'cities', 'deliveryCities'));
     }
 
+    /**
+     * Read-only Add/Update Item layout (Details Audit Log photo preview).
+     */
+    public function dispatchItemView($orderId, $itemId)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $order = Order::findOrFail($orderId);
+        $item = DispatchOrderItem::with('photoMedia')->where('order_id', $orderId)->findOrFail($itemId);
+        $cities = \App\Models\Branch::where('status', 1)->orderBy('name')->get();
+        $deliveryCities = $this->dispatchDeliveryCities();
+        $isViewOnly = true;
+
+        return view('order.dispatch-item-form', compact('order', 'item', 'cities', 'deliveryCities', 'isViewOnly'));
+    }
+
     public function dispatchItemCreate($id)
     {
         if (!auth()->user()->can('order-add')) {
@@ -4650,6 +4747,17 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.demo_permission_denied')], 403);
         }
 
+        if ($request->exists('gate_amount')) {
+            $request->merge([
+                'gate_amount' => parseDispatchMoney($request->input('gate_amount')),
+            ]);
+        }
+        if ($request->exists('gate_os_paid')) {
+            $request->merge([
+                'gate_os_paid' => parseDispatchMoney($request->input('gate_os_paid')),
+            ]);
+        }
+
         $data = $request->validate([
             'gate_amount' => 'nullable|numeric|min:0',
             'gate_os_paid' => 'nullable|numeric|min:0',
@@ -4667,6 +4775,23 @@ class OrderController extends Controller
         }
         $item->admin_updated_at = now();
         $item->save();
+
+        try {
+            $remitDay = normalizeYangonDateOnly($item->rider_remit_date) ?? '';
+            if ((string) $item->status === 'completed' && $remitDay !== '' && (int) ($item->delivery_man_id ?? 0) > 0) {
+                $branchId = (int) ($item->from_branch_id ?: $item->to_branch_id ?: 0);
+                app(\App\Services\RiderRemitService::class)->ensureOpenRemitDefaults(
+                    $remitDay,
+                    $branchId > 0 ? $branchId : null,
+                    (int) auth()->id()
+                );
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('rider remit gate sync failed after update gate', [
+                'item_id' => $item->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $displayOsToPay = $item->displayOsToPay();
         $osToPaySlip = formatDispatchOsToPaySlip($displayOsToPay);
@@ -5098,6 +5223,10 @@ class OrderController extends Controller
             'total_parcel' => max(1, (int) $order->total_parcel, $collectedCount),
             'total_amount' => (float) $order->dispatchItems()->sum('deli_amount'),
         ]);
+
+        if (function_exists('forgetAdminOrderListLiveVersion')) {
+            forgetAdminOrderListLiveVersion();
+        }
     }
 
     /**
@@ -5236,10 +5365,12 @@ class OrderController extends Controller
         $receivedDate = $this->parseDispatchDateInput($request->received_date);
         [$pickupDatetime, $deliveryDatetime] = $this->resolveDispatchSchedule($request, $receivedDate);
 
+        $remark = trim((string) ($request->remark ?? ''));
         $pickupPoint = [
             'name' => $request->os_name,
             'contact_number' => normalizeContactNumber($request->os_phone),
             'address' => $request->os_address,
+            'instruction' => $remark !== '' ? $remark : null,
         ];
 
         $existingPickup = is_array($order->pickup_point) ? $order->pickup_point : [];
@@ -5255,7 +5386,7 @@ class OrderController extends Controller
             'pickup_point' => $pickupPoint,
             'delivery_point' => $deliveryPoint,
             'total_parcel' => 1,
-            'description' => $request->remark,
+            'description' => $remark !== '' ? $remark : null,
             'delivery_man_id' => (int) $request->delivery_man_id,
             'country_id' => $client->country_id,
             'city_id' => $client->city_id,

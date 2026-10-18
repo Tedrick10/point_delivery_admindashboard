@@ -99,14 +99,27 @@
 
     function applyNotificationCount(count) {
         count = Number(count) || 0;
-        var $badge = $('.pds-topbar-notify .notify_count, .notify_count').first();
-        if (!$badge.length) return;
-        if (count > 0) {
-            $badge.addClass('notification_tag').text(count >= 100 ? '99+' : String(count)).removeClass('d-none');
-        } else {
-            $badge.addClass('d-none').removeClass('notification_tag').text('');
+        var $badge = $('.pds-topbar-notify .notify_count').first();
+        if ($badge.length) {
+            if (count > 0) {
+                $badge.addClass('notification_tag').text(count >= 100 ? '99+' : String(count)).removeClass('d-none');
+            } else {
+                $badge.addClass('d-none').removeClass('notification_tag').text('');
+            }
+        }
+        if (typeof window.updateNotificationDropdownMeta === 'function'
+            && !$('.pds-notify-menu').hasClass('show')) {
+            // Keep closed-dropdown header count in sync without rewriting unread sentence mid-open.
+            var $headerCount = $('.pds-notify-header-count');
+            $headerCount.text(count);
+            if (count > 0) {
+                $headerCount.removeClass('d-none');
+            } else {
+                $headerCount.addClass('d-none');
+            }
         }
     }
+    window.applyNotificationCount = applyNotificationCount;
 
     function applyDashboardStats(stats) {
         if (!stats) return;
@@ -156,11 +169,147 @@
         } catch (e) {}
     }
 
+    var __adminLiveLastUserScrollAt = 0;
+    var __adminLiveScrollListening = false;
+
+    function ensureAdminLiveScrollGuard() {
+        if (__adminLiveScrollListening) return;
+        __adminLiveScrollListening = true;
+        document.addEventListener('scroll', function () {
+            __adminLiveLastUserScrollAt = Date.now();
+        }, true);
+        document.addEventListener('wheel', function () {
+            __adminLiveLastUserScrollAt = Date.now();
+        }, { capture: true, passive: true });
+        document.addEventListener('touchmove', function () {
+            __adminLiveLastUserScrollAt = Date.now();
+        }, { capture: true, passive: true });
+    }
+
+    function userRecentlyScrolling(ms) {
+        return (Date.now() - __adminLiveLastUserScrollAt) < (ms || 1200);
+    }
+
+    function cssPathFromRoot(el, root) {
+        if (!el || !root || !root.contains(el)) return '';
+        var parts = [];
+        var cur = el;
+        while (cur && cur !== root) {
+            var parent = cur.parentElement;
+            if (!parent) break;
+            var idx = 1;
+            var sib = cur;
+            while ((sib = sib.previousElementSibling)) {
+                if (sib.tagName === cur.tagName) idx += 1;
+            }
+            parts.unshift(cur.tagName.toLowerCase() + ':nth-of-type(' + idx + ')');
+            cur = parent;
+        }
+        return parts.length ? ('#adminLiveRoot > ' + parts.join(' > ')) : '#adminLiveRoot';
+    }
+
+    function captureScrollPositions() {
+        var winY = window.scrollY || window.pageYOffset || 0;
+        var winX = window.scrollX || window.pageXOffset || 0;
+        var items = [];
+        var root = document.getElementById('adminLiveRoot');
+        var seen = [];
+
+        function pushEl(el) {
+            if (!el || seen.indexOf(el) !== -1) return;
+            var top = el.scrollTop || 0;
+            var left = el.scrollLeft || 0;
+            if (!top && !left) return;
+            seen.push(el);
+            items.push({
+                id: el.id || '',
+                path: root && root.contains(el) ? cssPathFromRoot(el, root) : '',
+                scrollTop: top,
+                scrollLeft: left
+            });
+        }
+
+        if (root) {
+            pushEl(root);
+            var nodes = root.querySelectorAll('*');
+            for (var i = 0; i < nodes.length; i++) {
+                var el = nodes[i];
+                if (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1) {
+                    pushEl(el);
+                }
+            }
+        }
+
+        ['.content-page', '.content', '#content-page', '.iq-content', '.container-fluid', '.dataTables_scrollBody', '.table-responsive'].forEach(function (sel) {
+            try {
+                document.querySelectorAll(sel).forEach(pushEl);
+            } catch (e) {}
+        });
+
+        return { winX: winX, winY: winY, items: items };
+    }
+
+    function restoreScrollPositions(state) {
+        if (!state) return;
+        function apply() {
+            try {
+                window.scrollTo(state.winX || 0, state.winY || 0);
+                if (document.scrollingElement) {
+                    document.scrollingElement.scrollTop = state.winY || 0;
+                    document.scrollingElement.scrollLeft = state.winX || 0;
+                }
+            } catch (e) {}
+            (state.items || []).forEach(function (item) {
+                var el = null;
+                if (item.id) {
+                    el = document.getElementById(item.id);
+                }
+                if (!el && item.path) {
+                    try { el = document.querySelector(item.path); } catch (e) {}
+                }
+                if (el) {
+                    el.scrollTop = item.scrollTop || 0;
+                    el.scrollLeft = item.scrollLeft || 0;
+                }
+            });
+        }
+        apply();
+        requestAnimationFrame(function () {
+            apply();
+            requestAnimationFrame(apply);
+        });
+        // Tables / images may reflow after soft replace.
+        window.setTimeout(apply, 50);
+        window.setTimeout(apply, 200);
+    }
+
+    function liveRootSignature(root) {
+        if (!root) return '';
+        try {
+            var clone = root.cloneNode(true);
+            clone.querySelectorAll('script').forEach(function (s) { s.remove(); });
+            return (clone.innerHTML || '')
+                .replace(/name="_token"[^>]*>/gi, '')
+                .replace(/value="[a-zA-Z0-9]{20,}"/g, 'value=""')
+                .replace(/\s+/g, ' ')
+                .trim();
+        } catch (e) {
+            return '';
+        }
+    }
+
     function softReplaceLiveRoot() {
+        ensureAdminLiveScrollGuard();
         var $root = $('#adminLiveRoot');
         if (!$root.length) return false;
         if ($('input:focus, textarea:focus, select:focus, .select2-container--open').length) return true;
         if ($('.modal.show, .jconfirm').length) return true;
+        // Don't yank the page while the user is still scrolling.
+        if (userRecentlyScrolling(1200)) return true;
+        if (window.__adminLiveSoftReplacing) return true;
+
+        window.__adminLiveSoftReplacing = true;
+        var scrollState = captureScrollPositions();
 
         $.ajax({
             url: window.location.href,
@@ -169,15 +318,35 @@
             cache: false,
             headers: { 'X-Admin-Live-Fragment': '1' }
         }).done(function (html) {
+            // User may have started scrolling while the fragment was loading.
+            if (userRecentlyScrolling(800) || $('input:focus, textarea:focus, select:focus, .select2-container--open').length || $('.modal.show, .jconfirm').length) {
+                return;
+            }
             var doc = new DOMParser().parseFromString(html, 'text/html');
             var newRoot = doc.querySelector('#adminLiveRoot');
             if (newRoot) {
+                var oldSig = liveRootSignature($root[0]);
+                var newSig = liveRootSignature(newRoot);
+                if (oldSig && newSig && oldSig === newSig) {
+                    return;
+                }
                 // Soft HTML replace without destroy leaves DataTables registered → tn/3 on next init.
                 destroyDataTablesIn($root);
+                // Soft replace strips scripts but leaves Rider Done heartbeat intervals alive.
+                try {
+                    if (window.__pdsRiderDonePresence && typeof window.__pdsRiderDonePresence.release === 'function') {
+                        window.__pdsRiderDonePresence.release();
+                    }
+                } catch (e) {}
+                window.__pdsRiderDonePresence = null;
+                window.__pdsRiderDoneItemsLock = false;
                 var imported = document.importNode(newRoot, true);
                 imported.querySelectorAll('script').forEach(function (s) { s.remove(); });
                 $root[0].replaceWith(imported);
+                restoreScrollPositions(scrollState);
                 $(document).trigger('admin-live:replaced');
+                // Re-apply after listeners (table freeze / animations) finish mutating layout.
+                restoreScrollPositions(scrollState);
             } else if (typeof window.pdsAdminReload === 'function') {
                 window.pdsAdminReload();
             } else if (window.AdminSpa && typeof window.AdminSpa.reload === 'function') {
@@ -189,6 +358,8 @@
             } else if (window.AdminSpa && typeof window.AdminSpa.reload === 'function') {
                 window.AdminSpa.reload();
             }
+        }).always(function () {
+            window.__adminLiveSoftReplacing = false;
         });
         return true;
     }

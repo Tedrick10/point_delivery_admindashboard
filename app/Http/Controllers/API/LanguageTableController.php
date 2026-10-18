@@ -28,6 +28,7 @@ class LanguageTableController extends Controller
                 'brand_font' => brandFontId(),
                 'brand_color' => brandColorId(),
                 'app_copy' => appCopyBundle(appCopyClientApp()),
+                'walkthrough' => walkthroughSlides(),
             ]);
         }
 
@@ -49,6 +50,7 @@ class LanguageTableController extends Controller
             'brand_color' => brandColorId(),
             'twilio_sms' => $is_twilio_active,
             'app_copy' => appCopyBundle(appCopyClientApp()),
+            'walkthrough' => walkthroughSlides(),
         ];
 
         return json_custom_response($response);

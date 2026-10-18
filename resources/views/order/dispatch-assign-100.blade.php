@@ -168,6 +168,15 @@
         }
         .pds-kyo-shin-modal__btn--primary:hover { filter: brightness(1.03); }
         .pds-kyo-shin-modal__btn--primary:disabled { opacity: .5; box-shadow: none; }
+        #assign100Table .js-assign100-toggle-check {
+            cursor: pointer;
+            user-select: none;
+        }
+        #assign100Table .js-assign100-toggle-check:hover {
+            color: var(--site-color);
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
     </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-assign-100-page">
         <div class="pds-dispatch-to-assign-screen">
@@ -218,8 +227,9 @@
                         <span class="pds-assign-action-btn__label">{{ $assignButtonLabel }}</span>
                     </button>
                     @endif
-                    <button type="button" class="pds-dispatch-items-icon-btn" id="printAssign100LabelsBtn" title="{{ __('message.assign_100_print_labels') }}">
+                    <button type="button" class="pds-dispatch-items-icon-btn" id="printAssign100LabelsBtn" title="{{ __('message.assign_100_print_labels') }}" disabled>
                         <i class="fas fa-print"></i>
+                        <span id="assign100PrintCount" hidden>0</span>
                     </button>
                 </div>
             </div>
@@ -248,7 +258,7 @@
                         <div class="pds-dispatch-field pds-dispatch-field-sm">
                             <label for="assign_100_os_name">{{ __('message.os_name') }}</label>
                             <div class="pds-follow-up-os-input-wrap">
-                                <input type="text" id="assign_100_os_name" class="pds-dispatch-input" placeholder="{{ __('message.os_name') }}" autocomplete="off">
+                                <input type="text" id="assign_100_os_name" class="pds-dispatch-input" placeholder="{{ __('message.os_name') }} / {{ __('message.phone') }}" autocomplete="off">
                                 <button type="button" class="pds-dispatch-to-assign-os-search-btn" id="openAssign100OsSearch" title="{{ __('message.to_find_os_name') }}">
                                     <i class="fas fa-search"></i>
                                 </button>
@@ -313,6 +323,7 @@
                                         $order = $item->order;
                                         $pickup = resolveDispatchPickupPoint($order);
                                         $osName = resolveDispatchOsName($order);
+                                        $osPhone = resolveDispatchOsPhone($order);
                                         $osAddress = resolveDispatchOsAddress($order);
                                         $pickupRider = optional($order?->delivery_man)->name ?? '-';
                                         $deliveryRider = optional($item->deliveryMan)->name ?? '-';
@@ -330,6 +341,7 @@
                                     @endphp
                                     <tr
                                         data-os-name="{{ $osName !== '-' ? $osName : '' }}"
+                                        data-os-phone="{{ $osPhone !== '-' ? $osPhone : '' }}"
                                         data-customer-name="{{ $item->customer_name ?: '' }}"
                                         data-customer-phone="{{ $item->customer_phone ?: '' }}"
                                         data-item-id="{{ $item->id }}"
@@ -352,10 +364,10 @@
                                             <span class="pds-dispatch-status {{ $workflow->assign100ItemStatusClass($item) }}">{{ $workflow->assign100ItemStatusLabel($item) }}</span>
                                         </td>
                                         <td>{{ $fromTo }}</td>
-                                        <td>{{ $osName }}</td>
+                                        <td class="js-assign100-toggle-check" title="{{ __('message.select') }}">{{ $osName }}</td>
                                         <td title="{{ $osAddress }}">{{ stringLong($osAddress, 'title', 18) ?: '-' }}</td>
                                         <td>{{ $pickupRider }}</td>
-                                        <td>{{ $item->customer_name ?: '-' }}</td>
+                                        <td class="js-assign100-toggle-check" title="{{ __('message.select') }}">{{ $item->customer_name ?: '-' }}</td>
                                         <td>{{ $item->customer_phone ?: '-' }}</td>
                                         <td title="{{ $item->customer_address }}">{{ stringLong($item->customer_address ?? '', 'title', 18) ?: '-' }}</td>
                                         <td>{{ $township }}</td>
@@ -387,13 +399,19 @@
         <div class="pds-label-popup__backdrop" data-label-popup-close></div>
         <div class="pds-label-popup__panel" role="dialog" aria-modal="true" aria-label="{{ __('message.assign_100_print_labels') }}">
             <div class="pds-label-popup__head">
-                <strong>{{ __('message.assign_100_print_labels') }}</strong>
+                <strong id="assign100LabelPopupTitle">{{ __('message.assign_100_print_labels') }}</strong>
                 <div class="pds-label-popup__actions">
                     <button type="button" class="pds-label-popup__btn" id="assign100LabelPrintBtn">{{ __('message.print') }}</button>
                     <button type="button" class="pds-label-popup__btn pds-label-popup__btn--ghost" data-label-popup-close>{{ __('message.close') }}</button>
                 </div>
             </div>
-            <iframe class="pds-label-popup__frame" id="assign100LabelFrame" title="{{ __('message.assign_100_print_labels') }}"></iframe>
+            <div class="pds-label-popup__body">
+                <div class="pds-label-popup__loading" id="assign100LabelLoading" aria-live="polite">
+                    <span class="pds-label-popup__spinner" aria-hidden="true"></span>
+                    Loading…
+                </div>
+                <iframe class="pds-label-popup__frame" id="assign100LabelFrame" title="{{ __('message.assign_100_print_labels') }}"></iframe>
+            </div>
         </div>
     </div>
 
@@ -448,7 +466,7 @@
 
 
     @section('bottom_script')
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=8"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(document).ready(function () {
@@ -483,15 +501,21 @@
                     });
                 }
 
-                function renderRiderRows(rows) {
+                function renderRiderRows(rows, activeIndex) {
                     var $body = $('#riderAssignTableBody').empty();
                     if (!rows.length) {
                         $body.append('<tr class="pds-dispatch-empty-row"><td colspan="4">{{ __('message.no_record_found') }}</td></tr>');
                         return;
                     }
+                    var focusIdx = typeof activeIndex === 'number' ? activeIndex : 0;
+                    if (focusIdx < 0) focusIdx = 0;
+                    if (focusIdx >= rows.length) focusIdx = rows.length - 1;
                     rows.forEach(function (row, idx) {
-                        $('<tr class="pds-dispatch-table-row"></tr>')
-                            .append('<td>' + (idx + 1) + '</td>')
+                        var $tr = $('<tr class="pds-dispatch-table-row" tabindex="-1"></tr>');
+                        if (idx === focusIdx) {
+                            $tr.addClass('is-keyboard-active');
+                        }
+                        $tr.append('<td>' + (idx + 1) + '</td>')
                             .append('<td>' + (row.name || row.text || '') + '</td>')
                             .append('<td>' + (row.branch || row.city || '-') + '</td>')
                             .append('<td>' + (row.phone || '-') + '</td>')
@@ -500,16 +524,137 @@
                     });
                 }
 
+                function getVisibleRiderRows() {
+                    return $('#riderAssignTableBody .pds-dispatch-table-row');
+                }
+
+                function getActiveRiderIndex() {
+                    var $rows = getVisibleRiderRows();
+                    var idx = $rows.index($rows.filter('.is-keyboard-active').first());
+                    return idx < 0 ? 0 : idx;
+                }
+
+                function getRiderTableWrap() {
+                    var wrap = document.getElementById('riderAssignTableWrap');
+                    if (wrap) {
+                        return wrap;
+                    }
+                    var $wrap = $('#riderAssignModal .pds-dispatch-table-wrap');
+                    return $wrap.length ? $wrap.get(0) : null;
+                }
+
+                function resetRiderTableScroll() {
+                    var wrap = getRiderTableWrap();
+                    if (wrap) {
+                        wrap.scrollTop = 0;
+                    }
+                    var modal = document.getElementById('riderAssignModal');
+                    if (modal) {
+                        modal.scrollTop = 0;
+                    }
+                }
+
+                function scrollActiveRiderIntoView($row, index) {
+                    var wrap = getRiderTableWrap();
+                    if (!wrap || !$row.length) {
+                        return;
+                    }
+                    // Keep early rows fully visible — never tuck #1/#2 under the header.
+                    if (index <= 1) {
+                        wrap.scrollTop = 0;
+                        return;
+                    }
+                    var $wrap = $(wrap);
+                    var wrapTop = wrap.scrollTop;
+                    var rowTop = $row.offset().top - $wrap.offset().top + wrapTop;
+                    var rowBottom = rowTop + $row.outerHeight();
+                    var viewBottom = wrapTop + wrap.clientHeight;
+                    var pad = 6;
+                    if (rowTop < wrapTop + pad) {
+                        wrap.scrollTop = Math.max(0, rowTop - pad);
+                    } else if (rowBottom > viewBottom - pad) {
+                        wrap.scrollTop = Math.max(0, rowBottom - wrap.clientHeight + pad);
+                    }
+                }
+
+                function setActiveRiderIndex(index) {
+                    var $rows = getVisibleRiderRows();
+                    if (!$rows.length) {
+                        return;
+                    }
+                    var next = index;
+                    if (next < 0) next = 0;
+                    if (next >= $rows.length) next = $rows.length - 1;
+                    $rows.removeClass('is-keyboard-active');
+                    var $active = $rows.eq(next).addClass('is-keyboard-active');
+                    scrollActiveRiderIntoView($active, next);
+                }
+
+                function assignActiveRider() {
+                    var $active = getVisibleRiderRows().filter('.is-keyboard-active').first();
+                    if (!$active.length) {
+                        $active = getVisibleRiderRows().first();
+                    }
+                    var rider = $active.data('rider');
+                    var itemIds = getVisibleCheckedItemIds();
+                    if (!rider || !rider.id || !itemIds.length) {
+                        return;
+                    }
+                    submitAssignAction(itemIds, rider.id);
+                }
+
+                function isTypingTarget(el) {
+                    if (!el) return false;
+                    var tag = (el.tagName || '').toLowerCase();
+                    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+                    if (el.isContentEditable) return true;
+                    return false;
+                }
+
+                function isRiderAssignModalOpen() {
+                    var $modal = $('#riderAssignModal');
+                    return $modal.length && ($modal.hasClass('show') || $modal.is(':visible'));
+                }
+
+                function openAssignRiderFromShortcut() {
+                    if (!showAssignAction) {
+                        return;
+                    }
+                    var itemIds = getVisibleCheckedItemIds();
+                    if (!itemIds.length) {
+                        if (typeof errorMessage === 'function') {
+                            errorMessage('{{ __('message.select_items_to_assign') }}');
+                        }
+                        return;
+                    }
+                    if (needsRider) {
+                        openRiderAssignModal();
+                        return;
+                    }
+                    submitAssignAction(itemIds, null);
+                }
+
                 function filterRiders(term) {
-                    var query = String(term || '').toLowerCase().trim();
+                    var query = String(term || '').trim();
                     if (!query) {
                         return riderCache;
                     }
+                    var matchFn = typeof window.pdsMatchNameOrPhone === 'function'
+                        ? window.pdsMatchNameOrPhone
+                        : null;
                     return riderCache.filter(function (row) {
-                        return (row.name || row.text || '').toLowerCase().indexOf(query) !== -1
-                            || String(row.phone || '').toLowerCase().indexOf(query) !== -1
-                            || String(row.city || '').toLowerCase().indexOf(query) !== -1
-                            || String(row.branch || '').toLowerCase().indexOf(query) !== -1;
+                        var name = row.name || row.text || '';
+                        var phone = row.phone || '';
+                        if (matchFn) {
+                            return matchFn(query, name, phone)
+                                || String(row.city || '').toLowerCase().indexOf(query.toLowerCase()) !== -1
+                                || String(row.branch || '').toLowerCase().indexOf(query.toLowerCase()) !== -1;
+                        }
+                        var q = query.toLowerCase();
+                        return String(name).toLowerCase().indexOf(q) !== -1
+                            || String(phone).toLowerCase().indexOf(q) !== -1
+                            || String(row.city || '').toLowerCase().indexOf(q) !== -1
+                            || String(row.branch || '').toLowerCase().indexOf(q) !== -1;
                     });
                 }
 
@@ -542,10 +687,32 @@
 
                 function openRiderAssignModal() {
                     $('#rider_modal_search').val('');
+                    resetRiderTableScroll();
                     loadRiders(function (rows) {
-                        renderRiderRows(rows);
+                        renderRiderRows(rows, 0);
+                        resetRiderTableScroll();
+                        setActiveRiderIndex(0);
                     });
-                    $('#riderAssignModal').modal('show');
+                    $('#riderAssignModal')
+                        .off('shown.bs.modal.assign100Rider')
+                        .on('shown.bs.modal.assign100Rider', function () {
+                            resetRiderTableScroll();
+                            setActiveRiderIndex(0);
+                            var search = document.getElementById('rider_modal_search');
+                            if (search && typeof search.focus === 'function') {
+                                try {
+                                    search.focus({ preventScroll: true });
+                                } catch (err) {
+                                    search.focus();
+                                }
+                            }
+                            // Focus can still nudge scroll in some browsers — snap back.
+                            requestAnimationFrame(function () {
+                                resetRiderTableScroll();
+                                setActiveRiderIndex(0);
+                            });
+                        })
+                        .modal('show');
                 }
 
                 function normalizeFilterValue(value) {
@@ -553,16 +720,25 @@
                 }
 
                 function applyAssign100Filters() {
-                    var osTerm = normalizeFilterValue($(osInputSelector).val());
+                    var osTerm = String($(osInputSelector).val() || '').trim();
                     var customerTerm = normalizeFilterValue($('#assign_100_customer_search').val());
                     var visibleCount = 0;
+                    var matchOs = typeof window.pdsMatchOsTerm === 'function'
+                        ? window.pdsMatchOsTerm
+                        : function (term, name, phone) {
+                            var q = String(term || '').toLowerCase();
+                            return !q
+                                || String(name || '').toLowerCase().indexOf(q) !== -1
+                                || String(phone || '').toLowerCase().indexOf(q) !== -1;
+                        };
 
                     $('#assign100Table tbody tr').each(function () {
                         var $row = $(this);
-                        var rowOsName = normalizeFilterValue($row.data('os-name'));
+                        var rowOsName = String($row.data('os-name') || '');
+                        var rowOsPhone = String($row.data('os-phone') || '');
                         var rowCustomerName = normalizeFilterValue($row.data('customer-name'));
                         var rowCustomerPhone = normalizeFilterValue($row.data('customer-phone'));
-                        var isMatch = (!osTerm || rowOsName.indexOf(osTerm) !== -1)
+                        var isMatch = (!osTerm || matchOs(osTerm, rowOsName, rowOsPhone))
                             && (!customerTerm || rowCustomerName.indexOf(customerTerm) !== -1 || rowCustomerPhone.indexOf(customerTerm) !== -1);
 
                         $row.toggleClass('d-none', !isMatch);
@@ -597,28 +773,61 @@
                     return ids;
                 }
 
-                function openAssign100LabelPopup(url) {
+                function openAssign100LabelPopup(url, count) {
                     var $popup = $('#assign100LabelPopup');
                     var $frame = $('#assign100LabelFrame');
                     if (!$popup.length || !$frame.length || !url) {
                         return;
                     }
-                    $frame.attr('src', url);
-                    $popup.removeAttr('hidden').addClass('is-open');
+                    var title = @json(__('message.assign_100_print_labels'));
+                    if (count && count > 1) {
+                        title += ' · ' + count;
+                    }
+                    $('#assign100LabelPopupTitle').text(title);
+                    $popup.removeAttr('hidden').addClass('is-open is-loading');
                     $('body').addClass('pds-label-popup-open');
+                    $frame.off('load.assign100Labels').one('load.assign100Labels', function () {
+                        $popup.removeClass('is-loading');
+                    });
+                    $frame.attr('src', url);
+                }
+
+                function openAssign100LabelsForIds(ids) {
+                    ids = (ids || []).filter(function (id) { return id > 0; });
+                    if (!ids.length) {
+                        if (typeof errorMessage === 'function') {
+                            errorMessage('{{ __('message.assign_100_select_to_print') }}');
+                        }
+                        return;
+                    }
+                    if (ids.length > 100) {
+                        if (typeof errorMessage === 'function') {
+                            errorMessage('{{ __('message.max_assign_100_items') }}');
+                        }
+                        return;
+                    }
+                    var params = ids.map(function (id) { return 'ids[]=' + encodeURIComponent(id); });
+                    params.push('embed=1');
+                    openAssign100LabelPopup(@json(route('order.dispatch.assign-100-labels')) + '?' + params.join('&'), ids.length);
                 }
 
                 function closeAssign100LabelPopup() {
                     var $popup = $('#assign100LabelPopup');
                     var $frame = $('#assign100LabelFrame');
-                    $popup.attr('hidden', true).removeClass('is-open');
-                    $frame.attr('src', 'about:blank');
+                    $popup.attr('hidden', true).removeClass('is-open is-loading');
+                    $frame.off('load.assign100Labels').attr('src', 'about:blank');
                     $('body').removeClass('pds-label-popup-open');
                 }
 
                 $(document).on('click', '.js-assign100-label-popup', function (e) {
                     e.preventDefault();
-                    openAssign100LabelPopup($(this).data('url'));
+                    var rowId = parseInt($(this).closest('tr').find('.pds-dispatch-item-check').val(), 10);
+                    var selected = getVisibleCheckedItemIds();
+                    if (selected.length > 1 && selected.indexOf(rowId) !== -1) {
+                        openAssign100LabelsForIds(selected);
+                        return;
+                    }
+                    openAssign100LabelPopup($(this).data('url'), 1);
                 });
 
                 $(document).on('click', '[data-label-popup-close]', function (e) {
@@ -640,26 +849,8 @@
                     }
                 });
 
-                $('#printAssign100LabelsBtn').on('click', function () {
-                    var ids = getVisibleCheckedItemIds();
-                    if (!ids.length) {
-                        ids = getVisibleItemIds();
-                    }
-                    if (!ids.length) {
-                        if (typeof errorMessage === 'function') {
-                            errorMessage('{{ __('message.assign_100_select_to_print') }}');
-                        }
-                        return;
-                    }
-                    if (ids.length > 100) {
-                        if (typeof errorMessage === 'function') {
-                            errorMessage('{{ __('message.max_assign_100_items') }}');
-                        }
-                        return;
-                    }
-                    var params = ids.map(function (id) { return 'ids[]=' + encodeURIComponent(id); });
-                    params.push('embed=1');
-                    openAssign100LabelPopup(@json(route('order.dispatch.assign-100-labels')) + '?' + params.join('&'));
+                $(document).on('click', '#printAssign100LabelsBtn', function () {
+                    openAssign100LabelsForIds(getVisibleCheckedItemIds());
                 });
 
                 function updateAssignRiderButtonState() {
@@ -667,6 +858,16 @@
                     $('#assignRiderBtn').prop('disabled', count === 0);
                     $('#sendToMdyBtn').prop('disabled', count === 0);
                     $('#giveKyoShinBtn').prop('disabled', count === 0);
+                    var $print = $('#printAssign100LabelsBtn');
+                    var $printCount = $('#assign100PrintCount');
+                    $print.prop('disabled', count === 0);
+                    if (count > 0) {
+                        $printCount.text(String(count)).removeAttr('hidden');
+                        $print.attr('title', @json(__('message.assign_100_print_labels')) + ' · ' + count);
+                    } else {
+                        $printCount.attr('hidden', true).text('0');
+                        $print.attr('title', @json(__('message.assign_100_print_labels')));
+                    }
                 }
 
                 function submitAssignAction(itemIds, riderId) {
@@ -748,7 +949,7 @@
                     clearTimeout(riderSearchTimer);
                     var term = $(this).val();
                     riderSearchTimer = setTimeout(function () {
-                        renderRiderRows(filterRiders(term));
+                        renderRiderRows(filterRiders(term), 0);
                     }, 200);
                 });
 
@@ -764,12 +965,88 @@
                 });
 
                 $(document).on('click', '#riderAssignTableBody .pds-dispatch-table-row', function () {
-                    var rider = $(this).data('rider');
+                    var $row = $(this);
+                    getVisibleRiderRows().removeClass('is-keyboard-active');
+                    $row.addClass('is-keyboard-active');
+                    var rider = $row.data('rider');
                     var itemIds = getVisibleCheckedItemIds();
                     if (!rider || !rider.id || !itemIds.length) {
                         return;
                     }
                     submitAssignAction(itemIds, rider.id);
+                });
+
+                // Click OS Name / Cust Name → toggle row checkbox.
+                $(document).on('click', '#assign100Table .js-assign100-toggle-check', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var $row = $(this).closest('tr');
+                    if ($row.hasClass('d-none')) {
+                        return;
+                    }
+                    var $check = $row.find('.pds-dispatch-item-check');
+                    if (!$check.length) {
+                        return;
+                    }
+                    $check.prop('checked', !$check.prop('checked')).trigger('change');
+                });
+
+                // Shortcuts: "." opens Assign Rider; arrows + Enter inside rider modal.
+                $(document).on('keydown.assign100Shortcuts', function (e) {
+                    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) {
+                        return;
+                    }
+
+                    var key = e.key;
+                    var riderModalOpen = isRiderAssignModalOpen();
+                    var typing = isTypingTarget(e.target);
+                    var inRiderSearch = $(e.target).is('#rider_modal_search');
+
+                    if (riderModalOpen) {
+                        if (key === 'ArrowDown' || key === 'ArrowUp') {
+                            if (typing && !inRiderSearch) {
+                                return;
+                            }
+                            e.preventDefault();
+                            var current = getActiveRiderIndex();
+                            setActiveRiderIndex(key === 'ArrowDown' ? current + 1 : current - 1);
+                            return;
+                        }
+                        if (key === 'Enter') {
+                            if (typing && !inRiderSearch) {
+                                return;
+                            }
+                            e.preventDefault();
+                            assignActiveRider();
+                            return;
+                        }
+                        return;
+                    }
+
+                    // P → open Print airway bill popup for the selected rows.
+                    if ((key === 'p' || key === 'P') && !typing) {
+                        if ($('#assign100LabelPopup').hasClass('is-open')) {
+                            return;
+                        }
+                        if ($('.modal.show').length) {
+                            return;
+                        }
+                        e.preventDefault();
+                        openAssign100LabelsForIds(getVisibleCheckedItemIds());
+                        return;
+                    }
+
+                    // Dot (.) → open Assign Rider popup (ignore while typing in filters).
+                    if ((key === '.' || key === 'Period') && !typing) {
+                        if ($('#assign100LabelPopup').hasClass('is-open')) {
+                            return;
+                        }
+                        if ($('.modal.show').length) {
+                            return;
+                        }
+                        e.preventDefault();
+                        openAssignRiderFromShortcut();
+                    }
                 });
 
                 var assign100FilterTimer;

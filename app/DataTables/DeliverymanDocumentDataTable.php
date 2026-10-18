@@ -61,7 +61,7 @@ class DeliverymanDocumentDataTable extends DataTable
             })
             ->filterColumn('delivery_man_id', function($query, $keyword) {
                 return $query->orWhereHas('delivery_man', function($q) use($keyword) {
-                    $q->where('name', 'like', "%{$keyword}%");
+                    applyNameOrPhoneSearch($q, $keyword, 'name', 'contact_number');
                 });
             })
 

@@ -208,7 +208,7 @@
                                         $totalGateAmount += $gateAmount;
                                         $totalOsToPay += $osToPayDisplay;
                                     @endphp
-                                    <tr data-cust-paid="{{ $custPaid }}" data-deli-amount="{{ $deliAmount }}" data-item-id="{{ $item->id }}" data-order-id="{{ $order?->id }}" data-return-type="{{ $item->returnType() ?? '' }}" data-edit-url="{{ $order ? route('order.dispatch.item.edit', [$order->id, $item->id]) : '' }}">
+                                    <tr data-cust-paid="{{ $custPaid }}" data-os-paid="{{ $osPaid }}" data-deli-amount="{{ $deliAmount }}" data-item-id="{{ $item->id }}" data-order-id="{{ $order?->id }}" data-return-type="{{ $item->returnType() ?? '' }}" data-edit-url="{{ $order ? route('order.dispatch.item.edit', [$order->id, $item->id]) : '' }}">
                                         <td class="pds-rider-sticky-col pds-rider-sticky-col--no">{{ $index + 1 }}</td>
                                         @if(! empty($canSelectItems))
                                         <td class="pds-rider-sticky-col pds-rider-sticky-col--check">
@@ -462,6 +462,7 @@
 
     @push('bottom_script')
         <script src="{{ asset('js/pds-photo-zoom.js') }}?v=3"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
         <script src="{{ asset('js/dispatch-item-form.js') }}?v=37"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
@@ -490,7 +491,10 @@
                 function riderUpdateSelectedTotal() {
                     var total = 0;
                     riderRowChecks().filter(':checked').each(function () {
-                        total += parseFloat($(this).closest('tr').data('cust-paid')) || 0;
+                        var $tr = $(this).closest('tr');
+                        // TOTAL = Cust Get/Paid + Os Paid (pay_done cash not in cust_get).
+                        total += (parseFloat($tr.data('cust-paid')) || 0)
+                            + (parseFloat($tr.data('os-paid')) || 0);
                     });
                     $('#riderItemsSelectedTotal').text(Number(total || 0).toLocaleString('en-US', {
                         maximumFractionDigits: 0,
@@ -892,7 +896,7 @@
                     if (action === 'completed') {
                         if (!isIntercityDelivered) {
                             $('input[name="rider_delivered_type"][value="other"]').prop('checked', true);
-                            $('#riderDeliveredGateAmount').val('0');
+                            $('#riderDeliveredGateAmount').val('');
                             syncDeliveredGateAmountVisibility();
                         } else if (deliverySettlementMode === 'half_deli') {
                             $('#riderDeliveredHalfDeliAmount').text(formatAmount(selectedHalfDeliTotal()));
@@ -968,7 +972,7 @@
                         notify(@json(__('message.delivered_type_required')), 'error');
                         return;
                     }
-                    if (deliveredType === 'gate' && (gateAmount === '' || gateAmount === null || Number(gateAmount) < 0)) {
+                    if (deliveredType === 'gate' && !(Number(String(gateAmount).replace(/,/g, '')) > 0)) {
                         notify(@json(__('message.gate_amount_required')), 'error');
                         return;
                     }
@@ -1004,15 +1008,26 @@
                 }
 
                 function filterReassignRiders(term) {
-                    var query = String(term || '').toLowerCase().trim();
+                    var query = String(term || '').trim();
                     if (!query) {
                         return riderCache;
                     }
+                    var matchFn = typeof window.pdsMatchNameOrPhone === 'function'
+                        ? window.pdsMatchNameOrPhone
+                        : null;
                     return riderCache.filter(function (row) {
-                        return (row.name || row.text || '').toLowerCase().indexOf(query) !== -1
-                            || String(row.phone || '').toLowerCase().indexOf(query) !== -1
-                            || String(row.city || '').toLowerCase().indexOf(query) !== -1
-                            || String(row.branch || '').toLowerCase().indexOf(query) !== -1;
+                        var name = row.name || row.text || '';
+                        var phone = row.phone || '';
+                        if (matchFn) {
+                            return matchFn(query, name, phone)
+                                || String(row.city || '').toLowerCase().indexOf(query.toLowerCase()) !== -1
+                                || String(row.branch || '').toLowerCase().indexOf(query.toLowerCase()) !== -1;
+                        }
+                        var q = query.toLowerCase();
+                        return String(name).toLowerCase().indexOf(q) !== -1
+                            || String(phone).toLowerCase().indexOf(q) !== -1
+                            || String(row.city || '').toLowerCase().indexOf(q) !== -1
+                            || String(row.branch || '').toLowerCase().indexOf(q) !== -1;
                     });
                 }
 

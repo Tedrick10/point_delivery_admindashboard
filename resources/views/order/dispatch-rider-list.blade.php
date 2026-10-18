@@ -30,7 +30,7 @@
                 'includeAll' => false,
                 'routeName' => 'order.dispatch.rider-list',
                 'routeQuery' => array_filter([
-                    'rider_id' => ($riderFilter ?? 'all') !== 'all' ? $riderFilter : null,
+                    'q' => filled($riderSearch ?? null) ? $riderSearch : null,
                 ]),
             ])
 
@@ -38,13 +38,14 @@
                 <input type="hidden" name="branch_id" value="{{ $branchFilter ?? '' }}">
                 <div class="pds-rider-toolbar__fields">
                     <div class="pds-dispatch-field pds-dispatch-field-sm pds-rider-toolbar__grow">
-                        <label for="rider_list_rider">{{ __('message.delivery_man') }}</label>
-                        <select name="rider_id" id="rider_list_rider" class="pds-dispatch-input pds-dispatch-select">
-                            <option value="all" @selected($riderFilter === 'all')>{{ __('message.all') }}</option>
-                            @foreach($riderOptions as $option)
-                                <option value="{{ $option->id }}" @selected((string) $riderFilter === (string) $option->id)>{{ $option->name }}</option>
-                            @endforeach
-                        </select>
+                        <label for="rider_list_search">{{ __('message.search') }}</label>
+                        <input type="search"
+                               name="q"
+                               id="rider_list_search"
+                               class="pds-dispatch-input"
+                               value="{{ $riderSearch ?? '' }}"
+                               placeholder="{{ __('message.delivery_man') }} / {{ __('message.phone') }}"
+                               autocomplete="off">
                     </div>
                 </div>
                 <div class="pds-rider-toolbar__actions">
@@ -54,7 +55,7 @@
                     </a>
                     <button type="submit" class="pds-rider-check-btn">
                         <i class="fas fa-search" aria-hidden="true"></i>
-                        <span>{{ __('message.check') }}</span>
+                        <span>{{ __('message.search') }}</span>
                     </button>
                 </div>
             </form>

@@ -32,11 +32,11 @@
             min-height: 100vh;
             font-family: 'Outfit', 'Noto Sans Myanmar', system-ui, sans-serif;
             color: var(--login-ink);
+            /* Match Super Admin login background */
             background:
-                radial-gradient(ellipse 90% 70% at 50% -10%, color-mix(in srgb, var(--site-color) 45%, transparent), transparent 55%),
-                radial-gradient(ellipse 50% 40% at 100% 100%, color-mix(in srgb, var(--site-color) 18%, transparent), transparent 55%),
-                radial-gradient(ellipse 40% 35% at 0% 80%, rgba(255, 255, 255, 0.06), transparent 50%),
-                linear-gradient(160deg, #120e0b 0%, #1f1510 42%, #2c1a12 100%);
+                radial-gradient(ellipse 90% 70% at 50% -10%, color-mix(in srgb, var(--site-color) 18%, transparent), transparent 55%),
+                radial-gradient(ellipse 45% 40% at 100% 100%, color-mix(in srgb, var(--site-color) 8%, transparent), transparent 50%),
+                linear-gradient(180deg, #F7F4F0 0%, #FFFFFF 55%, #F3F0EB 100%);
             display: grid;
             place-items: center;
             padding: 1.5rem;
@@ -49,23 +49,23 @@
             content: '';
             position: absolute;
             border-radius: 50%;
-            filter: blur(60px);
+            filter: blur(70px);
             pointer-events: none;
             z-index: 0;
         }
         body.admin-login-page::before {
-            width: 420px;
-            height: 420px;
-            top: -120px;
-            right: -80px;
-            background: color-mix(in srgb, var(--site-color) 28%, transparent);
+            width: 380px;
+            height: 380px;
+            top: -100px;
+            left: -60px;
+            background: color-mix(in srgb, var(--site-color) 18%, transparent);
         }
         body.admin-login-page::after {
-            width: 320px;
-            height: 320px;
-            bottom: -100px;
-            left: -60px;
-            background: rgba(255, 180, 100, 0.12);
+            width: 300px;
+            height: 300px;
+            bottom: -80px;
+            right: -40px;
+            background: color-mix(in srgb, var(--site-color) 12%, transparent);
         }
 
         .login-shell {
@@ -86,8 +86,9 @@
             border-radius: 24px;
             padding: 2rem 1.75rem 1.5rem;
             box-shadow:
-                0 1px 0 rgba(255, 255, 255, 0.65) inset,
-                0 24px 56px rgba(0, 0, 0, 0.32);
+                0 1px 0 rgba(255, 255, 255, 0.9) inset,
+                0 18px 48px rgba(20, 17, 15, 0.08),
+                0 4px 14px rgba(20, 17, 15, 0.04);
             position: relative;
             overflow: hidden;
         }
@@ -385,7 +386,7 @@
                                id="loginEmail"
                                name="email"
                                value="{{ old('email') }}"
-                               placeholder="admin@example.com"
+                               placeholder="Enter your email"
                                required
                                autofocus>
                     </div>

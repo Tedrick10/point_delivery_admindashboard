@@ -46,21 +46,21 @@
                     @if(getMediaFileExit($settings, $asset['key']))
                         <a class="sa-gs-brand-tile__remove remove-file"
                            href="{{ route('remove.file', ['id' => $settings->id, 'type' => $asset['key']]) }}"
-                           data--submit="confirm_form"
+                                data--submit="confirm_form"
                            data--confirmation="true"
-                           data--ajax="true"
-                           title='{{ __("message.remove_file_title" , ["name" =>  __("message.image") ]) }}'
-                           data-title='{{ __("message.remove_file_title" , ["name" =>  __("message.image") ]) }}'
-                           data-message='{{ __("message.remove_file_msg") }}'>
-                            <i class="ri-close-circle-line"></i>
-                        </a>
-                    @endif
-                </div>
+                                data--ajax="true"
+                                title='{{ __("message.remove_file_title" , ["name" =>  __("message.image") ]) }}'
+                                data-title='{{ __("message.remove_file_title" , ["name" =>  __("message.image") ]) }}'
+                                data-message='{{ __("message.remove_file_msg") }}'>
+                                <i class="ri-close-circle-line"></i>
+                            </a>
+                        @endif
+                    </div>
                 <div class="sa-gs-brand-tile__meta">
                     <span class="sa-gs-brand-tile__label">{{ $asset['label'] }}</span>
                     @if($isDemo)
                         <span class="sa-settings-hint">{{ __('message.demo_permission_denied') }}</span>
-                    @else
+                        @else
                         <label class="sa-gs-upload-btn" for="{{ $asset['key'] }}">
                             <i class="fas fa-upload" aria-hidden="true"></i>
                             Upload
@@ -72,7 +72,7 @@
                                class="sa-gs-upload-input"
                                accept="image/*"
                                lang="en">
-                    @endif
+                        @endif
                 </div>
             </div>
         @endforeach
@@ -88,7 +88,7 @@
             {!! html()->label(__('message.site_name'))->for('site_name')->class('sa-settings-label') !!}
             {!! html()->text('site_name', null)->class('sa-settings-input')->placeholder(__('message.site_name')) !!}
         </div>
-    </div>
+                    </div>
 </section>
 
 <section class="sa-gs-block">
@@ -121,7 +121,7 @@
                 </span>
             </label>
         @endforeach
-    </div>
+                            </div>
 </section>
 
 <section class="sa-gs-block">
@@ -230,6 +230,103 @@
             color: #a8a29e;
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
         }
+        .sa-gs-walk {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+        }
+        .sa-gs-walk__card {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 0;
+            padding: 12px;
+            border: 1px solid #F3E7DE;
+            border-radius: 18px;
+            background: linear-gradient(180deg, #FFFCF9 0%, #fff 42%);
+        }
+        .sa-gs-walk__stage {
+            position: relative;
+            height: 188px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            background:
+                radial-gradient(circle at 50% 42%, #fff 0%, #FFF1E6 72%);
+            overflow: hidden;
+        }
+        .sa-gs-walk__step {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            min-width: 26px;
+            height: 26px;
+            padding: 0 8px;
+            border-radius: 999px;
+            background: #111;
+            color: #fff;
+            font-size: 0.72rem;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sa-gs-walk__stage img {
+            width: 78%;
+            height: 132px;
+            object-fit: contain;
+        }
+        .sa-gs-walk__change {
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            margin: 0;
+        }
+        .sa-gs-walk__name {
+            margin: -2px 0 0;
+            text-align: center;
+            font-size: 0.78rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #FE6F07;
+        }
+        .sa-gs-walk__field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .sa-gs-walk__field .sa-settings-label {
+            margin: 0;
+        }
+        .sa-gs-walk__field .sa-settings-input {
+            width: 100%;
+            text-align: center;
+        }
+        .sa-gs-walk__field textarea.sa-settings-input {
+            height: auto;
+            min-height: 84px;
+            padding: 12px 14px;
+            border-radius: 16px !important;
+            resize: none;
+            line-height: 1.45;
+            font-weight: 600;
+        }
+        .sa-gs-walk__clear {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin: 0;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #78716c;
+            cursor: pointer;
+        }
+        @media (max-width: 980px) {
+            .sa-gs-walk { grid-template-columns: 1fr; }
+        }
     </style>
     <div class="sa-gs-choice-grid sa-gs-choice-grid--fonts">
         @foreach($brandFonts as $font)
@@ -246,6 +343,56 @@
                 </span>
             </label>
         @endforeach
+                            </div>
+</section>
+
+<section class="sa-gs-block">
+    <header class="sa-gs-block__head">
+        <h4>Walkthrough</h4>
+        <p>User App · Rider App</p>
+    </header>
+    @php
+        $walkNames = [1 => 'Pickup', 2 => 'Drop off', 3 => 'Confirm'];
+    @endphp
+    <div class="sa-gs-walk">
+        @foreach(($walkthrough ?? []) as $slide)
+            <article class="sa-gs-walk__card">
+                <div class="sa-gs-walk__stage">
+                    <span class="sa-gs-walk__step">{{ $slide['index'] }}</span>
+                    <img src="{{ $slide['image'] }}" alt="" class="walkthrough_preview_{{ $slide['index'] }}">
+                    <label class="sa-gs-upload-btn sa-gs-walk__change" for="walkthrough_image_{{ $slide['index'] }}">
+                        <i class="fas fa-upload" aria-hidden="true"></i>
+                        ပုံပြောင်းရန်
+                    </label>
+                </div>
+                <input type="file"
+                       name="walkthrough_image_{{ $slide['index'] }}"
+                       id="walkthrough_image_{{ $slide['index'] }}"
+                       class="sa-gs-upload-input"
+                       accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.svg"
+                       lang="en">
+                <p class="sa-gs-walk__name">{{ $walkNames[$slide['index']] ?? ('Slide '.$slide['index']) }}</p>
+                @if(!empty($slide['is_custom']))
+                    <label class="sa-gs-walk__clear">
+                        <input type="checkbox" name="walkthrough_clear_{{ $slide['index'] }}" value="1">
+                        မူလပုံပြန်ထား
+                    </label>
+                        @endif
+                <div class="sa-gs-walk__field">
+                    <label class="sa-settings-label" for="walkthrough_title_{{ $slide['index'] }}">ခေါင်းစဉ်</label>
+                    <input class="sa-settings-input" type="text" maxlength="80"
+                           id="walkthrough_title_{{ $slide['index'] }}"
+                           name="walkthrough_title_{{ $slide['index'] }}"
+                           value="{{ $slide['title'] }}">
+                </div>
+                <div class="sa-gs-walk__field">
+                    <label class="sa-settings-label" for="walkthrough_subtitle_{{ $slide['index'] }}">ဖော်ပြစာ</label>
+                    <textarea class="sa-settings-input" maxlength="180" rows="3"
+                              id="walkthrough_subtitle_{{ $slide['index'] }}"
+                              name="walkthrough_subtitle_{{ $slide['index'] }}">{{ $slide['subtitle'] }}</textarea>
+                </div>
+            </article>
+                    @endforeach
     </div>
 </section>
 
@@ -257,22 +404,22 @@
 <script>
 (function () {
     function getExtension(filename) {
-        var parts = filename.split('.');
-        return parts[parts.length - 1];
-    }
-    function isImage(filename) {
+            var parts = filename.split('.');
+            return parts[parts.length - 1];
+        }
+        function isImage(filename) {
         switch (getExtension(filename).toLowerCase()) {
-            case 'jpg':
-            case 'jpeg':
-            case 'png':
-            case 'gif':
-            case 'ico':
+                case 'jpg':
+                case 'jpeg':
+                case 'png':
+                case 'gif':
+                case 'ico':
             case 'webp':
             case 'svg':
-                return true;
+                    return true;
+            }
+            return false;
         }
-        return false;
-    }
     function readURL(input, className) {
         if (!(input.files && input.files[0])) return;
         if (!isImage(input.files[0].name)) {
@@ -308,6 +455,13 @@
         var favicon = document.getElementById('site_favicon');
         if (logo) logo.addEventListener('change', function () { readURL(this, 'site_logo'); });
         if (favicon) favicon.addEventListener('change', function () { readURL(this, 'site_favicon'); });
+        [1, 2, 3].forEach(function (index) {
+            var input = document.getElementById('walkthrough_image_' + index);
+            if (!input) return;
+            input.addEventListener('change', function () {
+                readURL(this, 'walkthrough_preview_' + index);
+            });
+        });
 
         document.querySelectorAll('input[name="brand_color"], input[name="brand_font"], input[name="ui_theme"]').forEach(function (input) {
             input.addEventListener('change', function () { syncChoiceActive(input); });

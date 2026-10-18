@@ -74,7 +74,7 @@ class ClientDataTable extends DataTable
                     . '</div>';
             })
             ->filterColumn('name', function ($query, $keyword) {
-                $query->where('name', 'like', "%{$keyword}%");
+                applyOnlineShopNameOrPhoneSearch($query, $keyword, 'users.name', 'users.contact_number');
             })
             ->editColumn('otp_verify_at', function ($data) {
                 if ($data->otp_verify_at !== null) {
@@ -201,15 +201,16 @@ class ClientDataTable extends DataTable
                 ->title(__('message.srno'))
                 ->addClass('text-capitalize')
                 ->orderable(false),
-            ['data' => 'name', 'name' => 'name', 'title' => __('message.name'),  'class' => 'text-capitalize', 'orderable' => false],
-            ['data' => 'city_id', 'name' => 'city_id', 'title' => __('message.city')],
-            ['data' => 'country_id', 'name' => 'country_id', 'title' => __('message.country')],
-            ['data' => 'created_at', 'name' => 'created_at', 'title' => __('message.created_at')],
-            ['data' => 'last_actived_at', 'name' => 'last_actived_at', 'title' => __('message.last_active')],
+            ['data' => 'name', 'name' => 'name', 'title' => __('message.name'), 'class' => 'text-capitalize', 'orderable' => false, 'searchable' => true],
+            ['data' => 'city_id', 'name' => 'city_id', 'title' => __('message.city'), 'searchable' => false],
+            ['data' => 'country_id', 'name' => 'country_id', 'title' => __('message.country'), 'searchable' => false],
+            ['data' => 'created_at', 'name' => 'created_at', 'title' => __('message.created_at'), 'searchable' => false],
+            ['data' => 'last_actived_at', 'name' => 'last_actived_at', 'title' => __('message.last_active'), 'searchable' => false],
             Column::make('approval_status', 'approval_status')
                 ->title(__('message.status'))
                 ->visible(true)
-                ->orderable(false),
+                ->orderable(false)
+                ->searchable(false),
             Column::computed('is_kyo_shin')
                 ->exportable(false)
                 ->printable(false)
@@ -235,6 +236,9 @@ class ClientDataTable extends DataTable
         $params['scrollY'] = 'calc(100vh - 320px)';
         $params['scrollCollapse'] = true;
         $params['autoWidth'] = true;
+        $params['searching'] = true;
+        // Seed DataTables search from ?q= so Apply Filter / Search form submit works.
+        $params['search'] = ['search' => trim((string) request('q', ''))];
 
         return $params;
     }

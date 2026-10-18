@@ -1061,6 +1061,9 @@
         if (!$form.length && event && event.target) {
             $form = $(event.target).closest('#dispatch_item_form');
         }
+        if ($form.attr('data-view-only') === '1') {
+            return false;
+        }
         submitDispatchItemForm($form);
         return false;
     };
@@ -1224,5 +1227,28 @@
         initDispatchItemSizeSelector();
 
         initDispatchFieldAddButtons($modal);
+
+        if (options.viewOnly || $form.attr('data-view-only') === '1') {
+            $form.addClass('is-view-only');
+            $form.find('input, select, textarea').each(function () {
+                var $el = $(this);
+                if ($el.is('[type="hidden"]')) {
+                    return;
+                }
+                $el.prop('disabled', true).attr('readonly', true);
+            });
+            $form.find('.dispatch-item-select2').each(function () {
+                var $sel = $(this);
+                if ($sel.data('select2')) {
+                    $sel.prop('disabled', true).trigger('change.select2');
+                }
+            });
+            $form.find('[data-dispatch-item-save], [type="submit"]').prop('disabled', true).hide();
+            $form.find('.pds-dispatch-item-credit-pill, .pds-dispatch-item-size-btn, .pds-dispatch-item-pay-pill')
+                .addClass('is-disabled')
+                .css('pointer-events', 'none');
+            // Hide "add city/township/branch" affordances in view mode.
+            $form.find('[data-dispatch-field-add], .pds-dispatch-field-add').hide();
+        }
     };
 })(window, jQuery);

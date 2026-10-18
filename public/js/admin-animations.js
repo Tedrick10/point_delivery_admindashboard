@@ -348,8 +348,18 @@
         revealContentNow();
     });
 
+    /**
+     * Soft live replace must NOT replay entrance / count-up animations —
+     * that is what makes admin screens jitter and feel like they jump.
+     */
+    function afterLiveSoftReplace() {
+        revealContentNow();
+        initLegacyPageEnhancements();
+        window.setTimeout(revealContentNow, 50);
+    }
+
     document.addEventListener('admin-spa:navigated', refreshPageMotion);
-    document.addEventListener('admin-live:replaced', refreshPageMotion);
+    document.addEventListener('admin-live:replaced', afterLiveSoftReplace);
 
     window.pdsAdminAnimationsRefresh = refreshPageMotion;
 })();

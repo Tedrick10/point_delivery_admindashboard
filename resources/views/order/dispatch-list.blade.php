@@ -50,7 +50,7 @@
                         <div class="header-title">
                             <h4 class="card-title mb-0 pds-page-title">{{ $pageTitle ?? '' }}</h4>
                         </div>
-                        <div class="card-header-toolbar pds-page-actions">
+                        <div class="card-header-toolbar pds-page-actions pds-dispatch-audit-actions">
                             <button type="button"
                                     class="pds-dispatch-items-audit-btn"
                                     id="deliAuditBtn"
@@ -58,6 +58,14 @@
                                     title="{{ __('message.dispatch_audit_deli_amount_log') }}">
                                 <i class="fas fa-clipboard-list" aria-hidden="true"></i>
                                 <span>{{ __('message.dispatch_audit_deli_amount_log') }}</span>
+                            </button>
+                            <button type="button"
+                                    class="pds-dispatch-items-audit-btn"
+                                    id="detailsAuditBtn"
+                                    data-url="{{ route('order.dispatch.details-audit') }}"
+                                    title="{{ __('message.dispatch_audit_details_log') }}">
+                                <i class="fas fa-id-card" aria-hidden="true"></i>
+                                <span>{{ __('message.dispatch_audit_details_log') }}</span>
                             </button>
                             @if(isset($button))
                                 {!! $button !!}
@@ -230,9 +238,28 @@
         </div>
     </div>
 
+    <div class="pds-rider-remit-audit pds-deli-audit pds-details-audit" id="detailsAuditModal" hidden>
+        <div class="pds-rider-remit-audit__backdrop" data-details-audit-close></div>
+        <div class="pds-rider-remit-audit__panel" role="dialog" aria-modal="true" aria-labelledby="detailsAuditTitle">
+            <div class="pds-rider-remit-audit__head">
+                <div>
+                    <h5 id="detailsAuditTitle">{{ __('message.dispatch_audit_details_log') }}</h5>
+                    <p id="detailsAuditRangeLabel">{{ $filterFromDate }} — {{ $filterToDate }}</p>
+                </div>
+                <button type="button" class="pds-rider-remit-audit__close" data-details-audit-close aria-label="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="pds-rider-remit-audit__body" id="detailsAuditBody">
+                <p class="pds-rider-remit-audit__empty">{{ __('message.dispatch_audit_details_empty') }}</p>
+            </div>
+        </div>
+    </div>
+
     @section('bottom_script')
         {{ $dataTable->scripts() }}
-        <script src="{{ asset('js/dispatch-pickup-rider-list.js') }}?v=11"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
+        <script src="{{ asset('js/dispatch-pickup-rider-list.js') }}?v=12"></script>
         {{-- admin-live.js is loaded globally from _scripts --}}
         <script>
             (function bindDeliAuditLog() {
@@ -247,9 +274,91 @@
                 if (!$btn.length || !$modal.length) return;
 
                 var emptyText = @json(__('message.dispatch_audit_deli_amount_empty'));
+                var noPhotoText = @json(__('message.dispatch_audit_details_no_photo'));
+                var originalLabel = @json(__('message.dispatch_audit_field_original_deli'));
+                var deliLabel = @json(__('message.dispatch_audit_field_deli_amount'));
+                var itemsUrlTpl = @json(route('order.dispatch.items', ['id' => '__ORDER_ID__']));
+
+                function esc(v) {
+                    return $('<div>').text(v == null ? '' : String(v)).html();
+                }
 
                 function closeAudit() {
                     $modal.attr('hidden', true);
+                }
+
+                function renderCard(e, index) {
+                    var orderId = parseInt(e.order_id, 10) || 0;
+                    var itemsUrl = orderId > 0
+                        ? itemsUrlTpl.replace('__ORDER_ID__', String(orderId))
+                        : '';
+                    var photos = Array.isArray(e.photos) ? e.photos : [];
+                    var photoUrl = (photos[0] && photos[0].url) ? String(photos[0].url) : '';
+                    var photoLabel = (photos[0] && photos[0].label)
+                        ? String(photos[0].label)
+                        : (e.item_code || 'Parcel');
+                    var viewUrl = e.view_url || '';
+                    var originalDeli = e.original_deli ? String(e.original_deli) : '';
+                    var newDeli = e.new_deli ? String(e.new_deli) : '';
+                    var size = e.size && e.size !== '—' ? String(e.size) : '';
+                    var html = '<li class="pds-deli-audit__item">';
+                    html += '<span class="pds-deli-audit__index">' + (index + 1) + '</span>';
+                    html += '<article class="pds-deli-audit__card">';
+                    html += '<header class="pds-deli-audit__head">';
+                    html += '<div class="pds-deli-audit__head-main">';
+                    html += '<span class="pds-deli-audit__eyebrow">DeliAmount</span>';
+                    html += '<h6 class="pds-deli-audit__title">' + esc(e.title || 'DeliAmount Audit') + '</h6>';
+                    html += '</div>';
+                    html += '<time class="pds-deli-audit__time">' + esc(e.time || '') + '</time>';
+                    html += '</header>';
+                    html += '<div class="pds-deli-audit__body">';
+                    html += '<div class="pds-deli-audit__person' + (photoUrl || viewUrl ? ' has-photo' : '') + '">';
+                    if (photoUrl && viewUrl) {
+                        html += '<a class="pds-deli-audit__photo is-openable loadRemoteModel" href="' + esc(viewUrl) + '" title="Item Details">';
+                        html += '<img src="' + esc(photoUrl) + '" alt="' + esc(photoLabel) + '" loading="lazy">';
+                        html += '<span class="pds-deli-audit__photo-zoom" aria-hidden="true"><i class="fas fa-search-plus"></i></span>';
+                        html += '</a>';
+                    } else if (photoUrl) {
+                        html += '<div class="pds-deli-audit__photo">';
+                        html += '<img src="' + esc(photoUrl) + '" alt="' + esc(photoLabel) + '" loading="lazy">';
+                        html += '</div>';
+                    } else if (viewUrl) {
+                        html += '<a class="pds-deli-audit__photo is-openable is-empty loadRemoteModel" href="' + esc(viewUrl) + '" title="Item Details">';
+                        html += '<span class="pds-deli-audit__photo-empty"><i class="fas fa-image" aria-hidden="true"></i><em>' + esc(noPhotoText) + '</em></span>';
+                        html += '<span class="pds-deli-audit__photo-zoom" aria-hidden="true"><i class="fas fa-external-link-alt"></i></span>';
+                        html += '</a>';
+                    } else {
+                        html += '<div class="pds-deli-audit__photo is-empty">';
+                        html += '<span class="pds-deli-audit__photo-empty"><i class="fas fa-image" aria-hidden="true"></i><em>' + esc(noPhotoText) + '</em></span>';
+                        html += '</div>';
+                    }
+                    html += '<div class="pds-deli-audit__main">';
+                    html += '<div class="pds-deli-audit__tags">';
+                    if (orderId) {
+                        html += '<span class="pds-deli-audit__tag">Order #' + orderId + '</span>';
+                    }
+                    if (e.item_code) {
+                        html += '<span class="pds-deli-audit__tag is-muted">Item ' + esc(e.item_code) + '</span>';
+                    }
+                    if (size) {
+                        html += '<span class="pds-deli-audit__tag is-accent">' + esc(size) + '</span>';
+                    }
+                    html += '</div>';
+                    if (originalDeli || newDeli) {
+                        html += '<div class="pds-deli-audit__change">';
+                        html += '<div class="pds-deli-audit__amt is-from"><span>' + esc(originalLabel) + '</span><strong>' + esc(originalDeli || '—') + '</strong></div>';
+                        html += '<span class="pds-deli-audit__arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></span>';
+                        html += '<div class="pds-deli-audit__amt is-to"><span>' + esc(deliLabel) + '</span><strong>' + esc(newDeli || '—') + '</strong></div>';
+                        html += '</div>';
+                    }
+                    html += '</div></div></div>';
+                    if (itemsUrl) {
+                        html += '<footer class="pds-deli-audit__foot">';
+                        html += '<a class="pds-deli-audit__open" href="' + itemsUrl + '">Order #' + orderId + '<i class="fas fa-arrow-right" aria-hidden="true"></i></a>';
+                        html += '</footer>';
+                    }
+                    html += '</article></li>';
+                    return html;
                 }
 
                 function openAudit() {
@@ -269,24 +378,9 @@
                                 $body.html('<p class="pds-rider-remit-audit__empty">' + emptyText + '</p>');
                                 return;
                             }
-                            var html = '<ol class="pds-rider-remit-audit__list">';
+                            var html = '<ol class="pds-rider-remit-audit__list pds-deli-audit__list">';
                             entries.forEach(function (e, index) {
-                                var parts = Array.isArray(e.action_parts) ? e.action_parts : [];
-                                var chips = parts.map(function (p) {
-                                    return '<span class="pds-rider-remit-audit__chip">' + $('<div>').text(p).html() + '</span>';
-                                }).join('');
-                                html += '<li class="pds-rider-remit-audit__item">';
-                                html += '<span class="pds-rider-remit-audit__index">' + (index + 1) + '</span>';
-                                html += '<div class="pds-rider-remit-audit__card">';
-                                html += '<div class="pds-rider-remit-audit__meta">';
-                                html += '<strong>' + $('<div>').text(e.title || 'DeliAmount').html() + '</strong>';
-                                html += '<time>' + $('<div>').text(e.time || '').html() + '</time>';
-                                html += '</div>';
-                                html += '<p>' + $('<div>').text(e.summary || e.message || '').html() + '</p>';
-                                if (chips) {
-                                    html += '<div class="pds-rider-remit-audit__chips">' + chips + '</div>';
-                                }
-                                html += '</div></li>';
+                                html += renderCard(e, index);
                             });
                             html += '</ol>';
                             $body.html(html);
@@ -295,7 +389,7 @@
                             var msg = (xhr.responseJSON && xhr.responseJSON.message)
                                 ? xhr.responseJSON.message
                                 : @json(__('message.something_went_wrong'));
-                            $body.html('<p class="pds-rider-remit-audit__empty">' + $('<div>').text(msg).html() + '</p>');
+                            $body.html('<p class="pds-rider-remit-audit__empty">' + esc(msg) + '</p>');
                         }
                     });
                 }
@@ -305,10 +399,176 @@
                     openAudit();
                 });
                 $modal.on('click', '[data-deli-audit-close]', closeAudit);
+                // Photo opens Item Details via loadRemoteModel; keep audit open underneath.
                 $(document).on('keydown.deliAuditList', function (e) {
-                    if (e.key === 'Escape' && !$modal.is('[hidden]')) {
-                        closeAudit();
+                    if (e.key !== 'Escape' || $modal.is('[hidden]')) {
+                        return;
                     }
+                    var $remote = $('#remoteModelData');
+                    if ($remote.hasClass('show') || $remote.is(':visible')) {
+                        return;
+                    }
+                    closeAudit();
+                });
+            })();
+
+            (function bindDetailsAuditLog() {
+                if (!window.jQuery) {
+                    return setTimeout(bindDetailsAuditLog, 40);
+                }
+                var $ = window.jQuery;
+                var $btn = $('#detailsAuditBtn');
+                var $modal = $('#detailsAuditModal');
+                var $body = $('#detailsAuditBody');
+                var $range = $('#detailsAuditRangeLabel');
+                if (!$btn.length || !$modal.length) return;
+
+                var emptyText = @json(__('message.dispatch_audit_details_empty'));
+                var moneyLabel = @json(__('message.dispatch_audit_details_money'));
+                var noPhotoText = @json(__('message.dispatch_audit_details_no_photo'));
+                var nameLabel = @json(__('message.customer_name'));
+                var phoneLabel = @json(__('message.phone'));
+                var addressLabel = @json(__('message.address'));
+                var itemValueLabel = @json(__('message.item_value'));
+                var deliLabel = @json(__('message.deli_amount'));
+                var itemsUrlTpl = @json(route('order.dispatch.items', ['id' => '__ORDER_ID__']));
+
+                function esc(v) {
+                    return $('<div>').text(v == null ? '' : String(v)).html();
+                }
+
+                function closeAudit() {
+                    $modal.attr('hidden', true);
+                }
+
+                function renderCard(e, index) {
+                    var d = e.detail || {};
+                    var orderId = parseInt(e.order_id, 10) || 0;
+                    var itemsUrl = orderId > 0
+                        ? itemsUrlTpl.replace('__ORDER_ID__', String(orderId))
+                        : '';
+                    var photoUrl = d.photo_url || '';
+                    var size = d.size && d.size !== '—' ? d.size : '';
+                    var html = '<li class="pds-details-audit__item">';
+                    html += '<span class="pds-details-audit__index">' + (index + 1) + '</span>';
+                    html += '<article class="pds-details-audit__card">';
+                    html += '<header class="pds-details-audit__head">';
+                    html += '<div class="pds-details-audit__head-main">';
+                    html += '<span class="pds-details-audit__eyebrow">Details</span>';
+                    html += '<h6 class="pds-details-audit__title">' + esc(e.title || 'Details Audit') + '</h6>';
+                    html += '</div>';
+                    html += '<time class="pds-details-audit__time">' + esc(e.time || '') + '</time>';
+                    html += '</header>';
+                    html += '<p class="pds-details-audit__summary">' + esc(e.summary || e.message || '') + '</p>';
+                    html += '<div class="pds-details-audit__tags">';
+                    if (orderId) {
+                        html += '<span class="pds-details-audit__tag">Order #' + orderId + '</span>';
+                    }
+                    if (e.item_code) {
+                        html += '<span class="pds-details-audit__tag is-muted">Item ' + esc(e.item_code) + '</span>';
+                    }
+                    if (size) {
+                        html += '<span class="pds-details-audit__tag is-accent">' + esc(size) + '</span>';
+                    }
+                    html += '</div>';
+                    html += '<div class="pds-details-audit__body">';
+                    html += '<div class="pds-details-audit__person has-photo">';
+                    var viewUrl = e.view_url || '';
+                    if (photoUrl && viewUrl) {
+                        html += '<a class="pds-details-audit__photo is-openable loadRemoteModel" href="' + esc(viewUrl) + '" title="Item Details">';
+                        html += '<img src="' + esc(photoUrl) + '" alt="' + esc(e.item_code || 'Item') + '" loading="lazy">';
+                        html += '<span class="pds-details-audit__photo-zoom" aria-hidden="true"><i class="fas fa-search-plus"></i></span>';
+                        html += '</a>';
+                    } else if (photoUrl) {
+                        html += '<div class="pds-details-audit__photo">';
+                        html += '<img src="' + esc(photoUrl) + '" alt="' + esc(e.item_code || 'Item') + '" loading="lazy">';
+                        html += '</div>';
+                    } else if (viewUrl) {
+                        html += '<a class="pds-details-audit__photo is-openable is-empty loadRemoteModel" href="' + esc(viewUrl) + '" title="Item Details">';
+                        html += '<span class="pds-details-audit__photo-empty"><i class="fas fa-image" aria-hidden="true"></i><em>' + esc(noPhotoText) + '</em></span>';
+                        html += '<span class="pds-details-audit__photo-zoom" aria-hidden="true"><i class="fas fa-external-link-alt"></i></span>';
+                        html += '</a>';
+                    } else {
+                        html += '<div class="pds-details-audit__photo">';
+                        html += '<span class="pds-details-audit__photo-empty"><i class="fas fa-image" aria-hidden="true"></i><em>' + esc(noPhotoText) + '</em></span>';
+                        html += '</div>';
+                    }
+                    html += '<dl class="pds-details-audit__fields">';
+                    html += '<div><dt><i class="fas fa-user" aria-hidden="true"></i>' + esc(nameLabel) + '</dt><dd>' + esc(d.customer_name || '—') + '</dd></div>';
+                    html += '<div><dt><i class="fas fa-phone" aria-hidden="true"></i>' + esc(phoneLabel) + '</dt><dd>' + esc(d.customer_phone || '—') + '</dd></div>';
+                    html += '<div><dt><i class="fas fa-location-dot" aria-hidden="true"></i>' + esc(addressLabel) + '</dt><dd>' + esc(d.customer_address || '—') + '</dd></div>';
+                    html += '</dl>';
+                    html += '</div>';
+                    html += '<div class="pds-details-audit__money">';
+                    html += '<div class="pds-details-audit__money-top">';
+                    html += '<span class="pds-details-audit__money-label">' + esc(moneyLabel) + '</span>';
+                    if (d.pay_mode && d.pay_mode !== '—') {
+                        html += '<span class="pds-details-audit__pay-pill">' + esc(d.pay_mode) + '</span>';
+                    }
+                    html += '</div>';
+                    html += '<div class="pds-details-audit__money-grid">';
+                    html += '<div class="pds-details-audit__amt"><span>' + esc(itemValueLabel) + '</span><strong>' + esc(d.item_value || '0') + '</strong></div>';
+                    html += '<div class="pds-details-audit__amt is-deli"><span>' + esc(deliLabel) + '</span><strong>' + esc(d.deli_amount || '0') + '</strong></div>';
+                    html += '</div></div>';
+                    html += '</div>';
+                    if (itemsUrl) {
+                        html += '<footer class="pds-details-audit__foot">';
+                        html += '<a class="pds-details-audit__open" href="' + itemsUrl + '">Order #' + orderId + '<i class="fas fa-arrow-right" aria-hidden="true"></i></a>';
+                        html += '</footer>';
+                    }
+                    html += '</article></li>';
+                    return html;
+                }
+
+                function openAudit() {
+                    var fromDate = $('#from_date').val() || @json($filterFromDate);
+                    var toDate = $('#to_date').val() || @json($filterToDate);
+                    $range.text(fromDate + ' — ' + toDate);
+                    $modal.removeAttr('hidden');
+                    $body.html('<p class="pds-rider-remit-audit__loading"><i class="fas fa-spinner fa-spin"></i></p>');
+                    $.ajax({
+                        url: $btn.data('url'),
+                        type: 'GET',
+                        data: { from_date: fromDate, to_date: toDate },
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                        success: function (res) {
+                            var entries = (res && res.entries) ? res.entries : [];
+                            if (!entries.length) {
+                                $body.html('<p class="pds-rider-remit-audit__empty">' + emptyText + '</p>');
+                                return;
+                            }
+                            var html = '<ol class="pds-rider-remit-audit__list pds-details-audit__list">';
+                            entries.forEach(function (e, index) {
+                                html += renderCard(e, index);
+                            });
+                            html += '</ol>';
+                            $body.html(html);
+                        },
+                        error: function (xhr) {
+                            var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                                ? xhr.responseJSON.message
+                                : @json(__('message.something_went_wrong'));
+                            $body.html('<p class="pds-rider-remit-audit__empty">' + esc(msg) + '</p>');
+                        }
+                    });
+                }
+
+                $btn.on('click', function (e) {
+                    e.preventDefault();
+                    openAudit();
+                });
+                $modal.on('click', '[data-details-audit-close]', closeAudit);
+                // Photo / empty-thumb opens read-only item modal via loadRemoteModel.
+                // Keep Details Audit open underneath until that modal closes.
+                $(document).on('keydown.detailsAuditList', function (e) {
+                    if (e.key !== 'Escape' || $modal.is('[hidden]')) {
+                        return;
+                    }
+                    var $remote = $('#remoteModelData');
+                    if ($remote.hasClass('show') || $remote.is(':visible')) {
+                        return;
+                    }
+                    closeAudit();
                 });
             })();
         </script>

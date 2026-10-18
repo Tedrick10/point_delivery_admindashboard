@@ -27,14 +27,16 @@
                     : '';
                 $riderLabel = trim($rider->name . ($riderPhone !== '' ? ' · ' . $riderPhone : ''));
             @endphp
-            <option value="{{ $rider->id }}" @selected($currentRiderId === (string) $rider->id)>{{ $riderLabel }}</option>
+            <option value="{{ $rider->id }}"
+                    data-phone="{{ $riderPhone }}"
+                    @selected($currentRiderId === (string) $rider->id)>{{ $riderLabel }}</option>
         @endforeach
         @if($currentRiderId && !($pickupRiders ?? collect())->contains('id', (int) $currentRiderId))
             @php
                 $currentPhone = optional($order->delivery_man)->riderAssignedPhone() ?: '';
                 $currentLabel = trim(($currentRiderName ?: $currentRiderId) . ($currentPhone !== '' ? ' · ' . $currentPhone : ''));
             @endphp
-            <option value="{{ $currentRiderId }}" selected>{{ $currentLabel }}</option>
+            <option value="{{ $currentRiderId }}" data-phone="{{ $currentPhone }}" selected>{{ $currentLabel }}</option>
         @endif
     </select>
 </div>

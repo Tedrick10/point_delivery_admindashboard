@@ -17,7 +17,6 @@ use App\Models\Order;
 use App\Models\Wallet;
 use App\Models\Branch;
 use App\Models\City;
-use App\Services\AppPushService;
 use App\Models\Claims;
 use App\Models\Country;
 use App\Models\UserAddress;
@@ -296,11 +295,7 @@ class ClientController extends Controller
             'profile_image' => 'nullable|image|mimes:jpg,jpeg,png,gif',
         ]);
 
-        $email = registrationEmailFromPhone((string) $request->contact_number);
-        if (User::withTrashed()->where('email', $email)->exists()) {
-            $digits = preg_replace('/\D+/', '', (string) $request->contact_number) ?: 'user';
-            $email = $digits.'.'.uniqid('os', false).'@pointdelivery.local';
-        }
+        $email = ensureUniqueRegistrationEmail((string) $request->contact_number);
 
         $user = User::create([
             'name' => $request->name,
@@ -386,11 +381,7 @@ class ClientController extends Controller
             if ($username === '') {
                 $username = registrationUsernameFromPhone($request->contact_number);
             }
-            $email = registrationEmailFromPhone($request->contact_number);
-            if (User::withTrashed()->where('email', $email)->exists()) {
-                $digits = preg_replace('/\D+/', '', (string) $request->contact_number) ?: 'user';
-                $email = $digits.'.'.uniqid('os', false).'@pointdelivery.local';
-            }
+            $email = ensureUniqueRegistrationEmail($request->contact_number);
 
             $payload = $request->only(['name', 'contact_number']);
             $payload['password'] = bcrypt($request->password);
@@ -457,9 +448,19 @@ class ClientController extends Controller
             $message = __('message.demo_permission_denied');
             return redirect()->back()->withErrors($message);
         }
-        $user = User::where('id', $id)->first();
+
+        $user = User::where('user_type', 'client')->find($id);
+        if (! $user) {
+            $message = __('message.not_found_entry', ['name' => __('message.online_shop')]);
+            if (request()->ajax()) {
+                return response()->json(['status' => false, 'message' => $message], 404);
+            }
+
+            return redirect()->route('users.index')->withErrors($message);
+        }
+
         $pageTitle = $user->name ?: __('message.online_shop');
-        $data = User::findOrFail($id);
+        $data = $user;
         $profileImage = getSingleMedia($data, 'profile_image');
         $type = request('type') ?? 'detail';
 
@@ -562,8 +563,13 @@ class ClientController extends Controller
             'password' => 'nullable|string|min:6|confirmed',
         ]);
 
+        $previousApproval = (string) ($user->approval_status ?? '');
         $existingProfile = is_array($user->os_profile) ? $user->os_profile : [];
         $osProfile = array_merge($existingProfile, prepareUserOsProfileFromRequest($request));
+        // Keep remembered login_password unless admin explicitly sets a new password.
+        if (! empty($existingProfile['login_password']) && empty($osProfile['login_password'])) {
+            $osProfile['login_password'] = $existingProfile['login_password'];
+        }
         $payload = $request->only(['name']);
         $payload['address'] = buildUserAddressFromProfile($osProfile);
         $payload['os_profile'] = $osProfile;
@@ -577,6 +583,7 @@ class ClientController extends Controller
         if ($request->filled('password')) {
             $payload['password'] = bcrypt($request->password);
             $payload['is_temp_password'] = 0;
+            $payload['os_profile'] = rememberOsLoginPassword($osProfile, (string) $request->password);
         }
 
         $user->fill($payload)->update();
@@ -586,6 +593,8 @@ class ClientController extends Controller
         }
 
         $user->assignRole($user->user_type);
+
+        finalizeOsClientFirstApproval($user->fresh(), $previousApproval);
 
         $message = __('message.update_form', ['form' => __('message.online_shop')]);
         if ($request->is('api/*')) {
@@ -617,30 +626,9 @@ class ClientController extends Controller
 
         $previous = (string) ($user->approval_status ?? '');
         $user->applyApprovalStatus($request->approval_status);
-
-        $plainPassword = null;
-        $username = sanitizeRegistrationUsername((string) ($user->username ?? ''));
-        if ($user->approval_status === User::APPROVAL_APPROVED && $previous !== User::APPROVAL_APPROVED) {
-            if ($username === '') {
-                $username = registrationUsernameFromPhone((string) ($user->contact_number ?? ''));
-                if ($username !== '') {
-                    $user->username = $username;
-                }
-            }
-            $plainPassword = generateOsLoginPassword();
-            $user->password = bcrypt($plainPassword);
-            $user->is_temp_password = 1;
-        }
-
         $user->save();
 
-        if ($plainPassword && $username !== '') {
-            try {
-                app(AppPushService::class)->notifyOsAccountApproved($user->fresh(), $username, $plainPassword);
-            } catch (\Throwable $e) {
-                report($e);
-            }
-        }
+        $credentials = finalizeOsClientFirstApproval($user->fresh(), $previous);
 
         return response()->json([
             'status' => true,
@@ -650,8 +638,8 @@ class ClientController extends Controller
             ]),
             'approval_status' => $user->approval_status,
             'label' => __('message.'.$user->approval_status),
-            'username' => $plainPassword ? $username : null,
-            'password' => $plainPassword,
+            'username' => $credentials['username'] ?? null,
+            'password' => $credentials['password'] ?? null,
         ]);
     }
 
@@ -834,6 +822,11 @@ class ClientController extends Controller
             return redirect()->back()->with($notification);
         }
 
+        $plainLoginPassword = (string) $request->password;
+        $osProfile = rememberOsLoginPassword(
+            is_array($request->input('os_profile')) ? $request->input('os_profile') : [],
+            $plainLoginPassword
+        );
         $request['password'] = bcrypt($request->password);
         $request['username'] = $request->username ?? stristr($request->email, "@", true) . rand(100, 1000);
         $request['display_name'] = $request['name'];
@@ -841,6 +834,7 @@ class ClientController extends Controller
         $request['approval_status'] = User::APPROVAL_PENDING;
         $request['status'] = 0;
         $request['created_by_admin'] = 0;
+        $request['os_profile'] = $osProfile;
 
         $result = User::create($request->all());
         $result->assignRole($request->user_type);

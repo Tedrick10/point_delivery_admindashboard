@@ -52,11 +52,8 @@ class DispatchOrderItemsExport implements FromCollection, WithHeadings, WithMapp
 
     public function map($row): array
     {
-        $remark = trim((string) ($row->remark ?? ''));
-        $normalized = strtolower(preg_replace('/\s+/', '_', $remark) ?? '');
-        if ($remark === '' || $remark === '-' || $normalized === 'rider_added' || $normalized === 'rider_done') {
-            $remark = __('message.done');
-        }
+        // Item Detail export: Done after Admin Update only — no free-text remark.
+        $remark = ! empty($row->admin_updated_at) ? __('message.done') : '-';
 
         return [
             $this->counter++,

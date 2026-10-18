@@ -26,7 +26,9 @@ class UserAddressResource extends JsonResource
             'address'           => $this->address,
             'latitude'          => $this->latitude,
             'longitude'         => $this->longitude,
-            'contact_number'    => $this->contact_number,
+            'contact_number'    => function_exists('normalizeContactNumber')
+                ? (normalizeContactNumber($this->contact_number) ?: $this->contact_number)
+                : $this->contact_number,
             'created_at'        => $this->created_at,
             'updated_at'        => $this->updated_at,
         ];

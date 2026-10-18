@@ -153,24 +153,141 @@
         );
     }
 
+    function phoneDigits(value) {
+        var digits = String(value || '').replace(/\D+/g, '');
+        // Strip leading Myanmar country code / trunk 0 so 09 / +95 / 9… match.
+        while (digits.indexOf('95') === 0 && digits.length >= 10) {
+            digits = digits.slice(2);
+        }
+        if (digits.charAt(0) === '0' && digits.length > 1) {
+            digits = digits.replace(/^0+/, '');
+        }
+        return digits;
+    }
+
+    /** Shared Name / Phone matcher for Online Shop search UIs. */
+    function matchOsTerm(term, name, phone) {
+        var query = String(term || '').toLowerCase().trim();
+        if (!query) {
+            return true;
+        }
+
+        var nameHit = String(name || '').toLowerCase().indexOf(query) !== -1;
+        if (nameHit) {
+            return true;
+        }
+
+        var rowPhone = String(phone || '');
+        if (rowPhone.toLowerCase().indexOf(query) !== -1) {
+            return true;
+        }
+
+        var qDigits = phoneDigits(query);
+        if (qDigits.length < 3) {
+            return false;
+        }
+
+        var rowDigits = phoneDigits(rowPhone);
+        return rowDigits.indexOf(qDigits) !== -1
+            || (qDigits.length >= 8 && rowDigits !== '' && qDigits.indexOf(rowDigits) !== -1);
+    }
+
+    window.pdsMatchOsTerm = matchOsTerm;
+    window.pdsMatchNameOrPhone = matchOsTerm;
+
     function filterOsClients(term) {
-        var query = (term || '').toLowerCase().trim();
         var list = getCachedOsClients();
 
-        if (!query) {
+        if (!String(term || '').trim()) {
             return list;
         }
 
         return list.filter(function (row) {
-            return (row.name || '').toLowerCase().indexOf(query) !== -1
-                || (row.text || '').toLowerCase().indexOf(query) !== -1
-                || (row.phone || '').toLowerCase().indexOf(query) !== -1;
+            return matchOsTerm(term, (row.name || '') + ' ' + (row.text || ''), row.phone || '');
         });
     }
 
     window.getOsClientList = function (term) {
         return filterOsClients(term);
     };
+
+    /**
+     * Searchable name/phone filter <select> (Online Shop / Rider toolbars).
+     * Options should include data-phone="09…".
+     */
+    window.initNamePhoneFilterSelect = function (selector, options) {
+        options = options || {};
+        var $el = $(selector);
+        if (!$el.length || !$.fn.select2) {
+            return;
+        }
+
+        if ($el.hasClass('select2-hidden-accessible')) {
+            $el.select2('destroy');
+        }
+
+        $el.select2({
+            width: '100%',
+            placeholder: options.placeholder || '',
+            allowClear: options.allowClear !== false,
+            minimumResultsForSearch: 0,
+            dropdownParent: options.dropdownParent || $(document.body),
+            matcher: function (params, data) {
+                if ($.trim(params.term || '') === '') {
+                    return data;
+                }
+                if (typeof data.children === 'object') {
+                    var match = $.extend(true, {}, data);
+                    var filtered = [];
+                    for (var c = 0; c < (data.children || []).length; c++) {
+                        var child = data.children[c];
+                        var childMatch = this.matcher(params, child);
+                        if (childMatch) {
+                            filtered.push(childMatch);
+                        }
+                    }
+                    if (filtered.length) {
+                        match.children = filtered;
+                        return match;
+                    }
+                    return null;
+                }
+                if (!data.id && data.id !== 0) {
+                    return null;
+                }
+                var phone = '';
+                if (data.element) {
+                    phone = $(data.element).attr('data-phone')
+                        || $(data.element).data('phone')
+                        || '';
+                }
+                // Also dig digits out of "Name · 09…" labels.
+                return matchOsTerm(params.term, data.text || '', phone || data.text || '') ? data : null;
+            },
+            templateResult: function (item) {
+                if (!item || item.loading) {
+                    return item && item.text ? item.text : '';
+                }
+                if (!item.id && item.id !== 0) {
+                    return item.text || '';
+                }
+                var phone = '';
+                if (item.element) {
+                    phone = $(item.element).attr('data-phone') || $(item.element).data('phone') || '';
+                }
+                if (!phone || String(item.text || '').indexOf(phone) !== -1) {
+                    return item.text || '';
+                }
+                var $row = $('<span class="pds-os-select-option"></span>');
+                $row.append($('<span class="pds-os-select-option__name"></span>').text(item.text || ''));
+                $row.append($('<span class="pds-os-select-option__phone"></span>').text(phone));
+                return $row;
+            }
+        });
+    };
+
+    window.initOnlineShopFilterSelect = window.initNamePhoneFilterSelect;
+    window.initRiderFilterSelect = window.initNamePhoneFilterSelect;
 
     window.refreshOsClientCache = function (callback) {
         if (!window.pdsOsSearchRoute) {
@@ -330,7 +447,10 @@
                         return;
                     }
 
-                    $.ajax(params).then(success).fail(failure);
+                    // Prefer server search (name + phone). On failure, filter local cache.
+                    $.ajax(params).then(success).fail(function () {
+                        success({ results: filterOsClients(term) });
+                    });
                 },
                 processResults: function (data, params) {
                     var term = (params && params.term) ? String(params.term).trim() : '';
@@ -347,6 +467,24 @@
 
                     return { results: getCachedOsClients() };
                 }
+            },
+            templateResult: function (item) {
+                if (!item || item.loading) {
+                    return item && item.text ? item.text : '';
+                }
+                if (!item.id) {
+                    return item.text || '';
+                }
+                var cached = osClientCache[String(item.id)] || {};
+                var label = item.text || item.name || cached.text || cached.name || '';
+                var phone = item.phone || cached.phone || '';
+                if (!phone) {
+                    return label;
+                }
+                var $row = $('<span class="pds-os-select-option"></span>');
+                $row.append($('<span class="pds-os-select-option__name"></span>').text(label));
+                $row.append($('<span class="pds-os-select-option__phone"></span>').text(phone));
+                return $row;
             }
         });
 
