@@ -237,6 +237,8 @@ class ClientDataTable extends DataTable
         $params['scrollCollapse'] = true;
         $params['autoWidth'] = true;
         $params['searching'] = true;
+        // Hide the default "Processing..." label during search/reload.
+        $params['processing'] = false;
         // Seed DataTables search from ?q= so Apply Filter / Search form submit works.
         $params['search'] = ['search' => trim((string) request('q', ''))];
 

@@ -165,10 +165,8 @@
                 hideDtChrome();
                 hideProcessing();
             });
-            $table.on('processing.dt.pdsOsSearch', function (e, settings, processing) {
-                if (!processing) {
-                    hideProcessing();
-                }
+            $table.on('processing.dt.pdsOsSearch', function () {
+                hideProcessing();
             });
             $table.on('xhr.dt.pdsOsSearch', function () {
                 hideProcessing();

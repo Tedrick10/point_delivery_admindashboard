@@ -24682,6 +24682,15 @@ body.pds-admin .pds-os-list-page .pds-os-list-tab.is-kyo-shin.is-active em {
     color: var(--site-color);
 }
 
+/* Online Shop: never show DataTables "Processing..." during search */
+body.pds-admin .pds-os-list-page .dataTables_processing,
+body.pds-admin .pds-os-list-page div.dataTables_wrapper div.dataTables_processing {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 /* Online Shop: unified search + delete toolbar */
 body.pds-admin .pds-os-list-page .pds-os-list-toolbar {
     display: flex;
