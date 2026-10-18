@@ -1,24 +1,24 @@
-{!! html()->form('GET', url()->current())->class('pds-list-filters pds-os-list-filters pds-os-list-filters--search')->id('pds-os-list-filter-form')->open() !!}
+{!! html()->form('GET', url()->current())->class('pds-os-search')->id('pds-os-list-filter-form')->open() !!}
     {!! html()->hidden('status', $approvalTab ?? request('status', 'pending')) !!}
     @if(($selectedBranchId ?? request('branch_id')) )
         {!! html()->hidden('branch_id', (int) ($selectedBranchId ?? request('branch_id'))) !!}
     @endif
 
-    <div class="pds-list-filters__field pds-list-filters__field--grow">
-        <label for="pds-os-list-search" class="pds-list-filters__label">{{ __('message.search') }}</label>
-        <input type="search"
-               id="pds-os-list-search"
-               name="q"
-               class="pds-dispatch-input"
-               placeholder="{{ __('message.os_name') }} / {{ __('message.phone') }}"
-               autocomplete="off"
-               value="{{ request('q', '') }}">
-    </div>
-
-    <div class="pds-list-filters__actions">
-        <button type="submit" id="pds-os-list-search-btn" class="btn btn-sm btn-primary pds-os-filter-apply">
+    <label for="pds-os-list-search" class="pds-os-search__label">{{ __('message.search') }}</label>
+    <div class="pds-os-search__row">
+        <div class="pds-os-search__field">
+            <i class="fas fa-search pds-os-search__icon" aria-hidden="true"></i>
+            <input type="search"
+                   id="pds-os-list-search"
+                   name="q"
+                   class="pds-os-search__input"
+                   placeholder="{{ __('message.os_name') }} / {{ __('message.phone') }}"
+                   autocomplete="off"
+                   value="{{ request('q', '') }}">
+        </div>
+        <button type="submit" id="pds-os-list-search-btn" class="pds-os-search__btn">
             <i class="fas fa-search" aria-hidden="true"></i>
-            {{ __('message.search') }}
+            <span>{{ __('message.search') }}</span>
         </button>
     </div>
 {!! html()->form()->close() !!}

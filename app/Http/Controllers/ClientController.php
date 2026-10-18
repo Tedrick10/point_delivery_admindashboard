@@ -102,7 +102,7 @@ class ClientController extends Controller
         $reset_file_button = '<a href="' . route('users.index', ['status' => $approvalTab]) . '" class="btn btn-sm btn-outline-primary"><i class="ri-repeat-line"></i> ' . __('message.reset_filter') . '</a>';
         $button = $auth_user->can('users-add') ? '<a href="' . route('users.create') . '" class="btn btn-sm btn-primary pds-os-list-add"><i class="fa fa-plus"></i> ' . __('message.add_form_title', ['form' => __('message.online_shop')]) . '</a>' : '';
         $multi_checkbox_delete = $auth_user->can('users-delete')
-            ? '<button type="button" id="deleteSelectedBtn" checked-title="users-checked" class="btn btn-sm btn-outline-danger pds-os-delete-btn is-visible">' . __('message.delete_selected') . '</button>'
+            ? '<button type="button" id="deleteSelectedBtn" checked-title="users-checked" class="btn btn-sm btn-outline-danger pds-os-delete-btn is-visible"><i class="fas fa-trash-alt" aria-hidden="true"></i> <span>' . __('message.delete_selected') . '</span></button>'
             : '';
         $export = $auth_user->can('users-add') ? '<a href="'.route('user.excel').'" class="btn btn-sm btn-outline-success loadRemoteModel"><i class="fa fa-download"></i> '. __('message.export').'</a>' : '';
         return $dataTable->with([

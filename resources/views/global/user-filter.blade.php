@@ -54,13 +54,16 @@
                     @endforeach
                 </div>
 
-                @include('global.user-datatable')
-
-                @if(isset($multi_checkbox_delete))
-                    <div class="pds-os-list-bulk">
-                        {!! $multi_checkbox_delete !!}
+                <div class="pds-os-list-toolbar">
+                    <div class="pds-os-list-toolbar__search">
+                        @include('global.user-datatable')
                     </div>
-                @endif
+                    @if(isset($multi_checkbox_delete))
+                        <div class="pds-os-list-toolbar__bulk pds-os-list-bulk">
+                            {!! $multi_checkbox_delete !!}
+                        </div>
+                    @endif
+                </div>
 
                 <div class="pds-os-list-table-shell">
                     {{ $dataTable->table(['class' => 'table w-100 pds-datatable pds-os-list-table'], false) }}
