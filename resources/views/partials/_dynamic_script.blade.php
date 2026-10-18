@@ -70,24 +70,32 @@
 
         function toggleDeleteButton() {
             const btn = $('#deleteSelectedBtn');
-            const keepVisible = btn.closest('.pds-dm-toolbar').length > 0;
+            // Rider List toolbar + Online Shop bulk bar: keep Delete Selected always visible.
+            const keepVisible = btn.closest('.pds-dm-toolbar, .pds-os-list-bulk').length > 0
+                || btn.hasClass('pds-os-delete-btn')
+                || btn.hasClass('pds-dm-delete-btn');
             const bulk = btn.closest('.pds-os-list-bulk, .mb-3');
             if (!btn.length) {
                 bulk.hide();
                 return;
             }
-            if ($('.select-table-row-checked-values:checked').length > 0) {
+            const hasSelection = $('.select-table-row-checked-values:checked').length > 0;
+            if (keepVisible) {
+                bulk.show();
                 btn.addClass('is-visible').removeAttr('hidden').show();
                 btn.prop('disabled', false);
-                btn.removeClass('bg-gray');
-                if (!keepVisible) {
-                    btn.addClass('bg-danger text-white');
+                if (hasSelection) {
+                    btn.removeClass('bg-gray').addClass('bg-danger text-white');
+                } else {
+                    btn.removeClass('bg-gray bg-danger text-white');
                 }
-                bulk.show();
-            } else if (keepVisible) {
-                btn.addClass('is-visible text-white').removeAttr('hidden').show();
+                return;
+            }
+            if (hasSelection) {
+                btn.addClass('is-visible').removeAttr('hidden').show();
                 btn.prop('disabled', false);
-                btn.removeClass('bg-gray bg-danger');
+                btn.removeClass('bg-gray').addClass('bg-danger text-white');
+                bulk.show();
             } else {
                 btn.removeClass('is-visible').attr('hidden', true).hide();
                 btn.prop('disabled', true);
