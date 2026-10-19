@@ -22,10 +22,36 @@ class OsSettlementService
     ) {}
 
     /**
+     * Settlement Online Shop id for a parcel (same rules as Daily Check).
+     * Photo / Viber orders often keep the uploader as order.client_id while
+     * pickup_point.name is the real shop — never group slips by client_id alone.
+     */
+    public function itemOsPartyUserId($item): int
+    {
+        return resolveDispatchOsPartyUserId($item->order ?? null);
+    }
+
+    /**
+     * Keep only parcels that belong to the given Online Shop party.
+     *
+     * @param  \Illuminate\Support\Collection<int, DispatchOrderItem>|iterable  $items
+     * @return \Illuminate\Support\Collection<int, DispatchOrderItem>
+     */
+    public function filterItemsForOsParty($items, int $osId)
+    {
+        return collect($items)
+            ->filter(fn ($item) => $this->itemOsPartyUserId($item) === $osId)
+            ->values();
+    }
+
+    /**
      * Unfinished Completed items for ငွေရှင်းတမ်း within a date range.
      * Delivered-only (no admin_completed_at) never appears — Completed first.
      * List day: first Completed on Yangon day C → C−1; later Completeds that rider on C → C.
      * Pass null for $osId to include all Online Shops.
+     *
+     * OS scoping is applied in completedItemsForPeriod via resolveDispatchOsPartyUserId
+     * (not order.client_id), so $osId is ignored here.
      */
     public function completedItemsQuery(?int $osId, string $fromDay, string $toDay, ?int $branchId = null)
     {
@@ -35,17 +61,6 @@ class OsSettlementService
         $this->applyUnfinishedSettlementConstraints($query, $fromDay, $toDay);
 
         return $query
-            ->when($osId !== null, function ($query) use ($osId) {
-                $query->whereHas('order', function ($q) use ($osId) {
-                    if ($osId > 0) {
-                        $q->where('client_id', $osId);
-                    } else {
-                        $q->where(function ($inner) {
-                            $inner->whereNull('client_id')->orWhere('client_id', 0);
-                        });
-                    }
-                });
-            })
             ->when($branchId !== null && $branchId > 0, function ($query) use ($branchId) {
                 applyDestinationBranchFilter($query, $branchId);
             })
@@ -83,13 +98,21 @@ class OsSettlementService
 
     /**
      * Unfinished Completed items whose ငွေရှင်းတမ်း list day falls in [from, to].
+     * When $osId is set, parcels are scoped by Online Shop party (pickup shop → client),
+     * not raw order.client_id — matches Daily Check / Money Transfer.
      */
     public function completedItemsForPeriod(?int $osId, string $fromDay, string $toDay, ?int $branchId = null)
     {
-        return $this->completedItemsQuery($osId, $fromDay, $toDay, $branchId)
+        $items = $this->completedItemsQuery(null, $fromDay, $toDay, $branchId)
             ->get()
             ->filter(fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
             ->values();
+
+        if ($osId === null) {
+            return $items;
+        }
+
+        return $this->filterItemsForOsParty($items, (int) $osId);
     }
 
     /**
@@ -156,15 +179,6 @@ class OsSettlementService
                         ->whereDate('rider_remit_date', '>=', $fromDay)
                         ->whereDate('rider_remit_date', '<=', $toDay);
                 });
-            })
-            ->whereHas('order', function ($q) use ($osId) {
-                if ($osId > 0) {
-                    $q->where('client_id', $osId);
-                } else {
-                    $q->where(function ($inner) {
-                        $inner->whereNull('client_id')->orWhere('client_id', 0);
-                    });
-                }
             });
 
         applyForcedItemOwnership($query);
@@ -172,11 +186,14 @@ class OsSettlementService
             applyDestinationBranchFilter($query, $branchId);
         }
 
-        return $query
-            ->orderByDesc('id')
-            ->get()
-            ->filter(fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
-            ->values();
+        return $this->filterItemsForOsParty(
+            $query
+                ->orderByDesc('id')
+                ->get()
+                ->filter(fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
+                ->values(),
+            $osId
+        );
     }
 
     /**
@@ -407,12 +424,12 @@ class OsSettlementService
                 ->values();
         }
 
-        // Net by Online Shop (not per-item sign):
+        // Net by Online Shop party (not per-item sign / not raw client_id):
         // - net < 0 → Os ဆီသို့လွှဲရန် (all nettable items for that OS)
         // - net > 0 → Os ဆီမှရရန် only when there is nothing to transfer
         // - net == 0 → finish on pay side (nothing to move either way)
         return $items
-            ->groupBy(static fn ($item) => (int) ($item->order?->client_id ?? 0))
+            ->groupBy(fn ($item) => $this->itemOsPartyUserId($item))
             ->flatMap(function ($osItems) use ($side) {
                 $nettable = $this->nettableSettlementItems($osItems);
                 if ($nettable->isEmpty()) {
@@ -491,14 +508,12 @@ class OsSettlementService
                 if ($branchId !== null && $branchId > 0) {
                     applyDestinationBranchFilter($kyoShinQuery, $branchId);
                 }
-                $items = $kyoShinQuery
-                    ->get()
-                    ->filter(static fn ($item) => (int) ($item->order?->client_id ?? 0) === $osId)
-                    ->values();
+                $items = $this->filterItemsForOsParty($kyoShinQuery->get(), $osId);
             } else {
-                $items = $this->finishedKyoShinItemsForPeriod($fromDay, $toDay, $branchId)
-                    ->filter(static fn ($item) => (int) ($item->order?->client_id ?? 0) === $osId)
-                    ->values();
+                $items = $this->filterItemsForOsParty(
+                    $this->finishedKyoShinItemsForPeriod($fromDay, $toDay, $branchId),
+                    $osId
+                );
             }
         } else {
             $items = $this->completedItemsForPeriod($osId, $fromDay, $toDay, $branchId);
@@ -965,11 +980,16 @@ class OsSettlementService
             ]];
         }
 
+        $osId = (int) ($batch->os_user_id ?? 0);
         $items = DispatchOrderItem::query()
             ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch', 'kyoShinItem'])
             ->whereIn('id', $itemIds)
-            ->get()
-            ->sortBy(fn ($item) => array_search((int) $item->id, $itemIds, true))
+            ->get();
+        if ($osId > 0) {
+            $items = $this->filterItemsForOsParty($items, $osId);
+        }
+        $items = $items
+            ->sortBy(fn ($item) => array_search((int) $item->id, $itemIds, true) ?: 9999)
             ->values();
 
         $invoiceDate = $batch->to_date

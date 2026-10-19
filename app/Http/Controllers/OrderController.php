@@ -3608,8 +3608,8 @@ class OrderController extends Controller
 
         $unfinishedItems = $settlementService
             ->completedItemsForPeriod(null, $fromDay, $toDay, $branchId)
-            ->filter(function ($item) use ($osFilter) {
-                $osId = (int) ($item->order?->client_id ?? 0);
+            ->filter(function ($item) use ($osFilter, $settlementService) {
+                $osId = $settlementService->itemOsPartyUserId($item);
                 if ($osFilter === '' || $osFilter === 'all') {
                     return true;
                 }
@@ -3633,7 +3633,8 @@ class OrderController extends Controller
         $allBranchCount = (int) $branchTabCounts->sum();
 
         // Only unfinished OS remain on ငွေရှင်းတမ်း; Finished rows move to Daily Check / Money Transfer.
-        $grouped = $unfinishedItems->groupBy(static fn ($item) => (int) ($item->order?->client_id ?? 0));
+        // Group by Online Shop party (pickup shop → client), not raw order.client_id.
+        $grouped = $unfinishedItems->groupBy(fn ($item) => $settlementService->itemOsPartyUserId($item));
         $osIds = $grouped->keys()
             ->map(static fn ($id) => (int) $id)
             ->unique()
@@ -3641,8 +3642,8 @@ class OrderController extends Controller
 
         $kyoShinPayItems = $settlementService
             ->finishedKyoShinItemsForPeriod($fromDay, $toDay, $branchId)
-            ->filter(function ($item) use ($osFilter) {
-                $osId = (int) ($item->order?->client_id ?? 0);
+            ->filter(function ($item) use ($osFilter, $settlementService) {
+                $osId = $settlementService->itemOsPartyUserId($item);
                 if ($osFilter === '' || $osFilter === 'all') {
                     return true;
                 }
@@ -3658,7 +3659,7 @@ class OrderController extends Controller
             ->values();
 
         $kyoShinOsIds = $kyoShinPayItems
-            ->map(static fn ($item) => (int) ($item->order?->client_id ?? 0))
+            ->map(fn ($item) => $settlementService->itemOsPartyUserId($item))
             ->unique()
             ->values();
 
@@ -3768,7 +3769,7 @@ class OrderController extends Controller
             return $buildOsRow($osId, $nettable);
         })->filter()->sortBy(static fn ($row) => mb_strtolower($row->name), SORT_NATURAL)->values();
 
-        $kyoShinGrouped = $kyoShinPayItems->groupBy(static fn ($item) => (int) ($item->order?->client_id ?? 0));
+        $kyoShinGrouped = $kyoShinPayItems->groupBy(fn ($item) => $settlementService->itemOsPartyUserId($item));
         $kyoShinPayRows = $kyoShinGrouped->keys()->map(function ($osId) use ($kyoShinGrouped, $buildOsRow) {
             $osId = (int) $osId;
 
@@ -3859,9 +3860,10 @@ class OrderController extends Controller
         [$branchId] = resolveDestinationBranchFilter($request);
 
         $items = $settlementService
-            ->finishedKyoShinItemsForPeriod($fromDay, $toDay, $branchId)
-            ->filter(static fn ($item) => (int) ($item->order?->client_id ?? 0) === $osId)
-            ->values()
+            ->filterItemsForOsParty(
+                $settlementService->finishedKyoShinItemsForPeriod($fromDay, $toDay, $branchId),
+                $osId
+            )
             ->each(function ($item) {
                 $item->loadMissing('kyoShinItem.batch');
                 $item->kyo_shin_amount = $item->kyoShinPayAmount();
@@ -3941,12 +3943,18 @@ class OrderController extends Controller
                 if ($branchId !== null && $branchId > 0) {
                     applyDestinationBranchFilter($batchQuery, $branchId);
                 }
-                $items = $batchQuery
-                    ->get()
+                $items = $settlementService
+                    ->filterItemsForOsParty($batchQuery->get(), $osId)
                     ->sortBy(static fn ($item) => array_search((int) $item->id, $itemIds, true) ?: 9999)
                     ->values();
+                if ($settlementSide !== null && $settlementSide !== 'kyo_shin') {
+                    $items = $settlementService->filterItemsBySettlementSide($items, $settlementSide);
+                }
             }
         }
+
+        // Final guard: never render another Online Shop's parcels on this slip.
+        $items = $settlementService->filterItemsForOsParty($items, $osId);
 
         if ($items->isEmpty()) {
             return response()->json(['message' => __('message.os_settlement_no_completed_items')], 422);
@@ -4306,15 +4314,6 @@ class OrderController extends Controller
 
         $itemsQuery = DispatchOrderItem::query()
             ->with(['order.client.city', 'order.city', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia'])
-            ->whereHas('order', function ($q) use ($osId) {
-                if ($osId > 0) {
-                    $q->where('client_id', $osId);
-                } else {
-                    $q->where(function ($inner) {
-                        $inner->whereNull('client_id')->orWhere('client_id', 0);
-                    });
-                }
-            })
             ->where(function ($dateQuery) use ($fromDay, $toDay) {
                 $dateQuery->whereBetween('received_date', [$fromDay, $toDay])
                     ->orWhere(function ($fallback) use ($fromDay, $toDay) {
@@ -4361,7 +4360,10 @@ class OrderController extends Controller
             });
         }
 
-        $items = $itemsQuery->orderByDesc('id')->get();
+        $settlementService = app(OsSettlementService::class);
+        // Scope by Online Shop party (pickup shop → client), not raw order.client_id.
+        $items = $settlementService
+            ->filterItemsForOsParty($itemsQuery->orderByDesc('id')->get(), $osId);
 
         $canBulkUpdate = $status === 'completed';
         $bulkActions = $canBulkUpdate
@@ -4369,29 +4371,14 @@ class OrderController extends Controller
             : [];
 
         $slipCompany = $this->dispatchOsSlipCompany();
-        $slipSender = [
-            'name' => $osName,
-            'phone' => $osId > 0
-                ? (normalizeContactNumber((string) ($osClient?->contact_number ?? '')) ?: '-')
-                : '-',
-            'address' => '-',
-        ];
-        if ($items->isNotEmpty()) {
-            $firstOrder = $items->first()->order;
-            if ($firstOrder) {
-                $slipSender['name'] = resolveDispatchOsName($firstOrder) !== '-'
-                    ? resolveDispatchOsName($firstOrder)
-                    : $osName;
-                $phone = resolveDispatchOsPhone($firstOrder);
-                $address = resolveDispatchOsAddress($firstOrder);
-                if ($phone !== '-') {
-                    $slipSender['phone'] = $phone;
-                }
-                if ($address !== '-') {
-                    $slipSender['address'] = $address;
-                }
-            }
-        }
+        $slipSender = $settlementService->resolveSlipSender(
+            $osClient ?? new User(),
+            $items,
+            $osName
+        );
+        $slipData = $settlementService->buildSlipRows($items, $toDateRaw, true);
+        $slipRows = $slipData['rows'];
+        $slipTotals = $slipData['totals'];
 
         $pageTitle = __('message.item_details');
         $assets = [];
@@ -4417,7 +4404,9 @@ class OrderController extends Controller
             'canBulkUpdate',
             'bulkActions',
             'slipCompany',
-            'slipSender'
+            'slipSender',
+            'slipRows',
+            'slipTotals'
         ));
     }
 
@@ -4439,26 +4428,36 @@ class OrderController extends Controller
         $osId = (int) $osId;
         $ids = array_values(array_unique(array_map('intval', $data['item_ids'])));
 
-        $query = DispatchOrderItem::query()
-            ->where('status', 'completed')
-            ->whereNotNull('admin_completed_at')
-            ->whereNull('admin_finished_at')
-            ->whereIn('id', $ids)
-            ->whereHas('order', function ($q) use ($osId) {
-                if ($osId > 0) {
-                    $q->where('client_id', $osId);
-                } else {
-                    $q->where(function ($inner) {
-                        $inner->whereNull('client_id')->orWhere('client_id', 0);
-                    });
-                }
-            });
+        $settlementService = app(OsSettlementService::class);
+        $allowedIds = $settlementService
+            ->filterItemsForOsParty(
+                DispatchOrderItem::query()
+                    ->with('order')
+                    ->where('status', 'completed')
+                    ->whereNotNull('admin_completed_at')
+                    ->whereNull('admin_finished_at')
+                    ->whereIn('id', $ids)
+                    ->get(),
+                $osId
+            )
+            ->pluck('id')
+            ->map(static fn ($id) => (int) $id)
+            ->values()
+            ->all();
 
-        $updated = $query->update([
-            'admin_finished_at' => now(),
-            'admin_updated_at' => now(),
-            'updated_at' => now(),
-        ]);
+        if ($allowedIds === []) {
+            return response()->json([
+                'message' => __('message.rider_items_mark_finished_none'),
+            ], 422);
+        }
+
+        $updated = DispatchOrderItem::query()
+            ->whereIn('id', $allowedIds)
+            ->update([
+                'admin_finished_at' => now(),
+                'admin_updated_at' => now(),
+                'updated_at' => now(),
+            ]);
 
         if ($updated <= 0) {
             return response()->json([
@@ -4466,7 +4465,7 @@ class OrderController extends Controller
             ], 422);
         }
 
-        app(\App\Services\KyoShinService::class)->syncFinishedForItemIds($ids, auth()->id());
+        app(\App\Services\KyoShinService::class)->syncFinishedForItemIds($allowedIds, auth()->id());
 
         return response()->json([
             'message' => __('message.rider_items_marked_finished', ['count' => $updated]),

@@ -98,6 +98,7 @@
                 type="button"
                 class="pds-os-slip-preview-btn"
                 data-os-id="{{ $row->id }}"
+                data-section="{{ $section }}"
                 title="{{ __('message.show_slip_completed') }}"
             >
                 <i class="fas fa-eye" aria-hidden="true"></i>
