@@ -51,6 +51,21 @@
                 .replace(/"/g, '&quot;');
         }
 
+        function decodeBase64Utf8(raw) {
+            var binary = atob(raw);
+            if (typeof TextDecoder !== 'undefined') {
+                var bytes = new Uint8Array(binary.length);
+                for (var i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                return new TextDecoder('utf-8').decode(bytes);
+            }
+            // Fallback for older browsers: percent-decode UTF-8 bytes.
+            return decodeURIComponent(Array.prototype.map.call(binary, function (ch) {
+                return '%' + ('00' + ch.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+        }
+
         function decodeRows(raw) {
             if (!raw) {
                 return [];
@@ -58,8 +73,13 @@
             try {
                 var json = raw;
                 try {
-                    json = atob(raw);
-                } catch (e) {}
+                    // Burmese / UTF-8 remarks must not use plain atob() (Latin-1 mojibake).
+                    json = decodeBase64Utf8(raw);
+                } catch (e) {
+                    try {
+                        json = atob(raw);
+                    } catch (e2) {}
+                }
                 var rows = JSON.parse(json);
                 return Array.isArray(rows) ? rows : [];
             } catch (err) {
