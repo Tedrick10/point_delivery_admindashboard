@@ -52,14 +52,20 @@ class Branch extends Model
         return $query->where('status', 1);
     }
 
+    /**
+     * Label for Branch Admin / API pickers — always the branch name.
+     * Using city_name here duplicated labels (e.g. two "Mandalay" for Food + မန္တလေး).
+     */
     public function displayLabel(): string
     {
-        $city = trim((string) $this->city_name);
-        if ($city !== '') {
-            return $city;
+        $name = trim((string) $this->name);
+        if ($name !== '') {
+            return $name;
         }
 
-        return (string) $this->name;
+        $city = trim((string) $this->city_name);
+
+        return $city !== '' ? $city : ('#'.(int) $this->id);
     }
 
     public function settlementMode(): string
