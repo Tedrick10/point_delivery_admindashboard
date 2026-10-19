@@ -483,6 +483,13 @@
                 var showKyoShinAction = @json((bool) ($showKyoShinAction ?? false));
                 var kyoShinActionUrl = @json($kyoShinActionUrl ?? route('order.dispatch.give-kyo-shin'));
 
+                // Warm logo in browser cache so label iframe paints faster.
+                try {
+                    var warmLogo = new Image();
+                    warmLogo.decoding = 'async';
+                    warmLogo.src = @json(asset('images/airway-bill-logo.png'));
+                } catch (e) {}
+
                 window.reloadDispatchItemsTable = function () {
                     typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                 };
@@ -773,6 +780,8 @@
                     return ids;
                 }
 
+                var assign100LabelFrameReady = false;
+
                 function openAssign100LabelPopup(url, count) {
                     var $popup = $('#assign100LabelPopup');
                     var $frame = $('#assign100LabelFrame');
@@ -783,14 +792,29 @@
                     if (count && count > 1) {
                         title += ' · ' + count;
                     }
+                    assign100LabelFrameReady = false;
                     $('#assign100LabelPopupTitle').text(title);
                     $popup.removeAttr('hidden').addClass('is-open is-loading');
                     $('body').addClass('pds-label-popup-open');
                     $frame.off('load.assign100Labels').one('load.assign100Labels', function () {
-                        $popup.removeClass('is-loading');
+                        // Keep spinner until iframe signals images/QR are paint-ready
+                        // (or fall back shortly after load).
+                        setTimeout(function () {
+                            if (!assign100LabelFrameReady) {
+                                assign100LabelFrameReady = true;
+                                $popup.removeClass('is-loading');
+                            }
+                        }, 900);
                     });
                     $frame.attr('src', url);
                 }
+
+                window.addEventListener('message', function (ev) {
+                    if (ev.origin !== window.location.origin) return;
+                    if (!ev.data || ev.data.type !== 'pds-assign100-labels-ready') return;
+                    assign100LabelFrameReady = true;
+                    $('#assign100LabelPopup').removeClass('is-loading');
+                });
 
                 function openAssign100LabelsForIds(ids) {
                     ids = (ids || []).filter(function (id) { return id > 0; });
@@ -837,9 +861,20 @@
 
                 $('#assign100LabelPrintBtn').on('click', function () {
                     var frame = document.getElementById('assign100LabelFrame');
-                    if (frame && frame.contentWindow) {
-                        frame.contentWindow.focus();
-                        frame.contentWindow.print();
+                    if (!frame || !frame.contentWindow) {
+                        return;
+                    }
+                    try {
+                        if (typeof frame.contentWindow.pdsPrintLabels === 'function') {
+                            frame.contentWindow.pdsPrintLabels();
+                            return;
+                        }
+                        frame.contentWindow.postMessage({ type: 'pds-assign100-labels-print' }, window.location.origin);
+                    } catch (e) {
+                        try {
+                            frame.contentWindow.focus();
+                            frame.contentWindow.print();
+                        } catch (e2) {}
                     }
                 });
 

@@ -6,6 +6,7 @@ use App\Models\DispatchOrderItem;
 use App\Models\Order;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class Assign100LabelService
@@ -14,6 +15,9 @@ class Assign100LabelService
 
     /** @var array{company: string, hotline: string, logo_url: string}|null */
     protected ?array $sharedMeta = null;
+
+    /** @var array<string, string> */
+    protected array $qrSvgMemo = [];
 
     public function payload(DispatchOrderItem $item): string
     {
@@ -56,7 +60,22 @@ class Assign100LabelService
 
     public function qrSvg(string $payload, int $size = 132): string
     {
-        return (string) QrCode::format('svg')->size($size)->margin(0)->errorCorrection('M')->generate($payload);
+        $memoKey = $size.'|'.$payload;
+        if (isset($this->qrSvgMemo[$memoKey])) {
+            return $this->qrSvgMemo[$memoKey];
+        }
+
+        $cacheKey = 'assign100_qr_svg_v2_'.$size.'_'.md5($payload);
+        $svg = Cache::remember($cacheKey, now()->addDays(14), static function () use ($payload, $size) {
+            // L = fewer modules → faster generate + lighter print SVG.
+            return (string) QrCode::format('svg')
+                ->size($size)
+                ->margin(0)
+                ->errorCorrection('L')
+                ->generate($payload);
+        });
+
+        return $this->qrSvgMemo[$memoKey] = $svg;
     }
 
     /**
@@ -132,7 +151,7 @@ class Assign100LabelService
         return (object) [
             'item' => $item,
             'payload' => $payload,
-            'qr_svg' => $this->qrSvg($payload, 148),
+            'qr_svg' => $this->qrSvg($payload, 128),
             'printed_at' => now('Asia/Yangon')->format('d M Y · g:i A'),
             'company' => $meta['company'],
             'hotline' => $meta['hotline'],
@@ -173,17 +192,22 @@ class Assign100LabelService
     }
 
     /**
-     * Prefer a tiny cached PNG URL (browser-cacheable) over a base64 data URI.
+     * Prefer an inlined tiny PNG so the print iframe does not wait on a second HTTP
+     * round-trip (Cloudflare MISS made preview/print feel laggy).
      */
     protected function labelLogoUrl(): string
     {
+        $dataUri = $this->labelLogoDataUri();
+        if ($dataUri !== '') {
+            return $dataUri;
+        }
+
         $cached = $this->ensureCachedLogoFile();
         if ($cached !== null) {
-            // Relative URL so local / production hosts both hit the same origin as the print iframe.
             return '/images/'.$cached.'?v='.filemtime(public_path('images/'.$cached));
         }
 
-        return $this->labelLogoDataUri();
+        return '';
     }
 
     protected function ensureCachedLogoFile(): ?string

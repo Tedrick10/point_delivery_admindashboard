@@ -565,10 +565,31 @@
             .hero .date {
                 border-color: #000;
             }
+            /* Faster print spool: drop paint-heavy effects */
+            .slip,
+            .money,
+            .qr-box {
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                filter: none !important;
+            }
+            .stack {
+                padding: 0 !important;
+                gap: 0 !important;
+                background: #fff !important;
+            }
+            .slip {
+                page-break-after: always;
+                break-after: page;
+            }
+            .slip:last-child {
+                page-break-after: auto;
+                break-after: auto;
+            }
         }
     </style>
 </head>
-<body>
+<body data-embed="{{ $embed ? '1' : '0' }}" data-autoprint="{{ !empty($autoprint) ? '1' : '0' }}">
     <div class="float-actions" role="toolbar" aria-label="Print actions">
         <button type="button" class="btn" onclick="window.close()">Close</button>
         <button type="button" class="btn primary" onclick="window.print()">Print</button>
@@ -581,7 +602,7 @@
                     <div class="brand">
                         @if(!empty($label->logo_url))
                             <span class="mark" aria-hidden="true">
-                                <img src="{{ $label->logo_url }}" alt="">
+                                <img src="{{ $label->logo_url }}" alt="" width="42" height="42" decoding="async">
                             </span>
                         @else
                             <span class="mark">P</span>
@@ -668,9 +689,9 @@
             var popup = document.getElementById('qrPopup');
             var codeEl = document.getElementById('qrPopupCode');
             var frameEl = document.getElementById('qrPopupFrame');
-            if (!popup || !codeEl || !frameEl) return;
 
             function openQr(btn) {
+                if (!popup || !codeEl || !frameEl) return;
                 var code = btn.getAttribute('data-code') || '';
                 codeEl.textContent = code;
                 frameEl.innerHTML = btn.innerHTML;
@@ -681,6 +702,7 @@
             }
 
             function closeQr() {
+                if (!popup || !frameEl) return;
                 popup.classList.remove('is-open');
                 popup.hidden = true;
                 popup.setAttribute('hidden', 'hidden');
@@ -702,8 +724,66 @@
             });
 
             document.addEventListener('keydown', function (e) {
-                if (e.key === 'Escape' && popup.classList.contains('is-open')) {
+                if (e.key === 'Escape' && popup && popup.classList.contains('is-open')) {
                     closeQr();
+                }
+            });
+
+            function notifyParentReady() {
+                try {
+                    if (window.parent && window.parent !== window) {
+                        window.parent.postMessage({ type: 'pds-assign100-labels-ready' }, window.location.origin);
+                    }
+                } catch (e) {}
+            }
+
+            function whenImagesReady(cb) {
+                var fired = false;
+                var finish = function () {
+                    if (fired) return;
+                    fired = true;
+                    cb();
+                };
+                var imgs = Array.prototype.slice.call(document.images || []);
+                if (!imgs.length) {
+                    finish();
+                    return;
+                }
+                var left = imgs.length;
+                var done = function () {
+                    left -= 1;
+                    if (left <= 0) finish();
+                };
+                imgs.forEach(function (img) {
+                    if (img.complete) {
+                        done();
+                        return;
+                    }
+                    img.addEventListener('load', done, { once: true });
+                    img.addEventListener('error', done, { once: true });
+                });
+                // Hard cap so a hung image never blocks print forever.
+                setTimeout(finish, 800);
+            }
+
+            window.pdsPrintLabels = function () {
+                whenImagesReady(function () {
+                    window.focus();
+                    window.print();
+                });
+            };
+
+            whenImagesReady(function () {
+                notifyParentReady();
+                if (document.body.getAttribute('data-autoprint') === '1') {
+                    window.pdsPrintLabels();
+                }
+            });
+
+            window.addEventListener('message', function (ev) {
+                if (ev.origin !== window.location.origin) return;
+                if (ev.data && ev.data.type === 'pds-assign100-labels-print') {
+                    window.pdsPrintLabels();
                 }
             });
         })();
