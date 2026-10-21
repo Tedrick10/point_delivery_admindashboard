@@ -177,6 +177,27 @@
             text-decoration: underline;
             text-underline-offset: 2px;
         }
+        .pds-dispatch-assign-100-page .pds-assign-100-os-select + .select2-container { width: 100% !important; }
+        .pds-dispatch-assign-100-page .select2-container--default .select2-selection--single {
+            height: 44px;
+            border: 1px solid #e2e8f0;
+            border-radius: 11px;
+            background: #fff;
+            display: flex;
+            align-items: center;
+        }
+        .pds-dispatch-assign-100-page .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 42px;
+            padding-left: 0.9rem;
+            color: #0f172a;
+            font-size: 0.86rem;
+        }
+        .pds-dispatch-assign-100-page .select2-container--default .select2-selection--single .select2-selection__arrow { height: 42px; }
+        .pds-dispatch-assign-100-page .select2-container--default.select2-container--focus .select2-selection--single,
+        .pds-dispatch-assign-100-page .select2-container--default.select2-container--open .select2-selection--single {
+            border-color: rgba(var(--brand-rgb), 0.45);
+            box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.1);
+        }
     </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-assign-100-page">
         <div class="pds-dispatch-to-assign-screen">
@@ -244,7 +265,9 @@
                     @foreach($destinationBranches as $branchTab)
                         @php $count = (int) ($tabCounts[$branchTab->id] ?? 0); @endphp
                         <a href="{{ route('order.dispatch.assign-100', ['to_branch_id' => $branchTab->id]) }}"
-                           class="pds-assign-100-tab{{ $activeToBranchId === (int) $branchTab->id ? ' is-active' : '' }}">
+                           class="pds-assign-100-tab{{ $activeToBranchId === (int) $branchTab->id ? ' is-active' : '' }}"
+                           data-spa-ignore
+                           data-assign100-branch-tab="1">
                             <span>{{ $branchTab->name }}</span>
                             <em>{{ $count }}</em>
                         </a>
@@ -252,17 +275,28 @@
                 </div>
             @endif
 
+            @php
+                $assign100OsNames = [];
+                foreach ($items as $assign100OsItem) {
+                    $assign100OsLabel = resolveDispatchOsName($assign100OsItem->order ?? null);
+                    if ($assign100OsLabel && $assign100OsLabel !== '-') {
+                        $assign100OsNames[$assign100OsLabel] = $assign100OsLabel;
+                    }
+                }
+                $assign100OsNames = array_values($assign100OsNames);
+                natcasesort($assign100OsNames);
+            @endphp
             <div class="pds-dispatch-to-assign-filter pds-assign-100-filter">
                 <div class="pds-dispatch-to-assign-filter-grid pds-dispatch-assign-100-filter-grid">
                     <div class="pds-dispatch-to-assign-os-filter">
                         <div class="pds-dispatch-field pds-dispatch-field-sm">
                             <label for="assign_100_os_name">{{ __('message.os_name') }}</label>
-                            <div class="pds-follow-up-os-input-wrap">
-                                <input type="text" id="assign_100_os_name" class="pds-dispatch-input" placeholder="{{ __('message.os_name') }} / {{ __('message.phone') }}" autocomplete="off">
-                                <button type="button" class="pds-dispatch-to-assign-os-search-btn" id="openAssign100OsSearch" title="{{ __('message.to_find_os_name') }}">
-                                    <i class="fas fa-search"></i>
-                                </button>
-                            </div>
+                            <select id="assign_100_os_name" class="pds-assign-100-os-select">
+                                <option value="">{{ __('message.all') }}</option>
+                                @foreach($assign100OsNames as $assign100OsName)
+                                    <option value="{{ $assign100OsName }}">{{ $assign100OsName }}</option>
+                                @endforeach
+                            </select>
                         </div>
                     </div>
                     <div class="pds-dispatch-field pds-dispatch-field-sm">
@@ -490,8 +524,59 @@
                     warmLogo.src = @json(asset('images/airway-bill-logo.png'));
                 } catch (e) {}
 
+                var ASSIGN100_FILTER_KEY = 'pdsAssign100SearchFilters';
+
+                function saveAssign100Filters() {
+                    try {
+                        sessionStorage.setItem(ASSIGN100_FILTER_KEY, JSON.stringify({
+                            os: String($(osInputSelector).val() || ''),
+                            customer: String($('#assign_100_customer_search').val() || '')
+                        }));
+                    } catch (e) {}
+                }
+
+                function restoreAssign100Filters() {
+                    try {
+                        var saved = JSON.parse(sessionStorage.getItem(ASSIGN100_FILTER_KEY) || '{}');
+                        if (saved && typeof saved === 'object') {
+                            if (typeof saved.os === 'string') {
+                                var $os = $(osInputSelector);
+                                var hasOption = $os.find('option').filter(function () {
+                                    return this.value === saved.os;
+                                }).length > 0;
+                                $os.val(hasOption ? saved.os : '');
+                            }
+                            if (typeof saved.customer === 'string') $('#assign_100_customer_search').val(saved.customer);
+                        }
+                    } catch (e) {}
+                }
+
+                function initAssign100OsSelect() {
+                    var $os = $(osInputSelector);
+                    if (!$os.length || typeof $.fn.select2 !== 'function') {
+                        return;
+                    }
+                    if ($os.hasClass('select2-hidden-accessible')) {
+                        $os.select2('destroy');
+                    }
+                    $os.select2({
+                        width: '100%',
+                        allowClear: true,
+                        placeholder: @json(__('message.all')),
+                        minimumResultsForSearch: 0
+                    });
+                }
+
                 window.reloadDispatchItemsTable = function () {
-                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
+                    saveAssign100Filters();
+                    // SPA reload re-binds page scripts; soft live replace drops handlers.
+                    if (typeof window.pdsAdminReload === 'function') {
+                        window.pdsAdminReload();
+                    } else if (typeof window.adminLiveReloadPage === 'function') {
+                        window.adminLiveReloadPage();
+                    } else {
+                        window.location.reload();
+                    }
                 };
 
                 function renderOsRows(rows) {
@@ -730,22 +815,13 @@
                     var osTerm = String($(osInputSelector).val() || '').trim();
                     var customerTerm = normalizeFilterValue($('#assign_100_customer_search').val());
                     var visibleCount = 0;
-                    var matchOs = typeof window.pdsMatchOsTerm === 'function'
-                        ? window.pdsMatchOsTerm
-                        : function (term, name, phone) {
-                            var q = String(term || '').toLowerCase();
-                            return !q
-                                || String(name || '').toLowerCase().indexOf(q) !== -1
-                                || String(phone || '').toLowerCase().indexOf(q) !== -1;
-                        };
 
                     $('#assign100Table tbody tr').each(function () {
                         var $row = $(this);
-                        var rowOsName = String($row.data('os-name') || '');
-                        var rowOsPhone = String($row.data('os-phone') || '');
+                        var rowOsName = String($row.attr('data-os-name') || '').trim();
                         var rowCustomerName = normalizeFilterValue($row.data('customer-name'));
                         var rowCustomerPhone = normalizeFilterValue($row.data('customer-phone'));
-                        var isMatch = (!osTerm || matchOs(osTerm, rowOsName, rowOsPhone))
+                        var isMatch = (!osTerm || rowOsName === osTerm)
                             && (!customerTerm || rowCustomerName.indexOf(customerTerm) !== -1 || rowCustomerPhone.indexOf(customerTerm) !== -1);
 
                         $row.toggleClass('d-none', !isMatch);
@@ -940,11 +1016,12 @@
                                 showMessage(res.message);
                             }
                             if (res && res.redirect) {
+                                saveAssign100Filters();
                                 if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(res.redirect);
                                 else window.location.href = res.redirect;
                                 return;
                             }
-                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
+                            window.reloadDispatchItemsTable();
                         },
                         error: function (xhr) {
                             updateAssignRiderButtonState();
@@ -961,8 +1038,6 @@
                 if (typeof window.initDispatchOsFields === 'function') {
                     window.initDispatchOsFields({ osSearchRoute: osSearchRoute });
                 }
-
-                $('#openAssign100OsSearch').on('click', openOsSearchModal);
 
                 var osSearchTimer;
                 $('#os_modal_search').on('input', function () {
@@ -986,17 +1061,6 @@
                     riderSearchTimer = setTimeout(function () {
                         renderRiderRows(filterRiders(term), 0);
                     }, 200);
-                });
-
-                $(document).on('click', '#osSearchTableBody .pds-dispatch-table-row', function () {
-                    var item = $(this).data('item');
-                    if (!item) {
-                        return;
-                    }
-                    var osName = item.name || String(item.text || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
-                    $(osInputSelector).val(osName);
-                    $('#osSearchModal').modal('hide');
-                    applyAssign100Filters();
                 });
 
                 $(document).on('click', '#riderAssignTableBody .pds-dispatch-table-row', function () {
@@ -1085,10 +1149,37 @@
                 });
 
                 var assign100FilterTimer;
-                $(osInputSelector + ', #assign_100_customer_search').on('input', function () {
-                    clearTimeout(assign100FilterTimer);
-                    assign100FilterTimer = setTimeout(applyAssign100Filters, 150);
-                });
+                $(document).off('change.assign100Os', osInputSelector)
+                    .on('change.assign100Os', osInputSelector, function () {
+                        saveAssign100Filters();
+                        applyAssign100Filters();
+                    });
+                $(document).off('input.assign100Filters', '#assign_100_customer_search')
+                    .on('input.assign100Filters', '#assign_100_customer_search', function () {
+                        clearTimeout(assign100FilterTimer);
+                        assign100FilterTimer = setTimeout(function () {
+                            saveAssign100Filters();
+                            applyAssign100Filters();
+                        }, 150);
+                    });
+
+                // Branch short-charts: own navigator so SPA stuck-lock cannot block a 2nd click.
+                $(document).off('click.assign100BranchTabs', '[data-assign100-branch-tab]')
+                    .on('click.assign100BranchTabs', '[data-assign100-branch-tab]', function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var href = this.href || this.getAttribute('href');
+                        if (!href) return;
+                        saveAssign100Filters();
+                        if (window.AdminSpa && typeof window.AdminSpa.resetNavigation === 'function') {
+                            window.AdminSpa.resetNavigation(true);
+                        }
+                        if (typeof window.pdsAdminGo === 'function') {
+                            window.pdsAdminGo(href);
+                        } else {
+                            window.location.assign(href);
+                        }
+                    });
 
                 $(document).on('change', '#assign100SelectAll', function () {
                     var isChecked = $(this).is(':checked');
@@ -1150,7 +1241,7 @@
                             if (res && res.message && typeof showMessage === 'function') {
                                 showMessage(res.message);
                             }
-                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
+                            window.reloadDispatchItemsTable();
                         },
                         error: function (xhr) {
                             $('#confirmKyoShinGiveBtn').prop('disabled', false);
@@ -1207,11 +1298,12 @@
                                 showMessage(res.message);
                             }
                             if (res && res.redirect) {
+                                saveAssign100Filters();
                                 if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(res.redirect);
                                 else window.location.href = res.redirect;
                                 return;
                             }
-                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
+                            window.reloadDispatchItemsTable();
                         },
                         error: function (xhr) {
                             updateAssignRiderButtonState();
@@ -1264,7 +1356,7 @@
                                             if (res && res.message && typeof showMessage === 'function') {
                                                 showMessage(res.message);
                                             }
-                                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
+                                            window.reloadDispatchItemsTable();
                                         },
                                         error: function (xhr) {
                                             var msg = (xhr.responseJSON && xhr.responseJSON.message)
@@ -1283,6 +1375,17 @@
                         }
                     });
                 });
+
+                restoreAssign100Filters();
+                initAssign100OsSelect();
+                applyAssign100Filters();
+
+                $(document).off('admin-live:replaced.assign100Filters admin-spa:navigated.assign100Filters')
+                    .on('admin-live:replaced.assign100Filters admin-spa:navigated.assign100Filters', function () {
+                        restoreAssign100Filters();
+                        initAssign100OsSelect();
+                        applyAssign100Filters();
+                    });
             });
         </script>
     @endsection

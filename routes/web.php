@@ -336,6 +336,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('expenses/{id}/generate', [ExpenseController::class, 'generate'])->name('order.expenses.generate');
     Route::delete('expenses/{id}', [ExpenseController::class, 'destroy'])->name('order.expenses.destroy');
     Route::get('expense-summary', [ExpenseSummaryController::class, 'index'])->name('order.expense-summary');
+    Route::get('expense-summary/income-items', [ExpenseSummaryController::class, 'incomeItems'])->name('order.expense-summary.income-items');
     Route::post('expense-summary/confirm', [ExpenseSummaryController::class, 'confirm'])->name('order.expense-summary.confirm');
     Route::get('delivery-route-locations', [DeliveryRouteLocationController::class, 'index'])->name('delivery-route-locations.index');
     Route::get('delivery-route-locations/townships', [DeliveryRouteLocationController::class, 'townships'])->name('delivery-route-locations.townships');

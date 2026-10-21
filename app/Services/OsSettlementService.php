@@ -290,26 +290,40 @@ class OsSettlementService
 
     public function resolveSlipSender(User $osClient, $items, string $osName): array
     {
+        // Slip Sender must match the settlement Online Shop row (User), not the
+        // first parcel's pickup/client name — those can differ when pickup text
+        // is a short alias ("Shwe Yee Min") while the OS account is "6 & 9".
+        $phone = normalizeContactNumber((string) ($osClient->contact_number ?? ''));
+        $address = formatOsClientAddress($osClient->id ? $osClient : null);
         $sender = [
-            'name' => $osName,
-            'phone' => normalizeContactNumber((string) ($osClient->contact_number ?? '')) ?: '-',
-            'address' => '-',
+            'name' => $osName !== '' && $osName !== '-'
+                ? $osName
+                : (trim((string) ($osClient->name ?? '')) ?: '-'),
+            'phone' => $phone !== '' ? $phone : '-',
+            'address' => $address !== '' ? $address : '-',
         ];
 
+        // Fallback only when the OS user record is missing identity fields.
         if ($items->isNotEmpty()) {
             $firstOrder = $items->first()->order;
             if ($firstOrder) {
-                $resolvedName = resolveDispatchOsName($firstOrder);
-                if ($resolvedName !== '-') {
-                    $sender['name'] = $resolvedName;
+                if ($sender['name'] === '-' || $sender['name'] === '') {
+                    $resolvedName = resolveDispatchOsName($firstOrder);
+                    if ($resolvedName !== '-') {
+                        $sender['name'] = $resolvedName;
+                    }
                 }
-                $phone = resolveDispatchOsPhone($firstOrder);
-                $address = resolveDispatchOsAddress($firstOrder);
-                if ($phone !== '-') {
-                    $sender['phone'] = $phone;
+                if ($sender['phone'] === '-') {
+                    $resolvedPhone = resolveDispatchOsPhone($firstOrder);
+                    if ($resolvedPhone !== '-') {
+                        $sender['phone'] = $resolvedPhone;
+                    }
                 }
-                if ($address !== '-') {
-                    $sender['address'] = $address;
+                if ($sender['address'] === '-') {
+                    $resolvedAddress = resolveDispatchOsAddress($firstOrder);
+                    if ($resolvedAddress !== '-') {
+                        $sender['address'] = $resolvedAddress;
+                    }
                 }
             }
         }

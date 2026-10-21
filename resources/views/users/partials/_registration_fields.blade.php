@@ -121,26 +121,22 @@
 
             <div class="pds-dispatch-field">
                 <label for="phone">{{ __('message.phone') }} <span class="text-danger">*</span></label>
-                <div class="pds-phone-field {{ $isEdit ? 'pds-phone-field--readonly' : '' }}">
+                <div class="pds-phone-field">
                     <input type="tel"
                            id="phone"
+                           name="phone"
                            class="pds-dispatch-input"
                            data-user-reg-phone="1"
                            placeholder="{{ __('message.reg_placeholder_phone') }}"
                            value="{{ $phoneNational }}"
-                           @if($isEdit)
-                               readonly tabindex="-1"
-                           @else
-                               name="phone"
-                               required
-                           @endif>
+                           required>
                 </div>
                 {{-- Edit/create store local 09… format (no +95). --}}
                 <input type="hidden"
                        name="contact_number"
                        id="contact_number_hidden"
                        value="{{ $phoneStored }}"
-                       @unless($isEdit) data-os-create-phone="1" @endunless>
+                       data-os-create-phone="1">
                 <small class="pds-field-hint">{{ __('message.phone_country_hint') }}</small>
                 @error('contact_number')
                     <span class="help-block error">{{ $message }}</span>
@@ -177,11 +173,10 @@
              data-placeholder-township="{{ __('message.reg_placeholder_township') }}"
              data-placeholder-township-locked="{{ __('message.nrc_placeholder_town_locked') }}">
             <div class="pds-dispatch-field">
-                <label for="reg_state">{{ __('message.region') }} <span class="text-danger">*</span></label>
+                <label for="reg_state">{{ __('message.region') }}</label>
                 <select name="os_profile[state_division]"
                         id="reg_state"
                         class="pds-dispatch-input pds-dispatch-select pds-os-location-select"
-                        required
                         data-placeholder="{{ __('message.reg_placeholder_state_division') }}">
                     <option value="">{{ __('message.reg_placeholder_state_division') }}</option>
                     @foreach($mmStates as $state)
@@ -201,11 +196,10 @@
             </div>
 
             <div class="pds-dispatch-field">
-                <label for="reg_township">{{ __('message.township') }} <span class="text-danger">*</span></label>
+                <label for="reg_township">{{ __('message.township') }}</label>
                 <select name="os_profile[township]"
                         id="reg_township"
                         class="pds-dispatch-input pds-dispatch-select pds-os-location-select"
-                        required
                         @disabled($selectedState === '')
                         data-placeholder="{{ __('message.reg_placeholder_township') }}">
                     <option value="">

@@ -152,8 +152,7 @@
                                 $cardDate = $card?->expense_date?->format('Y-m-d')
                                     ?? $row->summary_date?->format('Y-m-d');
                                 $dayKey = $row->summary_date?->format('Y-m-d');
-                                $incomeItems = $incomeItemsByDate[$dayKey] ?? [];
-                                $hasIncomeCard = count($incomeItems) > 0 || (float) $row->income > 0;
+                                $hasIncomeCard = (float) $row->income > 0;
                             @endphp
                             <tr>
                                 <td class="is-no">{{ $index + 1 }}</td>
@@ -166,7 +165,8 @@
                                                 title="{{ __('message.expenses_view_income_card') }}"
                                                 data-card-type="income"
                                                 data-date="{{ $dayKey }}"
-                                                data-items='@json($incomeItems)'
+                                                data-items="[]"
+                                                data-income-url="{{ route('order.expense-summary.income-items', array_filter(['date' => $dayKey, 'branch_id' => $selectedBranchId ?? null])) }}"
                                                 @disabled(! $hasIncomeCard)>
                                             <i class="fas fa-eye" aria-hidden="true"></i>
                                         </button>
@@ -393,12 +393,7 @@
                 refreshFormTotal();
             }
 
-            function openView(btn) {
-                let items = [];
-                try {
-                    const parsed = JSON.parse(btn.dataset.items || '[]');
-                    if (Array.isArray(parsed)) items = parsed;
-                } catch (e) {}
+            function openView(btn, items) {
                 activeCardType = btn.dataset.cardType === 'income' ? 'income' : 'expense';
                 if (titleEl) {
                     titleEl.textContent = activeCardType === 'income' ? i18n.incomeTitle : i18n.expenseTitle;
@@ -406,12 +401,46 @@
                 setColumnLabels(activeCardType);
                 if (dateInput) dateInput.value = btn.dataset.date || '';
                 rowsEl.innerHTML = '';
-                if (!items.length) {
+                if (!items || !items.length) {
                     items = [{ subject: '', amount: 0, locked: true }];
                 }
                 items.forEach(addRow);
                 closeImageView();
                 formModal.hidden = false;
+            }
+
+            function parseEmbeddedItems(btn) {
+                try {
+                    const parsed = JSON.parse(btn.dataset.items || '[]');
+                    if (Array.isArray(parsed)) return parsed;
+                } catch (e) {}
+                return [];
+            }
+
+            async function openCard(btn) {
+                if (btn.disabled) return;
+                const isIncome = btn.dataset.cardType === 'income';
+                let items = parseEmbeddedItems(btn);
+                const incomeUrl = btn.dataset.incomeUrl || '';
+                if (isIncome && incomeUrl && (!items || !items.length)) {
+                    btn.disabled = true;
+                    try {
+                        const res = await fetch(incomeUrl, {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                            credentials: 'same-origin',
+                        });
+                        const data = await res.json();
+                        if (res.ok && Array.isArray(data.items)) {
+                            items = data.items;
+                            btn.dataset.items = JSON.stringify(items);
+                        }
+                    } catch (e) {
+                        items = [];
+                    } finally {
+                        btn.disabled = false;
+                    }
+                }
+                openView(btn, items);
             }
 
             function closeForm() {
@@ -427,8 +456,7 @@
 
             document.querySelectorAll('.js-summary-view-card').forEach((btn) => {
                 btn.addEventListener('click', () => {
-                    if (btn.disabled) return;
-                    openView(btn);
+                    openCard(btn);
                 });
             });
         })();

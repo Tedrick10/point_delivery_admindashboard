@@ -202,9 +202,12 @@ class OrderController extends Controller
             if (is_numeric($request->per_page)) {
                 $per_page = $request->per_page;
             }
-            if ($request->per_page == -1) {
-                $per_page = $order->count();
+            if ((int) $request->per_page === -1) {
+                $per_page = max(1, (clone $order)->count());
             }
+        } elseif (auth()->check() && auth()->user()->user_type === 'delivery_man') {
+            // Rider Pick Up list: return all assigned parcels (old apps omit per_page and hit the 10/20 cap).
+            $per_page = max(1, (clone $order)->count());
         }
 
         $order = $order->with([

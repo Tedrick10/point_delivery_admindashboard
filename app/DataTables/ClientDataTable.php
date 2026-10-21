@@ -34,8 +34,10 @@ class ClientDataTable extends DataTable
             ->editColumn('last_actived_at', function ($query) {
                 return dateAgoFormate($query->last_actived_at, true) ?? '-';
             })
-            ->editColumn('contact_number', function($query) {
-                return auth()->user()->hasRole('admin') ? maskSensitiveInfo('contact_number', $query->contact_number) : maskSensitiveInfo('contact_number', $query->contact_number);
+            ->editColumn('contact_number', function ($query) {
+                $phone = normalizeContactNumber($query->contact_number);
+
+                return maskSensitiveInfo('contact_number', $phone !== '' ? $phone : $query->contact_number);
             })
             ->order(function ($query) {
                 if (request()->has('order')) {
@@ -63,7 +65,8 @@ class ClientDataTable extends DataTable
                 $fallback = asset('images/user/1.jpg');
                 $name = e($row->name);
                 $url = route('users.show', $row->id);
-                $phone = e(maskSensitiveInfo('contact_number', $row->contact_number) ?: '-');
+                $normalizedPhone = normalizeContactNumber($row->contact_number);
+                $phone = e(maskSensitiveInfo('contact_number', $normalizedPhone !== '' ? $normalizedPhone : $row->contact_number) ?: '-');
 
                 return '<div class="pds-table-user">'
                     . '<img src="' . e($img ?: $fallback) . '" alt="" class="pds-table-user__avatar">'
@@ -73,9 +76,19 @@ class ClientDataTable extends DataTable
                     . '</div>'
                     . '</div>';
             })
-            ->filterColumn('name', function ($query, $keyword) {
-                applyOnlineShopNameOrPhoneSearch($query, $keyword, 'users.name', 'users.contact_number');
-            })
+            // Override Yajra global/multi-term search so one full query hits ALL
+            // matching Online Shops (name + phone variants), not page-local data.
+            ->filter(function ($query) {
+                $term = trim((string) (
+                    request()->input('search.value')
+                    ?? request()->input('q')
+                    ?? ''
+                ));
+                if ($term === '') {
+                    return;
+                }
+                applyNameOrPhoneSearch($query, $term, 'users.name', 'users.contact_number');
+            }, true)
             ->editColumn('otp_verify_at', function ($data) {
                 if ($data->otp_verify_at !== null) {
                     return '<p class="text-capitalize badge bg-success text-center mt-3"> Verified</p>';
@@ -157,7 +170,23 @@ class ClientDataTable extends DataTable
         $city = request()->input('city_id');
         $country = request()->input('country_id');
         $lastActive = request()->input('last_actived_at');
-        applyOnlineShopApprovalTab($model, $status);
+        // When searching, look across all approval statuses in this branch so
+        // shops are not "missing" just because the wrong tab is selected.
+        // kyo_shin tab stays scoped to ကြိုရှင်း shops only.
+        $searchTerm = trim((string) (
+            request()->input('search.value')
+            ?? request()->input('q')
+            ?? ''
+        ));
+        if ($searchTerm !== '' && $status !== 'kyo_shin') {
+            $model->whereIn('approval_status', [
+                User::APPROVAL_PENDING,
+                User::APPROVAL_APPROVED,
+                User::APPROVAL_REJECTED,
+            ]);
+        } else {
+            applyOnlineShopApprovalTab($model, $status);
+        }
 
         if ($city) {
             $model->where('city_id', $city);

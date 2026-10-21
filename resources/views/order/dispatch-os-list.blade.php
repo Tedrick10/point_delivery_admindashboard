@@ -1,5 +1,25 @@
 <x-master-layout :assets="$assets ?? []">
-    
+<style>
+body.pds-admin .pds-os-settlement-table tfoot td {
+    padding: 0.85rem;
+    background: #fff7ed;
+    border-top: 2px solid #fdba74;
+    vertical-align: middle;
+}
+body.pds-admin .pds-os-settlement-total-row .pds-os-settlement-total-items {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #9a3412;
+}
+body.pds-admin .pds-os-settlement-total-row .pds-os-settlement-total-items strong {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #c2410c;
+}
+</style>
 <div id="adminLiveRoot" data-live-page="auto">
 <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-os-list-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
@@ -162,6 +182,25 @@
                                             @include('order.partials._dispatch-os-settlement-row', ['row' => $row, 'index' => $index, 'section' => 'pay'])
                                         @endforeach
                                     </tbody>
+                                    <tfoot>
+                                        <tr class="pds-os-settlement-total-row">
+                                            <td class="pds-rider-col-no"></td>
+                                            <td class="pds-os-settlement-col-os">
+                                                <span class="pds-os-settlement-total-items">
+                                                    {{ __('message.total') }}:
+                                                    <strong>{{ (int) $payToOsRows->sum('item_count') }}</strong>
+                                                    {{ __('message.items') }}
+                                                </span>
+                                            </td>
+                                            <td class="pds-os-settlement-col-amount"></td>
+                                            <td class="pds-os-settlement-col-kpay"></td>
+                                            <td class="pds-os-settlement-col-kpay"></td>
+                                            <td class="pds-os-settlement-col-slip"></td>
+                                            <td class="pds-os-settlement-col-method"></td>
+                                            <td class="pds-os-settlement-col-preview"></td>
+                                            <td class="pds-os-settlement-col-action"></td>
+                                        </tr>
+                                    </tfoot>
                                 </table>
                             @endif
                         </div>
@@ -225,6 +264,22 @@
                                             @include('order.partials._dispatch-os-settlement-row', ['row' => $row, 'index' => $index, 'section' => 'receive'])
                                         @endforeach
                                     </tbody>
+                                    <tfoot>
+                                        <tr class="pds-os-settlement-total-row">
+                                            <td class="pds-rider-col-no"></td>
+                                            <td class="pds-os-settlement-col-os">
+                                                <span class="pds-os-settlement-total-items">
+                                                    {{ __('message.total') }}:
+                                                    <strong>{{ (int) $receiveFromOsRows->sum('item_count') }}</strong>
+                                                    {{ __('message.items') }}
+                                                </span>
+                                            </td>
+                                            <td class="pds-os-settlement-col-amount"></td>
+                                            <td class="pds-os-settlement-col-slip"></td>
+                                            <td class="pds-os-settlement-col-preview"></td>
+                                            <td class="pds-os-settlement-col-action"></td>
+                                        </tr>
+                                    </tfoot>
                                 </table>
                             @endif
                         </div>
@@ -300,10 +355,12 @@
                 var finishAllUrl = @json(route('order.dispatch.os-finish-all'));
                 var csrf = $('meta[name="csrf-token"]').attr('content');
 
-                if (typeof flatpickr !== 'undefined') {
-                    flatpickr('.dispatch-datepicker', {
-                        dateFormat: 'd-m-Y',
-                        allowInput: true,
+                if (typeof window.pdsBindDispatchDatepickers === 'function') {
+                    window.pdsBindDispatchDatepickers();
+                } else if (typeof flatpickr !== 'undefined') {
+                    document.querySelectorAll('.dispatch-datepicker').forEach(function (el) {
+                        if (el._flatpickr) return;
+                        flatpickr(el, { dateFormat: 'd-m-Y', allowInput: true, disableMobile: true });
                     });
                 }
 
@@ -545,6 +602,7 @@
                         if ($table.is('#osSettlementKyoShinTable')) {
                             refreshKyoShinTotal();
                         }
+                        refreshOsSettlementItemTotals($table);
                         renumberOsSettlementRows($table);
                         updateFinishAllState();
                     });
@@ -630,6 +688,30 @@
                     next();
                 });
 
+                function parseRowItemIds($el) {
+                    var raw = String($el.attr('data-item-ids') || $el.data('item-ids') || '');
+                    if (!raw) return [];
+                    return raw.split(',').map(function (id) {
+                        return parseInt(id, 10);
+                    }).filter(function (id) {
+                        return id > 0;
+                    });
+                }
+
+                function refreshOsSettlementItemTotals($table) {
+                    if (!$table || !$table.length) return;
+                    var total = 0;
+                    $table.find('tbody tr.pds-os-settlement-row').each(function () {
+                        var $badge = $(this).find('.pds-os-settlement-badge').first();
+                        var n = parseInt(String($badge.text() || '').replace(/[^\d]/g, ''), 10);
+                        if (!isNaN(n)) total += n;
+                    });
+                    var $strong = $table.find('tfoot .pds-os-settlement-total-items strong');
+                    if ($strong.length) {
+                        $strong.text(String(total));
+                    }
+                }
+
                 function finishOneOs(osId, $row, $btn, paymentMethod) {
                     var settlementSide = normalizeSettlementSide($row.attr('data-section'));
                     $btn.prop('disabled', true);
@@ -641,6 +723,7 @@
                         delivery_format: 'table',
                         payment_method: settlementSide === 'kyo_shin' ? 'cash' : (paymentMethod || 'kpay'),
                         settlement_side: settlementSide,
+                        item_ids: parseRowItemIds($row),
                     };
                     $.ajax({
                         url: finishUrlTemplate.replace('__OS__', osId),
@@ -722,6 +805,7 @@
                             os_id: parseInt($row.data('os-id'), 10),
                             payment_method: $row.attr('data-payment-method') === 'cash' ? 'cash' : 'kpay',
                             settlement_side: 'pay',
+                            item_ids: parseRowItemIds($row),
                         });
                     });
                     if (!items.length) return;
@@ -737,6 +821,7 @@
                             os_id: parseInt($row.data('os-id'), 10),
                             payment_method: 'cash',
                             settlement_side: 'receive',
+                            item_ids: parseRowItemIds($row),
                         });
                     });
                     if (!items.length) return;
@@ -752,21 +837,95 @@
                             os_id: parseInt($row.data('os-id'), 10),
                             payment_method: 'cash',
                             settlement_side: 'kyo_shin',
+                            item_ids: parseRowItemIds($row),
                         });
                     });
                     if (!items.length) return;
                     finishAllOs(items, $(this), 'kyo_shin');
                 });
 
+                var slipPreviewXhr = null;
+
+                function cleanupOsSlipCompletedModal() {
+                    var $modal = $('#osSlipCompletedModal');
+                    if ($modal.length) {
+                        try {
+                            $modal.removeData('bs.modal');
+                        } catch (e) {}
+                        $modal.remove();
+                    }
+                    $('#osSettlementSlipModalHost').empty();
+                    if (!$('.modal.show').length) {
+                        $('.modal-backdrop').remove();
+                        $('body').removeClass('modal-open').css({ paddingRight: '', overflow: '' });
+                    }
+                }
+
+                function openOsSlipCompletedModal(html) {
+                    cleanupOsSlipCompletedModal();
+                    $('#osSettlementSlipModalHost').html(html || '');
+                    var $modal = $('#osSettlementSlipModalHost #osSlipCompletedModal');
+                    if (!$modal.length) {
+                        return;
+                    }
+                    // Move to <body> so fixed positioning / backdrop stacking works
+                    // (same pattern as Daily Check detail modal). Nested page shells
+                    // with transforms leave the X unclickable under the blur layer.
+                    if (!$modal.parent().is('body')) {
+                        $modal.appendTo(document.body);
+                    }
+                    $modal.modal({
+                        backdrop: true,
+                        keyboard: true,
+                        show: true,
+                    });
+                }
+
+                $(document)
+                    .off('click.pdsOsSlipClose', '#osSlipCompletedCloseBtn, #osSlipCompletedModal [data-dismiss="modal"]')
+                    .on('click.pdsOsSlipClose', '#osSlipCompletedCloseBtn, #osSlipCompletedModal [data-dismiss="modal"]', function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var $modal = $('#osSlipCompletedModal');
+                        if ($modal.length) {
+                            $modal.modal('hide');
+                        } else {
+                            cleanupOsSlipCompletedModal();
+                        }
+                    });
+
+                $(document)
+                    .off('hidden.bs.modal.pdsOsSlip', '#osSlipCompletedModal')
+                    .on('hidden.bs.modal.pdsOsSlip', '#osSlipCompletedModal', function () {
+                        $(this).remove();
+                        $('#osSettlementSlipModalHost').empty();
+                        if (!$('.modal.show').length) {
+                            $('.modal-backdrop').remove();
+                            $('body').removeClass('modal-open').css({ paddingRight: '', overflow: '' });
+                        }
+                    });
+
                 $(document).on('click', '.pds-os-slip-preview-btn', function () {
                     if ($(this).prop('disabled')) {
                         return;
                     }
-                    var osId = $(this).data('os-id');
+                    var $btn = $(this);
+                    var $row = $btn.closest('tr');
+                    var osId = $btn.data('os-id') || $row.data('os-id');
                     var settlementSide = normalizeSettlementSide(
-                        $(this).attr('data-section') || $(this).closest('tr').attr('data-section')
+                        $btn.attr('data-section') || $row.attr('data-section')
                     );
-                    $.ajax({
+                    var itemIds = parseRowItemIds($btn);
+                    if (!itemIds.length) {
+                        itemIds = parseRowItemIds($row);
+                    }
+                    if (slipPreviewXhr && slipPreviewXhr.readyState !== 4) {
+                        slipPreviewXhr.abort();
+                    }
+                    // Do NOT use traditional:true — it serializes item_ids as
+                    // item_ids=1&item_ids=2 (PHP keeps only the last id), so Show
+                    // Slip showed 1 parcel while the list badge showed N.
+                    slipPreviewXhr = $.ajax({
                         url: slipPreviewUrlTemplate.replace('__OS__', osId),
                         type: 'GET',
                         data: {
@@ -774,16 +933,16 @@
                             to_date: filterTo,
                             branch_id: filterBranchId,
                             settlement_side: settlementSide,
+                            item_ids: itemIds,
                         },
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
                         success: function (res) {
-                            $('#osSettlementSlipModalHost').html(res.html || '');
-                            var $modal = $('#osSettlementSlipModalHost #osSlipCompletedModal');
-                            if ($modal.length) {
-                                $modal.modal('show');
-                            }
+                            openOsSlipCompletedModal(res.html || '');
                         },
                         error: function (xhr) {
+                            if (xhr.statusText === 'abort') {
+                                return;
+                            }
                             var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : @json(__('message.something_went_wrong'));
                             notify(msg, 'error');
                         },

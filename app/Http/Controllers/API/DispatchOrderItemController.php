@@ -917,13 +917,8 @@ class DispatchOrderItemController extends Controller
             }
         }
 
-        $perPage = config('constant.PER_PAGE_LIMIT', 20);
-        if ($request->filled('per_page') && is_numeric($request->per_page)) {
-            $perPage = (int) $request->per_page;
-        }
-        if ((int) $request->get('per_page') === -1) {
-            $perPage = max(1, $query->count());
-        }
+        // Rider delivery list: always return the full assigned set (page size 10/20 hid parcels).
+        $perPage = max(1, (clone $query)->count());
 
         $page = $query->paginate($perPage);
         $items = DispatchOrderItemResource::collection($page);

@@ -164,7 +164,9 @@ class DispatchOrderItem extends Model
 
     public function order()
     {
-        return $this->belongsTo(Order::class, 'order_id', 'id');
+        // Soft-deleted orders must still resolve Online Shop for ငွေရှင်းတမ်း /
+        // Daily Check — otherwise parcels collapse into "No OS".
+        return $this->belongsTo(Order::class, 'order_id', 'id')->withTrashed();
     }
 
     public function messages()
@@ -515,13 +517,19 @@ class DispatchOrderItem extends Model
 
     public static function generateCode(): string
     {
+        // ymd + 6 digits = 1M codes/day. Old 3-digit space (1000/day) exhausted
+        // under load and looped forever → Rider "ထပ်တိုး" POST timed out.
         $prefix = now()->format('ymd');
 
-        do {
-            $code = $prefix . str_pad((string) random_int(0, 999), 3, '0', STR_PAD_LEFT);
-        } while (static::where('code', $code)->exists());
+        for ($attempt = 0; $attempt < 32; $attempt++) {
+            $code = $prefix.str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            if (! static::where('code', $code)->exists()) {
+                return $code;
+            }
+        }
 
-        return $code;
+        // Extremely unlikely collision fallback (still unique, fits varchar(32)).
+        return $prefix.substr(str_replace('.', '', uniqid('', true)), -10);
     }
 
     public static function deliveryCityLabel(?string $cityName): string

@@ -136,8 +136,6 @@
             { selector: '#reg_name', message: $form.attr('data-msg-os-name') },
             { selector: '#phone', message: $form.attr('data-msg-phone') },
             { selector: '#reg_address_unit', message: $form.attr('data-msg-address') },
-            { selector: '#reg_state', message: $form.attr('data-msg-state') },
-            { selector: '#reg_township', message: $form.attr('data-msg-township') },
             { selector: '#reg_kpay_name', message: $form.attr('data-msg-kpay-name') },
             { selector: '#reg_kpay_no', message: $form.attr('data-msg-kpay-no') }
         ];

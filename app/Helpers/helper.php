@@ -2183,6 +2183,22 @@ function appVersionPayload(string $app = 'user'): array
         $out[$jsonKey] = $val;
     }
 
+    // Never advertise force-update without a concrete newer version target.
+    // Otherwise apps already on the latest store build stay blocked forever.
+    foreach (['android' => 'android_version_code', 'ios' => 'ios_version'] as $platform => $versionKey) {
+        $forceKey = $platform.'_force_update';
+        $forceOn = in_array((string) ($out[$forceKey] ?? '0'), ['1', 'true', 'TRUE', 'yes'], true);
+        $target = $out[$versionKey] ?? null;
+        $hasTarget = $target !== null && $target !== '' && (
+            $platform === 'android' ? (is_numeric($target) && (int) $target > 0) : true
+        );
+        if ($forceOn && ! $hasTarget) {
+            $out[$forceKey] = '0';
+        } else {
+            $out[$forceKey] = $forceOn ? '1' : '0';
+        }
+    }
+
     return $out;
 }
 
@@ -6739,23 +6755,10 @@ function findClientIdByOsDisplayName(string $name): int
         return $cache[$key] = $clientIndex[$key];
     }
 
-    // Loose contains match (shortest name wins to avoid over-broad hits).
-    $bestId = 0;
-    $bestLen = PHP_INT_MAX;
-    foreach ($clientIndex as $clientKey => $clientId) {
-        if ($clientKey === '') {
-            continue;
-        }
-        if (str_contains($clientKey, $key) || str_contains($key, $clientKey)) {
-            $len = mb_strlen($clientKey);
-            if ($len < $bestLen) {
-                $bestLen = $len;
-                $bestId = (int) $clientId;
-            }
-        }
-    }
-
-    return $cache[$key] = $bestId;
+    // Exact normalized key only. Substring matching ("6" ⊂ "6 & 9",
+    // "noe noe" ⊂ "noe noe thadan hmue") was remapping parcels across
+    // Online Shops and leaking them into Show Slip Completed.
+    return $cache[$key] = 0;
 }
 
 /**

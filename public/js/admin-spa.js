@@ -223,6 +223,12 @@
         window.__pdsPageLiveBooted = false;
 
         try {
+            if (typeof window.pdsDestroyDatepickers === 'function') {
+                window.pdsDestroyDatepickers(document.querySelector(CONTENT) || document);
+            }
+        } catch (e) {}
+
+        try {
             if ($.fn.select2) {
                 $(CONTENT + ' .select2-hidden-accessible').select2('destroy');
             }
@@ -531,6 +537,24 @@
         }
     }
 
+    /** Clear a stuck SPA nav lock so branch tabs / links keep working. */
+    function resetNavigation(force) {
+        if (!force && !navigating) return;
+        if (visitWatchdog) {
+            clearTimeout(visitWatchdog);
+            visitWatchdog = null;
+        }
+        if (activeVisitXhr && typeof activeVisitXhr.abort === 'function') {
+            try { activeVisitXhr.abort(); } catch (e) {}
+        }
+        navigating = false;
+        pendingNav = null;
+        activeVisitXhr = null;
+        showLoading(false);
+        $(CONTENT).removeClass('pds-spa-loading');
+        document.body.classList.remove('pds-spa-navigating');
+    }
+
     function afterContentSwap(finalUrl) {
         cleanupLeftovers();
         syncLiveOptionsFromDom();
@@ -539,6 +563,25 @@
         }
         if (typeof window.pdsResyncFrozenTables === 'function') {
             window.pdsResyncFrozenTables();
+        }
+        if (typeof window.pdsCloseHeaderMenus === 'function') {
+            window.pdsCloseHeaderMenus();
+        } else {
+            var headerNav = document.querySelector('.pds-main-nav');
+            if (headerNav) {
+                headerNav.classList.remove('is-open');
+                headerNav.querySelectorAll('.pds-main-nav__item.is-open').forEach(function (el) {
+                    el.classList.remove('is-open');
+                    var btn = el.querySelector('.pds-main-nav__link--dropdown');
+                    if (btn) btn.setAttribute('aria-expanded', 'false');
+                });
+            }
+            var portal = document.getElementById('pdsMainNavPortal');
+            if (portal) {
+                portal.querySelectorAll('.pds-main-nav__dropdown.is-open-ported').forEach(function (dd) {
+                    dd.classList.remove('is-open-ported');
+                });
+            }
         }
         $(document).trigger('admin-spa:navigated', [finalUrl]);
         if (typeof window.adminLiveRefreshNow === 'function') {
@@ -552,8 +595,13 @@
         if (!url) return $.Deferred().reject().promise();
 
         if (navigating) {
-            pendingNav = { url: url, options: options };
-            return $.Deferred().resolve().promise();
+            // Same destination while stuck → force unlock so branch tabs work again.
+            if (url === window.location.href || (pendingNav && pendingNav.url === url)) {
+                resetNavigation(true);
+            } else {
+                pendingNav = { url: url, options: options };
+                return $.Deferred().resolve().promise();
+            }
         }
 
         if (!options.replace && url === window.location.href) {
@@ -563,13 +611,17 @@
         navigating = true;
         showLoading(true);
         if (visitWatchdog) clearTimeout(visitWatchdog);
+        // Summary / heavy Settlement pages can take >8s; aborting made clicks look broken.
+        var watchdogMs = url.indexOf('/expense-summary') !== -1 ? 30000 : 15000;
         visitWatchdog = setTimeout(function () {
+            if (window.console && console.warn) {
+                console.warn('[admin-spa] visit watchdog — resetting stuck navigation', url);
+            }
             if (activeVisitXhr && typeof activeVisitXhr.abort === 'function') {
                 try { activeVisitXhr.abort(); } catch (e) {}
-            } else {
-                finishVisit();
             }
-        }, 12000);
+            resetNavigation(true);
+        }, watchdogMs);
 
         var request = $.ajax({
             url: url,
@@ -739,6 +791,7 @@
         visit: visit,
         reload: reload,
         softRefresh: softRefresh,
+        resetNavigation: resetNavigation,
         navigating: function () { return navigating; }
     };
 

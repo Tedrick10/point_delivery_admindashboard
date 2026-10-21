@@ -2160,6 +2160,7 @@ class OrderController extends Controller
             ->whereHas('messages')
             ->with(['order.client.media', 'order.delivery_man', 'fromBranch', 'toBranch', 'deliveryMan'])
             ->withCount([
+                'messages',
                 'messages as unreplied_count' => function ($q) {
                     $q->where('sender_type', 'client')->whereNull('read_at');
                 },
@@ -2447,18 +2448,18 @@ class OrderController extends Controller
         $toDay = null;
         $hasDateFilter = $fromDateRaw !== '' || $toDateRaw !== '';
         if ($hasDateFilter) {
-            if ($fromDateRaw === '') {
+        if ($fromDateRaw === '') {
                 $fromDateRaw = $toDateRaw;
-            }
-            if ($toDateRaw === '') {
-                $toDateRaw = $fromDateRaw;
-            }
-            $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
-            $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
-            if ($toDay < $fromDay) {
-                $toDay = $fromDay;
-                $toDateRaw = $fromDateRaw;
-            }
+        }
+        if ($toDateRaw === '') {
+            $toDateRaw = $fromDateRaw;
+        }
+        $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
+        $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
+        if ($toDay < $fromDay) {
+            $toDay = $fromDay;
+            $toDateRaw = $fromDateRaw;
+        }
         }
 
         $search = trim((string) $request->get('search', ''));
@@ -2496,9 +2497,9 @@ class OrderController extends Controller
         }
 
         if ($hasDateFilter && $fromDay && $toDay) {
-            $itemsQuery->where(function ($dateQuery) use ($fromDay, $toDay) {
-                $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
-            });
+        $itemsQuery->where(function ($dateQuery) use ($fromDay, $toDay) {
+            $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
+        });
         }
 
         if ($status === 'delivered') {
@@ -2565,6 +2566,10 @@ class OrderController extends Controller
                 'admin_completed' => __('message.follow_up_status_completed'),
             ],
             'completed' => [
+                'courier_assigned' => __('message.follow_up_status_assigned'),
+                'courier_departed' => __('message.follow_up_status_on_way'),
+                'pending' => __('message.follow_up_status_pending'),
+                'delivered' => __('message.follow_up_status_delivered'),
                 'admin_finished' => __('message.follow_up_status_finished'),
             ],
             default => [],
@@ -2777,19 +2782,19 @@ class OrderController extends Controller
         foreach ($items as $item) {
             $itemPayload = $payload;
             $itemPayload['status_ordered_at'] = now()->addMilliseconds($updated * 10);
-            if ($fromStatus === 'return') {
+        if ($fromStatus === 'return') {
                 $itemPayload['admin_completed_at'] = null;
                 if ($item->isNormalReturn()) {
                     // No-fee: Assigned → Pending → Os Returned only.
                     if (Schema::hasColumn('dispatch_order_items', 'assigned_from_return')) {
                         $itemPayload['assigned_from_return'] = true;
                     }
-                    if (Schema::hasColumn('dispatch_order_items', 'return_reassigned')) {
+            if (Schema::hasColumn('dispatch_order_items', 'return_reassigned')) {
                         $itemPayload['return_reassigned'] = false;
-                    }
+            }
                 } else {
                     // Fee Return Delivery: behaves like a normal parcel.
-                    if (Schema::hasColumn('dispatch_order_items', 'assigned_from_return')) {
+            if (Schema::hasColumn('dispatch_order_items', 'assigned_from_return')) {
                         $itemPayload['assigned_from_return'] = false;
                     }
                     if (Schema::hasColumn('dispatch_order_items', 'return_reassigned')) {
@@ -2954,7 +2959,8 @@ class OrderController extends Controller
     /**
      * Admin Rider List — bulk update selected item statuses.
      * Assigned → On Way; On Way → Pending/Delivered; Pending → Delivered;
-     * Delivered → Completed (admin_completed_at).
+     * Delivered → Completed (admin_completed_at);
+     * Completed → Assigned / On Way / Pending / Delivered / Finished.
      */
     public function dispatchRiderItemsBulkUpdate(Request $request, $riderId)
     {
@@ -2971,7 +2977,7 @@ class OrderController extends Controller
         $rules = [
             'item_ids' => 'required|array|min:1',
             'item_ids.*' => 'integer',
-            'to_status' => 'required|string|in:courier_assigned,courier_departed,pending,completed,admin_completed,admin_finished,return,os_returned',
+            'to_status' => 'required|string|in:courier_assigned,courier_departed,pending,completed,delivered,admin_completed,admin_finished,return,os_returned',
             'remark' => 'nullable|string|max:1000',
             'pending_photo' => 'nullable|image|max:10240',
             'delivered_photo' => 'nullable|image|max:10240',
@@ -3068,6 +3074,59 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => __('message.rider_items_marked_finished', ['count' => $updated]),
+                'updated' => $updated,
+            ]);
+        }
+
+        // Completed → Delivered: clear admin_completed_at, keep status=completed.
+        if ($toStatus === 'delivered') {
+            $items = DispatchOrderItem::query()
+                ->where('delivery_man_id', $rider->id)
+                ->where('status', 'completed')
+                ->whereNotNull('admin_completed_at')
+                ->whereNull('admin_finished_at')
+                ->whereIn('id', $ids)
+                ->with('order')
+                ->get();
+
+            if ($items->isEmpty()) {
+                return response()->json([
+                    'message' => __('message.rider_items_mark_delivered_none'),
+                ], 422);
+            }
+
+            $now = now();
+            foreach ($items as $item) {
+                $fromStatus = (string) $item->status;
+                $item->forceFill([
+                    'admin_completed_at' => null,
+                    'admin_updated_at' => $now,
+                    'updated_at' => $now,
+                ])->save();
+                $updated++;
+
+                $order = $item->order;
+                if ($order) {
+                    try {
+                        $audit->logDeliveryItemStatus(
+                            $order,
+                            $item->fresh(),
+                            $fromStatus,
+                            'delivered',
+                            $admin
+                        );
+                    } catch (\Throwable $e) {
+                        \Log::warning('dispatch audit failed after admin uncomplete', [
+                            'order_id' => $order->id,
+                            'item_id' => $item->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            }
+
+            return response()->json([
+                'message' => __('message.rider_items_marked_delivered', ['count' => $updated]),
                 'updated' => $updated,
             ]);
         }
@@ -3670,7 +3729,7 @@ class OrderController extends Controller
             ->values()
             ->all();
 
-        $clients = User::query()
+        $clients = User::withTrashed()
             ->whereIn('id', $clientIds ?: [0])
             ->with('city')
             ->get()
@@ -3687,21 +3746,29 @@ class OrderController extends Controller
                 return null;
             }
 
+            $firstOrder = $itemGroup->first()?->order;
             $client = $osId > 0 ? ($clients->get($osId) ?? null) : null;
             if ($client === null && $osId > 0) {
-                $client = $itemGroup->first()?->order?->client;
+                $client = $firstOrder?->client;
                 if ($client !== null) {
                     $client->loadMissing('city');
                 }
             }
-            $baseName = $osId > 0
-                ? (trim((string) ($client?->name ?? '')) !== '' ? trim((string) $client->name) : ('#'.$osId))
-                : __('message.no_os');
-            if ($osId > 0 && ($baseName === '#'.$osId || $baseName === '')) {
-                $resolvedName = resolveDispatchOsName($itemGroup->first()?->order);
-                if ($resolvedName !== '-' && $resolvedName !== '') {
-                    $baseName = $resolvedName;
+            $resolvedName = function_exists('resolveDispatchOsName')
+                ? resolveDispatchOsName($firstOrder)
+                : '-';
+            if ($resolvedName === '-' || trim((string) $resolvedName) === '') {
+                $resolvedName = '';
+            }
+
+            if ($osId > 0) {
+                $baseName = trim((string) ($client?->name ?? ''));
+                if ($baseName === '') {
+                    $baseName = $resolvedName !== '' ? $resolvedName : ('#'.$osId);
                 }
+            } else {
+                // osId 0 = unmatched party; still show pickup / client name when known.
+                $baseName = $resolvedName !== '' ? $resolvedName : __('message.no_os');
             }
             $cityName = trim((string) ($client?->city?->name ?? ''));
             $name = $cityName !== '' ? ($baseName.' ('.$cityName.')') : $baseName;
@@ -3731,6 +3798,8 @@ class OrderController extends Controller
                 'kpay_slip_url' => $kpaySlipUrl,
                 'has_kpay_slip' => ! empty($kpaySlipUrl),
                 'item_count' => $itemGroup->count(),
+                // Lock Show Slip / Finish to exactly the parcels shown for this OS row.
+                'item_ids' => $itemGroup->pluck('id')->map(static fn ($id) => (int) $id)->values()->all(),
                 'is_finished' => false,
                 'batch_id' => null,
             ];
@@ -3918,7 +3987,31 @@ class OrderController extends Controller
         $settlementService = app(OsSettlementService::class);
         $settlementSide = $settlementService->normalizeSettlementSide($request->get('settlement_side'));
         [$branchId] = resolveDestinationBranchFilter($request);
-        if ($settlementSide === 'kyo_shin') {
+
+        // Prefer exact parcel ids from the list row — prevents re-query / name-match
+        // drift from pulling another Online Shop's parcels into Show Slip Completed.
+        $rawItemIds = $request->input('item_ids', []);
+        if (is_string($rawItemIds)) {
+            $rawItemIds = preg_split('/[,\s]+/', $rawItemIds) ?: [];
+        }
+        $requestedItemIds = array_values(array_unique(array_filter(array_map(
+            'intval',
+            (array) $rawItemIds
+        ), static fn ($id) => $id > 0)));
+
+        $batch = null;
+        if ($requestedItemIds !== []) {
+            $lockedQuery = DispatchOrderItem::query()
+                ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch', 'kyoShinItem'])
+                ->whereIn('id', $requestedItemIds);
+            if ($branchId !== null && $branchId > 0) {
+                applyDestinationBranchFilter($lockedQuery, $branchId);
+            }
+            $items = $settlementService
+                ->filterItemsForOsParty($lockedQuery->get(), $osId)
+                ->sortBy(static fn ($item) => array_search((int) $item->id, $requestedItemIds, true) ?: 9999)
+                ->values();
+        } elseif ($settlementSide === 'kyo_shin') {
             $items = $settlementService->kyoShinDetailItemsForPeriod($osId, $fromDay, $toDay, $branchId);
         } else {
             $items = $settlementService->filterItemsBySettlementSide(
@@ -3927,8 +4020,7 @@ class OrderController extends Controller
             );
         }
 
-        $batch = null;
-        if ($items->isEmpty()) {
+        if ($requestedItemIds === [] && $items->isEmpty()) {
             $batch = OsSettlementBatch::query()
                 ->where('os_user_id', $osId)
                 ->where('from_date', $fromDay)
@@ -4433,10 +4525,10 @@ class OrderController extends Controller
             ->filterItemsForOsParty(
                 DispatchOrderItem::query()
                     ->with('order')
-                    ->where('status', 'completed')
-                    ->whereNotNull('admin_completed_at')
-                    ->whereNull('admin_finished_at')
-                    ->whereIn('id', $ids)
+            ->where('status', 'completed')
+            ->whereNotNull('admin_completed_at')
+            ->whereNull('admin_finished_at')
+            ->whereIn('id', $ids)
                     ->get(),
                 $osId
             )
@@ -4454,10 +4546,10 @@ class OrderController extends Controller
         $updated = DispatchOrderItem::query()
             ->whereIn('id', $allowedIds)
             ->update([
-                'admin_finished_at' => now(),
-                'admin_updated_at' => now(),
-                'updated_at' => now(),
-            ]);
+            'admin_finished_at' => now(),
+            'admin_updated_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         if ($updated <= 0) {
             return response()->json([

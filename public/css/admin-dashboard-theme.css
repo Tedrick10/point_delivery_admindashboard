@@ -15319,6 +15319,33 @@ body.pds-admin .pds-os-slip-modal__header-actions {
     display: inline-flex;
     align-items: center;
     gap: 0.65rem;
+    position: relative;
+    z-index: 2;
+}
+
+body.pds-admin .pds-os-slip-modal__header .close,
+body.pds-admin .pds-os-slip-modal__close {
+    float: none;
+    margin: 0;
+    padding: 0.25rem 0.45rem;
+    font-size: 1.65rem;
+    line-height: 1;
+    font-weight: 700;
+    color: #fff !important;
+    text-shadow: none;
+    opacity: 1;
+    cursor: pointer;
+    position: relative;
+    z-index: 3;
+    pointer-events: auto !important;
+}
+
+body.pds-admin .pds-os-slip-modal__header .close:hover,
+body.pds-admin .pds-os-slip-modal__close:hover,
+body.pds-admin .pds-os-slip-modal__header .close:focus,
+body.pds-admin .pds-os-slip-modal__close:focus {
+    color: #fff !important;
+    opacity: 0.85;
 }
 
 body.pds-admin .pds-os-slip-screenshot-btn {
@@ -15999,6 +16026,28 @@ body.pds-admin .pds-os-settlement-table thead th {
 
 body.pds-admin .pds-os-settlement-table tbody td {
     padding: 1rem 0.85rem;
+}
+
+body.pds-admin .pds-os-settlement-table tfoot td {
+    padding: 0.85rem;
+    background: #fff7ed;
+    border-top: 2px solid #fdba74;
+    vertical-align: middle;
+}
+
+body.pds-admin .pds-os-settlement-total-row .pds-os-settlement-total-items {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #9a3412;
+}
+
+body.pds-admin .pds-os-settlement-total-row .pds-os-settlement-total-items strong {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #c2410c;
 }
 
 body.pds-admin .pds-os-settlement-col-os {
@@ -27332,7 +27381,7 @@ body.pds-admin .pds-msg-tabs {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.5rem;
-    margin-bottom: 0.95rem;
+    margin-bottom: 0;
     width: 100%;
 }
 
@@ -27383,47 +27432,6 @@ body.pds-admin .pds-msg-tabs__count {
 body.pds-admin .pds-msg-tabs__btn.is-active .pds-msg-tabs__count {
     background: #fff;
     color: var(--site-color);
-}
-
-body.pds-admin .pds-dispatch-assigned-items-page .pds-msg-filters {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    align-items: end;
-    gap: 0.85rem 1rem;
-    width: 100%;
-}
-
-body.pds-admin .pds-dispatch-assigned-items-page .pds-msg-filters > .pds-dispatch-field {
-    min-width: 0;
-    width: 100%;
-    max-width: none;
-}
-
-body.pds-admin .pds-dispatch-assigned-items-page .pds-msg-filters .pds-dispatch-field label {
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: #78716c !important;
-    letter-spacing: 0.02em;
-    text-transform: none;
-}
-
-body.pds-admin .pds-dispatch-assigned-items-page .pds-msg-filters .pds-dispatch-input {
-    width: 100%;
-    height: 42px;
-    border-radius: 12px;
-    border-color: #e7e5e4;
-    background: #fff;
-}
-
-body.pds-admin .pds-dispatch-assigned-items-page .pds-msg-filters .pds-dispatch-input:focus {
-    border-color: var(--site-color);
-    box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.12);
-}
-
-@media (max-width: 900px) {
-    body.pds-admin .pds-dispatch-assigned-items-page .pds-msg-filters {
-        grid-template-columns: 1fr;
-    }
 }
 
 body.pds-admin .pds-msg-thread-list {
@@ -27561,10 +27569,11 @@ body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-row-actions {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.25rem;
-    border-radius: 12px;
-    background: rgba(var(--brand-rgb), 0.08);
-    border: 1px solid rgba(var(--brand-rgb), 0.14);
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
 }
 
 body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-row-actions a {
@@ -27575,15 +27584,30 @@ body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-row-actions a {
     align-items: center;
     justify-content: center;
     color: var(--site-color);
-    background: transparent;
-    border: 0;
+    background: rgba(var(--brand-rgb), 0.08);
+    border: 1px solid rgba(var(--brand-rgb), 0.14);
     text-decoration: none;
-    transition: background 0.15s ease, color 0.15s ease;
+    box-shadow: none;
+    transform: none;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-row-actions a:hover {
-    background: var(--site-color);
-    color: #fff;
+body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-row-actions a:hover,
+body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-row-actions a:focus,
+body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-row-actions a:focus-visible,
+body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-row-actions a:active {
+    background: rgba(var(--brand-rgb), 0.16);
+    border-color: rgba(var(--brand-rgb), 0.4);
+    color: var(--site-color);
+    box-shadow: none;
+    transform: none;
+    outline: none;
+}
+
+body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-row-actions a:hover i,
+body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-row-actions a:focus i,
+body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-row-actions a:active i {
+    color: var(--site-color);
 }
 
 body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-action-message {
@@ -27592,7 +27616,7 @@ body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-action-message {
     height: 34px;
     border-radius: 10px;
     color: var(--site-color);
-    background: transparent;
+    background: rgba(var(--brand-rgb), 0.08);
 }
 
 body.pds-admin .pds-dispatch-assigned-items-page .pds-dispatch-msg-badge {

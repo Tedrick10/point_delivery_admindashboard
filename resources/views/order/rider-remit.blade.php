@@ -345,8 +345,13 @@
                 $(document).off('.pdsRiderRemit');
                 $('#rrAuditBtn, #rrAuditModal, #riderRemitGrid, #rrReturnInfoModal').off('.pdsRiderRemit');
 
-                if (typeof flatpickr !== 'undefined') {
-                    flatpickr('.dispatch-datepicker', { dateFormat: 'd-m-Y', allowInput: true });
+                if (typeof window.pdsBindDispatchDatepickers === 'function') {
+                    window.pdsBindDispatchDatepickers();
+                } else if (typeof flatpickr !== 'undefined') {
+                    document.querySelectorAll('.dispatch-datepicker').forEach(function (el) {
+                        if (el._flatpickr) return;
+                        flatpickr(el, { dateFormat: 'd-m-Y', allowInput: true, disableMobile: true });
+                    });
                 }
 
                 (function bindAuditLog() {

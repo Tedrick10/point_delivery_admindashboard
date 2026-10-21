@@ -393,15 +393,34 @@
             if (openItem) positionDropdown(openItem);
         }, true);
 
+        function closeHeaderMenus() {
+            nav.classList.remove('is-open');
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
+            closeAllDropdowns();
+        }
+        window.pdsCloseHeaderMenus = closeHeaderMenus;
+
+        // Capture phase: admin-spa stops the click before bubble listeners run.
         document.addEventListener('click', function (e) {
+            var link = e.target.closest && e.target.closest('a[href]');
+            if (link) {
+                var href = link.getAttribute('href') || '';
+                if (href && href !== '#' && href.indexOf('javascript:') !== 0) {
+                    closeHeaderMenus();
+                    return;
+                }
+            }
             var inNav = nav.contains(e.target);
             var inPortal = e.target.closest && e.target.closest('#pdsMainNavPortal');
             if (!inNav && !inPortal) {
-                nav.classList.remove('is-open');
-                if (toggle) toggle.setAttribute('aria-expanded', 'false');
-                closeAllDropdowns();
+                closeHeaderMenus();
             }
-        });
+        }, true);
+
+        window.addEventListener('popstate', closeHeaderMenus);
+        if (window.jQuery) {
+            window.jQuery(document).on('admin-spa:navigated.pdsHeader', closeHeaderMenus);
+        }
 
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {

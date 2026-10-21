@@ -25,20 +25,6 @@
                         <span class="pds-msg-tabs__count" data-count-for="answered">{{ $tabCounts['answered'] }}</span>
                     </button>
                 </div>
-                <div class="pds-dispatch-to-assign-filter-grid pds-dispatch-assign-100-filter-grid pds-msg-filters">
-                    <div class="pds-dispatch-field pds-dispatch-field-sm">
-                        <label for="assigned_rider_filter">{{ __('message.delivery_man') }}</label>
-                        <input type="text" id="assigned_rider_filter" class="pds-dispatch-input" placeholder="{{ __('message.delivery_man') }}" autocomplete="off">
-                    </div>
-                    <div class="pds-dispatch-field pds-dispatch-field-sm">
-                        <label for="assigned_username">{{ __('message.username') }}</label>
-                        <input type="text" id="assigned_username" class="pds-dispatch-input" placeholder="{{ __('message.username') }}" autocomplete="off">
-                    </div>
-                    <div class="pds-dispatch-field pds-dispatch-field-sm">
-                        <label for="assigned_phone">{{ __('message.phone') }}</label>
-                        <input type="text" id="assigned_phone" class="pds-dispatch-input" placeholder="{{ __('message.phone') }}" autocomplete="off">
-                    </div>
-                </div>
             </div>
 
             <div class="pds-dispatch-to-assign-body">
@@ -49,7 +35,7 @@
                     </div>
                 @else
                     <div class="pds-dispatch-to-assign-empty pds-msg-empty d-none" id="assignedFilterEmptyState">
-                        <span class="pds-msg-empty__icon" aria-hidden="true"><i class="fas fa-search"></i></span>
+                        <span class="pds-msg-empty__icon" aria-hidden="true"><i class="far fa-comments"></i></span>
                         <p>{{ __('message.no_record_found') }}</p>
                     </div>
                     <div class="pds-msg-thread-list" id="assignedTableShell">
@@ -148,55 +134,24 @@
                 try { savedMsgTab = String(sessionStorage.getItem('pdsMsgTab') || ''); } catch (e) {}
                 var activeMsgTab = allowedMsgTabs.indexOf(savedMsgTab) !== -1 ? savedMsgTab : 'unread';
 
-                function digitsOnly(value) {
-                    return String(value || '').replace(/\D+/g, '');
-                }
-
                 function applyAssignedFilters() {
-                    var rider = String($('#assigned_rider_filter').val() || '').toLowerCase().trim();
-                    var username = String($('#assigned_username').val() || '').toLowerCase().trim();
-                    var phone = String($('#assigned_phone').val() || '').toLowerCase().trim();
-                    var phoneDigits = digitsOnly(phone);
                     var visible = 0;
 
                     $('#assignedTableShell .pds-msg-thread-card').each(function () {
                         var $row = $(this);
-                        var rowRider = String($row.data('rider-name') || '').toLowerCase();
-                        var rowOs = String($row.data('os-name') || '').toLowerCase();
-                        var rowUsername = String($row.data('os-username') || '').toLowerCase();
-                        var rowOsPhone = String($row.data('os-phone') || '').toLowerCase();
-                        var rowCustomer = String($row.data('customer-name') || '').toLowerCase();
-                        var rowPhone = String($row.data('customer-phone') || '').toLowerCase();
-                        var rowPhoneDigits = digitsOnly(rowOsPhone + ' ' + rowPhone);
                         var isUnread = String($row.data('unread') || '0') === '1';
                         var isUnanswered = String($row.data('unanswered') || '0') === '1';
                         var isAnswered = String($row.data('answered') || '0') === '1';
-                        var matchRider = !rider || rowRider.indexOf(rider) !== -1;
-                        var matchUsername = !username
-                            || rowUsername.indexOf(username) !== -1
-                            || rowOs.indexOf(username) !== -1
-                            || rowCustomer.indexOf(username) !== -1;
-                        var matchPhone = !phone
-                            || rowOsPhone.indexOf(phone) !== -1
-                            || rowPhone.indexOf(phone) !== -1
-                            || (phoneDigits !== '' && rowPhoneDigits.indexOf(phoneDigits) !== -1);
                         var matchTab = (activeMsgTab === 'unread' && isUnread)
                             || (activeMsgTab === 'unanswered' && isUnanswered)
                             || (activeMsgTab === 'answered' && isAnswered);
-                        var show = matchRider && matchUsername && matchPhone && matchTab;
-                        $row.toggleClass('d-none', !show);
-                        if (show) visible += 1;
+                        $row.toggleClass('d-none', !matchTab);
+                        if (matchTab) visible += 1;
                     });
 
                     $('#assignedFilterEmptyState').toggleClass('d-none', visible !== 0);
                     $('#assignedTableShell').toggleClass('d-none', visible === 0);
                 }
-
-                var filterTimer;
-                $('#assigned_rider_filter, #assigned_username, #assigned_phone').on('input', function () {
-                    clearTimeout(filterTimer);
-                    filterTimer = setTimeout(applyAssignedFilters, 150);
-                });
 
                 $('#assignedMsgTabs').on('click', '[data-msg-tab]', function () {
                     var tab = String($(this).data('msg-tab') || 'unread');

@@ -447,6 +447,16 @@
             }
             portalDailyCheckModals();
 
+            // Soft replace / SPA remount leave fresh inputs — always (re)bind datepickers.
+            if (typeof window.pdsBindDispatchDatepickers === 'function') {
+                window.pdsBindDispatchDatepickers();
+            } else if (typeof flatpickr !== 'undefined') {
+                document.querySelectorAll('.dispatch-datepicker').forEach(function (el) {
+                    if (el._flatpickr) return;
+                    flatpickr(el, { dateFormat: 'd-m-Y', allowInput: true, disableMobile: true });
+                });
+            }
+
             if (window.__pdsDailyCheckBound) return;
             window.__pdsDailyCheckBound = true;
 
@@ -469,13 +479,6 @@
             var itemMediaUrl = null;
             var itemMediaType = null;
             var $activeItemMediaBtn = null;
-
-            if (typeof flatpickr !== 'undefined') {
-                flatpickr('.dispatch-datepicker', {
-                    dateFormat: 'd-m-Y',
-                    allowInput: true,
-                });
-            }
 
             function togglePartyFilters() {
                 var mode = $('input[name="mode"]:checked').val();
@@ -613,8 +616,13 @@
                 remitDateUrl = $(this).data('url');
                 $('#dailyCheckRemitDateInput').val($(this).data('date') || '');
                 $('#dailyCheckRemitDateModal').modal('show');
-                if (typeof flatpickr !== 'undefined') {
-                    flatpickr('#dailyCheckRemitDateInput', { dateFormat: 'd-m-Y', allowInput: true });
+                if (typeof window.pdsBindDispatchDatepickers === 'function') {
+                    window.pdsBindDispatchDatepickers('#dailyCheckRemitDateInput');
+                } else if (typeof flatpickr !== 'undefined') {
+                    var remitEl = document.getElementById('dailyCheckRemitDateInput');
+                    if (remitEl && !remitEl._flatpickr) {
+                        flatpickr(remitEl, { dateFormat: 'd-m-Y', allowInput: true, disableMobile: true });
+                    }
                 }
             });
 

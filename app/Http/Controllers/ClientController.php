@@ -288,8 +288,8 @@ class ClientController extends Controller
                 },
             ],
             'os_profile.address_unit' => 'required|string|max:255',
-            'os_profile.state_division' => 'required|string|max:255',
-            'os_profile.township' => 'required|string|max:255',
+            'os_profile.state_division' => 'nullable|string|max:255',
+            'os_profile.township' => 'nullable|string|max:255',
             'os_profile.kpay_name' => 'required|string|max:255',
             'os_profile.kpay_no' => 'required|string|max:50',
             'profile_image' => 'nullable|image|mimes:jpg,jpeg,png,gif',
@@ -559,8 +559,47 @@ class ClientController extends Controller
             return json_custom_response(['status' => false, 'message' => $message]);
         }
 
+        $rawPhone = $request->input('contact_number');
+        if ((! $request->filled('contact_number') || $rawPhone === '' || $rawPhone === null) && $request->filled('phone')) {
+            $rawPhone = $request->input('phone');
+        }
+        if (is_array($rawPhone)) {
+            $rawPhone = collect($rawPhone)->filter()->last();
+        }
+        if ($rawPhone !== null && $rawPhone !== '') {
+            $contactNumber = normalizeContactNumber((string) $rawPhone);
+            if ($contactNumber === '' || strlen(preg_replace('/\D+/', '', $contactNumber) ?? '') < 8) {
+                return redirect()->back()->withInput()->withErrors([
+                    'contact_number' => __('message.please_enter_contact_number'),
+                ]);
+            }
+            $request->merge(['contact_number' => $contactNumber]);
+        }
+
         $request->validate([
             'password' => 'nullable|string|min:6|confirmed',
+            'contact_number' => [
+                'required',
+                'string',
+                'max:50',
+                function ($attribute, $value, $fail) use ($user) {
+                    $variants = contactNumberLookupVariants((string) $value);
+                    if ($variants === []) {
+                        return;
+                    }
+                    $exists = User::query()
+                        ->where('user_type', 'client')
+                        ->whereNull('deleted_at')
+                        ->where('id', '!=', $user->id)
+                        ->whereIn('contact_number', $variants)
+                        ->exists();
+                    if ($exists) {
+                        $fail(__('message.contact_number_already_taken'));
+                    }
+                },
+            ],
+            'os_profile.state_division' => 'nullable|string|max:255',
+            'os_profile.township' => 'nullable|string|max:255',
         ]);
 
         $previousApproval = (string) ($user->approval_status ?? '');
@@ -570,7 +609,7 @@ class ClientController extends Controller
         if (! empty($existingProfile['login_password']) && empty($osProfile['login_password'])) {
             $osProfile['login_password'] = $existingProfile['login_password'];
         }
-        $payload = $request->only(['name']);
+        $payload = $request->only(['name', 'contact_number']);
         $payload['address'] = buildUserAddressFromProfile($osProfile);
         $payload['os_profile'] = $osProfile;
 

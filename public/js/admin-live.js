@@ -303,6 +303,7 @@
         var $root = $('#adminLiveRoot');
         if (!$root.length) return false;
         if ($('input:focus, textarea:focus, select:focus, .select2-container--open').length) return true;
+        if ($('.flatpickr-calendar.open').length) return true;
         if ($('.modal.show, .jconfirm').length) return true;
         // Don't yank the page while the user is still scrolling.
         if (userRecentlyScrolling(1200)) return true;
@@ -319,7 +320,7 @@
             headers: { 'X-Admin-Live-Fragment': '1' }
         }).done(function (html) {
             // User may have started scrolling while the fragment was loading.
-            if (userRecentlyScrolling(800) || $('input:focus, textarea:focus, select:focus, .select2-container--open').length || $('.modal.show, .jconfirm').length) {
+            if (userRecentlyScrolling(800) || $('input:focus, textarea:focus, select:focus, .select2-container--open').length || $('.flatpickr-calendar.open').length || $('.modal.show, .jconfirm').length) {
                 return;
             }
             var doc = new DOMParser().parseFromString(html, 'text/html');
@@ -332,6 +333,10 @@
                 }
                 // Soft HTML replace without destroy leaves DataTables registered → tn/3 on next init.
                 destroyDataTablesIn($root);
+                // Detached inputs leave orphan flatpickr calendars on <body>; destroy first.
+                if (typeof window.pdsDestroyDatepickers === 'function') {
+                    window.pdsDestroyDatepickers($root[0]);
+                }
                 // Soft replace strips scripts but leaves Rider Done heartbeat intervals alive.
                 try {
                     if (window.__pdsRiderDonePresence && typeof window.__pdsRiderDonePresence.release === 'function') {
@@ -340,9 +345,40 @@
                 } catch (e) {}
                 window.__pdsRiderDonePresence = null;
                 window.__pdsRiderDoneItemsLock = false;
+                // Keep Assign 100 / list filter text across soft HTML swaps.
+                var preserveIds = [
+                    'assign_100_os_name',
+                    'assign_100_customer_search',
+                    'assigned_username',
+                    'assigned_phone',
+                    'os_list_from_date',
+                    'os_list_to_date',
+                    'mt_from_date',
+                    'mt_to_date',
+                    'daily_check_from_date',
+                    'daily_check_to_date',
+                    'rider_items_from_date',
+                    'rider_items_to_date',
+                    'rr_date',
+                    'summary_from',
+                    'summary_to',
+                    'expenses_from',
+                    'expenses_to',
+                    'from_date',
+                    'to_date'
+                ];
+                var preserved = {};
+                preserveIds.forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el && 'value' in el) preserved[id] = el.value;
+                });
                 var imported = document.importNode(newRoot, true);
                 imported.querySelectorAll('script').forEach(function (s) { s.remove(); });
                 $root[0].replaceWith(imported);
+                Object.keys(preserved).forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el && 'value' in el) el.value = preserved[id];
+                });
                 restoreScrollPositions(scrollState);
                 $(document).trigger('admin-live:replaced');
                 // Re-apply after listeners (table freeze / animations) finish mutating layout.

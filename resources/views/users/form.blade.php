@@ -75,15 +75,13 @@
             var formRules = {
                 name: { required: true },
                 username: { required: true, minlength: 3 },
+                phone: { required: true },
                 'os_profile[address_unit]': { required: true },
-                'os_profile[state_division]': { required: true },
-                'os_profile[township]': { required: true },
                 'os_profile[kpay_name]': { required: true },
                 'os_profile[kpay_no]': { required: true },
             };
 
             @if(!isset($id))
-            formRules.phone = { required: true };
             formRules.password = { required: true, minlength: 6 };
             formRules.password_confirmation = { required: true, equalTo: '#reg_password' };
             @else

@@ -538,6 +538,15 @@ body.pds-admin.pds-header-nav .pds-main-nav__label {
     gap: 0.3rem;
 }
 
+body.pds-admin.pds-header-nav .pds-main-nav__label .badge.d-none,
+body.pds-admin.pds-header-nav .pds-main-nav__link .badge.d-none,
+body.pds-admin.pds-header-nav .pds-main-nav__sublink .badge.d-none,
+body.pds-admin.pds-header-nav .pds-main-nav__label .badge:empty,
+body.pds-admin.pds-header-nav .pds-main-nav__link .badge:empty,
+body.pds-admin.pds-header-nav .pds-main-nav__sublink .badge:empty {
+    display: none !important;
+}
+
 body.pds-admin.pds-header-nav .pds-main-nav__label .badge,
 body.pds-admin.pds-header-nav .pds-main-nav__link .badge,
 body.pds-admin.pds-header-nav .pds-main-nav__sublink .badge {

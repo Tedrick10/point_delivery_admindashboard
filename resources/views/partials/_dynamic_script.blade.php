@@ -25,6 +25,30 @@
             return date;
         };
         window.pdsTodayYangon = window.pdsParseDmy(@json(now('Asia/Yangon')->format('d-m-Y')));
+        window.pdsDestroyDatepickers = function (root) {
+            var scope = root && root.querySelectorAll ? root : document;
+            try {
+                scope.querySelectorAll('input').forEach(function (el) {
+                    if (!el._flatpickr) return;
+                    try { el._flatpickr.destroy(); } catch (e) {}
+                });
+            } catch (e) {}
+            // Soft replace / SPA swap detaches inputs but leaves calendars on <body>.
+            try {
+                document.querySelectorAll('.flatpickr-calendar').forEach(function (cal) {
+                    var owned = false;
+                    document.querySelectorAll('input').forEach(function (inp) {
+                        if (inp._flatpickr && inp._flatpickr.calendarContainer === cal) {
+                            owned = true;
+                        }
+                    });
+                    if (!owned && cal.parentNode) {
+                        cal.parentNode.removeChild(cal);
+                    }
+                });
+            } catch (e) {}
+        };
+
         window.pdsBindDmyDatepickers = function (selector, extra) {
             if (typeof flatpickr === 'undefined') return;
             extra = extra || {};
@@ -35,6 +59,7 @@
                     dateFormat: 'd-m-Y',
                     allowInput: true,
                     disableMobile: true,
+                    clickOpens: true,
                     defaultDate: parsed || undefined,
                     maxDate: extra.maxDate !== undefined ? extra.maxDate : window.pdsTodayYangon,
                     locale: {
@@ -60,6 +85,20 @@
                 }, extra));
             });
         };
+
+        // Settlement / dispatch filters: no maxDate (match prior raw flatpickr inits).
+        window.pdsBindDispatchDatepickers = function (selector, extra) {
+            window.pdsBindDmyDatepickers(
+                selector || '.dispatch-datepicker',
+                Object.assign({ maxDate: null }, extra || {})
+            );
+        };
+
+        $(document).on('admin-live:replaced', function () {
+            if (typeof window.pdsBindDispatchDatepickers === 'function') {
+                window.pdsBindDispatchDatepickers();
+            }
+        });
 
         $('.select2js').select2();
         $.ajaxSetup({

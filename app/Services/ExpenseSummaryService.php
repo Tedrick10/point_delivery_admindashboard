@@ -144,10 +144,12 @@ class ExpenseSummaryService
 
     /**
      * Generated Summary rows only (Expense Generate နှိပ်ပြီးသား).
+     * Page load skips live Daily Check sync — that was 10s+ and blocked SPA entry.
+     * Income is written at Generate; pass $syncIncome=true only for admin refresh jobs.
      *
      * @return \Illuminate\Support\Collection<int, ExpenseSummary>
      */
-    public function rowsForPeriod(string $from, string $to, ?int $branchId, $user = null)
+    public function rowsForPeriod(string $from, string $to, ?int $branchId, $user = null, bool $syncIncome = false)
     {
         $summaries = ExpenseSummary::query()
             ->with(['expenseCard.items'])
@@ -157,7 +159,9 @@ class ExpenseSummaryService
             ->orderBy('id')
             ->get();
 
-        $this->syncIncomeOnRows($summaries, $user);
+        if ($syncIncome) {
+            $this->syncIncomeOnRows($summaries, $user);
+        }
 
         return $summaries->values();
     }

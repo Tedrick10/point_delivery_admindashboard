@@ -112,7 +112,8 @@ class Order extends Model implements HasMedia
     }
     public function client()
     {
-        return $this->belongsTo(User::class, 'client_id', 'id');
+        // Soft-deleted OS accounts must still resolve names on settlement lists.
+        return $this->belongsTo(User::class, 'client_id', 'id')->withTrashed();
     }
 
     public function delivery_man()

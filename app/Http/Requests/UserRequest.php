@@ -109,8 +109,8 @@ class UserRequest extends FormRequest
                 'unique:users,username,'.$user_id,
             ];
             $rules['os_profile.address_unit'] = 'required|string|max:255';
-            $rules['os_profile.state_division'] = 'required|string|max:255';
-            $rules['os_profile.township'] = 'required|string|max:255';
+            $rules['os_profile.state_division'] = 'nullable|string|max:255';
+            $rules['os_profile.township'] = 'nullable|string|max:255';
         }
 
         if (!$user_id) {

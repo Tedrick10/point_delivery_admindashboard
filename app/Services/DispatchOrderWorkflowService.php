@@ -299,27 +299,78 @@ class DispatchOrderWorkflowService
 
     /**
      * Admin may fill Item Count info only after a Pickup Rider is assigned.
-     * Delivered items stay locked. ကြိုရှင်း parcels stay editable (including Return)
-     * so Return Type / OS contact can be set; Item Value / DeliAmount lock separately.
+     * Delivered items stay locked — except Messenger threads (parcel has chat),
+     * where Edit/Delete stay available so admins can correct parcel details.
+     * ကြိုရှင်း parcels stay editable (including Return) so Return Type / OS
+     * contact can be set; Item Value / DeliAmount lock separately.
      */
     public function canAdminEditDispatchItemInfo(Order $order, $item = null): bool
     {
+        $hasMessengerThread = $item !== null && $this->dispatchItemHasMessengerThread($item);
+        $itemStatus = '';
+        $itemHasRider = false;
+        if ($item !== null && is_object($item)) {
+            $itemStatus = (string) ($item->status ?? '');
+            $itemHasRider = ! empty($item->delivery_man_id);
+        }
+
+        // Active last-mile / return parcels stay editable on Rider List even when
+        // the parent order was cancelled or completed (seen: item On Way + order cancelled).
+        $activeItemStatuses = [
+            'courier_assigned',
+            'courier_departed',
+            'pending',
+            'assigned',
+            'return',
+            'os_returned',
+            'accepted',
+            'arrived',
+        ];
+        if ($itemStatus !== '' && in_array($itemStatus, $activeItemStatuses, true)) {
+            return true;
+        }
+
         if (in_array($order->status ?? '', ['cancelled', 'completed', 'draft'], true)) {
+            // Messenger threads stay editable after delivery/cancel for corrections.
+            return $hasMessengerThread;
+        }
+
+        $hasAssignedRider = ! empty($order->delivery_man_id) || $itemHasRider;
+
+        // Messenger parcels stay editable even before pickup-rider assign / after delivery.
+        if (! $hasAssignedRider && ! $hasMessengerThread) {
             return false;
         }
 
-        if (empty($order->delivery_man_id)) {
+        if ($itemStatus === 'completed' && ! $hasMessengerThread) {
             return false;
-        }
-
-        if ($item !== null) {
-            $itemStatus = is_object($item) ? (string) ($item->status ?? '') : '';
-            if ($itemStatus === 'completed') {
-                return false;
-            }
         }
 
         return true;
+    }
+
+    /**
+     * True when the parcel has at least one Messenger chat message.
+     */
+    public function dispatchItemHasMessengerThread($item): bool
+    {
+        if (! is_object($item)) {
+            return false;
+        }
+
+        if (isset($item->messages_count)) {
+            return (int) $item->messages_count > 0;
+        }
+
+        if (method_exists($item, 'relationLoaded') && $item->relationLoaded('messages')) {
+            return $item->messages->isNotEmpty();
+        }
+
+        if (method_exists($item, 'messages')) {
+            return $item->messages()->exists();
+        }
+
+        return false;
     }
 
     /**
@@ -1234,7 +1285,8 @@ class DispatchOrderWorkflowService
 
     /**
      * Admin Rider List Item Details — forward + rollback status moves.
-     * On Way / Pending / Delivered may return to earlier stages.
+     * On Way / Pending / Delivered / Completed may return to earlier stages.
+     * Finished stays locked.
      */
     public function allowedAdminRiderListStatusActions(DispatchOrderItem $item): array
     {
@@ -1244,12 +1296,18 @@ class DispatchOrderWorkflowService
             return [];
         }
 
-        // Delivered (not yet Completed / Finished) may roll back.
         if ($status === 'completed') {
-            if (! empty($item->admin_completed_at) || ! empty($item->admin_finished_at)) {
+            // Finished — no further moves from Rider List Completed tab.
+            if (! empty($item->admin_finished_at)) {
                 return [];
             }
 
+            // Completed → Assigned / On Way / Pending / Delivered (or Finished via UI).
+            if (! empty($item->admin_completed_at)) {
+                return ['courier_assigned', 'courier_departed', 'pending', 'delivered'];
+            }
+
+            // Delivered (not yet Completed) may roll back.
             return ['courier_assigned', 'courier_departed', 'pending'];
         }
 

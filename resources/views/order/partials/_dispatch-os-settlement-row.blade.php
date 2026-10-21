@@ -6,10 +6,13 @@
     $slipLabel = $section === 'receive' ? __('message.os_settlement_qr') : __('message.kpay_slip');
     $slipUploadLabel = $section === 'receive' ? __('message.upload_os_settlement_qr') : __('message.upload_kpay_slip');
     $canFinish = $isKyoShin || ! empty($row->has_kpay_slip);
+    $itemIds = collect($row->item_ids ?? [])->map(static fn ($id) => (int) $id)->filter()->values()->all();
+    $itemIdsAttr = implode(',', $itemIds);
 @endphp
 <tr
     class="pds-os-settlement-row"
     data-os-id="{{ $row->id }}"
+    data-item-ids="{{ $itemIdsAttr }}"
     data-has-kpay="{{ $canFinish ? '1' : '0' }}"
     data-is-finished="0"
     data-payment-method="{{ $showKpayCols ? 'kpay' : 'cash' }}"
@@ -29,6 +32,7 @@
                         type="button"
                         class="pds-os-settlement-badge pds-os-settlement-badge--link pds-os-slip-preview-btn"
                         data-os-id="{{ $row->id }}"
+                        data-item-ids="{{ $itemIdsAttr }}"
                         data-section="kyo_shin"
                         title="{{ __('message.show_slip_completed') }}"
                     >
@@ -98,6 +102,7 @@
                 type="button"
                 class="pds-os-slip-preview-btn"
                 data-os-id="{{ $row->id }}"
+                data-item-ids="{{ $itemIdsAttr }}"
                 data-section="{{ $section }}"
                 title="{{ __('message.show_slip_completed') }}"
             >

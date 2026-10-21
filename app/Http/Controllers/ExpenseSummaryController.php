@@ -73,16 +73,9 @@ class ExpenseSummaryController extends Controller
         [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request);
         $summaryService = app(\App\Services\ExpenseSummaryService::class);
         $authUser = auth()->user();
-        $rows = $summaryService->rowsForPeriod($from, $to, $branchId, $authUser);
-
+        // Fast path: stored rows only. Income card lines load on eye-click (AJAX).
+        $rows = $summaryService->rowsForPeriod($from, $to, $branchId, $authUser, false);
         $incomeItemsByDate = [];
-        foreach ($rows as $row) {
-            $day = $row->summary_date?->toDateString();
-            if (! $day || isset($incomeItemsByDate[$day])) {
-                continue;
-            }
-            $incomeItemsByDate[$day] = $summaryService->incomeCardItemsForDate($day, $authUser, $branchId);
-        }
 
         $branchTabCounts = $summaryService->branchRowCounts($from, $to);
         $allBranchCount = array_sum($branchTabCounts);
@@ -150,6 +143,32 @@ class ExpenseSummaryController extends Controller
             'checker_key' => $result['key'],
             'dates' => $result['dates'],
             'checks' => $result['checks'],
+        ]);
+    }
+
+    /**
+     * Lazy Income Card rows for one Summary day (keeps index page under SPA timeout).
+     */
+    public function incomeItems(Request $request): JsonResponse
+    {
+        if (! auth()->user()?->can('order-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $day = self::parseDate((string) $request->get('date', ''))
+            ?? self::parseDate((string) $request->get('from_date', ''));
+        if (! $day) {
+            return response()->json(['message' => __('message.something_went_wrong')], 422);
+        }
+
+        [$branchId] = resolveDestinationBranchFilter($request);
+        $items = app(\App\Services\ExpenseSummaryService::class)
+            ->incomeCardItemsForDate($day, auth()->user(), $branchId);
+
+        return response()->json([
+            'success' => true,
+            'date' => $day,
+            'items' => $items,
         ]);
     }
 

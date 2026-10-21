@@ -19,7 +19,11 @@
                         <i class="fas fa-download" aria-hidden="true"></i>
                         <span>{{ __('message.download') }}</span>
                     </button>
-                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <button type="button"
+                            class="close text-white pds-os-slip-modal__close"
+                            id="osSlipCompletedCloseBtn"
+                            data-dismiss="modal"
+                            aria-label="{{ __('message.close') }}">
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>

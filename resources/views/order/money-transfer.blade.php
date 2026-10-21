@@ -454,6 +454,16 @@
                 });
             })();
 
+            // Soft replace / SPA remount leave fresh inputs — always (re)bind datepickers.
+            if (typeof window.pdsBindDispatchDatepickers === 'function') {
+                window.pdsBindDispatchDatepickers();
+            } else if (typeof flatpickr !== 'undefined') {
+                document.querySelectorAll('.dispatch-datepicker').forEach(function (el) {
+                    if (el._flatpickr) return;
+                    flatpickr(el, { dateFormat: 'd-m-Y', allowInput: true, disableMobile: true });
+                });
+            }
+
             if (window.__pdsMoneyTransferBound) return;
             window.__pdsMoneyTransferBound = true;
 
@@ -643,13 +653,6 @@
                     $btn.prop('disabled', false);
                 });
             });
-
-            if (typeof flatpickr !== 'undefined') {
-                document.querySelectorAll('.dispatch-datepicker').forEach(function (el) {
-                    if (el._flatpickr) return;
-                    flatpickr(el, { dateFormat: 'd-m-Y', allowInput: true });
-                });
-            }
         })();
     </script>
 

@@ -43,6 +43,13 @@ class Handler extends ExceptionHandler
 
     public function render($request, Throwable $e)
     {
+        // Must run before the generic API JSON wrapper — otherwise Sanctum
+        // AuthenticationException becomes HTTP 500 "Unauthenticated." and the
+        // Rider app never hits its 401 session-expired / re-login flow.
+        if ($e instanceof AuthenticationException) {
+            return $this->unauthenticated($request, $e);
+        }
+
         if (($request->is('api/*') || $request->expectsJson()) && ! $e instanceof ValidationException) {
             $statusCode = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
 
@@ -69,8 +76,12 @@ class Handler extends ExceptionHandler
      */
     protected function unauthenticated($request, AuthenticationException $exception)
     {
-        if ($request->expectsJson() || $request->is('api*')) {
-            return response()->json(['error' => 'unauthenticated', 'message' => __('auth.unauthenticated')], 401);
+        if ($request->expectsJson() || $request->is('api/*') || $request->is('api*')) {
+            return response()->json([
+                'status' => false,
+                'error' => 'unauthenticated',
+                'message' => __('auth.unauthenticated'),
+            ], 401);
         }
 
         return redirect()->guest(route('login'));

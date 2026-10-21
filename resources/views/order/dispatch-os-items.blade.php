@@ -249,16 +249,52 @@
                     typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
                 };
 
-                if (typeof flatpickr !== 'undefined') {
-                    flatpickr('.dispatch-datepicker', {
-                        dateFormat: 'd-m-Y',
-                        allowInput: true,
+                if (typeof window.pdsBindDispatchDatepickers === 'function') {
+                    window.pdsBindDispatchDatepickers();
+                } else if (typeof flatpickr !== 'undefined') {
+                    document.querySelectorAll('.dispatch-datepicker').forEach(function (el) {
+                        if (el._flatpickr) return;
+                        flatpickr(el, { dateFormat: 'd-m-Y', allowInput: true, disableMobile: true });
                     });
                 }
 
                 function openOsSlip() {
-                    $('#osSlipCompletedModal').modal('show');
+                    // SPA soft-nav can leave a prior copy on <body>; keep a single instance.
+                    var $modals = $('#osSlipCompletedModal');
+                    if ($modals.length > 1) {
+                        $modals.slice(1).remove();
+                    }
+                    var $modal = $('#osSlipCompletedModal').first();
+                    if (!$modal.length) {
+                        return;
+                    }
+                    // Keep slip modal on <body> so close / backdrop work under admin shells.
+                    if (!$modal.parent().is('body')) {
+                        $modal.appendTo(document.body);
+                    }
+                    $modal.modal({
+                        backdrop: true,
+                        keyboard: true,
+                        show: true,
+                    });
                 }
+
+                $(document)
+                    .off('click.pdsOsSlipClose', '#osSlipCompletedCloseBtn, #osSlipCompletedModal [data-dismiss="modal"]')
+                    .on('click.pdsOsSlipClose', '#osSlipCompletedCloseBtn, #osSlipCompletedModal [data-dismiss="modal"]', function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        $('#osSlipCompletedModal').modal('hide');
+                    });
+
+                $(document)
+                    .off('hidden.bs.modal.pdsOsSlip', '#osSlipCompletedModal')
+                    .on('hidden.bs.modal.pdsOsSlip', '#osSlipCompletedModal', function () {
+                        if (!$('.modal.show').length) {
+                            $('.modal-backdrop').remove();
+                            $('body').removeClass('modal-open').css({ paddingRight: '', overflow: '' });
+                        }
+                    });
 
                 $(document).on('click', '#osSlipOpenBtn', function (e) {
                     e.preventDefault();
