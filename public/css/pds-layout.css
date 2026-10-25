@@ -2,16 +2,19 @@
  * Point Delivery — Admin layout (compatible with backend.css shell)
  */
 
-/* Page shell: no sideways document growth. Table scrollports keep their own bars. */
+/* Page shell: no sideways document growth. Table scrollports keep their own bars.
+   Use clip (not hidden) so position:sticky title bars still work while scrolling. */
 body.pds-admin {
     --pds-sidebar-w: 286px;
     --pds-sidebar-w-collapsed: 80px;
     --pds-topbar-h: 73px;
-    overflow-x: hidden;
+    overflow-x: clip;
+    overflow-y: visible;
 }
 
 body.pds-admin #app {
-    overflow-x: hidden;
+    overflow-x: clip;
+    overflow-y: visible; /* must stay visible or position:sticky never sticks to the viewport */
 }
 
 /* ── Sidebar width ───────────────────────────────────────── */
@@ -914,3 +917,5 @@ body.pds-admin.pds-header-nav .pds-topbar .dropdown-menu.pds-topbar-profile-menu
     margin: 0 !important;
     transform: none !important;
 }
+
+/* pds-css-bust 2026-10-23d */

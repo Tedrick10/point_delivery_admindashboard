@@ -100,9 +100,12 @@ class OsCashPayout extends Model
             $urls = $this->kyoShinBatch->slipPhotoUrls();
         }
         if ($urls === []) {
+            $settlement = app(\App\Services\OsSettlementService::class);
             foreach ([$this->slip_photo_path, $this->settlementBatch?->kpay_slip_path] as $path) {
-                if ($url = $this->publicUrl(is_string($path) ? $path : null)) {
-                    $urls[] = $url;
+                foreach ($settlement->normalizeSlipPaths(is_string($path) ? $path : null) as $storedPath) {
+                    if ($url = $this->publicUrl($storedPath)) {
+                        $urls[] = $url;
+                    }
                 }
             }
         }

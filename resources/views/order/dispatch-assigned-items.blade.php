@@ -100,14 +100,14 @@
                                     @endif
                                     <div class="pds-msg-thread-card__line3">
                                         <span class="pds-msg-thread-card__sender">({{ $senderLabel }})</span>
-                                        {{ $preview }}
+                                        <span class="pds-msg-thread-card__preview">{{ $preview }}</span>
                                     </div>
                                 </div>
                                 <div class="pds-msg-thread-card__aside">
                                     @if($unread > 0)
                                         <span class="pds-msg-thread-card__badge">{{ $unread > 99 ? '99+' : $unread }}</span>
                                     @endif
-                                    @include('order.dispatch-item-action', ['item' => $item, 'hideGate' => true])
+                                    @include('order.dispatch-item-action', ['item' => $item, 'hideGate' => true, 'hideEdit' => true])
                                 </div>
                             </div>
                         @endforeach

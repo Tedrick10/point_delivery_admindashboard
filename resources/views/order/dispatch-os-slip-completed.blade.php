@@ -63,6 +63,7 @@
                             <colgroup>
                                 <col class="pds-os-slip__col--no">
                                 <col class="pds-os-slip__col--date">
+                                <col class="pds-os-slip__col--created">
                                 <col class="pds-os-slip__col--customer">
                                 <col class="pds-os-slip__col--phone">
                                 <col class="pds-os-slip__col--address">
@@ -74,7 +75,8 @@
                             <thead>
                                 <tr>
                                     <th class="text-center">{{ __('message.no') }}</th>
-                                    <th>{{ __('message.date') }}</th>
+                                    <th class="pds-os-slip__th--date">{{ __('message.date') }}</th>
+                                    <th class="pds-os-slip__th--created" title="Order Created Date">{{ __('message.order_created_date') }}</th>
                                     <th>{{ __('message.customer') }}</th>
                                     <th>{{ __('message.phone') }}</th>
                                     <th>{{ __('message.address') }}</th>
@@ -93,13 +95,14 @@
                                 @forelse($slipRows as $index => $row)
                                     <tr>
                                         <td class="text-center">{{ $index + 1 }}</td>
-                                        <td>{{ $row['date'] }}</td>
-                                        <td>
+                                        <td class="pds-os-slip__cell--date">{{ $row['date'] }}</td>
+                                        <td class="pds-os-slip__cell--created">{{ $row['order_created_date'] ?? $row['date'] }}</td>
+                                        <td class="pds-os-slip__cell--customer">
                                             {{ $row['customer'] }}
                                             @include('order.partials._slip-kyo-shin-badge', ['row' => $row])
                                         </td>
-                                        <td>{{ $row['phone'] }}</td>
-                                        <td title="{{ $row['address'] }}">{{ stringLong($row['address'], 'title', 36) ?: '-' }}</td>
+                                        <td class="pds-os-slip__cell--phone">{{ $row['phone'] }}</td>
+                                        <td class="pds-os-slip__cell--address" title="{{ $row['address'] }}">{{ $row['address'] ?: '-' }}</td>
                                         <td class="text-right">{{ number_format($row['item_value']) }}</td>
                                         <td class="text-right pds-os-slip__col-deli">{!! formatDeliAmountDisplayHtml($row['deli_amount_display'] ?? null, $row['deli_amount'] ?? 0) !!}</td>
                                         <td class="text-right">{{ $row['gate'] ?? number_format((float) ($row['gate_amount'] ?? 0)) }}</td>
@@ -113,14 +116,14 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="9" class="text-center">{{ __('message.no_record_found') }}</td>
+                                        <td colspan="10" class="text-center">{{ __('message.no_record_found') }}</td>
                                     </tr>
                                 @endforelse
                             </tbody>
                             @if(count($slipRows) > 0)
                                 <tfoot>
                                     <tr>
-                                        <td colspan="5" class="pds-os-slip__total-label">{{ __('message.total') }}</td>
+                                        <td colspan="6" class="pds-os-slip__total-label">{{ __('message.total') }}</td>
                                         <td class="text-right">{{ number_format($slipTotals['item_value']) }}</td>
                                         <td class="text-right pds-os-slip__col-deli">{!! formatDeliAmountDisplayHtml(null, $slipTotals['deli_amount'] ?? 0) !!}</td>
                                         <td class="text-right">{{ number_format($slipTotals['gate_amount'] ?? 0) }}</td>

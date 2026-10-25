@@ -30,6 +30,7 @@
             <tr>
                 <th>{{ __('message.no') }}</th>
                 <th>{{ __('message.date') }}</th>
+                <th>{{ __('message.order_created_date') }}</th>
                 <th>{{ __('message.customer') }}</th>
                 <th>{{ __('message.phone') }}</th>
                 <th>{{ __('message.address') }}</th>
@@ -44,6 +45,7 @@
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td>{{ $row['date'] }}</td>
+                    <td>{{ $row['order_created_date'] ?? $row['date'] }}</td>
                     <td>{{ $row['customer'] }}@if(!empty($row['is_kyo_shin']) || !empty($slipIsKyoShin)) ({{ __('message.kyo_shin_title') }})@endif</td>
                     <td>{{ $row['phone'] }}</td>
                     <td>{{ stringLong($row['address'], 'title', 20) ?: '-' }}</td>
@@ -56,7 +58,7 @@
         </tbody>
         <tfoot>
             <tr>
-                <td colspan="5">{{ __('message.total') }}</td>
+                <td colspan="6">{{ __('message.total') }}</td>
                 <td class="text-right">{{ number_format($slipTotals['item_value']) }}</td>
                 <td class="text-right">{{ formatDeliAmountDisplayPlain(null, $slipTotals['deli_amount'] ?? 0) }}</td>
                 <td class="text-right">{{ number_format($slipTotals['gate_amount'] ?? 0) }}</td>

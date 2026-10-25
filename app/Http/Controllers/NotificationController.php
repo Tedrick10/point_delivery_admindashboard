@@ -36,8 +36,12 @@ class NotificationController extends Controller
         }
 
         // Keep Notification "User Messages" in sync with Message menu unread chats.
-        clearNoisyAdminUnreadNotifications($user);
-        syncUnreadDispatchItemMessageNotifications($user);
+        try {
+            clearNoisyAdminUnreadNotifications($user);
+            syncUnreadDispatchItemMessageNotifications($user);
+        } catch (\Throwable $e) {
+            // Still return list/counts if backfill fails.
+        }
 
         $query = $user->notifications()->latest();
         if ($category !== 'all') {
@@ -94,8 +98,12 @@ class NotificationController extends Controller
     {
         $user = auth()->user();
 
-        clearNoisyAdminUnreadNotifications($user);
-        syncUnreadDispatchItemMessageNotifications($user);
+        try {
+            clearNoisyAdminUnreadNotifications($user);
+            syncUnreadDispatchItemMessageNotifications($user);
+        } catch (\Throwable $e) {
+            // Still return counts if backfill fails.
+        }
 
         $unread_count = adminNotificationUnreadCount($user);
         $response = [

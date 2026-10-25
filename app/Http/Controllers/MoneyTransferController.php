@@ -176,17 +176,44 @@ class MoneyTransferController extends Controller
         }
 
         $data = $request->validate([
-            'transfer_id' => 'required|integer',
-            'payment_method' => 'required|string|in:kpay',
-            'kpay_slip' => 'required|image|max:10240',
+            'payment_method' => 'required|string|in:kpay,cash',
+            'transfer_id' => 'nullable|integer|required_without:settlement_batch_id',
+            'settlement_batch_id' => 'nullable|integer|required_without:transfer_id',
+            'kpay_slip' => 'nullable|image|max:10240',
         ]);
 
-        $transfer = \App\Models\OsMoneyTransfer::query()->findOrFail((int) $data['transfer_id']);
-        if (($transfer->payment_method ?? '') !== 'cash') {
-            return response()->json(['message' => __('message.cash_payout_invalid_transition')], 422);
-        }
+        $target = strtolower((string) $data['payment_method']);
 
         try {
+            if ($target === 'cash') {
+                if (! empty($data['settlement_batch_id'])) {
+                    $batch = \App\Models\OsSettlementBatch::query()->findOrFail((int) $data['settlement_batch_id']);
+                    $row = $service->switchBatchToCash($batch);
+                } else {
+                    $transfer = \App\Models\OsMoneyTransfer::query()->findOrFail((int) $data['transfer_id']);
+                    $row = $service->switchPaymentMethod($transfer, 'cash');
+                }
+
+                return response()->json([
+                    'message' => __('message.money_transfer_switched_to_cash'),
+                    'payment_method' => $row->payment_method,
+                    'transfer_id' => $row->id,
+                ]);
+            }
+
+            if (empty($data['transfer_id'])) {
+                return response()->json(['message' => __('message.cash_payout_invalid_transition')], 422);
+            }
+
+            $transfer = \App\Models\OsMoneyTransfer::query()->findOrFail((int) $data['transfer_id']);
+            if (($transfer->payment_method ?? '') !== 'cash') {
+                return response()->json(['message' => __('message.cash_payout_invalid_transition')], 422);
+            }
+
+            if (! $request->hasFile('kpay_slip')) {
+                return response()->json(['message' => __('message.money_transfer_kpay_slip_required')], 422);
+            }
+
             $row = $service->switchPaymentMethod(
                 $transfer,
                 'kpay',

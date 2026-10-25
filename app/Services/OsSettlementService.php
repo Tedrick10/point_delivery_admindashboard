@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AdminKpayAccount;
 use App\Models\DispatchOrderItem;
 use App\Models\OsSettlementBatch;
 use App\Models\OsSettlementDraft;
@@ -9,6 +10,7 @@ use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -253,11 +255,13 @@ class OsSettlementService
             $date = $slipItem->received_date
                 ? Carbon::parse($slipItem->received_date)->format('d-m-Y')
                 : $invoiceDate;
+            $orderCreatedDate = $this->slipOrderCreatedDate($slipItem, $date);
 
             $gateAmount = (float) ($slipItem->gate_amount ?? 0);
 
             $rows[] = [
                 'date' => $date,
+                'order_created_date' => $orderCreatedDate,
                 'customer' => $slipItem->customer_name ?: '-',
                 'phone' => $slipItem->customer_phone ?: '-',
                 'address' => $slipItem->customer_address ?: '-',
@@ -286,6 +290,33 @@ class OsSettlementService
         }
 
         return ['rows' => $rows, 'totals' => $totals];
+    }
+
+    /**
+     * Order start / created day for Show Slip tables (Asia/Yangon).
+     */
+    protected function slipOrderCreatedDate($slipItem, string $fallback): string
+    {
+        $order = null;
+        try {
+            $order = $slipItem->order ?? null;
+        } catch (\Throwable $e) {
+            $order = null;
+        }
+
+        foreach (['created_at', 'date', 'pickup_datetime'] as $field) {
+            $raw = $order->{$field} ?? null;
+            if (empty($raw)) {
+                continue;
+            }
+            try {
+                return Carbon::parse($raw)->timezone('Asia/Yangon')->format('d-m-Y');
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+
+        return $fallback;
     }
 
     public function resolveSlipSender(User $osClient, $items, string $osName): array
@@ -345,8 +376,163 @@ class OsSettlementService
         return trim((string) ($profile['kpay_no'] ?? ''));
     }
 
-    public function uploadKpaySlip(int $osId, string $fromDay, string $toDay, UploadedFile $file): OsSettlementDraft
+    /**
+     * @param  mixed  $paths
+     * @return list<string>
+     */
+    protected function normalizePathList($paths): array
     {
+        if (! is_array($paths)) {
+            $path = trim((string) $paths);
+
+            return $path === '' ? [] : [$path];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn ($path) => trim((string) $path),
+            $paths
+        )));
+    }
+
+    /**
+     * Flat path list (legacy string / JSON array, or all sides merged).
+     *
+     * @return list<string>
+     */
+    public function normalizeSlipPaths(?string $stored): array
+    {
+        $raw = trim((string) $stored);
+        if ($raw === '') {
+            return [];
+        }
+
+        if (str_starts_with($raw, '{')) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded) && (array_key_exists('pay', $decoded) || array_key_exists('receive', $decoded))) {
+                return array_values(array_unique(array_merge(
+                    $this->normalizePathList($decoded['pay'] ?? []),
+                    $this->normalizePathList($decoded['receive'] ?? [])
+                )));
+            }
+        }
+
+        if (str_starts_with($raw, '[')) {
+            $decoded = json_decode($raw, true);
+            if (! is_array($decoded)) {
+                return [];
+            }
+
+            return $this->normalizePathList($decoded);
+        }
+
+        return [$raw];
+    }
+
+    /**
+     * Side-aware draft store: {"pay":[...],"receive":[...]}.
+     * Legacy string/array is kept on pay only so receive never auto-inherits it.
+     *
+     * @return array{pay: list<string>, receive: list<string>, legacy: bool}
+     */
+    public function slipPathsBySide(?string $stored): array
+    {
+        $raw = trim((string) $stored);
+        if ($raw === '') {
+            return ['pay' => [], 'receive' => [], 'legacy' => false];
+        }
+
+        if (str_starts_with($raw, '{')) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded) && (array_key_exists('pay', $decoded) || array_key_exists('receive', $decoded))) {
+                return [
+                    'pay' => $this->normalizePathList($decoded['pay'] ?? []),
+                    'receive' => $this->normalizePathList($decoded['receive'] ?? []),
+                    'legacy' => false,
+                ];
+            }
+        }
+
+        $legacy = $this->normalizeSlipPaths($raw);
+
+        return [
+            'pay' => $legacy,
+            'receive' => [],
+            'legacy' => true,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function slipPathsForSide(?string $stored, ?string $side): array
+    {
+        $side = $this->normalizeSettlementSide($side) === 'receive' ? 'receive' : 'pay';
+        $bySide = $this->slipPathsBySide($stored);
+
+        return $bySide[$side] ?? [];
+    }
+
+    /**
+     * @param  list<string>  $paths
+     */
+    public function encodeSlipPaths(array $paths): ?string
+    {
+        $paths = array_values(array_unique(array_filter(array_map(
+            static fn ($path) => trim((string) $path),
+            $paths
+        ))));
+
+        if ($paths === []) {
+            return null;
+        }
+
+        return count($paths) === 1 ? $paths[0] : json_encode($paths);
+    }
+
+    /**
+     * @param  array{pay?: list<string>, receive?: list<string>}  $bySide
+     */
+    public function encodeSlipPathsBySide(array $bySide): ?string
+    {
+        $payload = [
+            'pay' => array_values(array_unique($this->normalizePathList($bySide['pay'] ?? []))),
+            'receive' => array_values(array_unique($this->normalizePathList($bySide['receive'] ?? []))),
+        ];
+
+        if ($payload['pay'] === [] && $payload['receive'] === []) {
+            return null;
+        }
+
+        return json_encode($payload);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function urlsForStored(?string $stored, ?string $side = null): array
+    {
+        $paths = $side
+            ? $this->slipPathsForSide($stored, $side)
+            : $this->normalizeSlipPaths($stored);
+        $urls = [];
+        foreach ($paths as $path) {
+            $url = $this->urlForPath($path);
+            if ($url) {
+                $urls[] = $url;
+            }
+        }
+
+        return $urls;
+    }
+
+    public function uploadKpaySlip(
+        int $osId,
+        string $fromDay,
+        string $toDay,
+        UploadedFile $file,
+        ?string $settlementSide = 'pay'
+    ): OsSettlementDraft {
+        $side = $this->normalizeSettlementSide($settlementSide) === 'receive' ? 'receive' : 'pay';
         $dir = $this->storageDir($osId, $fromDay, $toDay);
         $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
         if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
@@ -355,16 +541,123 @@ class OsSettlementService
         $filename = 'kpay-slip-'.Str::random(8).'.'.$ext;
         $path = $file->storeAs($dir, $filename, 'public');
 
-        $draft = OsSettlementDraft::query()->updateOrCreate(
-            [
-                'os_user_id' => $osId,
-                'from_date' => $fromDay,
-                'to_date' => $toDay,
-            ],
-            ['kpay_slip_path' => $path]
-        );
+        $draft = OsSettlementDraft::query()->firstOrNew([
+            'os_user_id' => $osId,
+            'from_date' => $fromDay,
+            'to_date' => $toDay,
+        ]);
+
+        $bySide = $this->slipPathsBySide($draft->kpay_slip_path);
+        $bySide[$side][] = $path;
+        unset($bySide['legacy']);
+        $draft->kpay_slip_path = $this->encodeSlipPathsBySide($bySide);
+        $draft->save();
 
         return $draft;
+    }
+
+    /**
+     * @param  list<UploadedFile>  $files
+     */
+    public function uploadKpaySlips(
+        int $osId,
+        string $fromDay,
+        string $toDay,
+        array $files,
+        ?string $settlementSide = 'pay'
+    ): OsSettlementDraft {
+        $draft = null;
+        foreach ($files as $file) {
+            if (! $file instanceof UploadedFile) {
+                continue;
+            }
+            $draft = $this->uploadKpaySlip($osId, $fromDay, $toDay, $file, $settlementSide);
+        }
+
+        if (! $draft) {
+            throw new \InvalidArgumentException('No image files provided.');
+        }
+
+        return $draft;
+    }
+
+    /**
+     * Remove one proof image from the draft by zero-based index (within that side).
+     */
+    public function removeKpaySlipAt(
+        int $osId,
+        string $fromDay,
+        string $toDay,
+        int $index,
+        ?string $settlementSide = 'pay'
+    ): OsSettlementDraft {
+        $side = $this->normalizeSettlementSide($settlementSide) === 'receive' ? 'receive' : 'pay';
+        $draft = $this->getDraft($osId, $fromDay, $toDay);
+        if (! $draft) {
+            throw new \InvalidArgumentException(__('message.something_went_wrong'));
+        }
+
+        $bySide = $this->slipPathsBySide($draft->kpay_slip_path);
+        $paths = $bySide[$side] ?? [];
+        if ($index < 0 || $index >= count($paths)) {
+            throw new \InvalidArgumentException(__('message.something_went_wrong'));
+        }
+
+        $removed = $paths[$index];
+        array_splice($paths, $index, 1);
+        $bySide[$side] = $paths;
+        unset($bySide['legacy']);
+
+        if (
+            $removed
+            && ! str_starts_with($removed, 'http://')
+            && ! str_starts_with($removed, 'https://')
+            && ! str_starts_with($removed, '/storage/')
+            && Storage::disk('public')->exists($removed)
+        ) {
+            Storage::disk('public')->delete($removed);
+        }
+
+        $draft->kpay_slip_path = $this->encodeSlipPathsBySide($bySide);
+        $draft->save();
+
+        return $draft;
+    }
+
+    /**
+     * Drop proof images for one settlement tab so the other tab never inherits them.
+     */
+    public function clearDraftSide(int $osId, string $fromDay, string $toDay, ?string $settlementSide): void
+    {
+        $side = $this->normalizeSettlementSide($settlementSide);
+        if (! in_array($side, ['pay', 'receive'], true)) {
+            return;
+        }
+
+        $draft = $this->getDraft($osId, $fromDay, $toDay);
+        if (! $draft) {
+            return;
+        }
+
+        $bySide = $this->slipPathsBySide($draft->kpay_slip_path);
+        if (! empty($bySide['legacy'])) {
+            $draft->kpay_slip_path = null;
+            $draft->save();
+
+            return;
+        }
+
+        $bySide[$side] = [];
+        unset($bySide['legacy']);
+        $encoded = $this->encodeSlipPathsBySide($bySide);
+        if ($encoded === null) {
+            $draft->delete();
+
+            return;
+        }
+
+        $draft->kpay_slip_path = $encoded;
+        $draft->save();
     }
 
     public function getDraft(int $osId, string $fromDay, string $toDay): ?OsSettlementDraft
@@ -380,9 +673,16 @@ class OsSettlementService
      * A proof belongs to the sheet day it was uploaded on.
      * Later list days (next ငွေရှင်းတမ်း) must not inherit that screenshot.
      */
-    public function draftSlipAppliesToItems(?OsSettlementDraft $draft, $items): bool
+    public function draftSlipAppliesToItems(?OsSettlementDraft $draft, $items, ?string $settlementSide = null): bool
     {
-        if (! $draft || trim((string) $draft->kpay_slip_path) === '') {
+        if (! $draft) {
+            return false;
+        }
+
+        $paths = $settlementSide
+            ? $this->slipPathsForSide($draft->kpay_slip_path, $settlementSide)
+            : $this->normalizeSlipPaths($draft->kpay_slip_path);
+        if ($paths === []) {
             return false;
         }
 
@@ -405,15 +705,25 @@ class OsSettlementService
         return $newestDay <= $slipDay;
     }
 
-    public function getDraftKpayPath(int $osId, string $fromDay, string $toDay, $items = null): ?string
-    {
+    public function getDraftKpayPath(
+        int $osId,
+        string $fromDay,
+        string $toDay,
+        $items = null,
+        ?string $settlementSide = null
+    ): ?string {
         $draft = $this->getDraft($osId, $fromDay, $toDay);
         if (! $draft) {
             return null;
         }
 
-        if ($items !== null && ! $this->draftSlipAppliesToItems($draft, $items)) {
+        if ($items !== null && ! $this->draftSlipAppliesToItems($draft, $items, $settlementSide)) {
             return null;
+        }
+
+        $side = $this->normalizeSettlementSide($settlementSide);
+        if (in_array($side, ['pay', 'receive'], true)) {
+            return $this->encodeSlipPaths($this->slipPathsForSide($draft->kpay_slip_path, $side));
         }
 
         return $draft->kpay_slip_path;
@@ -504,7 +814,8 @@ class OsSettlementService
         string $paymentMethod = 'kpay',
         ?string $settlementSide = null,
         ?array $itemIds = null,
-        ?int $branchId = null
+        ?int $branchId = null,
+        ?int $adminKpayAccountId = null
     ): OsSettlementBatch {
         $settlementSide = $this->normalizeSettlementSide($settlementSide);
         $isKyoShinSide = $settlementSide === 'kyo_shin';
@@ -544,10 +855,9 @@ class OsSettlementService
         }
 
         $paymentMethod = in_array($paymentMethod, ['kpay', 'cash'], true) ? $paymentMethod : ($isKyoShinSide ? 'cash' : 'kpay');
-        $kpayPath = $isKyoShinSide ? null : $this->getDraftKpayPath($osId, $fromDay, $toDay, $items);
-        if ($kpayPath && ! Storage::disk('public')->exists($kpayPath)) {
-            $kpayPath = null;
-        }
+        $kpayPath = $isKyoShinSide ? null : $this->sanitizeStoredSlipPath(
+            $this->getDraftKpayPath($osId, $fromDay, $toDay, $items, $settlementSide)
+        );
 
         $toDateRaw = Carbon::parse($toDay)->format('d-m-Y');
         $slipData = $this->buildSlipRows($items, $toDateRaw, ! $isKyoShinSide, $isKyoShinSide);
@@ -562,49 +872,90 @@ class OsSettlementService
             throw new \RuntimeException(__('message.os_settlement_kpay_slip_required'));
         }
 
+        $needsAdminKpay = $settlementSide === 'pay'
+            && $paymentMethod === 'kpay'
+            && abs((float) $amount) > 0.00001;
+        $adminAccount = null;
+        if ($needsAdminKpay) {
+            if (! $adminKpayAccountId) {
+                throw new \RuntimeException(__('message.admin_kpay_account_required'));
+            }
+            $adminAccount = AdminKpayAccount::query()->find($adminKpayAccountId);
+            if (! $adminAccount) {
+                throw new \RuntimeException(__('message.admin_kpay_account_not_found'));
+            }
+            $transferNeed = round(abs((float) $amount), 2);
+            if ((float) $adminAccount->balance + 0.00001 < $transferNeed) {
+                throw new \RuntimeException(__('message.admin_kpay_insufficient_balance'));
+            }
+        }
+
         // Money Transfer / batch period = items' list day (10:00 AM Yangon cutoff),
         // not the filter day when unfinished rows were carried into "today".
         [$batchFromDay, $batchToDay] = $this->listDayRangeFromItems($items, $fromDay, $toDay);
 
         @set_time_limit(120);
 
-        $batch = OsSettlementBatch::create([
-            'os_user_id' => $osId,
-            'from_date' => $batchFromDay,
-            'to_date' => $batchToDay,
-            'amount' => $amount,
-            'payment_method' => $paymentMethod,
-            'settlement_side' => $settlementSide,
-            'delivery_format' => $this->normalizeDeliveryFormat($deliveryFormat),
-            'kpay_name' => $this->kpayNameFromUser($osClient),
-            'kpay_no' => $this->kpayNoFromUser($osClient),
-            'kpay_slip_path' => $isKyoShinSide ? null : $kpayPath,
-            'item_ids' => $itemIds,
-            'finished_by' => $finishedBy,
-            'finished_at' => now(),
-        ]);
+        $batch = DB::transaction(function () use (
+            $osId,
+            $batchFromDay,
+            $batchToDay,
+            $amount,
+            $paymentMethod,
+            $settlementSide,
+            $deliveryFormat,
+            $osClient,
+            $isKyoShinSide,
+            $kpayPath,
+            $itemIds,
+            $finishedBy,
+            $adminAccount,
+            $needsAdminKpay,
+            $fromDay,
+            $toDay
+        ) {
+            if ($needsAdminKpay && $adminAccount) {
+                $adminAccount->deduct(abs((float) $amount));
+            }
 
-        DispatchOrderItem::query()
-            ->whereIn('id', $itemIds)
-            ->update([
-                'admin_finished_at' => now(),
-                'admin_updated_at' => now(),
-                'updated_at' => now(),
+            $created = OsSettlementBatch::create([
+                'os_user_id' => $osId,
+                'from_date' => $batchFromDay,
+                'to_date' => $batchToDay,
+                'amount' => $amount,
+                'payment_method' => $paymentMethod,
+                'settlement_side' => $settlementSide,
+                'delivery_format' => $this->normalizeDeliveryFormat($deliveryFormat),
+                'kpay_name' => $this->kpayNameFromUser($osClient),
+                'kpay_no' => $this->kpayNoFromUser($osClient),
+                'admin_kpay_account_id' => $adminAccount?->id,
+                'kpay_slip_path' => $isKyoShinSide ? null : $kpayPath,
+                'item_ids' => $itemIds,
+                'finished_by' => $finishedBy,
+                'finished_at' => now(),
             ]);
 
-        app(\App\Services\KyoShinService::class)->syncFinishedForItemIds($itemIds, $finishedBy);
+            DispatchOrderItem::query()
+                ->whereIn('id', $itemIds)
+                ->update([
+                    'admin_finished_at' => now(),
+                    'admin_updated_at' => now(),
+                    'updated_at' => now(),
+                ]);
 
-        // Drop the proof once this period is finished. If the other side on the
-        // same sheet day is still open, keep the slip. A later list day must not
-        // inherit yesterday's screenshot.
-        $remaining = $this->completedItemsForPeriod($osId, $fromDay, $toDay);
-        $draft = $this->getDraft($osId, $fromDay, $toDay);
-        if ($remaining->isEmpty()) {
-            $draft?->delete();
-        } elseif ($draft && ! $this->draftSlipAppliesToItems($draft, $remaining)) {
-            $draft->kpay_slip_path = null;
-            $draft->save();
-        }
+            app(\App\Services\KyoShinService::class)->syncFinishedForItemIds($itemIds, $finishedBy);
+
+            // Clear this tab's proof so the other tab (pay↔receive) never inherits it.
+            if (! $isKyoShinSide) {
+                $this->clearDraftSide($osId, $fromDay, $toDay, $settlementSide);
+            }
+            $remaining = $this->completedItemsForPeriod($osId, $fromDay, $toDay);
+            if ($remaining->isEmpty()) {
+                $this->getDraft($osId, $fromDay, $toDay)?->delete();
+            }
+
+            return $created;
+        });
 
         $isReceiveSide = $settlementSide === 'receive';
         $receiveId = null;
@@ -1015,11 +1366,43 @@ class OsSettlementService
 
     public function urlForPath(?string $path): ?string
     {
-        if (! $path) {
+        // Accept a single storage path, or a JSON list (use the first image).
+        $paths = $this->normalizeSlipPaths($path);
+        $first = $paths[0] ?? null;
+        if (! $first) {
             return null;
         }
 
-        return Storage::disk('public')->url($path);
+        // Already-resolved absolute/relative URL.
+        if (str_starts_with($first, 'http://') || str_starts_with($first, 'https://') || str_starts_with($first, '/storage/')) {
+            return $first;
+        }
+
+        return Storage::disk('public')->url($first);
+    }
+
+    /**
+     * Keep only slip paths that still exist on the public disk.
+     * Multi-image drafts store a JSON array — never pass that raw string to Storage::exists().
+     */
+    public function sanitizeStoredSlipPath(?string $stored): ?string
+    {
+        $existing = [];
+        foreach ($this->normalizeSlipPaths($stored) as $path) {
+            if ($path === '') {
+                continue;
+            }
+            if (
+                str_starts_with($path, 'http://')
+                || str_starts_with($path, 'https://')
+                || str_starts_with($path, '/storage/')
+                || Storage::disk('public')->exists($path)
+            ) {
+                $existing[] = $path;
+            }
+        }
+
+        return $this->encodeSlipPaths($existing);
     }
 
     protected function storageDir(int $osId, string $fromDay, string $toDay): string

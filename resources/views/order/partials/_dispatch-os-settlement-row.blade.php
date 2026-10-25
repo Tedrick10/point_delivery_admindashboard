@@ -8,6 +8,13 @@
     $canFinish = $isKyoShin || ! empty($row->has_kpay_slip);
     $itemIds = collect($row->item_ids ?? [])->map(static fn ($id) => (int) $id)->filter()->values()->all();
     $itemIdsAttr = implode(',', $itemIds);
+    $slipUrls = collect($row->kpay_slip_urls ?? [])
+        ->filter(static fn ($url) => is_string($url) && trim($url) !== '')
+        ->values()
+        ->all();
+    if ($slipUrls === [] && ! empty($row->kpay_slip_url)) {
+        $slipUrls = [(string) $row->kpay_slip_url];
+    }
 @endphp
 <tr
     class="pds-os-settlement-row"
@@ -17,6 +24,12 @@
     data-is-finished="0"
     data-payment-method="{{ $showKpayCols ? 'kpay' : 'cash' }}"
     data-section="{{ $section }}"
+    data-os-name="{{ e($row->display_name ?? $row->name) }}"
+    data-os-phone="{{ e($row->phone ?? '-') }}"
+    data-os-address="{{ e($row->address ?? '-') }}"
+    data-kpay-name="{{ e($row->kpay_name ?? '') }}"
+    data-kpay-no="{{ e($row->kpay_no ?? '') }}"
+    data-amount="{{ (float) ($row->amount ?? 0) }}"
 >
     <td class="pds-rider-col-no">{{ $index + 1 }}</td>
     <td class="pds-os-settlement-col-os">
@@ -67,27 +80,45 @@
     @endif
     @if(! $isKyoShin)
         <td class="pds-os-settlement-col-slip pds-os-kpay-upload-cell">
-            <label class="pds-os-kpay-upload-card {{ $section === 'receive' ? 'pds-os-kpay-upload-card--qr' : '' }}" title="{{ $slipUploadLabel }}">
-                @if($row->kpay_slip_url)
-                    <a href="{{ $row->kpay_slip_url }}" target="_blank" rel="noopener" class="pds-os-kpay-preview" onclick="event.preventDefault(); event.stopPropagation(); window.open(this.href, '_blank', 'noopener');">
-                        <img src="{{ $row->kpay_slip_url }}" alt="{{ $slipLabel }}" class="pds-os-kpay-thumb">
-                    </a>
-                @else
-                    <span class="pds-os-kpay-placeholder">
-                        <i class="fas {{ $section === 'receive' ? 'fa-qrcode' : 'fa-image' }}" aria-hidden="true"></i>
-                        <span>{{ $slipUploadLabel }}</span>
-                    </span>
-                @endif
+            <div
+                class="pds-os-kpay-upload-card {{ $section === 'receive' ? 'pds-os-kpay-upload-card--qr' : '' }} {{ $slipUrls !== [] ? 'has-images' : '' }}"
+                tabindex="0"
+                data-os-id="{{ $row->id }}"
+                title="{{ $slipUploadLabel }} · paste / drop / click"
+            >
+                <div class="pds-os-kpay-gallery">
+                    @foreach($slipUrls as $slipIndex => $slipUrl)
+                        <span class="pds-os-kpay-preview" data-index="{{ $slipIndex }}">
+                            <a
+                                href="{{ $slipUrl }}"
+                                class="pds-os-kpay-thumb-link"
+                                title="{{ $slipLabel }}"
+                            >
+                                <img src="{{ $slipUrl }}" alt="{{ $slipLabel }}" class="pds-os-kpay-thumb">
+                            </a>
+                            <button
+                                type="button"
+                                class="pds-os-kpay-remove"
+                                data-index="{{ $slipIndex }}"
+                                title="{{ __('message.delete') }}"
+                                aria-label="{{ __('message.delete') }}"
+                            >
+                                <i class="fas fa-times" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                    @endforeach
+                </div>
                 <span class="pds-os-kpay-upload-btn" aria-hidden="true">
-                    <i class="fas fa-cloud-upload-alt"></i>
+                    <i class="fas fa-plus"></i>
                 </span>
                 <input
                     type="file"
                     class="pds-os-kpay-file-input"
                     accept="image/*"
+                    multiple
                     data-os-id="{{ $row->id }}"
                 >
-            </label>
+            </div>
         </td>
         @if($showKpayCols)
             <td class="pds-os-settlement-col-method">

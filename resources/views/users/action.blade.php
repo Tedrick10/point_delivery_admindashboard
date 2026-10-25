@@ -29,29 +29,31 @@
         {!! html()->form()->close() !!}
     </div>
 @else
-    <div class="custom-switch custom-switch-text custom-switch-color custom-control-inline">
-        <div class="custom-switch-inner">
-            @if($action_type == 'email_verified')
-                {!! html()->checkbox('email_verified', $data['is_autoverified_email'] == '1', $data['id'])
-                    ->class('custom-control-input bg-success change_user_verification')
-                    ->id('email_' . $data['id'])
-                    ->attribute('data-type', 'user')
-                    ->attribute('data-name', 'is_autoverified_email')
-                    ->attribute('data-id', $data['id']) !!}
-                {!! html()->label()->for('email_' . $data['id'])->class('custom-control-label') !!}
-            @endif
+    @if(in_array($action_type, ['email_verified', 'mobile_verified'], true))
+        <div class="custom-switch custom-switch-text custom-switch-color custom-control-inline">
+            <div class="custom-switch-inner">
+                @if($action_type == 'email_verified')
+                    {!! html()->checkbox('email_verified', $data['is_autoverified_email'] == '1', $data['id'])
+                        ->class('custom-control-input bg-success change_user_verification')
+                        ->id('email_' . $data['id'])
+                        ->attribute('data-type', 'user')
+                        ->attribute('data-name', 'is_autoverified_email')
+                        ->attribute('data-id', $data['id']) !!}
+                    {!! html()->label()->for('email_' . $data['id'])->class('custom-control-label') !!}
+                @endif
 
-            @if($action_type == 'mobile_verified')
-                {!! html()->checkbox('mobile_verified', $data['is_autoverified_mobile'] == '1', $data['id'])
-                    ->class('custom-control-input bg-success change_user_verification')
-                    ->id('mobile_' . $data['id'])
-                    ->attribute('data-type', 'user')
-                    ->attribute('data-name', 'is_autoverified_mobile')
-                    ->attribute('data-id', $data['id']) !!}
-                {!! html()->label()->for('mobile_' . $data['id'])->class('custom-control-label') !!}
-            @endif
+                @if($action_type == 'mobile_verified')
+                    {!! html()->checkbox('mobile_verified', $data['is_autoverified_mobile'] == '1', $data['id'])
+                        ->class('custom-control-input bg-success change_user_verification')
+                        ->id('mobile_' . $data['id'])
+                        ->attribute('data-type', 'user')
+                        ->attribute('data-name', 'is_autoverified_mobile')
+                        ->attribute('data-id', $data['id']) !!}
+                    {!! html()->label()->for('mobile_' . $data['id'])->class('custom-control-label') !!}
+                @endif
+            </div>
         </div>
-    </div>
+    @endif
 
     @if($action_type == 'status')
         <div class="custom-switch custom-switch-text custom-switch-color custom-control-inline m-0">
@@ -69,18 +71,28 @@
     @if($action_type == 'approval_status')
         @php
             $current = $data->approval_status ?? 'approved';
+            if (! in_array($current, ['pending', 'approved', 'rejected'], true)) {
+                $current = 'pending';
+            }
         @endphp
-        <select
-            class="pds-os-approval-select js-os-approval-status"
-            data-id="{{ $data->id }}"
-            data-url="{{ route('users.approval-status', $data->id) }}"
-            data-tone="{{ $current }}"
-            aria-label="{{ __('message.status') }}"
-        >
-            <option value="pending" @selected($current === 'pending')>{{ __('message.pending') }}</option>
-            <option value="approved" @selected($current === 'approved')>{{ __('message.approved') }}</option>
-            <option value="rejected" @selected($current === 'rejected')>{{ __('message.rejected') }}</option>
-        </select>
+        @if($auth_user->can('users-edit'))
+            {{-- Rejected can always be changed back to Pending / Approved. --}}
+            <select
+                class="pds-os-approval-select js-os-approval-status"
+                data-id="{{ $data->id }}"
+                data-url="{{ route('users.approval-status', $data->id) }}"
+                data-tone="{{ $current }}"
+                data-prev="{{ $current }}"
+                title="{{ __('message.approval_status') }} — {{ __('message.pending') }} / {{ __('message.approved') }} / {{ __('message.rejected') }}"
+                aria-label="{{ __('message.approval_status') }}"
+            >
+                <option value="pending" @selected($current === 'pending')>{{ __('message.pending') }}</option>
+                <option value="approved" @selected($current === 'approved')>{{ __('message.approved') }}</option>
+                <option value="rejected" @selected($current === 'rejected')>{{ __('message.rejected') }}</option>
+            </select>
+        @else
+            <span class="pds-os-approval-pill is-{{ $current }}">{{ __('message.'.$current) }}</span>
+        @endif
     @endif
 
     @if($action_type == 'action')

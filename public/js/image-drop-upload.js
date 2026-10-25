@@ -49,6 +49,8 @@
 
     function isImageInput(input) {
         if (!input || input.type !== 'file' || input.disabled) return false;
+        // OS settlement proof cells have their own paste handler — avoid double upload.
+        if ((input.className || '').indexOf('pds-os-kpay-file-input') !== -1) return false;
         var accept = (input.getAttribute('accept') || '').toLowerCase();
         if (accept.indexOf('image') !== -1) return true;
         if (accept && SKIP_ACCEPT.test(accept)) return false;
@@ -126,10 +128,8 @@
         } catch (err) {
             return false;
         }
+        // Native change is enough; also firing jQuery change doubles uploads.
         input.dispatchEvent(new Event('change', { bubbles: true }));
-        if (window.jQuery) {
-            window.jQuery(input).trigger('change');
-        }
         return true;
     }
 

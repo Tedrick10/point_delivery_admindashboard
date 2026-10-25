@@ -60,6 +60,7 @@
                     allowInput: true,
                     disableMobile: true,
                     clickOpens: true,
+                    appendTo: document.body,
                     defaultDate: parsed || undefined,
                     maxDate: extra.maxDate !== undefined ? extra.maxDate : window.pdsTodayYangon,
                     locale: {
@@ -86,6 +87,34 @@
             });
         };
 
+        // Keep Cancel / Edit (#remoteModelData) above already-open page modals (Details).
+        function pdsStackRemoteModalOnTop() {
+            var $remote = $('#remoteModelData');
+            if (!$remote.length || !$remote.hasClass('show')) return;
+            var otherOpen = $('.modal.show').not($remote).length > 0;
+            $remote.toggleClass('pds-nested-on-top', otherOpen);
+            if (!otherOpen) {
+                $('.modal-backdrop.pds-nested-modal-backdrop').removeClass('pds-nested-modal-backdrop');
+                return;
+            }
+            var $backs = $('.modal-backdrop.show');
+            $backs.removeClass('pds-nested-modal-backdrop');
+            if ($backs.length > 1) {
+                $backs.last().addClass('pds-nested-modal-backdrop');
+            }
+        }
+
+        $(document)
+            .off('shown.bs.modal.pdsNestedRemote hidden.bs.modal.pdsNestedRemote', '#remoteModelData')
+            .on('shown.bs.modal.pdsNestedRemote', '#remoteModelData', function () {
+                window.setTimeout(pdsStackRemoteModalOnTop, 0);
+                window.setTimeout(pdsStackRemoteModalOnTop, 50);
+            })
+            .on('hidden.bs.modal.pdsNestedRemote', '#remoteModelData', function () {
+                $(this).removeClass('pds-nested-on-top');
+                $('.modal-backdrop.pds-nested-modal-backdrop').removeClass('pds-nested-modal-backdrop');
+            });
+
         // Settlement / dispatch filters: no maxDate (match prior raw flatpickr inits).
         window.pdsBindDispatchDatepickers = function (selector, extra) {
             window.pdsBindDmyDatepickers(
@@ -94,9 +123,15 @@
             );
         };
 
-        $(document).on('admin-live:replaced', function () {
+        $(document).on('admin-live:replaced admin-spa:navigated', function () {
             if (typeof window.pdsBindDispatchDatepickers === 'function') {
                 window.pdsBindDispatchDatepickers();
+            }
+            if (typeof window.pdsReinitSettlementFilterSelects === 'function') {
+                window.pdsReinitSettlementFilterSelects();
+            }
+            if (typeof window.pdsInitMoneyTransferFilters === 'function') {
+                window.pdsInitMoneyTransferFilters();
             }
         });
 
@@ -1022,15 +1057,22 @@
             var isFormPage = /\/(create|edit)(\/|$)/.test(path)
                 || $('form#userForm, form#orderForm, .pds-disable-live-reload, form.pds-form-no-live-reload').length > 0;
 
-            // One poller updates badges/notifications/dashboard and refreshes lists when version changes.
+            // Badges/notifications always poll. Full-page soft HTML replace is opt-in
+            // (data-live-soft="1") because it makes CSS look broken site-wide.
+            var hasDataTable = !!(window.LaravelDataTables || $('.dataTable, table.dataTable').length);
+            var liveRootEl = document.getElementById('adminLiveRoot');
+            var allowContentRefresh = !includeDashboard && !isFormPage && (
+                hasDataTable
+                || (liveRootEl && liveRootEl.getAttribute('data-live-soft') === '1')
+                || (liveRootEl && liveRootEl.getAttribute('data-live-mode') === 'ajax')
+            );
             window.bootAdminGlobalLive({
                 stateUrl: @json(route('admin.live.state')),
                 intervalMs: 4000,
                 page: pageName || 'global',
                 includeDashboard: includeDashboard,
                 data: query,
-                // Dashboard cards update from JSON only — never flash/replace the home shell.
-                refreshContent: includeDashboard ? false : !isFormPage,
+                refreshContent: allowContentRefresh,
                 onReload: includeDashboard ? function () {} : undefined,
                 hardReloadFallback: false
             });

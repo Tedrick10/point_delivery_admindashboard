@@ -10,6 +10,21 @@
                         <h4>{{__('message.notification_settings')}}</h4>
                     </div>
                     <div class="card-body">
+                        @php
+                            $fcmStatus = app(\App\Services\AppPushService::class)->credentialsStatus();
+                        @endphp
+                        @if(! ($fcmStatus['user'] && $fcmStatus['delivery']))
+                            <div class="alert alert-danger" role="alert">
+                                <strong>FCM push is broken on this server.</strong>
+                                Device tokens exist, but Firebase Admin service-account JSON is missing.
+                                Place files under <code>storage/app/firebase/</code>:
+                                <ul class="mb-1 mt-2">
+                                    <li><code>user-service-account.json</code> (project <code>point-user-app</code>) — {{ $fcmStatus['user'] ? 'OK' : 'MISSING' }}</li>
+                                    <li><code>delivery-service-account.json</code> (project <code>point-delivery-app</code>) — {{ $fcmStatus['delivery'] ? 'OK' : 'MISSING' }}</li>
+                                </ul>
+                                Firebase Console → Project Settings → Service accounts → Generate new private key.
+                            </div>
+                        @endif
                         <div class="row mb-3">
                             <div class="col-md-12">
                                 <div class="custom-switch custom-switch-color custom-control-inline">

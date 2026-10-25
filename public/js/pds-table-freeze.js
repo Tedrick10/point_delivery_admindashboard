@@ -112,9 +112,12 @@
     function markPlainShells() {
         // Pass 1: known shells
         document.querySelectorAll(SHELL_SELECTORS).forEach(function (shell) {
-            // Items list uses page scroll + CSS sticky — never height-cap / plain-freeze it.
+            // Items / Rider List use page scroll — never height-cap them
+            // (capped shells ate the search toolbar and left a huge white gap).
             if (shell.classList.contains('pds-dispatch-items-table-shell') ||
-                shell.closest('.pds-dispatch-items-page')) {
+                shell.closest('.pds-dispatch-items-page') ||
+                shell.classList.contains('pds-plain-freeze-skip') ||
+                shell.closest('.pds-dispatch-rider-list-page')) {
                 shell.classList.add('pds-plain-freeze-skip');
                 shell.classList.remove('pds-plain-freeze');
                 return;

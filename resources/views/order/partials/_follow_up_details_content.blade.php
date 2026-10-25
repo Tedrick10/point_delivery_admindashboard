@@ -216,6 +216,9 @@
     @endif
 </div>
 
-<div class="pds-follow-up-details-actions">
-    @include('order.dispatch-item-action', ['item' => $item])
+<div class="pds-follow-up-details-actions" data-fu-details-actions>
+    @include('order.dispatch-item-action', [
+        'item' => $item,
+        'replaceDeleteWithCancel' => true,
+    ])
 </div>

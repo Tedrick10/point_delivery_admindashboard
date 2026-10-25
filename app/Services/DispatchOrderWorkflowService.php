@@ -299,8 +299,8 @@ class DispatchOrderWorkflowService
 
     /**
      * Admin may fill Item Count info only after a Pickup Rider is assigned.
-     * Delivered items stay locked — except Messenger threads (parcel has chat),
-     * where Edit/Delete stay available so admins can correct parcel details.
+     * Rider List Assigned / On Way / Delivered stay editable for corrections.
+     * Completed (finished) items stay locked — except Messenger threads.
      * ကြိုရှင်း parcels stay editable (including Return) so Return Type / OS
      * contact can be set; Item Value / DeliAmount lock separately.
      */
@@ -314,8 +314,9 @@ class DispatchOrderWorkflowService
             $itemHasRider = ! empty($item->delivery_man_id);
         }
 
-        // Active last-mile / return parcels stay editable on Rider List even when
-        // the parent order was cancelled or completed (seen: item On Way + order cancelled).
+        // Active last-mile / return / delivered parcels stay editable on Rider List
+        // even when the parent order was cancelled or completed
+        // (seen: item On Way + order cancelled; Delivered tab needs Edit/Delete).
         $activeItemStatuses = [
             'courier_assigned',
             'courier_departed',
@@ -325,6 +326,7 @@ class DispatchOrderWorkflowService
             'os_returned',
             'accepted',
             'arrived',
+            'delivered',
         ];
         if ($itemStatus !== '' && in_array($itemStatus, $activeItemStatuses, true)) {
             return true;
@@ -893,16 +895,24 @@ class DispatchOrderWorkflowService
     {
         $order->loadMissing('dispatchItems');
 
-        // Pull back Assign 100 rows unless BOTH Rider Done + Admin Done.
+        // Pull back only truly premature Assign 100 rows (see reclaim helpers).
         $this->reclaimPrematureAssign100ItemsForOrder($order);
 
-        if (! $this->isReadyForAssign100($order)) {
+        if (empty($order->delivery_man_id)) {
             return 0;
         }
 
+        // Rider Done (or sibling already last-mile) is required before Assign 100.
+        if (! $this->hasPhysicalPickupCompleted($order) && ! $this->hasLastMileItems($order)) {
+            return 0;
+        }
+
+        // Promote every Admin-stamped collected parcel — do not wait for incomplete
+        // siblings in the same OS order (those stay on Order List until stamped).
         $items = DispatchOrderItem::query()
             ->where('order_id', $order->id)
             ->where('status', 'collected')
+            ->whereNotNull('admin_updated_at')
             ->get();
 
         $moved = 0;
@@ -1002,15 +1012,11 @@ class DispatchOrderWorkflowService
     }
 
     /**
-     * Move Assign 100 pool rows back to collected unless BOTH Rider Done
-     * and Admin Done are true. Clears hub claim stamps so MDY reclaim works.
+     * Move Assign 100 pool rows back to collected when premature.
+     * Incomplete sibling parcels must NOT yank already Admin-stamped pool rows.
      */
     public function reclaimPrematureAssign100ItemsForOrder(Order $order): int
     {
-        if ($this->isReadyForAssign100($order)) {
-            return 0;
-        }
-
         $payload = [
             'status' => 'collected',
             'assigned_at' => null,
@@ -1025,16 +1031,23 @@ class DispatchOrderWorkflowService
             $payload['hub_accepted_at'] = null;
         }
 
-        return DispatchOrderItem::query()
+        $query = DispatchOrderItem::query()
             ->where('order_id', $order->id)
             ->where('status', 'assigned')
-            ->whereNull('delivery_man_id')
-            ->update($payload);
+            ->whereNull('delivery_man_id');
+
+        $riderDone = $this->hasPhysicalPickupCompleted($order) || $this->hasLastMileItems($order);
+        if ($riderDone) {
+            // Rider Done: only bounce rows that never got Admin Item Info.
+            $query->whereNull('admin_updated_at');
+        }
+
+        return $query->update($payload);
     }
 
     /**
-     * Move collected items to Assign 100 when both Rider Done + Admin Done.
-     * Keeps Order List tab badges from counting finished workflow orders.
+     * Move Admin-stamped collected items to Assign 100 when Rider Done.
+     * Incomplete siblings stay on Order List; stamped parcels still promote.
      */
     public function promoteReadyOrdersToAssign100(): int
     {
@@ -1048,10 +1061,7 @@ class DispatchOrderWorkflowService
                     });
             })
             ->whereHas('dispatchItems', function ($item) {
-                $item->where('status', 'collected');
-            })
-            ->whereDoesntHave('dispatchItems', function ($item) {
-                $item->where('status', 'collected')->whereNull('admin_updated_at');
+                $item->where('status', 'collected')->whereNotNull('admin_updated_at');
             })
             ->pluck('id');
 

@@ -1,15 +1,112 @@
 <x-master-layout :assets="$assets ?? []">
     
-<div id="adminLiveRoot" data-live-page="auto">
+{{-- data-live-mode=ajax: live poll refreshes rows only (no full shell soft-replace / CSS flicker) --}}
+<div id="adminLiveRoot" data-live-page="follow-up" data-live-mode="ajax">
 <style>
         .pds-kyo-shin-row-badge {
             display: inline-flex; align-items: center; margin-left: 6px;
             padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
             background: rgba(var(--brand-rgb), 0.16); color: var(--site-color); letter-spacing: .02em;
         }
+        .pds-follow-up-loading {
+            display: flex; align-items: center; justify-content: center; gap: 0.65rem;
+            min-height: 160px; color: #64748b; font-size: 0.9rem;
+        }
+        .pds-follow-up-loading i { animation: pds-fu-spin 0.8s linear infinite; }
+        @keyframes pds-fu-spin { to { transform: rotate(360deg); } }
+        .pds-follow-up-pager {
+            display: flex; align-items: center; justify-content: space-between; gap: 0.85rem;
+            flex-wrap: wrap; margin-top: 1rem; padding: 0.85rem 1rem;
+            border: 1px solid #e8eef5; border-radius: 14px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        }
+        .pds-follow-up-pager__meta {
+            display: inline-flex; align-items: center; gap: 0.45rem;
+            color: #64748b; font-size: 0.8rem; font-weight: 500;
+        }
+        .pds-follow-up-pager__meta strong {
+            color: #0f172a; font-weight: 700;
+        }
+        .pds-follow-up-pager__nav {
+            display: inline-flex; align-items: center; gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+        .pds-follow-up-pager__pages {
+            display: inline-flex; align-items: center; gap: 0.28rem;
+            flex-wrap: wrap;
+        }
+        .pds-follow-up-pager__btn,
+        .pds-follow-up-pager__page {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 38px; height: 38px; padding: 0 0.6rem;
+            border-radius: 11px; border: 1px solid transparent;
+            background: transparent; color: #0f172a;
+            font-size: 0.86rem; font-weight: 700; line-height: 1;
+            cursor: pointer; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .pds-follow-up-pager__btn {
+            min-width: 38px; color: #0f172a; border-color: #cbd5e1; background: #fff;
+        }
+        .pds-follow-up-pager__page {
+            border-color: transparent;
+        }
+        .pds-follow-up-pager__btn:hover:not(:disabled),
+        .pds-follow-up-pager__page:hover:not(.is-active):not(:disabled) {
+            border-color: var(--site-color, #FE6F07);
+            color: var(--site-color, #FE6F07);
+            background: rgba(var(--brand-rgb), 0.1);
+        }
+        .pds-follow-up-pager__page.is-active {
+            background: var(--site-color, #FE6F07) !important;
+            color: #ffffff !important;
+            border-color: var(--site-color, #FE6F07) !important;
+            box-shadow: 0 6px 16px rgba(var(--brand-rgb), 0.42);
+            cursor: default;
+        }
+        .pds-follow-up-pager__btn:disabled {
+            opacity: 0.4; cursor: not-allowed; box-shadow: none;
+        }
+        .pds-follow-up-pager__page.is-active:disabled {
+            opacity: 1; cursor: default;
+        }
+        .pds-follow-up-page.is-fu-silent-loading #toAssignTableShell {
+            opacity: 0.72;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+        .pds-follow-up-pager__ellipsis {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 28px; height: 36px; color: #94a3b8; font-weight: 700; letter-spacing: 0.08em;
+            user-select: none;
+        }
+        @media (max-width: 640px) {
+            .pds-follow-up-pager { justify-content: center; }
+            .pds-follow-up-pager__meta { width: 100%; justify-content: center; }
+            .pds-follow-up-pager__nav { width: 100%; justify-content: center; }
+        }
+        /* Orange table header sticks while scrolling the Follow Up table shell */
+        .pds-follow-up-page .pds-dispatch-to-assign-table-shell {
+            overflow: auto !important;
+            max-height: min(68vh, calc(100vh - var(--pds-topbar-h, 73px) - 220px)) !important;
+            /* transform/contain break position:sticky on thead */
+            transform: none !important;
+            contain: none !important;
+        }
+        .pds-follow-up-page .pds-dispatch-to-assign-table.pds-sticky-freeze {
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+        }
+        .pds-follow-up-page .pds-dispatch-to-assign-table thead th {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 6 !important;
+            background: var(--site-color, #FE6F07) !important;
+            color: #fff !important;
+        }
     </style>
-    <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page">
+    <div class="container-fluid pds-page-wrap pds-dispatch-to-assign-page pds-follow-up-page">
         <div class="pds-dispatch-to-assign-screen">
+            <div class="pds-follow-up-page-head">
             <div class="pds-dispatch-to-assign-topbar">
                 <div class="pds-dispatch-to-assign-topbar-copy">
                     <span class="pds-dispatch-to-assign-eyebrow">
@@ -20,7 +117,7 @@
                     <p class="pds-dispatch-to-assign-subtitle">
                         <span class="pds-dispatch-to-assign-count-pill">
                             {{ __('message.item_count') }}
-                            <strong id="toAssignItemCount">{{ $items->count() }}</strong>
+                            <strong id="toAssignItemCount">0</strong>
                         </span>
                     </p>
                 </div>
@@ -80,20 +177,19 @@
                     </div>
                 </div>
             </div>
+            </div>{{-- /.pds-follow-up-page-head --}}
 
             <div class="pds-dispatch-to-assign-body">
-                @if($items->isEmpty())
-                    <div class="pds-dispatch-to-assign-empty" id="toAssignEmptyState">
+                <div class="pds-dispatch-to-assign-empty d-none" id="toAssignEmptyState">
                         <i class="fas fa-inbox"></i>
                         <p>{{ __('message.no_record_found') }}</p>
                     </div>
-                @else
-                    <div class="pds-dispatch-to-assign-empty d-none" id="toAssignFilterEmptyState">
-                        <i class="fas fa-search"></i>
-                        <p>{{ __('message.no_record_found') }}</p>
+                <div class="pds-follow-up-loading" id="toAssignLoadingState" aria-live="polite">
+                    <i class="fas fa-spinner" aria-hidden="true"></i>
+                    <span>{{ __('message.splash_loading') }}</span>
                     </div>
-                    <div class="pds-dispatch-to-assign-table-shell pds-table-shell" id="toAssignTableShell">
-                        <table class="table w-100 pds-dispatch-to-assign-table" id="toAssignTable">
+                <div class="pds-dispatch-to-assign-table-shell pds-table-shell d-none" id="toAssignTableShell">
+                    <table class="table w-100 pds-dispatch-to-assign-table pds-sticky-freeze" id="toAssignTable">
                             <thead>
                                 <tr>
                                     @if($canReassignFollowUpRider)
@@ -122,109 +218,21 @@
                                     <th class="pds-fu-col pds-fu-col--action">{{ __('message.action') }}</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                @php $workflow = app(\App\Services\DispatchOrderWorkflowService::class); @endphp
-                                @foreach($items as $index => $item)
-                                    @php
-                                        $order = $item->order;
-                                        $osName = resolveDispatchOsName($order);
-                                        $osPhone = resolveDispatchOsPhone($order);
-                                        $osAddress = resolveDispatchOsAddress($order);
-                                        $pickupRider = optional($order?->delivery_man)->name ?? '-';
-                                        $pickupRiderPhone = optional($order?->delivery_man)->riderAssignedPhone() ?: '';
-                                        $deliveryRider = optional($item->deliveryMan)->name ?? '-';
-                                        $fromTo = trim((optional($item->fromBranch)->name ?? '-') . ' - ' . (optional($item->toBranch)->name ?? '-'));
-                                        $township = \App\Models\DispatchOrderItem::deliveryCityLabel($item->delivery_city);
-                                        if ($township === '-' && $item->township) {
-                                            $township = $item->township;
-                                        }
-                                        $orderDate = $order?->created_at
-                                            ? \Carbon\Carbon::parse($order->created_at)->format('d-m-Y')
-                                            : '-';
-                                        $receivedDate = $item->received_date
-                                            ? \Carbon\Carbon::parse($item->received_date)->format('d-m-Y')
-                                            : '-';
-                                        $followUpStatus = $workflow->followUpStatusKey($item);
-                                        $rowCanReassign = $canReassignFollowUpRider && $workflow->canReassignFollowUpRider($item);
-                                    @endphp
-                                    <tr
-                                        data-item-id="{{ $item->id }}"
-                                        data-os-name="{{ $osName !== '-' ? $osName : '' }}"
-                                        data-os-phone="{{ $osPhone !== '-' ? $osPhone : '' }}"
-                                        data-pickup-rider="{{ $pickupRider !== '-' ? $pickupRider : '' }}"
-                                        data-pickup-rider-phone="{{ $pickupRiderPhone }}"
-                                        data-customer-name="{{ $item->customer_name ?: '' }}"
-                                        data-customer-phone="{{ $item->customer_phone ?: '' }}"
-                                        data-follow-up-status="{{ $followUpStatus }}"
-                                        data-can-reassign="{{ $rowCanReassign ? '1' : '0' }}"
-                                        data-to-branch-id="{{ (int) ($item->to_branch_id ?? 0) }}"
-                                    >
-                                        @if($canReassignFollowUpRider)
-                                            <td class="pds-fu-col pds-fu-col--check pds-follow-up-check-col">
-                                                @if($rowCanReassign)
-                                                    <input type="checkbox"
-                                                           class="pds-follow-up-item-check"
-                                                           value="{{ $item->id }}"
-                                                           aria-label="{{ __('message.follow_up_assign_rider') }}">
-                                                @endif
-                                            </td>
-                                        @endif
-                                        <td class="pds-fu-col pds-fu-col--no to-assign-row-no">{{ $index + 1 }}</td>
-                                        <td class="pds-fu-col pds-fu-col--date">{{ $orderDate }}</td>
-                                        <td class="pds-fu-col pds-fu-col--date">{{ $receivedDate }}</td>
-                                        <td class="pds-fu-col pds-fu-col--voucher">
-                                            {{ $item->code ?? '-' }}
-                                            @if($item->kyoShinItem)
-                                                <span class="pds-kyo-shin-row-badge">{{ __('message.kyo_shin_title') }}</span>
-                                            @endif
-                                        </td>
-                                        <td class="pds-fu-col pds-fu-col--status pds-follow-up-status-cell">
-                                            <span class="pds-dispatch-status {{ $workflow->followUpItemStatusClass($item) }}" title="{{ $workflow->followUpItemStatusLabel($item) }}">{{ $workflow->followUpItemStatusLabel($item) }}</span>
-                                        </td>
-                                        <td class="pds-fu-col pds-fu-col--fromto">{{ $fromTo }}</td>
-                                        <td class="pds-fu-col pds-fu-col--os"><span class="pds-follow-up-cell pds-follow-up-cell--name" title="{{ $osName }}">{{ $osName }}</span></td>
-                                        <td class="pds-fu-col pds-fu-col--os-addr pds-follow-up-address-cell" title="{{ $osAddress }}">
-                                            <span class="pds-follow-up-cell pds-follow-up-cell--address">{{ stringLong($osAddress, 'title', 28) ?: '-' }}</span>
-                                        </td>
-                                        <td class="pds-fu-col pds-fu-col--pickup"><span class="pds-follow-up-cell pds-follow-up-cell--rider" title="{{ $pickupRider }}">{{ $pickupRider }}</span></td>
-                                        <td class="pds-fu-col pds-fu-col--customer"><span class="pds-follow-up-cell pds-follow-up-cell--name" title="{{ $item->customer_name }}">{{ $item->customer_name ?: '-' }}</span></td>
-                                        <td class="pds-fu-col pds-fu-col--phone"><span class="pds-follow-up-cell pds-follow-up-cell--phone">{{ $item->customer_phone ?: '-' }}</span></td>
-                                        <td class="pds-fu-col pds-fu-col--addr pds-follow-up-address-cell" title="{{ $item->customer_address }}">
-                                            <span class="pds-follow-up-cell pds-follow-up-cell--address">{{ stringLong($item->customer_address ?? '', 'title', 28) ?: '-' }}</span>
-                                        </td>
-                                        <td class="pds-fu-col pds-fu-col--township">{{ $township }}</td>
-                                        <td class="pds-fu-col pds-fu-col--rider">
-                                            @if($rowCanReassign)
-                                                <button type="button"
-                                                        class="pds-follow-up-rider-btn js-follow-up-assign-one"
-                                                        data-item-id="{{ $item->id }}"
-                                                        data-to-branch-id="{{ (int) ($item->to_branch_id ?? 0) }}"
-                                                        title="{{ __('message.follow_up_assign_rider') }}">
-                                                    <span>{{ $deliveryRider !== '-' ? $deliveryRider : __('message.assign_rider') }}</span>
-                                                    <i class="fas fa-user-edit" aria-hidden="true"></i>
-                                                </button>
-                                            @else
-                                                <span class="pds-follow-up-cell pds-follow-up-cell--rider" title="{{ $deliveryRider }}">{{ $deliveryRider !== '-' ? $deliveryRider : '-' }}</span>
-                                            @endif
-                                        </td>
-                                        <td class="pds-fu-col pds-fu-col--money pds-follow-up-num-cell">{{ (float) $item->advance_paid == 0.0 ? '' : number_format((float) $item->advance_paid) }}</td>
-                                        <td class="pds-fu-col pds-fu-col--money pds-follow-up-num-cell">{{ number_format((float) $item->item_value) }}</td>
-                                        <td class="pds-fu-col pds-fu-col--deli text-right pds-follow-up-num-cell">{!! formatDispatchDeliAmountHtml($item) !!}</td>
-                                        <td class="pds-fu-col pds-fu-col--remark" title="{{ $item->remark }}">{{ stringLong($item->remark ?? '', 'title', 24) ?: '-' }}</td>
-                                        <td class="pds-fu-col pds-fu-col--action pds-follow-up-actions-cell">
-                                            <button type="button"
-                                                    class="pds-follow-up-details-btn"
-                                                    data-url="{{ route('order.dispatch.to-assign.details', $item->id) }}">
-                                                <i class="fas fa-eye" aria-hidden="true"></i>
-                                                <span>{{ __('message.details') }}</span>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
+                        <tbody id="toAssignTableBody"></tbody>
                         </table>
                     </div>
-                @endif
+                <div class="pds-follow-up-pager d-none" id="toAssignPager">
+                    <div class="pds-follow-up-pager__meta" id="toAssignPagerMeta"></div>
+                    <nav class="pds-follow-up-pager__nav" aria-label="{{ __('message.follow_up') }} pagination">
+                        <button type="button" class="pds-follow-up-pager__btn" id="toAssignPrevPage" title="{{ __('message.previous') }}" aria-label="{{ __('message.previous') }}">
+                            <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                        </button>
+                        <div class="pds-follow-up-pager__pages" id="toAssignPagerPages"></div>
+                        <button type="button" class="pds-follow-up-pager__btn" id="toAssignNextPage" title="{{ __('message.next') }}" aria-label="{{ __('message.next') }}">
+                            <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                        </button>
+                    </nav>
+                </div>
             </div>
         </div>
     </div>
@@ -238,8 +246,9 @@
     <div class="modal fade" id="followUpDetailsModal" tabindex="-1" role="dialog" aria-labelledby="followUpDetailsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
             <div class="modal-content pds-follow-up-details-modal">
-                <div class="modal-header">
+                <div class="modal-header pds-follow-up-details-modal__header">
                     <h5 class="modal-title" id="followUpDetailsModalLabel">{{ __('message.details') }}</h5>
+                    <div class="pds-follow-up-details-header-actions" id="followUpDetailsHeaderActions" aria-label="{{ __('message.details') }}"></div>
                     <button type="button" class="close" data-dismiss="modal" aria-label="{{ __('message.close') }}">
                         <span aria-hidden="true">&times;</span>
                     </button>
@@ -258,13 +267,25 @@
                 var osSearchRoute = "{{ route('ajax-list', ['type' => 'os_dispatch_search']) }}";
                 var riderRoute = "{{ route('ajax-list', ['type' => 'dispatch_deliveryman_search']) }}";
                 var reassignUrl = @json(route('order.dispatch.to-assign.reassign-rider'));
+                var dataUrl = @json($followUpDataUrl ?? route('order.dispatch.to-assign.data'));
                 var canReassign = @json((bool) ($canReassignFollowUpRider ?? false));
                 var riderCache = [];
                 var pendingItemIds = [];
                 var activeToBranchId = 0;
+                var currentPage = 1;
+                var lastPage = 1;
+                var loadSeq = 0;
+                var filterTimer = null;
+                var loadXhr = null;
+                var hasLoadedOnce = false;
+
+                // Live poll must NOT flash the full-page spinner every few seconds.
+                if (typeof window.adminLiveUpdateOptions === 'function') {
+                    window.adminLiveUpdateOptions({ refreshContent: false });
+                }
 
                 window.reloadDispatchItemsTable = function () {
-                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
+                    loadFollowUpPage(currentPage, { silent: true });
                 };
 
                 function renderOsRows(rows) {
@@ -343,13 +364,9 @@
                     $('#osSearchModal').modal('show');
                 }
 
-                function normalizeFilterValue(value) {
-                    return String(value || '').toLowerCase().trim();
-                }
-
                 function getVisibleCheckedItemIds() {
                     var ids = [];
-                    $('#toAssignTable tbody tr:not(.d-none) .pds-follow-up-item-check:checked').each(function () {
+                    $('#toAssignTableBody .pds-follow-up-item-check:checked').each(function () {
                         ids.push(parseInt($(this).val(), 10));
                     });
                     return ids;
@@ -359,8 +376,8 @@
                     if (!canReassign) return;
                     var count = getVisibleCheckedItemIds().length;
                     $('#followUpAssignRiderBtn').prop('disabled', count === 0);
-                    var visibleAssignable = $('#toAssignTable tbody tr:not(.d-none)[data-can-reassign="1"]').length;
-                    var checkedVisible = $('#toAssignTable tbody tr:not(.d-none)[data-can-reassign="1"] .pds-follow-up-item-check:checked').length;
+                    var visibleAssignable = $('#toAssignTableBody tr[data-can-reassign="1"]').length;
+                    var checkedVisible = $('#toAssignTableBody tr[data-can-reassign="1"] .pds-follow-up-item-check:checked').length;
                     $('#followUpSelectAll').prop('checked', visibleAssignable > 0 && checkedVisible === visibleAssignable);
                 }
 
@@ -397,7 +414,7 @@
                             if (res && res.message && typeof showMessage === 'function') {
                                 showMessage(res.message);
                             }
-                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
+                            loadFollowUpPage(currentPage);
                         },
                         error: function (xhr) {
                             updateAssignRiderButtonState();
@@ -409,51 +426,142 @@
                     });
                 }
 
-                function applyToAssignFilters() {
-                    var osTerm = String($('#to_assign_os_name').val() || '').trim();
-                    var riderTerm = String($('#to_assign_pickup_rider').val() || '').trim();
-                    var customerTerm = normalizeFilterValue($('#to_assign_customer_search').val());
-                    var statusTerm = String($('#to_assign_status').val() || '').trim();
-                    var visibleCount = 0;
-                    var matchNamePhone = typeof window.pdsMatchNameOrPhone === 'function'
-                        ? window.pdsMatchNameOrPhone
-                        : (typeof window.pdsMatchOsTerm === 'function'
-                            ? window.pdsMatchOsTerm
-                            : function (term, name, phone) {
-                                var q = String(term || '').toLowerCase();
-                                return !q
-                                    || String(name || '').toLowerCase().indexOf(q) !== -1
-                                    || String(phone || '').toLowerCase().indexOf(q) !== -1;
-                            });
+                function currentFilters() {
+                    return {
+                        status: String($('#to_assign_status').val() || '').trim(),
+                        os: String($('#to_assign_os_name').val() || '').trim(),
+                        pickup_rider: String($('#to_assign_pickup_rider').val() || '').trim(),
+                        customer: String($('#to_assign_customer_search').val() || '').trim(),
+                        page: currentPage,
+                        per_page: 50
+                    };
+                }
 
-                    $('#toAssignTable tbody tr').each(function () {
-                        var $row = $(this);
-                        var rowOsName = String($row.data('os-name') || '');
-                        var rowOsPhone = String($row.data('os-phone') || '');
-                        var rowPickupRider = String($row.data('pickup-rider') || '');
-                        var rowPickupRiderPhone = String($row.data('pickup-rider-phone') || '');
-                        var rowCustomerName = normalizeFilterValue($row.data('customer-name'));
-                        var rowCustomerPhone = normalizeFilterValue($row.data('customer-phone'));
-                        var rowStatus = String($row.data('follow-up-status') || '');
-                        var statusMatch = !statusTerm || rowStatus === statusTerm;
-                        var isMatch = (!osTerm || matchNamePhone(osTerm, rowOsName, rowOsPhone))
-                            && (!riderTerm || matchNamePhone(riderTerm, rowPickupRider, rowPickupRiderPhone))
-                            && (!customerTerm || rowCustomerName.indexOf(customerTerm) !== -1 || rowCustomerPhone.indexOf(customerTerm) !== -1)
-                            && statusMatch;
+                function setLoading(isLoading, silent) {
+                    var $page = $('.pds-follow-up-page');
+                    if (silent) {
+                        $page.toggleClass('is-fu-silent-loading', !!isLoading);
+                        return;
+                    }
+                    $page.removeClass('is-fu-silent-loading');
+                    $('#toAssignLoadingState').toggleClass('d-none', !isLoading);
+                    if (isLoading) {
+                        $('#toAssignEmptyState').addClass('d-none');
+                        $('#toAssignTableShell').addClass('d-none');
+                        $('#toAssignPager').addClass('d-none');
+                    }
+                }
 
-                        $row.toggleClass('d-none', !isMatch);
-                        if (isMatch) {
-                            visibleCount += 1;
-                            $row.find('.to-assign-row-no').text(visibleCount);
-                        } else {
-                            $row.find('.pds-follow-up-item-check').prop('checked', false);
+                function buildPageWindow(page, totalPages) {
+                    var pages = [];
+                    if (totalPages <= 7) {
+                        for (var i = 1; i <= totalPages; i++) pages.push(i);
+                        return pages;
+                    }
+                    pages.push(1);
+                    var start = Math.max(2, page - 1);
+                    var end = Math.min(totalPages - 1, page + 1);
+                    if (page <= 3) {
+                        start = 2;
+                        end = 4;
+                    }
+                    if (page >= totalPages - 2) {
+                        start = totalPages - 3;
+                        end = totalPages - 1;
+                    }
+                    if (start > 2) pages.push('…');
+                    for (var n = start; n <= end; n++) pages.push(n);
+                    if (end < totalPages - 1) pages.push('…');
+                    pages.push(totalPages);
+                    return pages;
+                }
+
+                function renderPager(from, to, total) {
+                    var $pages = $('#toAssignPagerPages').empty();
+                    var windowPages = buildPageWindow(currentPage, lastPage);
+                    windowPages.forEach(function (item) {
+                        if (item === '…') {
+                            $pages.append('<span class="pds-follow-up-pager__ellipsis" aria-hidden="true">…</span>');
+                            return;
                         }
+                        var isActive = item === currentPage;
+                        var $btn = $('<button type="button" class="pds-follow-up-pager__page"></button>')
+                            .text(String(item))
+                            .attr('data-page', item)
+                            .attr('aria-label', 'Page ' + item);
+                        if (isActive) {
+                            $btn.addClass('is-active').attr('aria-current', 'page').prop('disabled', true);
+                        }
+                        $pages.append($btn);
                     });
+                    $('#toAssignPagerMeta').html(
+                        '<span>Showing <strong>' + (from || 0) + '–' + (to || 0) + '</strong> of <strong>' + total + '</strong></span>'
+                    );
+                    $('#toAssignPrevPage').prop('disabled', currentPage <= 1);
+                    $('#toAssignNextPage').prop('disabled', currentPage >= lastPage);
+                }
 
-                    $('#toAssignItemCount').text(visibleCount);
-                    $('#toAssignFilterEmptyState').toggleClass('d-none', visibleCount > 0);
-                    $('#toAssignTableShell').toggleClass('d-none', visibleCount === 0);
+                function loadFollowUpPage(page, options) {
+                    options = options || {};
+                    var silent = !!options.silent && hasLoadedOnce;
+                    currentPage = Math.max(1, parseInt(page, 10) || 1);
+                    var seq = ++loadSeq;
+                    var params = currentFilters();
+                    params.page = currentPage;
+                    if (loadXhr && typeof loadXhr.abort === 'function') {
+                        try { loadXhr.abort(); } catch (e) {}
+                    }
+                    setLoading(true, silent);
+                    loadXhr = $.ajax({
+                        url: dataUrl,
+                        method: 'GET',
+                        data: params,
+                        dataType: 'json',
+                        cache: false
+                    }).done(function (res) {
+                            if (seq !== loadSeq) return;
+                            var total = parseInt(res.total, 10) || 0;
+                            currentPage = parseInt(res.page, 10) || 1;
+                            lastPage = parseInt(res.last_page, 10) || 1;
+                            $('#toAssignItemCount').text(total);
+                            $('#toAssignTableBody').html(res.html || '');
+                            $('#followUpSelectAll').prop('checked', false);
+                            hasLoadedOnce = true;
+                            setLoading(false, silent);
+                            if (total === 0) {
+                                $('#toAssignEmptyState').removeClass('d-none');
+                                $('#toAssignTableShell').addClass('d-none');
+                                $('#toAssignPager').addClass('d-none');
+                            } else {
+                                $('#toAssignEmptyState').addClass('d-none');
+                                $('#toAssignTableShell').removeClass('d-none');
+                                $('#toAssignPager').removeClass('d-none');
+                                renderPager(res.from || 0, res.to || 0, total);
+                            }
                     updateAssignRiderButtonState();
+                        })
+                        .fail(function (xhr, status) {
+                            if (seq !== loadSeq || status === 'abort') return;
+                            setLoading(false, silent);
+                            if (!hasLoadedOnce) {
+                                $('#toAssignEmptyState').removeClass('d-none');
+                                $('#toAssignTableBody').empty();
+                            }
+                            if (typeof errorMessage === 'function') {
+                                errorMessage('{{ __('message.something_went_wrong') }}');
+                            }
+                        })
+                        .always(function () {
+                            if (seq === loadSeq) loadXhr = null;
+                        });
+                }
+
+                function scheduleReload(resetPage) {
+                    clearTimeout(filterTimer);
+                    filterTimer = setTimeout(function () {
+                        if (resetPage) currentPage = 1;
+                        loadFollowUpPage(currentPage);
+                    }, 220);
                 }
 
                 if (typeof window.initDispatchOsFields === 'function') {
@@ -483,20 +591,31 @@
                     var osName = item.name || String(item.text || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
                     $('#to_assign_os_name').val(osName);
                     $('#osSearchModal').modal('hide');
-                    applyToAssignFilters();
+                    scheduleReload(true);
                 });
 
-                var toAssignFilterTimer;
-                $('#to_assign_os_name, #to_assign_pickup_rider, #to_assign_customer_search, #to_assign_status').on('input change', function () {
-                    clearTimeout(toAssignFilterTimer);
-                    toAssignFilterTimer = setTimeout(applyToAssignFilters, 150);
+                $('#to_assign_os_name, #to_assign_pickup_rider, #to_assign_customer_search').on('input', function () {
+                    scheduleReload(true);
+                });
+                $('#to_assign_status').on('change', function () {
+                    scheduleReload(true);
                 });
 
-                applyToAssignFilters();
+                $('#toAssignPrevPage').on('click', function () {
+                    if (currentPage > 1) loadFollowUpPage(currentPage - 1);
+                });
+                $('#toAssignNextPage').on('click', function () {
+                    if (currentPage < lastPage) loadFollowUpPage(currentPage + 1);
+                });
+                $(document).on('click', '#toAssignPagerPages .pds-follow-up-pager__page', function () {
+                    if ($(this).hasClass('is-active') || $(this).prop('disabled')) return;
+                    var page = parseInt($(this).attr('data-page'), 10);
+                    if (page && page !== currentPage) loadFollowUpPage(page);
+                });
 
                 $(document).on('change', '#followUpSelectAll', function () {
                     var checked = $(this).is(':checked');
-                    $('#toAssignTable tbody tr:not(.d-none)[data-can-reassign="1"] .pds-follow-up-item-check').prop('checked', checked);
+                    $('#toAssignTableBody tr[data-can-reassign="1"] .pds-follow-up-item-check').prop('checked', checked);
                     updateAssignRiderButtonState();
                 });
 
@@ -511,7 +630,7 @@
                         return;
                     }
                     var branchIds = {};
-                    $('#toAssignTable tbody tr:not(.d-none) .pds-follow-up-item-check:checked').each(function () {
+                    $('#toAssignTableBody .pds-follow-up-item-check:checked').each(function () {
                         var bid = parseInt($(this).closest('tr').data('to-branch-id'), 10) || 0;
                         if (bid > 0) branchIds[bid] = true;
                     });
@@ -543,22 +662,41 @@
                     submitReassign(rider.id);
                 });
 
+                function mountFollowUpDetailsActions() {
+                    var $slot = $('#followUpDetailsHeaderActions');
+                    var $src = $('#followUpDetailsModalBody').find('[data-fu-details-actions]');
+                    $slot.empty();
+                    if (!$src.length) return;
+                    var $actions = $src.find('.pds-dispatch-row-actions').first();
+                    if ($actions.length) {
+                        $slot.append($actions);
+                    }
+                    $src.remove();
+                }
+
                 $(document).on('click', '.pds-follow-up-details-btn', function (e) {
                     e.preventDefault();
                     e.stopPropagation();
                     var url = $(this).data('url');
                     var $body = $('#followUpDetailsModalBody');
                     if (!url) return;
+                    $('#followUpDetailsHeaderActions').empty();
                     $body.html('<p class="text-center py-4 mb-0">{{ __('message.splash_loading') }}</p>');
                     $('#followUpDetailsModal').modal('show');
                     $.get(url).done(function (html) {
                         $body.html(html);
+                        mountFollowUpDetailsActions();
                     }).fail(function () {
                         $body.html('<p class="text-danger text-center py-4 mb-0">{{ __('message.something_went_wrong') }}</p>');
                     });
                 });
 
-                $(document).on('click', '.pds-dispatch-action-edit.loadRemoteModel', function (e) {
+                $('#followUpDetailsModal').on('hidden.bs.modal', function () {
+                    $('#followUpDetailsHeaderActions').empty();
+                    $('#followUpDetailsModalBody').empty();
+                });
+
+                $(document).on('click', '#followUpDetailsHeaderActions .loadRemoteModel, .pds-dispatch-action-edit.loadRemoteModel, .pds-dispatch-action-cancel.loadRemoteModel', function (e) {
                     e.stopPropagation();
                 });
 
@@ -593,7 +731,7 @@
                                             if (res && res.message && typeof showMessage === 'function') {
                                                 showMessage(res.message);
                                             }
-                                            typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
+                                            loadFollowUpPage(currentPage);
                                         },
                                         error: function (xhr) {
                                             var msg = (xhr.responseJSON && xhr.responseJSON.message)
@@ -610,6 +748,8 @@
                         }
                     });
                 });
+
+                loadFollowUpPage(1);
             })();
         </script>
     @endsection

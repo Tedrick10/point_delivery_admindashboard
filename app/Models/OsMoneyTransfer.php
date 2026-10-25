@@ -15,6 +15,7 @@ class OsMoneyTransfer extends Model
         'os_user_id',
         'payment_method',
         'settlement_batch_id',
+        'admin_kpay_account_id',
         'cash_amount',
         'kpay_amount',
         'freight_amount',
@@ -30,6 +31,7 @@ class OsMoneyTransfer extends Model
             'branch_id' => 'integer',
             'os_user_id' => 'integer',
             'settlement_batch_id' => 'integer',
+            'admin_kpay_account_id' => 'integer',
             'cash_amount' => 'double',
             'kpay_amount' => 'double',
             'freight_amount' => 'double',
@@ -55,5 +57,10 @@ class OsMoneyTransfer extends Model
     public function settlementBatch(): BelongsTo
     {
         return $this->belongsTo(OsSettlementBatch::class, 'settlement_batch_id');
+    }
+
+    public function adminKpayAccount(): BelongsTo
+    {
+        return $this->belongsTo(AdminKpayAccount::class, 'admin_kpay_account_id');
     }
 }

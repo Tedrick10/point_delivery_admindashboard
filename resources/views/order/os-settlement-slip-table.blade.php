@@ -10,10 +10,12 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 16px; color: #1f2937; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th { background: #f97316; color: #fff; padding: 8px 6px; text-align: left; white-space: normal; line-height: 1.25; overflow: hidden; }
-        td { padding: 7px 6px; border-bottom: 1px solid #e5e7eb; }
-        tr:nth-child(even) td { background: #f9fafb; }
-        tfoot td { background: #f97316; color: #fff; font-weight: bold; }
+        th { background: #f97316; color: #fff; padding: 10px 8px; text-align: left; white-space: nowrap; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; }
+        td { padding: 9px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+        tr:nth-child(even) td { background: #fff7ed; }
+        tfoot td { background: #ea580c; color: #fff !important; font-weight: bold; }
+        td.date-cell, td.phone-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
+        td.address-cell { white-space: normal; line-height: 1.35; max-width: 180px; }
         .text-right { text-align: right; }
         .is-negative { color: #dc2626; }
         .meta { font-size: 11px; color: #6b7280; }
@@ -93,6 +95,7 @@
             <tr>
                 <th>{{ __('message.no') }}</th>
                 <th>{{ __('message.date') }}</th>
+                <th title="Order Created Date">{{ __('message.order_created_date') }}</th>
                 <th>{{ __('message.customer') }}</th>
                 <th>{{ __('message.phone') }}</th>
                 <th>{{ __('message.address') }}</th>
@@ -111,13 +114,14 @@
             @forelse($slipRows as $index => $row)
                 <tr>
                     <td>{{ $index + 1 }}</td>
-                    <td>{{ $row['date'] }}</td>
+                    <td class="date-cell">{{ $row['date'] }}</td>
+                    <td class="date-cell">{{ $row['order_created_date'] ?? $row['date'] }}</td>
                     <td>
                         {{ $row['customer'] }}
                         @include('order.partials._slip-kyo-shin-badge', ['row' => $row, 'slipIsKyoShin' => $slipIsKyoShin ?? false])
                     </td>
-                    <td>{{ $row['phone'] }}</td>
-                    <td>{{ stringLong($row['address'], 'title', 28) ?: '-' }}</td>
+                    <td class="phone-cell">{{ $row['phone'] }}</td>
+                    <td class="address-cell" title="{{ $row['address'] }}">{{ $row['address'] ?: '-' }}</td>
                     <td class="text-right">{{ number_format($row['item_value']) }}</td>
                     <td class="text-right">{!! formatDeliAmountDisplayHtml($row['deli_amount_display'] ?? null, $row['deli_amount'] ?? 0) !!}</td>
                     <td class="text-right">{{ $row['gate'] ?? number_format((float) ($row['gate_amount'] ?? 0)) }}</td>
@@ -131,14 +135,14 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="9" style="text-align:center;">{{ __('message.no_record_found') }}</td>
+                    <td colspan="10" style="text-align:center;">{{ __('message.no_record_found') }}</td>
                 </tr>
             @endforelse
         </tbody>
         @if(count($slipRows) > 0)
             <tfoot>
                 <tr>
-                    <td colspan="5">{{ __('message.total') }}</td>
+                    <td colspan="6">{{ __('message.total') }}</td>
                     <td class="text-right">{{ number_format($slipTotals['item_value']) }}</td>
                     <td class="text-right">{!! formatDeliAmountDisplayHtml(null, $slipTotals['deli_amount'] ?? 0) !!}</td>
                     <td class="text-right">{{ number_format($slipTotals['gate_amount'] ?? 0) }}</td>

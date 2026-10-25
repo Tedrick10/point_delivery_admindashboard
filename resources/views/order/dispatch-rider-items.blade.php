@@ -14,6 +14,81 @@
             white-space: nowrap; cursor: pointer; user-select: none;
         }
         .pds-return-retry-check input { width: 16px; height: 16px; accent-color: #ea580c; cursor: pointer; }
+
+        /* Excel export — page-local so theme cache / global span color cannot flatten it */
+        .pds-dispatch-rider-items-page .pds-rider-toolbar__aside {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 0.55rem !important;
+        }
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 0.5rem !important;
+            min-height: 42px !important;
+            padding: 0 1.1rem 0 0.85rem !important;
+            border-radius: 12px !important;
+            border: 0 !important;
+            background: linear-gradient(180deg, #34d399 0%, #16a34a 55%, #15803d 100%) !important;
+            color: #fff !important;
+            font-family: var(--admin-font) !important;
+            font-size: 0.82rem !important;
+            font-weight: 750 !important;
+            letter-spacing: 0.02em !important;
+            text-decoration: none !important;
+            box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.28) inset,
+                0 8px 18px rgba(22, 163, 74, 0.32) !important;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease !important;
+        }
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn:hover,
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn:focus,
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn:active {
+            background: linear-gradient(180deg, #4ade80 0%, #22c55e 55%, #16a34a 100%) !important;
+            color: #fff !important;
+            text-decoration: none !important;
+            transform: translateY(-1px);
+            box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.32) inset,
+                0 12px 24px rgba(22, 163, 74, 0.38) !important;
+            outline: none !important;
+            filter: none !important;
+        }
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn .pds-rider-excel-btn__icon {
+            width: auto !important;
+            height: auto !important;
+            border-radius: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-shrink: 0 !important;
+            background: transparent !important;
+            color: #fff !important;
+            box-shadow: none !important;
+        }
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn:hover .pds-rider-excel-btn__icon,
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn:focus .pds-rider-excel-btn__icon {
+            background: transparent !important;
+            color: #fff !important;
+            box-shadow: none !important;
+        }
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn .pds-rider-excel-btn__icon i,
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn:hover .pds-rider-excel-btn__icon i,
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn:focus .pds-rider-excel-btn__icon i {
+            font-size: 0.95rem !important;
+            color: #fff !important;
+            line-height: 1 !important;
+        }
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn .pds-rider-excel-btn__label,
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn span,
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn:hover .pds-rider-excel-btn__label,
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn:hover span,
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn:focus .pds-rider-excel-btn__label,
+        .pds-dispatch-rider-items-page a.pds-rider-excel-btn:focus span {
+            color: #fff !important;
+            font-weight: 750 !important;
+        }
     </style>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-dispatch-rider-items-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
@@ -67,6 +142,23 @@
                         <i class="fas fa-search" aria-hidden="true"></i>
                         <span>{{ __('message.check') }}</span>
                     </button>
+                    <a
+                        class="pds-rider-excel-btn"
+                        href="{{ route('order.dispatch.rider-items.export-excel', array_filter([
+                            'riderId' => $rider->id,
+                            'status' => $status ?? null,
+                            'from_date' => $filterFromDate ?? null,
+                            'to_date' => $filterToDate ?? null,
+                            'search' => $search ?? null,
+                            'branch_id' => $branchFilter ?? null,
+                        ])) }}"
+                        data-spa-ignore
+                    >
+                        <span class="pds-rider-excel-btn__icon" aria-hidden="true">
+                            <i class="fas fa-file-excel"></i>
+                        </span>
+                        <span class="pds-rider-excel-btn__label">{{ __('message.export') }}</span>
+                    </a>
                 </div>
             </form>
 

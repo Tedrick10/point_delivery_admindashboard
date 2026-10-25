@@ -37,6 +37,10 @@
            data-meta="{{ e($metaLine) }}"
            data-list-url="{{ route('order.dispatch.item.messages', [$orderId, $item->id]) }}"
            data-store-url="{{ route('order.dispatch.item.messages.store', [$orderId, $item->id]) }}"
+           data-rider-preview-url="{{ route('order.dispatch.item.rider-preview', [$orderId, $item->id]) }}"
+           @if($canEditInfo)
+           data-edit-url="{{ route('order.dispatch.item.edit', [$orderId, $item->id]) }}"
+           @endif
            title="{{ __('message.chat') }}">
             <i class="fab fa-facebook-messenger"></i>
             @if($unreadClientReplies > 0)
@@ -56,14 +60,22 @@
             <i class="fas fa-train"></i>
         </a>
     @endif
-    @if(auth()->user()->can('order-edit') && $canEditInfo)
+    @if(empty($hideEdit) && auth()->user()->can('order-edit') && $canEditInfo)
         <a href="{{ route('order.dispatch.item.edit', [$orderId, $item->id]) }}"
            class="pds-dispatch-action-edit loadRemoteModel"
            title="{{ __('message.edit') }}">
             <i class="fas fa-pen"></i>
         </a>
     @endif
-    @if(auth()->user()->can('order-delete') && $canEditInfo)
+    @if(!empty($replaceDeleteWithCancel))
+        @if(auth()->user()->can('order-edit') && $order && !in_array($order->status, ['cancelled', 'completed'], true))
+            <a href="{{ route('cance.order', $orderId) }}"
+               class="pds-dispatch-action-cancel loadRemoteModel"
+               title="{{ __('message.cancel_order') }}">
+                <i class="fas fa-ban"></i>
+            </a>
+        @endif
+    @elseif(auth()->user()->can('order-delete') && $canEditInfo)
         <a href="javascript:void(0)"
            class="pds-dispatch-action-delete"
            data-dispatch-item-delete="1"

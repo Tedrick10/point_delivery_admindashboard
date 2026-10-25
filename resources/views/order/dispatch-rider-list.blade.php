@@ -34,9 +34,9 @@
                 ]),
             ])
 
-            <form method="GET" action="{{ route('order.dispatch.rider-list') }}" class="pds-rider-toolbar" id="riderListFilterForm">
+            <form method="GET" action="{{ route('order.dispatch.rider-list') }}" class="pds-rider-toolbar pds-rider-list-toolbar" id="riderListFilterForm">
                 <input type="hidden" name="branch_id" value="{{ $branchFilter ?? '' }}">
-                <div class="pds-rider-toolbar__fields">
+                <div class="pds-rider-toolbar__fields pds-rider-list-toolbar__fields">
                     <div class="pds-dispatch-field pds-dispatch-field-sm pds-rider-toolbar__grow">
                         <label for="rider_list_search">{{ __('message.search') }}</label>
                         <input type="search"
@@ -50,7 +50,7 @@
                 </div>
                 <div class="pds-rider-toolbar__actions">
                     <a href="{{ route('order.dispatch.rider-list', array_filter(['branch_id' => $selectedBranchId ?? null])) }}" class="pds-rider-reset-btn">
-                        <i class="fas fa-eraser" aria-hidden="true"></i>
+                        <i class="fas fa-undo-alt" aria-hidden="true"></i>
                         <span>{{ __('message.reset') }}</span>
                     </a>
                     <button type="submit" class="pds-rider-check-btn">
@@ -67,8 +67,8 @@
                         <p>{{ __('message.no_record_found') }}</p>
                     </div>
                 @else
-                    <div class="pds-rider-table-shell">
-                        <table class="table pds-rider-list-table">
+                    <div class="pds-rider-table-shell pds-plain-freeze-skip">
+                        <table class="table pds-rider-list-table pds-sticky-freeze">
                             <thead>
                                 <tr>
                                     <th class="pds-rider-col-no">{{ __('message.no') }}</th>
@@ -233,16 +233,29 @@
             </footer>
         </div>
     </div>
-</div>
+    {{-- Inline boot: @section is skipped by x-master-layout component. --}}
+    <script>
+            (function bootRiderListPage() {
+                if (!window.jQuery) {
+                    return setTimeout(bootRiderListPage, 40);
+                }
+                var $ = window.jQuery;
 
+                try {
+                    if ('scrollRestoration' in window.history) {
+                        window.history.scrollRestoration = 'manual';
+                    }
+                    window.scrollTo(0, 0);
+                    var shell = document.querySelector('.pds-dispatch-rider-list-page .pds-rider-table-shell');
+                    if (shell) shell.scrollTop = 0;
+                    var toolbar = document.getElementById('riderListFilterForm');
+                    if (toolbar && typeof toolbar.scrollIntoView === 'function') {
+                        toolbar.scrollIntoView({ block: 'nearest' });
+                    }
+                } catch (e) {}
 
-    @section('bottom_script')
-        <script>
-            $(document).ready(function () {
                 var riderOfMonthUrl = @json($riderOfMonthUrl ?? route('deliveryman.rider-of-month'));
                 var reviewsUrlTpl = @json(url('deliveryman/__ID__/reviews'));
-                var $rotmModal = $('#pdsRiderOfMonthModal');
-                var $reviewsModal = $('#pdsRiderReviewsModal');
                 var emptyRotm = @json(__('message.rider_of_the_month_empty'));
                 var ratingLabel = @json(__('message.rider_of_the_month_rating'));
                 var finishedLabel = @json(__('message.rider_of_the_month_finished'));
@@ -250,8 +263,11 @@
                 var reviewsTitle = @json(__('message.reviews'));
                 var noReviews = @json(__('message.no_record_found'));
 
-                function closeRotm() { $rotmModal.attr('hidden', true); }
-                function closeReviews() { $reviewsModal.attr('hidden', true); }
+                function $rotmModal() { return $('#pdsRiderOfMonthModal'); }
+                function $reviewsModal() { return $('#pdsRiderReviewsModal'); }
+
+                function closeRotm() { $rotmModal().attr('hidden', true); }
+                function closeReviews() { $reviewsModal().attr('hidden', true); }
 
                 function starsHtml(avg) {
                     var full = Math.floor(avg);
@@ -270,7 +286,7 @@
 
                 function openRotm() {
                     $('#pds-rotm-body').html('<div class="pds-rotm-loading"><i class="fas fa-spinner fa-spin"></i></div>');
-                    $rotmModal.removeAttr('hidden');
+                    $rotmModal().removeAttr('hidden');
                     $.getJSON(riderOfMonthUrl)
                         .done(function (res) {
                             var month = res.month_label ? String(res.month_label) : '';
@@ -313,7 +329,7 @@
                     $('#pds-reviews-title').text(reviewsTitle);
                     $('#pds-reviews-summary').html('');
                     $('#pds-reviews-body').html('<div class="pds-rotm-loading"><i class="fas fa-spinner fa-spin"></i></div>');
-                    $reviewsModal.removeAttr('hidden');
+                    $reviewsModal().removeAttr('hidden');
                     $.getJSON(reviewsUrlTpl.replace('__ID__', String(riderId)))
                         .done(function (res) {
                             var r = res.rider || {};
@@ -353,18 +369,28 @@
                         });
                 }
 
-                $('#pds-rider-of-month-btn').on('click', openRotm);
-                $('#pds-rotm-close, #pdsRiderOfMonthModal [data-close="rotm"]').on('click', closeRotm);
-                $('#pds-reviews-close, #pdsRiderReviewsModal [data-close="reviews"]').on('click', closeReviews);
-                $(document).on('click', '.js-rider-reviews', function () {
-                    openReviews($(this).data('rider-id'));
-                });
-                $(document).on('keydown', function (e) {
-                    if (e.key !== 'Escape') return;
-                    if (!$rotmModal.is('[hidden]')) closeRotm();
-                    if (!$reviewsModal.is('[hidden]')) closeReviews();
-                });
-            });
+                $(document)
+                    .off('click.pdsRiderListRotm', '#pds-rider-of-month-btn')
+                    .on('click.pdsRiderListRotm', '#pds-rider-of-month-btn', openRotm);
+                $(document)
+                    .off('click.pdsRiderListRotmClose', '#pds-rotm-close, #pdsRiderOfMonthModal [data-close="rotm"]')
+                    .on('click.pdsRiderListRotmClose', '#pds-rotm-close, #pdsRiderOfMonthModal [data-close="rotm"]', closeRotm);
+                $(document)
+                    .off('click.pdsRiderListReviewsClose', '#pds-reviews-close, #pdsRiderReviewsModal [data-close="reviews"]')
+                    .on('click.pdsRiderListReviewsClose', '#pds-reviews-close, #pdsRiderReviewsModal [data-close="reviews"]', closeReviews);
+                $(document)
+                    .off('click.pdsRiderListReviews', '.js-rider-reviews')
+                    .on('click.pdsRiderListReviews', '.js-rider-reviews', function () {
+                        openReviews($(this).data('rider-id'));
+                    });
+                $(document)
+                    .off('keydown.pdsRiderListEsc')
+                    .on('keydown.pdsRiderListEsc', function (e) {
+                        if (e.key !== 'Escape') return;
+                        if (!$rotmModal().is('[hidden]')) closeRotm();
+                        if (!$reviewsModal().is('[hidden]')) closeReviews();
+                    });
+            })();
         </script>
-    @endsection
+</div>
 </x-master-layout>

@@ -96,24 +96,45 @@
 <link rel="stylesheet" href="{{ public_asset_ver('css/vendor/select2.min.css') }}">
 <link rel="stylesheet" href="{{ public_asset_ver('vendor/confirmJS/jquery-confirm.min.css') }}"/>
 <link rel="stylesheet" href="{{ public_asset_ver('vendor/magnific-popup/css/magnific-popup.css') }}"/>
-{{-- Inline PDS theme CSS so php artisan serve cannot truncate linked stylesheets. --}}
+{{--
+  Theme CSS: always <link> on Apache/FPM (production).
+  Inline only under `php artisan serve` (cli-server), where linked CSS can truncate.
+--}}
 @php
-    $pdsInlineCss = trim(
-        public_css_inline('css/custom.css')."\n".
-        public_css_inline('css/admin-dashboard-theme.css')."\n".
-        public_css_inline('css/admin-themes.css')."\n".
-        public_css_inline('css/pds-layout.css')
-    );
+    $pdsPreferInlineCss = PHP_SAPI === 'cli-server' && filter_var(env('PDS_INLINE_THEME_CSS', true), FILTER_VALIDATE_BOOLEAN);
+    $pdsInlineCss = '';
+    if ($pdsPreferInlineCss) {
+        $pdsInlineCss = trim(
+            public_css_inline('css/custom.css')."\n".
+            public_css_inline('css/admin-dashboard-theme.css')."\n".
+            public_css_inline('css/admin-themes.css')."\n".
+            public_css_inline('css/pds-layout.css')
+        );
+    }
+    $pdsCssCustom = public_asset_ver('css/custom.css');
+    $pdsCssTheme = public_asset_ver('css/admin-dashboard-theme.css');
+    $pdsCssThemes = public_asset_ver('css/admin-themes.css');
+    $pdsCssLayout = public_asset_ver('css/pds-layout.css');
 @endphp
-@if($pdsInlineCss !== '')
+@if($pdsPreferInlineCss && $pdsInlineCss !== '')
     <style id="pds-admin-theme-inline">{!! $pdsInlineCss !!}</style>
 @else
-    <link rel="stylesheet" href="{{ public_asset_ver('css/custom.css') }}">
-    <link rel="stylesheet" href="{{ public_asset_ver('css/admin-dashboard-theme.css') }}">
-    <link rel="stylesheet" href="{{ public_asset_ver('css/admin-themes.css') }}">
-    <link rel="stylesheet" href="{{ public_asset_ver('css/pds-layout.css') }}">
+    <link rel="stylesheet" href="{{ $pdsCssCustom }}" id="pds-css-custom">
+    <link rel="stylesheet" href="{{ $pdsCssTheme }}" id="pds-css-theme">
+    <link rel="stylesheet" href="{{ $pdsCssThemes }}" id="pds-css-themes">
+    <link rel="stylesheet" href="{{ $pdsCssLayout }}" id="pds-css-layout">
 @endif
-<link rel="stylesheet" href="{{ public_asset_ver('css/image-drop-upload.css') }}">
+<link rel="stylesheet" href="{{ public_asset_ver('css/pds-rider-mt-ui4.css') }}" id="pds-css-rider-mt-ui4">
+<link rel="stylesheet" href="{{ public_asset_ver('css/image-drop-upload.css') }}" id="pds-css-image-drop">
+<style id="pds-css-critical-safe">
+/* Failsafe: never leave the admin shell invisible if theme CSS is slow/cached oddly */
+html, body.pds-admin { opacity: 1 !important; visibility: visible !important; }
+body.pds-admin .content-page,
+body.pds-admin .pds-page-wrap,
+body.pds-admin .pds-motion-enter,
+body.pds-admin .wrapper { opacity: 1 !important; visibility: visible !important; }
+body.pds-admin .pds-topbar { background: #fff !important; }
+</style>
 {{-- MUST load AFTER theme CSS so brand color/font win over Outfit / FE6F07 defaults. --}}
 <style id="pds-brand-live">
 :root,
@@ -500,12 +521,33 @@ document.documentElement.setAttribute('data-brand-font', window.pdsBrandFontId |
     body.pds-admin .content-page .pds-rider-table-shell--scroll table.table,
     body.pds-admin .content-page .pds-rider-table-shell--scroll .pds-rider-items-table,
     body.pds-admin .content-page .pds-rider-table-shell--scroll .pds-rider-list-table,
+    body.pds-admin .content-page .pds-plain-freeze-skip .pds-rider-list-table,
+    body.pds-admin .pds-dispatch-rider-list-page .pds-rider-list-table,
     body.pds-admin .pds-plain-freeze > table,
     body.pds-admin .pds-plain-freeze table,
     body.pds-admin table.pds-sticky-freeze {
         border-collapse: separate !important;
         border-spacing: 0 !important;
         overflow: visible !important;
+    }
+
+    /* Rider List: parent overflow:hidden stole sticky from the table shell. */
+    body.pds-admin .pds-dispatch-rider-list-page .pds-rider-screen,
+    body.pds-admin .pds-dispatch-rider-list-page .pds-rider-body {
+        overflow: visible !important;
+    }
+    body.pds-admin .pds-dispatch-rider-list-page .pds-rider-table-shell {
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+        max-height: calc(100vh - var(--pds-topbar-h, 60px) - 5.75rem) !important;
+    }
+    body.pds-admin .pds-dispatch-rider-list-page .pds-rider-list-table thead th {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 8 !important;
+        background: var(--site-color, #FE6F07) !important;
+        background-color: var(--site-color, #FE6F07) !important;
+        color: #fff !important;
     }
 
     /* List pages: fit table to card width (inner scrollport still scrolls) */

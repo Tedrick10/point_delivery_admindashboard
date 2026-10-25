@@ -612,71 +612,137 @@
             </div>
         </div>
     </div>
-    @section('bottom_script')
-    <script>
-           $("#basic-table").DataTable({
-                "dom":  '<"row align-items-center"<"col-md-2"><"col-md-6" B><"col-md-4"f>><"table-responsive my-3" rt><"d-flex" <"flex-grow-1" l><"p-2" i><"mt-4" p>><"clear">',
-                "order": [[0, "desc"]]
-            });
-            $(document).ready(function() {
-                $('[data-toggle="tooltip"]').tooltip();
-                $('.update-verification').click(function() {
-                    var type = $(this).data('type');
-                    var id = $(this).data('id');
-                    var message = 'Are you sure you want to re-verify ' + type + '?';
-                    Swal.fire({
-                        title: message,
-                        showDenyButton: true,
-                        confirmButtonText: 'Yes',
-                        denyButtonText: 'No'
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            $('#update-type').val(type);
-                            $('#update-id').val(id);
-                            $('#update-confirm').val('yes');
-                            $('#update-form').submit();
-                        } else if (result.isDenied) {
-                            $('#update-confirm').val('no');
-                        }
-                    });
-                });
+    <div class="modal fade" id="osRejectReasonModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ __('message.rejected') }} — {{ __('message.os_rejection_reason_label') }}</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-2">{{ __('message.os_rejection_reason_prompt') }}</p>
+                    <label class="font-weight-bold" for="osRejectReasonInput">{{ __('message.os_rejection_reason_label') }} <span class="text-danger">*</span></label>
+                    <textarea id="osRejectReasonInput" class="form-control" rows="4" maxlength="1000"></textarea>
+                    <div class="text-danger small mt-2 d-none" id="osRejectReasonError">{{ __('message.os_rejection_reason_required') }}</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('message.cancel') }}</button>
+                    <button type="button" class="btn btn-danger" id="osRejectReasonSubmit">{{ __('message.reject') }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                $(document).on('change', '.js-os-approval-status', function () {
-                    var $el = $(this);
-                    $el.prop('disabled', true);
-                    $el.attr('data-tone', $el.val());
-                    $.ajax({
-                        url: $el.data('url'),
-                        method: 'POST',
-                        data: {
-                            _token: '{{ csrf_token() }}',
-                            approval_status: $el.val()
-                        }
-                    }).done(function (res) {
-                        var msg = res.message || 'Updated';
-                        if (res.username && res.password) {
-                            msg += '  Username: ' + res.username + '  Password: ' + res.password;
-                        }
-                        if (typeof SnackBar === 'function') {
-                            SnackBar({ message: msg, status: 'success' });
-                        }
-                        var tone = res.approval_status || $el.val();
-                        $('.pds-os-approval-pill')
-                            .removeClass('is-pending is-approved is-rejected')
-                            .addClass('is-' + tone)
-                            .text(res.label || tone);
-                    }).fail(function (xhr) {
-                        var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Update failed';
-                        if (typeof SnackBar === 'function') {
-                            SnackBar({ message: msg, status: 'error' });
-                        } else {
-                            alert(msg);
-                        }
-                    }).always(function () {
-                        $el.prop('disabled', false);
-                    });
+    <script>
+    (function () {
+        function withJquery(cb) {
+            if (window.jQuery) return cb(window.jQuery);
+            setTimeout(function () { withJquery(cb); }, 40);
+        }
+        withJquery(function ($) {
+            if (window.__pdsOsProfileApprovalBound) return;
+            window.__pdsOsProfileApprovalBound = true;
+
+            if ($.fn.DataTable && $('#basic-table').length) {
+                $('#basic-table').DataTable({
+                    "dom": '<"row align-items-center"<"col-md-2"><"col-md-6" B><"col-md-4"f>><"table-responsive my-3" rt><"d-flex" <"flex-grow-1" l><"p-2" i><"mt-4" p>><"clear">',
+                    "order": [[0, "desc"]]
+                });
+            }
+
+            $('[data-toggle="tooltip"]').tooltip();
+            $(document).on('click', '.update-verification', function () {
+                var type = $(this).data('type');
+                var id = $(this).data('id');
+                Swal.fire({
+                    title: 'Are you sure you want to re-verify ' + type + '?',
+                    showDenyButton: true,
+                    confirmButtonText: 'Yes',
+                    denyButtonText: 'No'
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        $('#update-type').val(type);
+                        $('#update-id').val(id);
+                        $('#update-confirm').val('yes');
+                        $('#update-form').submit();
+                    } else if (result.isDenied) {
+                        $('#update-confirm').val('no');
+                    }
                 });
             });
-        </script>
-    @endsection
+
+            var pendingReject = null;
+            function postOsApproval($el, value, reason) {
+                $el.prop('disabled', true);
+                $el.attr('data-tone', value);
+                var data = {
+                    _token: $('meta[name="csrf-token"]').attr('content'),
+                    approval_status: value
+                };
+                if (reason) data.approval_rejection_reason = reason;
+                $.ajax({
+                    url: $el.data('url'),
+                    method: 'POST',
+                    data: data
+                }).done(function (res) {
+                    var msg = res.message || 'Updated';
+                    if (res.username && res.password) {
+                        msg += '  Username: ' + res.username + '  Password: ' + res.password;
+                    }
+                    if (typeof SnackBar === 'function') SnackBar({ message: msg, status: 'success' });
+                    var tone = res.approval_status || value;
+                    $('.pds-os-approval-pill')
+                        .removeClass('is-pending is-approved is-rejected')
+                        .addClass('is-' + tone)
+                        .text(res.label || tone);
+                }).fail(function (xhr) {
+                    var prev = $el.data('prev') || 'pending';
+                    $el.val(prev).attr('data-tone', prev);
+                    var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Update failed';
+                    if (typeof SnackBar === 'function') SnackBar({ message: msg, status: 'error' });
+                    else alert(msg);
+                }).always(function () {
+                    $el.prop('disabled', false);
+                });
+            }
+
+            $(document).on('focus', '.js-os-approval-status', function () {
+                $(this).data('prev', $(this).val());
+            });
+
+            $(document).on('change', '.js-os-approval-status', function () {
+                var $el = $(this);
+                var value = $el.val();
+                if (value === 'rejected') {
+                    pendingReject = $el;
+                    $('#osRejectReasonInput').val('');
+                    $('#osRejectReasonError').addClass('d-none');
+                    $('#osRejectReasonModal').modal('show');
+                    return;
+                }
+                postOsApproval($el, value, null);
+            });
+
+            $('#osRejectReasonModal').on('hidden.bs.modal', function () {
+                if (pendingReject) {
+                    var prev = pendingReject.data('prev') || 'pending';
+                    pendingReject.val(prev).attr('data-tone', prev);
+                    pendingReject = null;
+                }
+            });
+
+            $(document).on('click', '#osRejectReasonSubmit', function () {
+                var reason = $.trim($('#osRejectReasonInput').val() || '');
+                if (!reason) {
+                    $('#osRejectReasonError').removeClass('d-none');
+                    return;
+                }
+                var $el = pendingReject;
+                pendingReject = null;
+                $('#osRejectReasonModal').modal('hide');
+                if ($el) postOsApproval($el, 'rejected', reason);
+            });
+        });
+    })();
+    </script>
 </x-master-layout>

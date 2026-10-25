@@ -236,7 +236,8 @@ class DispatchItemMessageController extends Controller
                     $item,
                     $user,
                     $body,
-                    $hasImage
+                    $hasImage,
+                    (int) $message->id
                 );
                 notifyAdminsDispatchItemMessage($payload);
             } catch (\Throwable $e) {

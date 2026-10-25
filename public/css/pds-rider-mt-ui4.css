@@ -1,0 +1,140 @@
+/*
+ * Rider List layout (stable):
+ * - Search toolbar stays above the table (sticky under topbar)
+ * - Table scrolls inside its own shell
+ * - Orange thead sticks at top:0 of THAT shell (never mid-list)
+ *
+ * Critical: any ancestor with overflow:hidden|auto|scroll becomes the sticky
+ * scrollport — .pds-rider-screen { overflow:hidden } was eating the thead.
+ */
+
+/* Let the TABLE SHELL be the sticky scrollport (not .pds-rider-screen). */
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-screen {
+    overflow: visible !important;
+}
+
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-hero {
+    margin-bottom: 0.35rem !important;
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
+}
+
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-body {
+    padding: 0.45rem 1rem 0.85rem !important;
+    overflow: visible !important;
+}
+
+/* Search: always on screen under topbar */
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-list-toolbar {
+    position: sticky !important;
+    top: var(--pds-topbar-h, 60px) !important;
+    z-index: 40 !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: flex-end !important;
+    gap: 0.55rem !important;
+    padding: 0.55rem 1rem !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    border-bottom: 1px solid rgba(20, 17, 15, 0.08) !important;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05) !important;
+}
+
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-list-toolbar__fields,
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-toolbar__fields {
+    display: flex !important;
+    flex: 1 1 260px !important;
+    min-width: min(100%, 220px) !important;
+    max-width: 480px !important;
+    gap: 0.55rem !important;
+}
+
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-toolbar__grow {
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-list-toolbar .pds-dispatch-field label {
+    display: block !important;
+    margin-bottom: 0.25rem !important;
+}
+
+body.pds-admin .pds-dispatch-rider-list-page #rider_list_search,
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-list-toolbar .pds-dispatch-input {
+    display: block !important;
+    width: 100% !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    background: #fff !important;
+    border: 1px solid rgba(20, 17, 15, 0.12) !important;
+    border-radius: 10px !important;
+    color: #14110F !important;
+}
+
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-list-toolbar .pds-rider-toolbar__actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.45rem !important;
+    flex: 0 0 auto !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-list-toolbar .pds-rider-reset-btn,
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-list-toolbar .pds-rider-check-btn {
+    display: inline-flex !important;
+    min-height: 40px !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/*
+ * Scroll shell: ONLY this box scrolls vertically.
+ * Leave room for topbar + sticky search so search never gets pushed away.
+ */
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-table-shell,
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-table-shell.pds-plain-freeze,
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-table-shell.pds-plain-freeze-skip {
+    max-height: calc(100vh - var(--pds-topbar-h, 60px) - 5.75rem) !important;
+    height: auto !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    border: 1px solid rgba(20, 17, 15, 0.07);
+    border-radius: 14px;
+    background: #fff;
+}
+
+/* Orange title sticks to the TOP of the scroll shell — never mid-rows.
+   backend.css .table{overflow:hidden} + spreadsheet border-collapse:collapse
+   both kill sticky — force separate + visible here. */
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-list-table,
+body.pds-admin .pds-dispatch-rider-list-page table.table.pds-rider-list-table {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    overflow: visible !important;
+}
+
+body.pds-admin .pds-dispatch-rider-list-page .pds-rider-list-table thead th {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 8 !important;
+    background: var(--site-color, #FE6F07) !important;
+    background-color: var(--site-color, #FE6F07) !important;
+    color: #fff !important;
+}
+
+/* Money Transfer calendars */
+.flatpickr-calendar {
+    z-index: 100000 !important;
+}
+.flatpickr-calendar.open {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}

@@ -507,6 +507,37 @@
     var pendingNav = null;
     var activeVisitXhr = null;
 
+    function forceScrollTop() {
+        try {
+            if ('scrollRestoration' in window.history) {
+                window.history.scrollRestoration = 'manual';
+            }
+        } catch (e) {}
+        try {
+            var root = document.documentElement;
+            if (root) {
+                root.style.overflowAnchor = 'none';
+                root.scrollTop = 0;
+            }
+            if (document.body) document.body.scrollTop = 0;
+            if (document.scrollingElement) {
+                document.scrollingElement.scrollTop = 0;
+                document.scrollingElement.scrollLeft = 0;
+            }
+            window.scrollTo(0, 0);
+            var content = document.querySelector(CONTENT);
+            if (content) {
+                content.scrollTop = 0;
+                content.scrollLeft = 0;
+            }
+            var live = document.getElementById('adminLiveRoot');
+            if (live) {
+                live.scrollTop = 0;
+                live.scrollLeft = 0;
+            }
+        } catch (e) {}
+    }
+
     function cleanupLeftovers() {
         try {
             $('.modal-backdrop').remove();
@@ -514,10 +545,7 @@
             $('.jconfirm').remove();
             $('body').removeClass('modal-open').css({ paddingRight: '', overflow: '' });
         } catch (e) {}
-        try {
-            if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
-            window.scrollTo(0, 0);
-        } catch (e) {}
+        forceScrollTop();
     }
 
     function finishVisit() {
@@ -530,6 +558,7 @@
         activeVisitXhr = null;
         $(CONTENT).removeClass('pds-spa-loading');
         document.body.classList.remove('pds-spa-navigating');
+        forceScrollTop();
         if (pendingNav) {
             var next = pendingNav;
             pendingNav = null;
@@ -556,6 +585,9 @@
     }
 
     function afterContentSwap(finalUrl) {
+        // Invalidate any in-flight admin-live soft replace from the previous page
+        // so its scroll restore cannot yank the new page mid-viewport.
+        window.__pdsAdminLiveNavGen = (window.__pdsAdminLiveNavGen || 0) + 1;
         cleanupLeftovers();
         syncLiveOptionsFromDom();
         if (typeof window.pdsAdminAnimationsRefresh === 'function') {
@@ -583,10 +615,17 @@
                 });
             }
         }
+        forceScrollTop();
+        requestAnimationFrame(forceScrollTop);
+        setTimeout(forceScrollTop, 0);
+        setTimeout(forceScrollTop, 50);
+        setTimeout(forceScrollTop, 200);
         $(document).trigger('admin-spa:navigated', [finalUrl]);
         if (typeof window.adminLiveRefreshNow === 'function') {
             window.adminLiveRefreshNow();
         }
+        // Live poll / table paint can reflow and re-anchor scroll — pin top again.
+        setTimeout(forceScrollTop, 400);
     }
 
     function visit(url, options) {
@@ -769,6 +808,11 @@
     rememberExistingScripts();
     patchDataTableReinit();
     hideSplash();
+    try {
+        if ('scrollRestoration' in window.history) {
+            window.history.scrollRestoration = 'manual';
+        }
+    } catch (e) {}
 
     // Capture phase so SPA wins before other menu handlers / default navigation.
     document.addEventListener('click', onClick, true);

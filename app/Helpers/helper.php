@@ -2872,8 +2872,13 @@ function getPanelStaffUsers()
             $query->whereIn('user_type', ['admin', 'super_admin'])
                 ->orWhereNotIn('user_type', ['client', 'delivery_man', 'admin', 'super_admin']);
         })
+        // Active staff only — inactive accounts must not receive bell/messenger noise.
+        ->where(function ($q) {
+            $q->whereNull('status')->orWhere('status', 1)->orWhere('status', '1');
+        })
         ->get()
-        ->unique('id');
+        ->unique('id')
+        ->values();
 }
 
 function classifyOrderNotificationCategory(string $historyType, ?User $actor = null): string
@@ -3015,7 +3020,8 @@ function buildDispatchItemMessageNotificationPayload(
     \App\Models\DispatchOrderItem $item,
     \App\Models\User $sender,
     ?string $messageText = null,
-    bool $isImage = false
+    bool $isImage = false,
+    int $lastMessageId = 0
 ): array {
     $parcel = trim((string) ($item->code ?: ''));
     $parcelLabel = $parcel !== '' ? $parcel : ('#'.$item->id);
@@ -3043,6 +3049,7 @@ function buildDispatchItemMessageNotificationPayload(
         'sender_id' => $sender->id,
         'sender_name' => $senderName,
         'has_image' => $isImage,
+        'last_message_id' => max(0, $lastMessageId),
     ];
 }
 
@@ -3068,9 +3075,9 @@ function notifyAdminsDispatchItemMessage(array $notification_data): void
             ->first();
 
         if ($existing) {
+            // Keep created_at tied to the message — bumping to now() broke sync after mark-as-read.
             $existing->forceFill([
                 'data' => array_merge(is_array($existing->data) ? $existing->data : [], $payload),
-                'created_at' => now(),
                 'updated_at' => now(),
             ])->save();
 
@@ -3079,6 +3086,35 @@ function notifyAdminsDispatchItemMessage(array $notification_data): void
 
         $admin->notify(new \App\Notifications\CustomerSupportNotification($payload));
     });
+}
+
+/**
+ * Messenger topbar badge: threads where the latest chat message is from the OS/client.
+ * (Opening a chat may set read_at — that must NOT clear this badge until staff replies.)
+ */
+function unansweredDispatchChatThreadCount(): int
+{
+    try {
+        $latestIds = \Illuminate\Support\Facades\DB::table('dispatch_item_messages')
+            ->selectRaw('MAX(id) as id')
+            ->groupBy('dispatch_order_item_id')
+            ->pluck('id');
+
+        if ($latestIds->isEmpty()) {
+            return 0;
+        }
+
+        return (int) \App\Models\DispatchItemMessage::query()
+            ->whereIn('id', $latestIds)
+            ->where('sender_type', 'client')
+            ->count();
+    } catch (\Throwable $e) {
+        return (int) \App\Models\DispatchOrderItem::query()
+            ->whereHas('messages', function ($q) {
+                $q->where('sender_type', 'client')->whereNull('read_at');
+            })
+            ->count();
+    }
 }
 
 /**
@@ -3092,21 +3128,49 @@ function adminNotificationUnreadCount(?\App\Models\User $user = null): int
         return 0;
     }
 
-    return (int) $user->unreadNotifications()
-        ->where(function ($q) {
-            $q->whereIn('data->category', ['user_messages', 'user_orders'])
-                ->orWhereIn('data->type', [
-                    'dispatch_item_message',
-                    'customersupport',
-                    'create',
-                    'draft',
-                    'active',
-                    'cancelled',
-                    'bid_placed',
-                    'payment_status_message',
-                ]);
-        })
-        ->count();
+    try {
+        $filtered = (int) $user->unreadNotifications()
+            ->where(function ($q) {
+                $q->whereIn('data->category', ['user_messages', 'user_orders'])
+                    ->orWhereIn('data->type', [
+                        'dispatch_item_message',
+                        'customersupport',
+                        'create',
+                        'draft',
+                        'active',
+                        'cancelled',
+                        'bid_placed',
+                        'payment_status_message',
+                    ]);
+            })
+            ->count();
+
+        if ($filtered > 0) {
+            return $filtered;
+        }
+
+        // Some MySQL/MariaDB JSON path filters miss rows — fall back to PHP classify.
+        $total = (int) $user->unreadNotifications()->count();
+        if ($total === 0) {
+            return 0;
+        }
+
+        return (int) $user->unreadNotifications()
+            ->orderByDesc('created_at')
+            ->limit(250)
+            ->get(['id', 'data'])
+            ->filter(function ($notification) {
+                $data = is_array($notification->data) ? $notification->data : [];
+                $category = function_exists('inferNotificationCategory')
+                    ? inferNotificationCategory($data)
+                    : (string) ($data['category'] ?? '');
+
+                return in_array($category, ['user_messages', 'user_orders'], true);
+            })
+            ->count();
+    } catch (\Throwable $e) {
+        return (int) $user->unreadNotifications()->count();
+    }
 }
 
 /**
@@ -3143,81 +3207,110 @@ function syncUnreadDispatchItemMessageNotifications(?\App\Models\User $user = nu
         return;
     }
 
-    $unreadRows = \App\Models\DispatchItemMessage::query()
-        ->select([
-            'dispatch_order_item_id',
-            \Illuminate\Support\Facades\DB::raw('MAX(id) as last_message_id'),
-        ])
-        ->where('sender_type', 'client')
-        ->whereNull('read_at')
-        ->groupBy('dispatch_order_item_id')
-        ->limit(100)
-        ->get();
+    try {
+        // Prefer unanswered threads (latest msg from client), not only read_at IS NULL.
+        $latestIds = \Illuminate\Support\Facades\DB::table('dispatch_item_messages')
+            ->selectRaw('MAX(id) as id')
+            ->groupBy('dispatch_order_item_id')
+            ->pluck('id');
 
-    if ($unreadRows->isEmpty()) {
-        return;
-    }
+        if ($latestIds->isEmpty()) {
+            return;
+        }
 
-    $itemIds = $unreadRows->pluck('dispatch_order_item_id')->map(fn ($id) => (int) $id)->filter()->values();
-    $existingByItem = [];
-    $user->notifications()
-        ->where('data->type', 'dispatch_item_message')
-        ->whereIn('data->dispatch_order_item_id', $itemIds->all())
-        ->orderByDesc('created_at')
-        ->get(['id', 'data', 'created_at'])
-        ->each(function ($notification) use (&$existingByItem) {
-            $data = is_array($notification->data) ? $notification->data : [];
-            $itemId = (int) ($data['dispatch_order_item_id'] ?? 0);
-            if ($itemId <= 0 || isset($existingByItem[$itemId])) {
-                return;
+        $lastMessages = \App\Models\DispatchItemMessage::query()
+            ->with(['sender', 'media'])
+            ->whereIn('id', $latestIds)
+            ->where('sender_type', 'client')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->keyBy('dispatch_order_item_id');
+
+        if ($lastMessages->isEmpty()) {
+            return;
+        }
+
+        $itemIds = $lastMessages->keys()->map(fn ($id) => (int) $id)->filter()->values();
+        $notifiedMessageIdByItem = [];
+        $hasUnreadByItem = [];
+
+        $user->notifications()
+            ->where('data->type', 'dispatch_item_message')
+            ->whereIn('data->dispatch_order_item_id', $itemIds->all())
+            ->orderByDesc('created_at')
+            ->get(['id', 'data', 'read_at', 'created_at'])
+            ->each(function ($notification) use (&$notifiedMessageIdByItem, &$hasUnreadByItem) {
+                $data = is_array($notification->data) ? $notification->data : [];
+                $itemId = (int) ($data['dispatch_order_item_id'] ?? 0);
+                if ($itemId <= 0) {
+                    return;
+                }
+                if ($notification->read_at === null) {
+                    $hasUnreadByItem[$itemId] = true;
+                }
+                if (isset($notifiedMessageIdByItem[$itemId])) {
+                    return;
+                }
+                $notifiedMessageIdByItem[$itemId] = (int) ($data['last_message_id'] ?? 0);
+                // Legacy rows without last_message_id: treat created_at as coverage watermark via id 0
+                // and fall back to "already covered" only when unread still exists.
+            });
+
+        $items = \App\Models\DispatchOrderItem::query()
+            ->whereIn('id', $itemIds->all())
+            ->get()
+            ->keyBy('id');
+
+        foreach ($lastMessages as $itemId => $last) {
+            $itemId = (int) $itemId;
+            $item = $items->get($itemId);
+            if ($itemId <= 0 || ! $item || ! $last) {
+                continue;
             }
-            $existingByItem[$itemId] = optional($notification->created_at)->timestamp ?? 0;
-        });
 
-    $lastMessages = \App\Models\DispatchItemMessage::query()
-        ->with(['sender', 'media'])
-        ->whereIn('id', $unreadRows->pluck('last_message_id')->filter()->all())
-        ->get()
-        ->keyBy('id');
+            if (! empty($hasUnreadByItem[$itemId])) {
+                continue;
+            }
 
-    $items = \App\Models\DispatchOrderItem::query()
-        ->whereIn('id', $itemIds->all())
-        ->get()
-        ->keyBy('id');
+            $lastId = (int) $last->id;
+            $notifiedId = (int) ($notifiedMessageIdByItem[$itemId] ?? 0);
+            // Same message already notified (even if marked read) — don't spam recreate.
+            if ($notifiedId > 0 && $notifiedId >= $lastId) {
+                continue;
+            }
+            // Legacy notification without last_message_id: only skip if we cannot prove a newer msg.
+            if ($notifiedId === 0 && array_key_exists($itemId, $notifiedMessageIdByItem)) {
+                // Had a notification row but no message id — recreate once so badge recovers for staff.
+                // After create, last_message_id is stored and mark-as-read is respected.
+            }
 
-    foreach ($unreadRows as $row) {
-        $itemId = (int) $row->dispatch_order_item_id;
-        $item = $items->get($itemId);
-        $last = $lastMessages->get($row->last_message_id);
-        if ($itemId <= 0 || ! $item || ! $last) {
-            continue;
+            $sender = $last->sender;
+            if (! $sender) {
+                $sender = new \App\Models\User([
+                    'id' => (int) ($last->sender_id ?? 0),
+                    'name' => __('message.user'),
+                ]);
+            }
+
+            $isImage = ($last->message_type === 'image') || getMediaFileExit($last, 'chat_image');
+            $payload = buildDispatchItemMessageNotificationPayload(
+                $item,
+                $sender,
+                $last->message,
+                $isImage,
+                $lastId
+            );
+
+            $user->notify(new \App\Notifications\CustomerSupportNotification($payload));
+            $hasUnreadByItem[$itemId] = true;
+            $notifiedMessageIdByItem[$itemId] = $lastId;
         }
-
-        $messageTs = optional($last->created_at)->timestamp ?? 0;
-        $alreadyTs = $existingByItem[$itemId] ?? 0;
-        // Already notified for this message (or a newer one) — don't recreate after mark-as-read.
-        if ($alreadyTs > 0 && $alreadyTs >= $messageTs) {
-            continue;
-        }
-
-        $sender = $last->sender;
-        if (! $sender) {
-            $sender = new \App\Models\User([
-                'id' => (int) ($last->sender_id ?? 0),
-                'name' => __('message.user'),
-            ]);
-        }
-
-        $isImage = ($last->message_type === 'image') || getMediaFileExit($last, 'chat_image');
-        $payload = buildDispatchItemMessageNotificationPayload(
-            $item,
-            $sender,
-            $last->message,
-            $isImage
-        );
-
-        $user->notify(new \App\Notifications\CustomerSupportNotification($payload));
-        $existingByItem[$itemId] = now()->timestamp;
+    } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Log::warning('syncUnreadDispatchItemMessageNotifications failed', [
+            'user_id' => $user->id ?? null,
+            'error' => $e->getMessage(),
+        ]);
     }
 }
 
@@ -3300,7 +3393,6 @@ function getAttachmentArray($attchments)
 }
 function saveOrderHistory($data)
 {
-    $admin = User::where('user_type', 'admin')->first();
     $data['datetime'] = date('Y-m-d H:i:s');
     $orderData = $data['order'];
     $emailData = OrderMail::where('type', $orderData->status)->first();
@@ -4171,10 +4263,13 @@ function saveOrderHistory($data)
     ];
 
     foreach ($sendTo as $send) {
+        // Collect recipients per channel. Admin bell must reach ALL panel staff,
+        // not only User::admin()->first() (that left other accounts with empty counts).
+        $recipients = collect();
 
         switch ($send) {
             case 'admin':
-                $user = User::whereUserType('admin')->first();
+                $recipients = getPanelStaffUsers();
                 if ($data['history_type'] == 'create') {
                     $template_data = $notification_data;
                     $template_data['message_subject'] = "New Order #" . $data['order']->id . " Created";
@@ -4182,7 +4277,10 @@ function saveOrderHistory($data)
                 }
                 break;
             case 'client':
-                $user = User::whereId($data['order']->client_id)->first();
+                $clientUser = User::whereId($data['order']->client_id)->first();
+                if ($clientUser) {
+                    $recipients = collect([$clientUser]);
+                }
                 if ($data['history_type'] == 'courier_assigned') {
                     $notification_data['message'] = __('message.courier_assigned_history.client', ['id' => $order_id, 'delivery_person' => $history_data['delivery_man_name']]);
                 }
@@ -4192,9 +4290,11 @@ function saveOrderHistory($data)
                 }
                 break;
 
-
             case 'delivery_man':
-                $user = User::whereId($data['order']->delivery_man_id)->first();
+                $riderUser = User::whereId($data['order']->delivery_man_id)->first();
+                if ($riderUser) {
+                    $recipients = collect([$riderUser]);
+                }
                 if ($data['history_type'] == 'courier_assigned') {
                     $notification_data['message'] = __('message.courier_assigned_history.delivery_man', ['id' => $order_id]);
                     $notification_data['type'] = \App\Services\AppPushService::TYPE_PICKUP_ASSIGNED;
@@ -4205,12 +4305,20 @@ function saveOrderHistory($data)
                 }
                 break;
             case 'deliveryMan':
-                $user = User::whereId($data['deliveryManId'])->first();
+                $extraRider = User::whereId($data['deliveryManId'])->first();
+                if ($extraRider) {
+                    $recipients = collect([$extraRider]);
+                }
                 $notification_data['message'] = __('message.apply_reject_history.delivery_man', ['id' => $order_id]);
 
                 break;
         }
-        if ($user != null) {
+
+        foreach ($recipients as $user) {
+            if ($user == null) {
+                continue;
+            }
+
             // Item Delivered: AppPushService stores `item_delivered` for OS App — skip duplicate client "completed" row.
             $skipClientCompletedDb = ! empty($data['skip_push'])
                 && $send === 'client'
@@ -4236,6 +4344,11 @@ function saveOrderHistory($data)
                         app(\App\Services\AppPushService::class)->notifyRiderPickupAssigned($data['order'], $user);
                     } catch (\Throwable $e) {
                         Log::warning('pickup assign push failed', ['error' => $e->getMessage()]);
+                    }
+                } elseif ($send === 'admin') {
+                    // DB bell already fan-out above; push only devices that opted in.
+                    if (! empty($user->player_id) && function_exists('pushNotificationsEnabled') && pushNotificationsEnabled()) {
+                        $user->notify(new CommonNotification($notification_data['type'], $notification_data));
                     }
                 } else {
                     $user->notify(new CommonNotification($notification_data['type'], $notification_data));
@@ -6254,6 +6367,33 @@ function finalizeOsClientFirstApproval(\App\Models\User $user, string $previousA
         'username' => $username,
         'password' => $plainPassword,
     ];
+}
+
+/**
+ * First-time OS client rejection: push notify User App with fixed Burmese copy.
+ */
+function finalizeOsClientRejection(\App\Models\User $user, string $previousApproval): void
+{
+    if (($user->user_type ?? '') !== 'client') {
+        return;
+    }
+
+    if (($user->approval_status ?? '') !== \App\Models\User::APPROVAL_REJECTED) {
+        return;
+    }
+
+    if ($previousApproval === \App\Models\User::APPROVAL_REJECTED) {
+        return;
+    }
+
+    try {
+        app(\App\Services\AppPushService::class)->notifyOsAccountRejected(
+            $user,
+            (string) ($user->approval_rejection_reason ?? '')
+        );
+    } catch (\Throwable $e) {
+        report($e);
+    }
 }
 
 function buildUserAddressFromProfile(array $osProfile): string

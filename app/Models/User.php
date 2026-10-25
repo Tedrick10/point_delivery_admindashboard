@@ -41,6 +41,7 @@ class User extends Authenticatable implements HasMedia
         'is_temp_password', 'created_by_admin', 'is_dispatch_hub', 'is_mdy_return',
         'hub_parent_id', 'os_profile', 'is_kyo_shin',
         'approval_status',
+        'approval_rejection_reason',
     ];
 
     /**
@@ -117,7 +118,7 @@ class User extends Authenticatable implements HasMedia
     /**
      * Sync approval_status with login-active status for OS clients.
      */
-    public function applyApprovalStatus(string $approvalStatus): void
+    public function applyApprovalStatus(string $approvalStatus, ?string $rejectionReason = null): void
     {
         $approvalStatus = in_array($approvalStatus, self::approvalStatuses(), true)
             ? $approvalStatus
@@ -125,6 +126,13 @@ class User extends Authenticatable implements HasMedia
 
         $this->approval_status = $approvalStatus;
         $this->status = $approvalStatus === self::APPROVAL_APPROVED ? 1 : 0;
+
+        if ($approvalStatus === self::APPROVAL_REJECTED) {
+            $reason = trim((string) $rejectionReason);
+            $this->approval_rejection_reason = $reason !== '' ? $reason : $this->approval_rejection_reason;
+        } else {
+            $this->approval_rejection_reason = null;
+        }
     }
 
     public function routeNotificationForOneSignal()

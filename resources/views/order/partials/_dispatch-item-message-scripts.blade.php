@@ -209,6 +209,20 @@
             if (customer) titleBits.push(customer);
             $('#dispatchItemMessageCustomer').text(titleBits.length ? ' — ' + titleBits.join(' · ') : '');
             $('#dispatchItemMessageMeta').text($btn.data('meta') || '');
+            var editUrl = ($btn.attr('data-edit-url') || '').trim();
+            var $edit = $('#dispatchItemMessageEdit');
+            if (editUrl) {
+                $edit.attr('href', editUrl).removeClass('d-none');
+            } else {
+                $edit.attr('href', '#').addClass('d-none');
+            }
+            var viewUrl = ($btn.attr('data-rider-preview-url') || '').trim();
+            var $riderPreview = $('#dispatchItemMessageRiderPreview');
+            if (viewUrl) {
+                $riderPreview.attr('href', viewUrl).removeClass('d-none');
+            } else {
+                $riderPreview.attr('href', '#').addClass('d-none');
+            }
             $('#dispatchItemMessageInput').val('');
             clearImagePreview();
             renderMessages([]);
@@ -218,6 +232,11 @@
             setTimeout(function () {
                 $('#dispatchItemMessageInput').focus();
             }, 250);
+        });
+
+        $(document).on('hidden.bs.modal', '#dispatchItemMessageModal', function () {
+            $('#dispatchItemMessageEdit').attr('href', '#').addClass('d-none');
+            $('#dispatchItemMessageRiderPreview').attr('href', '#').addClass('d-none');
         });
 
         $(document).on('click', '#dispatchItemMessageSend', function () {

@@ -17,6 +17,7 @@ class OsSettlementBatch extends Model
         'delivery_format',
         'kpay_name',
         'kpay_no',
+        'admin_kpay_account_id',
         'kpay_slip_path',
         'slip_table_path',
         'slip_image_path',
@@ -36,12 +37,18 @@ class OsSettlementBatch extends Model
             'amount' => 'float',
             'item_ids' => 'array',
             'finished_at' => 'datetime',
+            'admin_kpay_account_id' => 'integer',
         ];
     }
 
     public function osUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'os_user_id');
+    }
+
+    public function adminKpayAccount(): BelongsTo
+    {
+        return $this->belongsTo(AdminKpayAccount::class, 'admin_kpay_account_id');
     }
 
     public function finishedByUser(): BelongsTo

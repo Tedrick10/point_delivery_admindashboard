@@ -137,28 +137,37 @@
                     </div>
                 @else
                     @php
+                        $showKpayDetailCols = in_array($paymentMethod, ['all', 'kpay'], true);
                         $mtHeadCols = [
                             ['label' => __('message.no'), 'class' => '', 'col' => 'mt-col-no'],
                             ['label' => __('message.os_name'), 'class' => '', 'col' => 'mt-col-os'],
                         ];
+                        if ($showKpayDetailCols) {
+                            $mtHeadCols[] = ['label' => __('message.money_transfer_col_os_kpay'), 'class' => '', 'col' => 'mt-col-os-kpay'];
+                            $mtHeadCols[] = ['label' => __('message.money_transfer_col_admin_kpay'), 'class' => '', 'col' => 'mt-col-admin-kpay', 'title' => __('message.admin_kbz_pay_account')];
+                        }
                         if ($showMethodCol) {
-                            $mtHeadCols[] = ['label' => __('message.payment_method'), 'class' => '', 'col' => 'mt-col-method'];
+                            $mtHeadCols[] = ['label' => __('message.money_transfer_col_method'), 'class' => '', 'col' => 'mt-col-method', 'title' => __('message.payment_method')];
                         }
                         $mtHeadCols[] = ['label' => __('message.os_to_pay'), 'class' => 'text-right', 'title' => __('message.money_transfer_col_help_due'), 'col' => 'mt-col-due'];
                         if ($showCashCols) {
                             $mtHeadCols[] = ['label' => __('message.delivery_man'), 'class' => '', 'col' => 'mt-col-rider'];
                             $mtHeadCols[] = ['label' => __('message.status'), 'class' => '', 'col' => 'mt-col-status'];
                             $mtHeadCols[] = ['label' => __('message.remark_label'), 'class' => '', 'col' => 'mt-col-remark'];
-                            $mtHeadCols[] = ['label' => __('message.finish_image'), 'class' => 'pds-mt-photo-col', 'col' => 'mt-col-photo'];
-                            $mtHeadCols[] = ['label' => __('message.pending_image'), 'class' => 'pds-mt-photo-col', 'col' => 'mt-col-photo'];
+                            $mtHeadCols[] = ['label' => __('message.money_transfer_col_finish'), 'class' => 'pds-mt-photo-col', 'col' => 'mt-col-photo', 'title' => __('message.finish_image')];
+                            $mtHeadCols[] = ['label' => __('message.money_transfer_col_pending'), 'class' => 'pds-mt-photo-col', 'col' => 'mt-col-photo', 'title' => __('message.pending_image')];
                             $mtHeadCols[] = ['label' => __('message.action'), 'class' => 'text-center', 'col' => 'mt-col-action'];
                         } else {
                             $mtHeadCols[] = ['label' => __('message.kpay_slip'), 'class' => '', 'col' => 'mt-col-photo'];
+                            $mtHeadCols[] = ['label' => __('message.action'), 'class' => 'text-center', 'col' => 'mt-col-action'];
                         }
-                        $mtDueColIndex = $showMethodCol ? 3 : 2; // 0-based
+                        $mtDueColIndex = collect($mtHeadCols)->search(static fn ($c) => ($c['col'] ?? '') === 'mt-col-due');
+                        if ($mtDueColIndex === false) {
+                            $mtDueColIndex = 2;
+                        }
                         $mtTotalDue = (float) $rows->sum(function ($r) { return (float) ($r->amount_due ?? 0); });
                         $mtColCount = count($mtHeadCols);
-                        $mtTableClass = 'table pds-rider-list-table pds-daily-check-table pds-money-transfer-table '.($showCashCols ? 'is-cash-cols' : 'is-kpay-compact');
+                        $mtTableClass = 'table pds-rider-list-table pds-daily-check-table pds-money-transfer-table '.($showCashCols ? 'is-cash-cols' : 'is-kpay-compact').($showKpayDetailCols ? ' has-kpay-detail-cols' : '');
                     @endphp
                     <div class="pds-frozen-table pds-daily-check-shell pds-money-transfer-shell" id="moneyTransferFrozen" data-due-col="{{ $mtDueColIndex }}">
                         <div class="pds-frozen-table__head">
@@ -193,24 +202,60 @@
                                         data-transfer-id="{{ $row->transfer_id ?? '' }}"
                                         data-payment-method="{{ $row->payment_method ?? $paymentMethod }}">
                                         <td class="pds-money-transfer-no">{{ $index + 1 }}</td>
-                                        <td>
+                                        <td class="pds-money-transfer-os-cell">
                                             <div class="pds-money-transfer-os">
-                                                <strong class="pds-money-transfer-os__name">{{ $row->name }}</strong>
-                                                @if(!empty($row->os_phone))
-                                                    <div class="text-muted small">{{ $row->os_phone }}</div>
-                                                @endif
-                                                @if($rowMethod === 'kpay' && ($row->kpay_name || $row->kpay_no))
-                                                    <span class="pds-money-transfer-os__kpay">
-                                                        KBZ Pay
-                                                        @if($row->kpay_name) — {{ $row->kpay_name }} @endif
-                                                        @if($row->kpay_no) · {{ $row->kpay_no }} @endif
-                                                    </span>
-                                                @endif
+                                                <div class="pds-money-transfer-os__identity">
+                                                    <strong class="pds-money-transfer-os__name">{{ $row->name }}</strong>
+                                                    @if(!empty($row->os_phone))
+                                                        <span class="pds-money-transfer-os__phone">
+                                                            <i class="fas fa-phone-alt" aria-hidden="true"></i>{{ $row->os_phone }}
+                                                        </span>
+                                                    @endif
+                                                </div>
                                             </div>
                                         </td>
+                                        @if($showKpayDetailCols)
+                                            <td class="pds-mt-kpay-col">
+                                                @if($rowMethod === 'kpay' && ($row->kpay_name || $row->kpay_no))
+                                                    <div class="pds-mt-pay-chip pds-mt-pay-chip--shop"
+                                                         title="{{ trim(($row->kpay_name ?? '').' '.($row->kpay_no ?? '')) }}">
+                                                        <span class="pds-mt-pay-chip__icon" aria-hidden="true"><i class="fas fa-wallet"></i></span>
+                                                        <div class="pds-mt-pay-chip__body">
+                                                            @if($row->kpay_name)
+                                                                <strong>{{ $row->kpay_name }}</strong>
+                                                            @endif
+                                                            @if($row->kpay_no)
+                                                                <span>{{ $row->kpay_no }}</span>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                @else
+                                                    <span class="pds-mt-empty">—</span>
+                                                @endif
+                                            </td>
+                                            <td class="pds-mt-kpay-col">
+                                                @if($rowMethod === 'kpay' && (!empty($row->admin_kpay_name) || !empty($row->admin_kpay_phone)))
+                                                    <div class="pds-mt-pay-chip pds-mt-pay-chip--admin"
+                                                         title="{{ trim(($row->admin_kpay_name ?? '').' '.($row->admin_kpay_phone ?? '')) }}">
+                                                        <span class="pds-mt-pay-chip__icon" aria-hidden="true"><i class="fas fa-user-shield"></i></span>
+                                                        <div class="pds-mt-pay-chip__body">
+                                                            @if(!empty($row->admin_kpay_name))
+                                                                <strong>{{ $row->admin_kpay_name }}</strong>
+                                                            @endif
+                                                            @if(!empty($row->admin_kpay_phone))
+                                                                <span>{{ $row->admin_kpay_phone }}</span>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                @else
+                                                    <span class="pds-mt-empty">—</span>
+                                                @endif
+                                            </td>
+                                        @endif
                                         @if($showMethodCol)
-                                            <td>
+                                            <td class="pds-mt-method-cell">
                                                 <span class="pds-mt-method-badge {{ $rowMethod === 'cash' ? 'is-cash' : 'is-kpay' }}">
+                                                    <i class="fas {{ $rowMethod === 'cash' ? 'fa-money-bill-wave' : 'fa-mobile-alt' }}" aria-hidden="true"></i>
                                                     {{ $rowMethod === 'cash' ? __('message.money_transfer_tab_cash') : __('message.money_transfer_tab_kpay') }}
                                                 </span>
                                             </td>
@@ -227,40 +272,49 @@
                                                         <div class="text-muted small">{{ $row->delivery_man_phone }}</div>
                                                     @endif
                                                 @else
-                                                    <span class="text-muted">—</span>
+                                                    <span class="pds-mt-empty">—</span>
                                                 @endif
                                             </td>
                                             <td>
-                                                <span class="badge badge-secondary">{{ $row->cash_payout_status ?? 'unassigned' }}</span>
+                                                <span class="pds-mt-status-badge">{{ $row->cash_payout_status ?? 'unassigned' }}</span>
                                             </td>
-                                            <td style="min-width:140px;max-width:220px;">
+                                            <td class="pds-mt-remark-cell">
                                                 @php
                                                     $hasPendingRemark = filled($row->pending_note ?? null);
                                                     $hasDoneRemark = filled($row->done_note ?? null);
                                                 @endphp
                                                 @if($hasPendingRemark)
-                                                    <div class="mb-1">
-                                                        <span class="badge badge-warning">Pending</span>
-                                                        <div class="mt-1" style="white-space:pre-wrap;">{{ $row->pending_note }}</div>
+                                                    <div class="pds-mt-remark">
+                                                        <span class="pds-mt-remark__tag is-pending">Pending</span>
+                                                        <div class="pds-mt-remark__text">{{ $row->pending_note }}</div>
                                                     </div>
                                                 @endif
                                                 @if($hasDoneRemark)
-                                                    <div class="{{ $hasPendingRemark ? 'mt-2' : '' }}">
-                                                        <span class="badge badge-success">Done</span>
-                                                        <div class="mt-1" style="white-space:pre-wrap;">{{ $row->done_note }}</div>
+                                                    <div class="pds-mt-remark {{ $hasPendingRemark ? 'is-stacked' : '' }}">
+                                                        <span class="pds-mt-remark__tag is-done">Done</span>
+                                                        <div class="pds-mt-remark__text">{{ $row->done_note }}</div>
                                                     </div>
                                                 @endif
                                                 @if(! $hasPendingRemark && ! $hasDoneRemark)
-                                                    <span class="text-muted">—</span>
+                                                    <span class="pds-mt-empty">—</span>
                                                 @endif
                                             </td>
                                             @php
-                                                $finishUrl = $row->done_photo_url ?: $row->kpay_slip_url;
+                                                $finishUrls = collect($row->kpay_slip_urls ?? [])
+                                                    ->filter(static fn ($u) => is_string($u) && trim($u) !== '')
+                                                    ->values()
+                                                    ->all();
+                                                if ($finishUrls === [] && ! empty($row->kpay_slip_url)) {
+                                                    $finishUrls = [(string) $row->kpay_slip_url];
+                                                }
+                                                if (! empty($row->done_photo_url) && $finishUrls === []) {
+                                                    $finishUrls = [(string) $row->done_photo_url];
+                                                }
                                                 $pendingUrl = $row->pending_photo_url ?? null;
                                             @endphp
                                             <td class="pds-mt-photo-cell">
                                                 @include('order.partials._money-transfer-photo', [
-                                                    'url' => $finishUrl,
+                                                    'urls' => $finishUrls,
                                                     'title' => __('message.finish_image'),
                                                 ])
                                             </td>
@@ -273,26 +327,35 @@
                                             <td class="text-center pds-money-transfer-actions">
                                                 @if($canEdit && !empty($row->transfer_id) && !empty($row->can_switch_to_kpay))
                                                     <button type="button"
-                                                            class="btn btn-sm btn-outline-primary js-mt-switch"
+                                                            class="pds-mt-switch-btn pds-mt-switch-btn--kpay js-mt-switch"
                                                             data-transfer-id="{{ $row->transfer_id }}"
                                                             data-kpay-name="{{ $row->kpay_name ?? '' }}"
                                                             data-kpay-no="{{ $row->kpay_no ?? '' }}"
                                                             data-method="kpay"
                                                             title="{{ __('message.switch_to_kpay') }}">
-                                                        <i class="fas fa-edit" aria-hidden="true"></i>
-                                                        {{ __('message.switch_to_kpay') }}
+                                                        <span class="pds-mt-switch-btn__icon" aria-hidden="true"><i class="fas fa-mobile-alt"></i></span>
+                                                        <span class="pds-mt-switch-btn__label">{{ __('message.switch_to_kpay') }}</span>
                                                     </button>
                                                 @else
-                                                    <span class="text-muted">—</span>
+                                                    <span class="pds-mt-switch-empty">—</span>
                                                 @endif
                                             </td>
                                             @else
-                                            <td><span class="text-muted">—</span></td>
-                                            <td><span class="text-muted">—</span></td>
-                                            <td><span class="text-muted">—</span></td>
+                                            <td><span class="pds-mt-empty">—</span></td>
+                                            <td><span class="pds-mt-empty">—</span></td>
+                                            <td><span class="pds-mt-empty">—</span></td>
+                                            @php
+                                                $cashFinishUrls = collect($row->kpay_slip_urls ?? [])
+                                                    ->filter(static fn ($u) => is_string($u) && trim($u) !== '')
+                                                    ->values()
+                                                    ->all();
+                                                if ($cashFinishUrls === [] && ! empty($row->kpay_slip_url)) {
+                                                    $cashFinishUrls = [(string) $row->kpay_slip_url];
+                                                }
+                                            @endphp
                                             <td class="pds-mt-photo-cell">
                                                 @include('order.partials._money-transfer-photo', [
-                                                    'url' => $row->kpay_slip_url,
+                                                    'urls' => $cashFinishUrls,
                                                     'title' => __('message.finish_image'),
                                                 ])
                                             </td>
@@ -303,16 +366,54 @@
                                                 ])
                                             </td>
                                             <td class="text-center pds-money-transfer-actions">
-                                                <span class="text-muted">—</span>
+                                                @if($canEdit && !empty($row->settlement_batch_id) && !empty($row->can_switch_to_cash))
+                                                    <button type="button"
+                                                            class="pds-mt-switch-btn pds-mt-switch-btn--cash js-mt-switch-cash"
+                                                            data-settlement-batch-id="{{ $row->settlement_batch_id }}"
+                                                            data-transfer-id="{{ $row->transfer_id ?? '' }}"
+                                                            data-os-name="{{ $row->name }}"
+                                                            data-amount="{{ number_format((float) $row->amount_due) }}"
+                                                            title="{{ __('message.switch_to_cash') }}">
+                                                        <span class="pds-mt-switch-btn__icon" aria-hidden="true"><i class="fas fa-money-bill-wave"></i></span>
+                                                        <span class="pds-mt-switch-btn__label">{{ __('message.switch_to_cash') }}</span>
+                                                    </button>
+                                                @else
+                                                    <span class="pds-mt-switch-empty">—</span>
+                                                @endif
                                             </td>
                                             @endif
                                         @else
+                                            @php
+                                                $kpayUrls = collect($row->kpay_slip_urls ?? [])
+                                                    ->filter(static fn ($u) => is_string($u) && trim($u) !== '')
+                                                    ->values()
+                                                    ->all();
+                                                if ($kpayUrls === [] && ! empty($row->kpay_slip_url)) {
+                                                    $kpayUrls = [(string) $row->kpay_slip_url];
+                                                }
+                                            @endphp
                                             <td class="pds-mt-photo-cell" style="min-width:120px;">
                                                 @include('order.partials._money-transfer-photo', [
-                                                    'url' => $row->kpay_slip_url,
+                                                    'urls' => $kpayUrls,
                                                     'title' => __('message.kpay_slip'),
                                                     'large' => true,
                                                 ])
+                                            </td>
+                                            <td class="text-center pds-money-transfer-actions">
+                                                @if($canEdit && !empty($row->settlement_batch_id) && ($row->can_switch_to_cash ?? true))
+                                                    <button type="button"
+                                                            class="pds-mt-switch-btn pds-mt-switch-btn--cash js-mt-switch-cash"
+                                                            data-settlement-batch-id="{{ $row->settlement_batch_id }}"
+                                                            data-transfer-id="{{ $row->transfer_id ?? '' }}"
+                                                            data-os-name="{{ $row->name }}"
+                                                            data-amount="{{ number_format((float) $row->amount_due) }}"
+                                                            title="{{ __('message.switch_to_cash') }}">
+                                                        <span class="pds-mt-switch-btn__icon" aria-hidden="true"><i class="fas fa-money-bill-wave"></i></span>
+                                                        <span class="pds-mt-switch-btn__label">{{ __('message.switch_to_cash') }}</span>
+                                                    </button>
+                                                @else
+                                                    <span class="pds-mt-switch-empty">—</span>
+                                                @endif
                                             </td>
                                         @endif
                                     </tr>
@@ -392,24 +493,455 @@
         </div>
     </div>
 
-    <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
+    <div class="modal fade pds-mt-switch-modal" id="mtSwitchCashModal" tabindex="-1" role="dialog" aria-labelledby="mtSwitchCashModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content pds-mt-switch-modal__content pds-mt-switch-modal__content--cash">
+                <div class="modal-header pds-mt-switch-modal__header pds-mt-switch-modal__header--cash">
+                    <h5 class="modal-title" id="mtSwitchCashModalLabel">
+                        <i class="fas fa-money-bill-wave" aria-hidden="true"></i>
+                        {{ __('message.money_transfer_switch_cash_title') }}
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3 text-muted">{{ __('message.money_transfer_switch_cash_hint') }}</p>
+                    <div class="pds-mt-switch-kpay-meta">
+                        <div class="pds-mt-switch-kpay-meta__item pds-mt-switch-kpay-meta__item--cash">
+                            <span>{{ __('message.os_name') }}</span>
+                            <strong id="mtSwitchCashOsName">—</strong>
+                        </div>
+                        <div class="pds-mt-switch-kpay-meta__item pds-mt-switch-kpay-meta__item--cash">
+                            <span>{{ __('message.os_to_pay') }}</span>
+                            <strong id="mtSwitchCashAmount">—</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('message.cancel') }}</button>
+                    <button type="button" class="pds-mt-switch-btn pds-mt-switch-btn--cash pds-mt-switch-btn--lg" id="mtSwitchCashConfirm">
+                        <span class="pds-mt-switch-btn__icon" aria-hidden="true"><i class="fas fa-money-bill-wave"></i></span>
+                        <span class="pds-mt-switch-btn__label">{{ __('message.switch_to_cash') }}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Scoped styles so Switch buttons / OS chips look correct even if theme/custom CSS cache lags. --}}
+    <style id="pds-mt-switch-btn-styles">
+        body.pds-admin .pds-money-transfer-page .pds-money-transfer-shell {
+            border: 1px solid #f1e7dc;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 8px 24px rgba(120, 53, 15, 0.05);
+        }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table {
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table thead th {
+            white-space: nowrap;
+            font-size: 0.7rem;
+            letter-spacing: 0.04em;
+            padding: 0.75rem 0.7rem;
+        }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table tbody td {
+            vertical-align: middle;
+            padding: 0.75rem 0.7rem;
+            border-right: 1px solid #f3eee8;
+            border-bottom: 1px solid #f3eee8;
+            background: #fffefb;
+        }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table tbody tr:hover td {
+            background: #fffaf3;
+        }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table tbody td:last-child {
+            border-right: none;
+        }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table col.mt-col-no { width: 48px; }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table col.mt-col-os { width: 160px; }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.has-kpay-detail-cols col.mt-col-os-kpay,
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.has-kpay-detail-cols col.mt-col-admin-kpay {
+            width: 188px;
+        }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table col.mt-col-method { width: 92px; }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table col.mt-col-due { width: 100px; }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-cash-cols col.mt-col-rider { width: 110px; }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-cash-cols col.mt-col-status { width: 96px; }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-cash-cols col.mt-col-remark { width: 120px; }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-cash-cols col.mt-col-photo { width: 118px; }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-cash-cols col.mt-col-action { width: 148px; }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table td.pds-mt-photo-cell,
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table th.pds-mt-photo-col {
+            overflow: visible !important;
+            text-overflow: clip;
+            white-space: nowrap;
+            text-align: center;
+            min-width: 118px;
+        }
+        body.pds-admin .pds-money-transfer-os-cell,
+        body.pds-admin .pds-mt-kpay-col {
+            overflow: hidden !important;
+        }
+        body.pds-admin .pds-money-transfer-os {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+            min-width: 0;
+        }
+        body.pds-admin .pds-money-transfer-os__identity {
+            display: flex;
+            flex-direction: column;
+            gap: 0.12rem;
+            min-width: 0;
+        }
+        body.pds-admin .pds-money-transfer-os__name {
+            color: #1c1917;
+            font-size: 0.9rem;
+            font-weight: 800;
+            line-height: 1.3;
+            letter-spacing: -0.01em;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        body.pds-admin .pds-money-transfer-os__phone {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            color: #78716c;
+            font-size: 0.74rem;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+        body.pds-admin .pds-money-transfer-os__phone i {
+            font-size: 0.62rem;
+            color: #a8a29e;
+        }
+        body.pds-admin .pds-mt-pay-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            width: 100%;
+            padding: 0.42rem 0.5rem;
+            border-radius: 12px;
+            border: 1px solid transparent;
+            box-sizing: border-box;
+            min-width: 0;
+        }
+        body.pds-admin .pds-mt-pay-chip__icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 10px;
+            flex: 0 0 auto;
+            font-size: 0.72rem;
+        }
+        body.pds-admin .pds-mt-pay-chip__body {
+            display: flex;
+            flex-direction: column;
+            gap: 0.06rem;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+        body.pds-admin .pds-mt-pay-chip__body strong {
+            font-size: 0.8rem;
+            font-weight: 800;
+            line-height: 1.25;
+            color: #1c1917;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        body.pds-admin .pds-mt-pay-chip__body span {
+            font-size: 0.72rem;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            color: #78716c;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        body.pds-admin .pds-mt-pay-chip--shop {
+            background: #fffbeb;
+            border-color: #fde68a;
+        }
+        body.pds-admin .pds-mt-pay-chip--shop .pds-mt-pay-chip__icon {
+            background: #f59e0b;
+            color: #fff;
+        }
+        body.pds-admin .pds-mt-pay-chip--admin {
+            background: #fff7ed;
+            border-color: #fdba74;
+        }
+        body.pds-admin .pds-mt-pay-chip--admin .pds-mt-pay-chip__icon {
+            background: #ea580c;
+            color: #fff;
+        }
+        body.pds-admin .pds-mt-pay-chip--admin .pds-mt-pay-chip__body strong {
+            color: #9a3412;
+        }
+        body.pds-admin .pds-mt-method-cell {
+            text-align: center;
+        }
+        body.pds-admin .pds-mt-method-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.28rem 0.58rem;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+        body.pds-admin .pds-mt-method-badge i { font-size: 0.64rem; }
+        body.pds-admin .pds-mt-method-badge.is-kpay {
+            background: #fff7ed;
+            border-color: #fdba74;
+            color: #c2410c;
+        }
+        body.pds-admin .pds-mt-method-badge.is-cash {
+            background: #ecfdf5;
+            border-color: #6ee7b7;
+            color: #047857;
+        }
+        body.pds-admin .pds-money-transfer-due {
+            font-size: 0.98rem;
+            font-weight: 800;
+            color: #0f766e;
+            letter-spacing: -0.01em;
+            font-variant-numeric: tabular-nums;
+        }
+        body.pds-admin .pds-mt-empty {
+            color: #d6d3d1;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+        body.pds-admin .pds-mt-status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.24rem 0.52rem;
+            border-radius: 999px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: capitalize;
+        }
+        body.pds-admin .pds-mt-remark-cell { min-width: 0; }
+        body.pds-admin .pds-mt-remark.is-stacked { margin-top: 0.45rem; }
+        body.pds-admin .pds-mt-remark__tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.14rem 0.42rem;
+            border-radius: 999px;
+            font-size: 0.62rem;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+        body.pds-admin .pds-mt-remark__tag.is-pending {
+            background: #fffbeb;
+            color: #b45309;
+            border: 1px solid #fde68a;
+        }
+        body.pds-admin .pds-mt-remark__tag.is-done {
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+        }
+        body.pds-admin .pds-mt-remark__text {
+            margin-top: 0.22rem;
+            white-space: pre-wrap;
+            font-size: 0.74rem;
+            color: #57534e;
+            line-height: 1.35;
+        }
+        body.pds-admin .pds-money-transfer-page .pds-mt-photo-gallery {
+            display: inline-flex;
+            flex-wrap: nowrap;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            max-width: none;
+            overflow: visible;
+            vertical-align: middle;
+        }
+        body.pds-admin .pds-money-transfer-page .pds-mt-photo {
+            width: 48px;
+            height: 48px;
+            border-radius: 11px;
+            border: 1px solid #e7e5e4;
+            box-shadow: 0 1px 3px rgba(28, 25, 23, 0.06);
+            cursor: zoom-in;
+            transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+        }
+        body.pds-admin .pds-money-transfer-page .pds-mt-photo:hover {
+            transform: translateY(-1px) scale(1.04);
+            border-color: #fdba74;
+            box-shadow: 0 6px 14px rgba(234, 88, 12, 0.16);
+        }
+        body.pds-admin .pds-money-transfer-page .pds-mt-photo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        body.pds-admin .pds-money-transfer-page .pds-mt-photo-more {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 48px;
+            height: 48px;
+            border-radius: 11px;
+            border: 1px solid #fdba74;
+            background: #fff7ed;
+            color: #c2410c;
+            font-size: 0.78rem;
+            font-weight: 800;
+            cursor: zoom-in;
+            padding: 0;
+            line-height: 1;
+        }
+        body.pds-admin .pds-money-transfer-page .pds-mt-photo-more:hover {
+            background: #ffedd5;
+            border-color: #fb923c;
+        }
+        body.pds-admin .pds-money-transfer-page .pds-mt-photo-empty {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 48px;
+            height: 48px;
+            border-radius: 11px;
+            background: #fafaf9;
+            border: 1px dashed #e7e5e4;
+            color: #d6d3d1;
+            font-size: 0.9rem;
+        }
+        body.pds-admin .pds-money-transfer-actions { white-space: nowrap; vertical-align: middle; }
+        body.pds-admin .pds-mt-switch-empty {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 2rem; color: #d6d3d1; font-weight: 700;
+        }
+        body.pds-admin .pds-mt-switch-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
+            height: 32px; padding: 0 0.75rem 0 0.35rem; border-radius: 999px;
+            border: 1px solid transparent; font-size: 0.7rem; font-weight: 800;
+            letter-spacing: 0.01em; line-height: 1; cursor: pointer;
+            transition: transform .15s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, .05); white-space: nowrap;
+        }
+        body.pds-admin .pds-mt-switch-btn:hover {
+            transform: translateY(-1px); box-shadow: 0 6px 14px rgba(15, 23, 42, .1);
+        }
+        body.pds-admin .pds-mt-switch-btn:active { transform: translateY(0); }
+        body.pds-admin .pds-mt-switch-btn:focus {
+            outline: none; box-shadow: 0 0 0 3px rgba(var(--brand-rgb), .22);
+        }
+        body.pds-admin .pds-mt-switch-btn__icon {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 22px; height: 22px; border-radius: 999px; font-size: .66rem; flex: 0 0 auto;
+        }
+        body.pds-admin .pds-mt-switch-btn__label { position: relative; top: .5px; }
+        body.pds-admin .pds-mt-switch-btn--cash {
+            background: #ecfdf5;
+            border-color: #6ee7b7; color: #047857;
+        }
+        body.pds-admin .pds-mt-switch-btn--cash .pds-mt-switch-btn__icon { background: #059669; color: #fff; }
+        body.pds-admin .pds-mt-switch-btn--cash:hover {
+            background: #d1fae5;
+            border-color: #34d399; color: #065f46;
+        }
+        body.pds-admin .pds-mt-switch-btn--kpay {
+            background: #fff7ed;
+            border-color: rgba(var(--brand-rgb), .45); color: var(--site-color);
+        }
+        body.pds-admin .pds-mt-switch-btn--kpay .pds-mt-switch-btn__icon { background: var(--site-color); color: #fff; }
+        body.pds-admin .pds-mt-switch-btn--kpay:hover {
+            background: #ffedd5;
+            border-color: var(--site-color);
+        }
+        body.pds-admin .pds-mt-switch-btn--lg {
+            height: 40px; padding: 0 1.1rem 0 .45rem; font-size: .82rem;
+        }
+        body.pds-admin .pds-mt-switch-btn--lg .pds-mt-switch-btn__icon { width: 28px; height: 28px; font-size: .78rem; }
+        body.pds-admin .pds-mt-switch-modal__header--cash {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            color: #fff; border-bottom: none;
+        }
+        body.pds-admin .pds-mt-switch-modal__header--cash .modal-title {
+            display: inline-flex; align-items: center; gap: .5rem; font-weight: 800; color: #fff;
+        }
+        body.pds-admin .pds-mt-switch-modal__header--cash .close { color: #fff !important; opacity: 1; text-shadow: none; }
+        body.pds-admin .pds-mt-switch-kpay-meta__item--cash { background: #ecfdf5; border-color: #a7f3d0; }
+        body.pds-admin .pds-mt-switch-kpay-meta__item--cash span { color: #047857; }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-kpay-compact col.mt-col-action {
+            width: 160px;
+        }
+        body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-kpay-compact td.pds-money-transfer-actions {
+            overflow: visible !important; text-overflow: clip; text-align: center; white-space: nowrap;
+        }
+    </style>
+    {{-- Inline boot: @section/@push is skipped by x-master-layout (same pattern as Daily Check). --}}
+    <script src="{{ asset('js/dispatch-os-fields.js') }}?v=14"></script>
     <script>
-        (function bootMoneyTransfer() {
-            if (!window.jQuery) {
-                return setTimeout(bootMoneyTransfer, 40);
+        (function bootMoneyTransfer(attempt) {
+            attempt = attempt || 0;
+            if (!window.jQuery || typeof window.flatpickr === 'undefined') {
+                if (attempt < 100) return setTimeout(function () { bootMoneyTransfer(attempt + 1); }, 50);
+                return;
             }
             var $ = window.jQuery;
+            var fp = window.flatpickr;
 
-            if (typeof window.initOnlineShopFilterSelect === 'function') {
+            function bindMoneyTransferCalendars() {
+                var ids = ['mt_from_date', 'mt_to_date'];
+                if (typeof window.pdsBindDispatchDatepickers === 'function') {
+                    window.pdsBindDispatchDatepickers('#mt_from_date, #mt_to_date');
+                }
+                if (typeof fp === 'undefined' && typeof window.flatpickr !== 'undefined') {
+                    fp = window.flatpickr;
+                }
+                if (typeof fp === 'undefined') return;
+                ids.forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (!el || el._flatpickr) return;
+                    fp(el, {
+                        dateFormat: 'd-m-Y',
+                        allowInput: true,
+                        disableMobile: true,
+                        clickOpens: true,
+                        appendTo: document.body,
+                        maxDate: null
+                    });
+                });
+            }
+
+            function bindMoneyTransferOsSelect() {
+                if (!document.getElementById('mt_os')) return;
+                if (typeof window.initOnlineShopFilterSelect !== 'function') return;
+                if (!$.fn || !$.fn.select2) return;
                 window.initOnlineShopFilterSelect('#mt_os', {
                     placeholder: @json(__('message.select_name', ['select' => __('message.os_name')])),
                     allowClear: false
                 });
             }
 
-            (function bindFrozenMoneyTransferScroll() {
+            function bindMoneyTransferFrozenScroll() {
                 var root = document.getElementById('moneyTransferFrozen');
-                if (!root) return;
+                if (!root || root.getAttribute('data-mt-scroll-bound') === '1') return;
+                root.setAttribute('data-mt-scroll-bound', '1');
                 var headWrap = root.querySelector('.pds-frozen-table__head');
                 var bodyWrap = root.querySelector('.pds-frozen-table__body');
                 var footWrap = root.querySelector('.pds-frozen-table__foot');
@@ -446,26 +978,190 @@
 
                 bodyWrap.addEventListener('scroll', syncScroll);
                 window.addEventListener('resize', syncColWidths);
-                // After layout / images settle.
                 requestAnimationFrame(function () {
                     syncColWidths();
                     setTimeout(syncColWidths, 50);
                     setTimeout(syncColWidths, 250);
                 });
-            })();
-
-            // Soft replace / SPA remount leave fresh inputs — always (re)bind datepickers.
-            if (typeof window.pdsBindDispatchDatepickers === 'function') {
-                window.pdsBindDispatchDatepickers();
-            } else if (typeof flatpickr !== 'undefined') {
-                document.querySelectorAll('.dispatch-datepicker').forEach(function (el) {
-                    if (el._flatpickr) return;
-                    flatpickr(el, { dateFormat: 'd-m-Y', allowInput: true, disableMobile: true });
-                });
             }
+
+            function initMoneyTransferFilters() {
+                if (!document.getElementById('mt_os') && !document.getElementById('mt_from_date')) {
+                    return;
+                }
+                bindMoneyTransferCalendars();
+                bindMoneyTransferOsSelect();
+                bindMoneyTransferFrozenScroll();
+            }
+
+            window.pdsInitMoneyTransferFilters = initMoneyTransferFilters;
+            initMoneyTransferFilters();
+            setTimeout(initMoneyTransferFilters, 100);
+            setTimeout(initMoneyTransferFilters, 400);
+            setTimeout(initMoneyTransferFilters, 900);
 
             if (window.__pdsMoneyTransferBound) return;
             window.__pdsMoneyTransferBound = true;
+
+            var mtLightboxUrls = [];
+            var mtLightboxIndex = 0;
+            var mtLightboxTitle = '';
+
+            function ensureMtPhotoLightbox() {
+                var $box = $('#pdsMtPhotoLightbox');
+                if ($box.length) return $box;
+                $('body').append(
+                    '<div id="pdsMtPhotoLightbox" class="pds-os-proof-lightbox pds-mt-photo-lightbox" role="dialog" aria-modal="true" aria-label="Image preview">'
+                    + '<div class="pds-os-proof-lightbox__shell">'
+                    + '<header class="pds-os-proof-lightbox__top">'
+                    + '<div class="pds-os-proof-lightbox__title"><i class="fas fa-image" aria-hidden="true"></i><span class="js-mt-lb-title">Image</span></div>'
+                    + '<button type="button" class="pds-os-proof-lightbox__close" aria-label="Close"><i class="fas fa-times"></i></button>'
+                    + '</header>'
+                    + '<div class="pds-os-proof-lightbox__body">'
+                    + '<button type="button" class="pds-os-proof-lightbox__nav pds-os-proof-lightbox__nav--prev" aria-label="Previous"><i class="fas fa-chevron-left"></i></button>'
+                    + '<div class="pds-os-proof-lightbox__stage"><img class="pds-os-proof-lightbox__img" alt="Preview"></div>'
+                    + '<button type="button" class="pds-os-proof-lightbox__nav pds-os-proof-lightbox__nav--next" aria-label="Next"><i class="fas fa-chevron-right"></i></button>'
+                    + '</div>'
+                    + '<footer class="pds-os-proof-lightbox__foot">'
+                    + '<div class="pds-os-proof-lightbox__meta"></div>'
+                    + '<div class="pds-os-proof-lightbox__thumbs"></div>'
+                    + '</footer>'
+                    + '</div></div>'
+                );
+                return $('#pdsMtPhotoLightbox');
+            }
+
+            function renderMtPhotoLightbox() {
+                var $box = ensureMtPhotoLightbox();
+                var url = mtLightboxUrls[mtLightboxIndex] || '';
+                var $img = $box.find('.pds-os-proof-lightbox__img');
+                $box.find('.js-mt-lb-title').text(mtLightboxTitle || 'Image');
+                $img.removeClass('is-ready').attr('src', url);
+                $img.off('load.pdsMtLb error.pdsMtLb').on('load.pdsMtLb error.pdsMtLb', function () {
+                    $(this).addClass('is-ready');
+                });
+                if ($img[0] && $img[0].complete && $img[0].naturalWidth) {
+                    $img.addClass('is-ready');
+                }
+                $box.find('.pds-os-proof-lightbox__meta').html(
+                    mtLightboxUrls.length
+                        ? '<span class="pds-os-proof-lightbox__count">' + (mtLightboxIndex + 1)
+                            + '</span><span class="pds-os-proof-lightbox__sep">/</span><span>'
+                            + mtLightboxUrls.length + '</span>'
+                        : ''
+                );
+                var multi = mtLightboxUrls.length > 1;
+                $box.find('.pds-os-proof-lightbox__nav--prev').prop('hidden', !multi);
+                $box.find('.pds-os-proof-lightbox__nav--next').prop('hidden', !multi);
+                $box.toggleClass('has-multi', multi);
+                var thumbsHtml = '';
+                if (multi) {
+                    mtLightboxUrls.forEach(function (thumbUrl, i) {
+                        thumbsHtml += '<button type="button" class="pds-os-proof-lightbox__thumb'
+                            + (i === mtLightboxIndex ? ' is-active' : '')
+                            + '" data-index="' + i + '" aria-label="Image ' + (i + 1) + '">'
+                            + '<img src="' + thumbUrl + '" alt=""></button>';
+                    });
+                }
+                $box.find('.pds-os-proof-lightbox__thumbs').html(thumbsHtml);
+            }
+
+            function openMtPhotoLightbox(urls, index, title) {
+                mtLightboxUrls = (urls || []).filter(Boolean);
+                if (!mtLightboxUrls.length) return;
+                mtLightboxTitle = title || 'Image';
+                mtLightboxIndex = Math.max(0, Math.min(index || 0, mtLightboxUrls.length - 1));
+                ensureMtPhotoLightbox().addClass('is-open');
+                $('body').addClass('pds-os-proof-lightbox-open');
+                renderMtPhotoLightbox();
+            }
+
+            function closeMtPhotoLightbox() {
+                $('#pdsMtPhotoLightbox').removeClass('is-open');
+                $('body').removeClass('pds-os-proof-lightbox-open');
+            }
+
+            function stepMtPhotoLightbox(delta) {
+                if (mtLightboxUrls.length < 2) return;
+                mtLightboxIndex = (mtLightboxIndex + delta + mtLightboxUrls.length) % mtLightboxUrls.length;
+                renderMtPhotoLightbox();
+            }
+
+            function collectMtGalleryUrls($gallery) {
+                var urls = $gallery.find('.pds-mt-photo-urls [data-url]').map(function () {
+                    return $(this).attr('data-url');
+                }).get().filter(Boolean);
+                if (!urls.length) {
+                    urls = $gallery.find('a.js-mt-photo').map(function () {
+                        return $(this).attr('href');
+                    }).get().filter(Boolean);
+                }
+                return urls;
+            }
+
+            $(document)
+                .off('click.pdsMtPhoto', '.js-mt-photo, .js-mt-photo-more')
+                .on('click.pdsMtPhoto', '.js-mt-photo, .js-mt-photo-more', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var $el = $(this);
+                    var $gallery = $el.closest('.pds-mt-photo-gallery');
+                    if (!$gallery.length) return;
+                    var urls = collectMtGalleryUrls($gallery);
+                    var index = parseInt($el.attr('data-index'), 10);
+                    if (Number.isNaN(index)) index = 0;
+                    openMtPhotoLightbox(urls, index, $gallery.attr('data-title') || '');
+                });
+
+            $(document)
+                .off('click.pdsMtPhotoLb')
+                .on('click.pdsMtPhotoLb', '#pdsMtPhotoLightbox', function (e) {
+                    if (e.target === this) closeMtPhotoLightbox();
+                })
+                .on('click.pdsMtPhotoLb', '#pdsMtPhotoLightbox .pds-os-proof-lightbox__close', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeMtPhotoLightbox();
+                })
+                .on('click.pdsMtPhotoLb', '#pdsMtPhotoLightbox .pds-os-proof-lightbox__nav--prev', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    stepMtPhotoLightbox(-1);
+                })
+                .on('click.pdsMtPhotoLb', '#pdsMtPhotoLightbox .pds-os-proof-lightbox__nav--next', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    stepMtPhotoLightbox(1);
+                })
+                .on('click.pdsMtPhotoLb', '#pdsMtPhotoLightbox .pds-os-proof-lightbox__thumb', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var i = parseInt($(this).attr('data-index'), 10);
+                    if (Number.isNaN(i)) return;
+                    mtLightboxIndex = i;
+                    renderMtPhotoLightbox();
+                });
+
+            $(document)
+                .off('keydown.pdsMtPhotoLb')
+                .on('keydown.pdsMtPhotoLb', function (e) {
+                    if (!$('#pdsMtPhotoLightbox').hasClass('is-open')) return;
+                    if (e.key === 'Escape') closeMtPhotoLightbox();
+                    if (e.key === 'ArrowLeft') stepMtPhotoLightbox(-1);
+                    if (e.key === 'ArrowRight') stepMtPhotoLightbox(1);
+                });
+
+            $(document)
+                .off('admin-live:replaced.pdsMtFilters admin-spa:navigated.pdsMtFilters')
+                .on('admin-live:replaced.pdsMtFilters admin-spa:navigated.pdsMtFilters', function () {
+                    [0, 50, 150, 400].forEach(function (ms) {
+                        setTimeout(function () {
+                            if (typeof window.pdsInitMoneyTransferFilters === 'function') {
+                                window.pdsInitMoneyTransferFilters();
+                            }
+                        }, ms);
+                    });
+                });
 
             var saveUrl = @json(route('order.money-transfer.upsert'));
             var fillUrl = @json(route('order.money-transfer.fill-kpay'));
@@ -476,6 +1172,8 @@
             var branchId = @json($branchFilter);
             var paymentMethod = @json($paymentMethod ?? 'all');
             var pendingSwitchTransferId = null;
+            var pendingSwitchCashBatchId = null;
+            var pendingSwitchCashTransferId = null;
             var previewObjectUrl = null;
 
             function num(v) {
@@ -621,6 +1319,68 @@
                 });
             });
 
+            function resetSwitchCashModal() {
+                pendingSwitchCashBatchId = null;
+                pendingSwitchCashTransferId = null;
+                $('#mtSwitchCashOsName').text('—');
+                $('#mtSwitchCashAmount').text('—');
+                $('#mtSwitchCashConfirm').prop('disabled', false);
+            }
+
+            $(document).on('click', '.js-mt-switch-cash', function () {
+                var batchId = $(this).data('settlement-batch-id');
+                if (!batchId) return;
+                resetSwitchCashModal();
+                pendingSwitchCashBatchId = batchId;
+                pendingSwitchCashTransferId = $(this).data('transfer-id') || null;
+                $('#mtSwitchCashOsName').text(String($(this).attr('data-os-name') || '').trim() || '—');
+                $('#mtSwitchCashAmount').text(String($(this).attr('data-amount') || '').trim() || '—');
+                $('#mtSwitchCashModal').modal('show');
+            });
+
+            $('#mtSwitchCashModal').on('hidden.bs.modal', function () {
+                resetSwitchCashModal();
+            });
+
+            $('#mtSwitchCashConfirm').on('click', function () {
+                var $btn = $(this);
+                if (!pendingSwitchCashBatchId && !pendingSwitchCashTransferId) return;
+
+                var fd = new FormData();
+                fd.append('_token', csrf);
+                fd.append('payment_method', 'cash');
+                if (pendingSwitchCashBatchId) {
+                    fd.append('settlement_batch_id', pendingSwitchCashBatchId);
+                }
+                if (pendingSwitchCashTransferId) {
+                    fd.append('transfer_id', pendingSwitchCashTransferId);
+                }
+
+                $btn.prop('disabled', true);
+                $.ajax({
+                    url: switchUrl,
+                    method: 'POST',
+                    data: fd,
+                    processData: false,
+                    contentType: false,
+                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }
+                }).done(function (res) {
+                    if (window.toastr && res.message) toastr.success(res.message);
+                    $('#mtSwitchCashModal').modal('hide');
+                    var mtUrl = @json(route('order.money-transfer')) + '?method=cash'
+                        + '&from_date=' + encodeURIComponent(fromDate)
+                        + '&to_date=' + encodeURIComponent(toDate)
+                        + '&branch_id=' + encodeURIComponent(branchId);
+                    if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(mtUrl);
+                    else window.location.href = mtUrl;
+                }).fail(function (xhr) {
+                    var msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Switch failed';
+                    if (window.toastr) toastr.error(msg);
+                    else alert(msg);
+                    $btn.prop('disabled', false);
+                });
+            });
+
             $(document).on('keydown', '.pds-money-transfer-input', function (e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
@@ -655,6 +1415,5 @@
             });
         })();
     </script>
-
 </div>
 </x-master-layout>

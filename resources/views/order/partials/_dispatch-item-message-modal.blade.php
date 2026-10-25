@@ -14,9 +14,25 @@
                         <div class="pds-item-chat-modal__meta" id="dispatchItemMessageMeta"></div>
                     </div>
                 </div>
-                <button type="button" class="pds-item-chat-modal__close" data-dismiss="modal" aria-label="{{ __('message.close') }}">
-                    <i class="fas fa-times" aria-hidden="true"></i>
-                </button>
+                <div class="pds-item-chat-modal__actions">
+                    <a href="#"
+                       id="dispatchItemMessageRiderPreview"
+                       class="pds-item-chat-modal__rider loadRemoteModel d-none"
+                       title="{{ __('message.rider_app_view') }}"
+                       aria-label="{{ __('message.rider_app_view') }}">
+                        <i class="fas fa-eye" aria-hidden="true"></i>
+                    </a>
+                    <a href="#"
+                       id="dispatchItemMessageEdit"
+                       class="pds-item-chat-modal__edit loadRemoteModel d-none"
+                       title="{{ __('message.edit') }}"
+                       aria-label="{{ __('message.edit') }}">
+                        <i class="fas fa-pen" aria-hidden="true"></i>
+                    </a>
+                    <button type="button" class="pds-item-chat-modal__close" data-dismiss="modal" aria-label="{{ __('message.close') }}">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
             <div class="pds-item-chat-modal__body">
                 <div id="dispatchItemMessageList" class="pds-item-msg-list"></div>
@@ -133,21 +149,64 @@
         color: #a8a29e;
         font-weight: 600;
     }
-    body.pds-admin .pds-item-chat-modal__close {
-        width: 32px;
-        height: 32px;
-        border: 0;
-        border-radius: 999px;
-        background: rgba(28, 25, 23, 0.05);
-        color: #78716c;
-        display: grid;
-        place-items: center;
-        cursor: pointer;
+    body.pds-admin .pds-item-chat-modal__actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
         flex-shrink: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+    }
+    body.pds-admin .pds-item-chat-modal__edit,
+    body.pds-admin .pds-item-chat-modal__rider,
+    body.pds-admin .pds-item-chat-modal__close {
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        border-radius: 999px;
+        display: inline-grid;
+        place-items: center;
+        flex-shrink: 0;
+        text-decoration: none !important;
+        line-height: 1;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+    }
+    body.pds-admin .pds-item-chat-modal__rider {
+        border: 1px solid rgba(28, 25, 23, 0.08);
+        background: #fff;
+        color: #44403c !important;
+        box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
+    }
+    body.pds-admin .pds-item-chat-modal__edit {
+        border: 1px solid rgba(var(--brand-rgb), 0.28);
+        background: rgba(var(--brand-rgb), 0.12);
+        color: var(--site-color) !important;
+        box-shadow: 0 1px 2px rgba(var(--brand-rgb), 0.08);
+    }
+    body.pds-admin .pds-item-chat-modal__close {
+        border: 0;
+        background: transparent;
+        color: #78716c;
+    }
+    body.pds-admin .pds-item-chat-modal__edit:hover,
+    body.pds-admin .pds-item-chat-modal__rider:hover {
+        background: var(--site-color);
+        border-color: var(--site-color);
+        color: #fff !important;
+        box-shadow: 0 6px 14px rgba(var(--brand-rgb), 0.28);
+        transform: translateY(-1px);
     }
     body.pds-admin .pds-item-chat-modal__close:hover {
         background: rgba(var(--brand-rgb), 0.12);
         color: var(--site-color);
+    }
+    body.pds-admin .pds-item-chat-modal__edit i,
+    body.pds-admin .pds-item-chat-modal__rider i,
+    body.pds-admin .pds-item-chat-modal__close i {
+        font-size: 0.84rem;
+        line-height: 1;
     }
     body.pds-admin .pds-item-chat-modal__body {
         padding: 0.95rem 1.05rem 1.1rem;

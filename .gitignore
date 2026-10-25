@@ -4,9 +4,6 @@
 /storage/*.key
 /storage/pail
 /vendor
-.env
-.env.backup
-.env.production
 .phpunit.result.cache
 .phpunit.cache
 Homestead.json
@@ -20,6 +17,8 @@ yarn-error.log
 /.zed
 .DS_Store
 Thumbs.db
+
+# Firebase private keys (GitHub push protection blocks these)
 /storage/app/firebase/*.json
 !/storage/app/firebase/.gitignore
 !/storage/app/firebase/README.md

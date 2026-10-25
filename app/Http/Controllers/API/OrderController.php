@@ -220,7 +220,13 @@ class OrderController extends Controller
             },
         ]);
 
-        $order = $order->orderBy('date', 'desc')->paginate($per_page);
+        // Rider Pick Up: last status change (Completed / Pick Up Error / …) at the top.
+        if (auth()->check() && auth()->user()->user_type === 'delivery_man') {
+            $order = $order->reorder()->orderByDesc('updated_at')->orderByDesc('id');
+        } else {
+            $order = $order->orderBy('date', 'desc');
+        }
+        $order = $order->paginate($per_page);
         $items = OrderResource::collection($order);
 
         $wallet_data = Wallet::where('user_id', auth()->id())->first();

@@ -851,3 +851,663 @@ body.pds-admin table.dataTable thead th.sorting_desc {
     background-position: center right 4px;
     padding-right: 24px !important;
 }
+/* Money Transfer — Switch to Cash / Kpay action buttons */
+body.pds-admin .pds-money-transfer-actions {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+body.pds-admin .pds-mt-switch-empty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    color: #cbd5e1;
+    font-weight: 700;
+}
+
+body.pds-admin .pds-mt-switch-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    height: 34px;
+    padding: 0 0.85rem 0 0.4rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    white-space: nowrap;
+}
+
+body.pds-admin .pds-mt-switch-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+}
+
+body.pds-admin .pds-mt-switch-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+body.pds-admin .pds-mt-switch-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.22);
+}
+
+body.pds-admin .pds-mt-switch-btn__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    flex: 0 0 auto;
+}
+
+body.pds-admin .pds-mt-switch-btn__label {
+    position: relative;
+    top: 0.5px;
+}
+
+body.pds-admin .pds-mt-switch-btn--cash {
+    background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+    border-color: #6ee7b7;
+    color: #047857;
+}
+
+body.pds-admin .pds-mt-switch-btn--cash .pds-mt-switch-btn__icon {
+    background: #059669;
+    color: #fff;
+}
+
+body.pds-admin .pds-mt-switch-btn--cash:hover {
+    background: linear-gradient(180deg, #d1fae5 0%, #a7f3d0 100%);
+    border-color: #34d399;
+    color: #065f46;
+}
+
+body.pds-admin .pds-mt-switch-btn--kpay {
+    background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+    border-color: rgba(var(--brand-rgb), 0.45);
+    color: var(--site-color);
+}
+
+body.pds-admin .pds-mt-switch-btn--kpay .pds-mt-switch-btn__icon {
+    background: var(--site-color);
+    color: #fff;
+}
+
+body.pds-admin .pds-mt-switch-btn--kpay:hover {
+    background: linear-gradient(180deg, #ffedd5 0%, #fed7aa 100%);
+    border-color: var(--site-color);
+}
+
+body.pds-admin .pds-mt-switch-btn--lg {
+    height: 40px;
+    padding: 0 1.1rem 0 0.45rem;
+    font-size: 0.82rem;
+}
+
+body.pds-admin .pds-mt-switch-btn--lg .pds-mt-switch-btn__icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.78rem;
+}
+
+body.pds-admin .pds-mt-switch-modal__header--cash {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    color: #fff;
+    border-bottom: none;
+}
+
+body.pds-admin .pds-mt-switch-modal__header--cash .modal-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 800;
+    color: #fff;
+}
+
+body.pds-admin .pds-mt-switch-modal__header--cash .close {
+    color: #fff !important;
+    opacity: 1;
+    text-shadow: none;
+}
+
+body.pds-admin .pds-mt-switch-kpay-meta__item--cash {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+}
+
+body.pds-admin .pds-mt-switch-kpay-meta__item--cash span {
+    color: #047857;
+}
+
+body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-kpay-compact th:nth-child(5),
+body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-kpay-compact td:nth-child(5) {
+    width: 168px;
+    text-align: center;
+    overflow: visible !important;
+    text-overflow: clip;
+    white-space: nowrap;
+}
+
+body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-kpay-compact col.mt-col-action,
+body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-cash-cols col.mt-col-action {
+    width: 168px;
+}
+
+body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-kpay-compact td.pds-money-transfer-actions {
+    overflow: visible !important;
+    text-overflow: clip;
+}
+
+/*
+ * Branch / Assign100 tabs — centered flex wrap, even padding, Myanmar-safe line-height.
+ * Authoritative branch styles also inline in _branch-tabs.blade.php.
+ */
+body.pds-admin .pds-dm-branch-tabs-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 1rem 1.25rem 0.35rem !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+body.pds-admin .pds-dm-branch-tabs,
+body.pds-admin .pds-assign-100-tabs,
+body.pds-admin .pds-dispatch-items-tabs {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    align-items: center !important;
+    align-content: center !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0.75rem !important;
+    box-sizing: border-box !important;
+    border-radius: 18px !important;
+    background: linear-gradient(180deg, #fffaf5 0%, #fff3e8 100%) !important;
+    border: 1px solid rgba(var(--brand-rgb), 0.18) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 8px 20px rgba(15, 23, 42, 0.04) !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+}
+
+body.pds-admin .pds-assign-100-tabs,
+body.pds-admin .pds-dispatch-items-tabs {
+    width: auto !important;
+    margin: 0.85rem 1.25rem 1rem !important;
+    padding: 0.85rem 0.85rem 1rem !important;
+}
+
+body.pds-admin .pds-dispatch-assign-100-page .pds-assign-100-tabs {
+    margin-bottom: 1.1rem !important;
+    padding-top: 0.9rem !important;
+    padding-bottom: 1.05rem !important;
+}
+
+body.pds-admin .pds-dispatch-assign-100-page .pds-assign-100-tab {
+    min-height: 3rem !important;
+    padding: 0.65rem 0.8rem !important;
+    line-height: 1.55 !important;
+}
+
+body.pds-admin .pds-dispatch-assign-100-page .pds-assign-100-tab > span {
+    padding: 0.2rem 0 !important;
+    line-height: 1.55 !important;
+}
+
+body.pds-admin .pds-dispatch-assign-100-page .pds-assign-100-filter {
+    margin-top: 0.15rem !important;
+}
+
+body.pds-admin .pds-dm-branch-tab,
+body.pds-admin .pds-assign-100-tab,
+body.pds-admin .pds-dispatch-items-tab {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.45rem !important;
+    flex: 0 1 11rem !important;
+    width: 11rem !important;
+    max-width: calc(50% - 0.5rem) !important;
+    min-width: 0 !important;
+    min-height: 2.85rem !important;
+    padding: 0.55rem 0.7rem !important;
+    border-radius: 999px !important;
+    box-sizing: border-box !important;
+    line-height: 1.45 !important;
+    overflow: visible !important;
+}
+
+body.pds-admin .pds-dm-branch-tab__label,
+body.pds-admin .pds-assign-100-tab > span,
+body.pds-admin .pds-dispatch-items-tab > span {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    line-height: 1.45 !important;
+    padding: 0.15rem 0 !important;
+    font-family: 'Noto Sans Myanmar', 'Myanmar Text', 'Padauk', var(--admin-font), system-ui, sans-serif !important;
+}
+
+body.pds-admin .pds-os-settlement-tabs {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    width: auto !important;
+    margin: 0.85rem 1.25rem 1rem !important;
+    padding: 0.75rem !important;
+    box-sizing: border-box !important;
+    border-radius: 18px !important;
+    background: #fff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04) !important;
+}
+
+body.pds-admin .pds-os-settlement-tab {
+    min-height: 2.75rem !important;
+    padding: 0.55rem 1rem !important;
+    line-height: 1.45 !important;
+    box-sizing: border-box !important;
+}
+
+/* Assign 100 topbar — keep Assign Rider / print inside the card */
+body.pds-admin .pds-dispatch-assign-100-page .pds-dispatch-to-assign-topbar {
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.75rem 1rem !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+}
+
+body.pds-admin .pds-dispatch-assign-100-page .pds-dispatch-to-assign-topbar-copy {
+    min-width: 0 !important;
+    flex: 1 1 12rem !important;
+}
+
+body.pds-admin .pds-dispatch-assign-100-page .pds-dispatch-to-assign-topbar-actions {
+    flex: 0 1 auto !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-end !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+@media (max-width: 992px) {
+    body.pds-admin .pds-assign-100-tabs,
+    body.pds-admin .pds-dispatch-items-tabs,
+    body.pds-admin .pds-os-settlement-tabs {
+        margin-left: 0.85rem !important;
+        margin-right: 0.85rem !important;
+    }
+    body.pds-admin .pds-dm-branch-tab,
+    body.pds-admin .pds-assign-100-tab,
+    body.pds-admin .pds-dispatch-items-tab {
+        flex-basis: calc(50% - 0.5rem) !important;
+        width: calc(50% - 0.5rem) !important;
+        max-width: calc(50% - 0.5rem) !important;
+    }
+}
+
+/* Message screen — readable preview text; App View header stays white-on-orange */
+body.pds-admin .pds-dispatch-assigned-items-page .pds-msg-thread-card__line3 {
+    color: #44403c !important;
+}
+body.pds-admin .pds-dispatch-assigned-items-page .pds-msg-thread-card__sender {
+    color: var(--site-color) !important;
+}
+body.pds-admin .pds-dispatch-assigned-items-page .pds-msg-thread-card__preview {
+    color: #1c1917 !important;
+    font-weight: 600;
+}
+body.pds-admin .pds-dispatch-assigned-items-page .pds-msg-thread-card.is-unread .pds-msg-thread-card__preview {
+    color: #0c0a09 !important;
+    font-weight: 700;
+}
+body.pds-admin .pds-dispatch-assigned-items-page .pds-msg-thread-card__parcel {
+    color: #1c1917 !important;
+}
+body.pds-admin .pds-dispatch-assigned-items-page .pds-msg-thread-card__line2 {
+    color: #78716c !important;
+}
+
+/* Cash Payout status tabs — Assign / Assigned / Pending / Done */
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 0.45rem !important;
+    width: auto !important;
+    margin: 0.85rem 1.25rem 1.15rem !important;
+    padding: 0.45rem !important;
+    box-sizing: border-box !important;
+    border-radius: 18px !important;
+    background: #fff !important;
+    border: 1px solid rgba(28, 25, 23, 0.08) !important;
+    box-shadow: 0 10px 28px rgba(28, 25, 23, 0.05) !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.45rem !important;
+    min-height: 2.85rem !important;
+    padding: 0.55rem 0.7rem !important;
+    margin: 0 !important;
+    border-radius: 14px !important;
+    border: 1px solid transparent !important;
+    background: transparent !important;
+    color: #57534e !important;
+    font-size: 0.86rem !important;
+    font-weight: 750 !important;
+    line-height: 1.2 !important;
+    text-decoration: none !important;
+    box-sizing: border-box !important;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab i {
+    font-size: 0.82rem !important;
+    color: #a8a29e !important;
+    line-height: 1 !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab > span {
+    white-space: nowrap !important;
+    line-height: 1.2 !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab em {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    align-self: center !important;
+    min-width: 1.55rem !important;
+    height: 1.55rem !important;
+    padding: 0 0.42rem !important;
+    margin: 0 !important;
+    border-radius: 999px !important;
+    background: #f5f5f4 !important;
+    color: #57534e !important;
+    font-style: normal !important;
+    font-size: 0.72rem !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab:hover {
+    background: #fafaf9 !important;
+    border-color: rgba(28, 25, 23, 0.08) !important;
+    color: #1c1917 !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab:hover i {
+    color: var(--site-color) !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab.is-active {
+    background: var(--site-color) !important;
+    border-color: var(--site-color) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 18px rgba(var(--brand-rgb), 0.28) !important;
+    transform: translateY(-1px);
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab.is-active > span,
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab.is-active i {
+    color: #fff !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab.is-active em {
+    background: #fff !important;
+    color: var(--site-color) !important;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18) !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab--assigned.is-active {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.28) !important;
+}
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab--assigned.is-active em {
+    color: #2563eb !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab--pending.is-active {
+    background: #d97706 !important;
+    border-color: #d97706 !important;
+    box-shadow: 0 8px 18px rgba(217, 119, 6, 0.28) !important;
+}
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab--pending.is-active em {
+    color: #b45309 !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab--done.is-active {
+    background: #059669 !important;
+    border-color: #059669 !important;
+    box-shadow: 0 8px 18px rgba(5, 150, 105, 0.28) !important;
+}
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-tab--done.is-active em {
+    color: #047857 !important;
+}
+
+@media (max-width: 767.98px) {
+    body.pds-admin .pds-cash-payout-page .pds-cash-payout-tabs {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        margin-left: 0.85rem !important;
+        margin-right: 0.85rem !important;
+    }
+}
+
+/* Cash Payout Action — searchable Delivery Man select */
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-actions {
+    min-width: 220px !important;
+    gap: 0.5rem !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-assign {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.3rem !important;
+    min-width: 200px !important;
+    padding: 0.45rem 0.55rem 0.5rem !important;
+    border-radius: 14px !important;
+    background: linear-gradient(180deg, #fffaf5 0%, #fff 100%) !important;
+    border: 1px solid rgba(var(--brand-rgb), 0.18) !important;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04) !important;
+}
+
+body.pds-admin .pds-cash-payout-page select.pds-cash-payout-select {
+    min-height: 40px !important;
+    height: 40px !important;
+    padding: 0 0.7rem !important;
+    line-height: 38px !important;
+    border-radius: 10px !important;
+    box-sizing: border-box !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-assign__label {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    margin: 0 !important;
+    color: var(--site-color) !important;
+    font-size: 0.7rem !important;
+    font-weight: 750 !important;
+    letter-spacing: 0.02em !important;
+    text-transform: uppercase !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-assign__label i {
+    font-size: 0.72rem !important;
+}
+
+/* Cash payout searchable Delivery Man combo (no Select2) */
+body.pds-admin .pds-cash-payout-page .pds-cash-combo {
+    position: relative !important;
+    width: 100% !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-combo__native {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    clip: rect(0, 0, 0, 0) !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-combo__toggle {
+    width: 100% !important;
+    min-height: 40px !important;
+    height: 40px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 0.5rem !important;
+    padding: 0 0.7rem !important;
+    border: 1px solid #e7e5e4 !important;
+    border-radius: 10px !important;
+    background: #fff !important;
+    color: #1c1917 !important;
+    font-size: 0.84rem !important;
+    font-weight: 650 !important;
+    text-align: left !important;
+    cursor: pointer !important;
+    box-shadow: none !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-combo.is-open .pds-cash-combo__toggle,
+body.pds-admin .pds-cash-payout-page .pds-cash-combo__toggle:focus {
+    border-color: rgba(var(--brand-rgb), 0.5) !important;
+    box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.12) !important;
+    outline: none !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-combo__label {
+    flex: 1 1 auto !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-combo__label.is-placeholder {
+    color: #a8a29e !important;
+    font-weight: 600 !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-combo__toggle i {
+    color: #a8a29e !important;
+    font-size: 0.7rem !important;
+    flex: 0 0 auto !important;
+}
+
+/* Panel is portaled to <body> so table overflow cannot clip it */
+body.pds-admin .pds-cash-combo__panel {
+    display: none !important;
+    flex-direction: column !important;
+    max-height: 280px !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(var(--brand-rgb), 0.22) !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    box-shadow: 0 18px 40px rgba(28, 25, 23, 0.16) !important;
+}
+
+body.pds-admin .pds-cash-combo__panel.is-open {
+    display: flex !important;
+}
+
+body.pds-admin .pds-cash-combo__search-wrap {
+    padding: 0.65rem 0.7rem 0.35rem !important;
+    flex: 0 0 auto !important;
+}
+
+body.pds-admin .pds-cash-combo__search {
+    width: 100% !important;
+    min-height: 40px !important;
+    padding: 0.55rem 0.8rem !important;
+    border: 1px solid #e7e5e4 !important;
+    border-radius: 10px !important;
+    font-size: 0.86rem !important;
+    outline: none !important;
+    box-sizing: border-box !important;
+}
+
+body.pds-admin .pds-cash-combo__search:focus {
+    border-color: var(--site-color) !important;
+    box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.12) !important;
+}
+
+body.pds-admin .pds-cash-combo__list {
+    overflow-y: auto !important;
+    max-height: 210px !important;
+    padding: 0.25rem 0 0.45rem !important;
+}
+
+body.pds-admin .pds-cash-combo__option {
+    display: block !important;
+    width: 100% !important;
+    border: 0 !important;
+    background: transparent !important;
+    text-align: left !important;
+    padding: 0.55rem 0.85rem !important;
+    font-size: 0.86rem !important;
+    font-weight: 600 !important;
+    color: #1c1917 !important;
+    cursor: pointer !important;
+}
+
+body.pds-admin .pds-cash-combo__option:hover {
+    background: rgba(var(--brand-rgb), 0.12) !important;
+    color: var(--site-color) !important;
+}
+
+body.pds-admin .pds-cash-combo__option.is-selected {
+    background: var(--site-color) !important;
+    color: #fff !important;
+}
+
+body.pds-admin .pds-cash-combo__empty {
+    padding: 0.75rem 0.85rem !important;
+    color: #a8a29e !important;
+    font-size: 0.84rem !important;
+    font-weight: 600 !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-btn {
+    min-height: 40px !important;
+    border-radius: 11px !important;
+    font-weight: 780 !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-btn--warn {
+    background: #fff !important;
+    box-shadow: 0 2px 8px rgba(var(--brand-rgb), 0.08) !important;
+}
+
+body.pds-admin .pds-cash-payout-page .pds-cash-payout-btn--ok {
+    box-shadow: 0 6px 14px rgba(22, 163, 74, 0.22) !important;
+}
+
+/* pds-css-bust 2026-10-25-cash-payout-select2-fix */

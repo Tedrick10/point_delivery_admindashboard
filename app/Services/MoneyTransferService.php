@@ -40,6 +40,10 @@ class MoneyTransferService
             return $this->listCashFinishRows($fromDay, $toDay, $osId, $branchId);
         }
 
+        if ($paymentMethod === 'kpay') {
+            return $this->listKpayFinishRows($fromDay, $toDay, $osId, $branchId);
+        }
+
         if ($paymentMethod === 'all') {
             $kpaySheet = $this->listSheet($fromDay, $toDay, $branchId, $osId, 'kpay');
             $cashSheet = $this->listCashFinishRows($fromDay, $toDay, $osId, $branchId);
@@ -48,15 +52,16 @@ class MoneyTransferService
                     return mb_strtolower((string) ($row->name ?? '')).'|'.((string) ($row->payment_method ?? 'kpay'));
                 })
                 ->values();
-            $totals = $this->finishTotals($fromDay, $toDay, $osId, $branchId);
+            $kpaySum = round((float) $kpaySheet['rows']->sum('amount_due'), 2);
+            $cashSum = round((float) $cashSheet['rows']->sum('amount_due'), 2);
 
             return [
                 'rows' => $rows,
                 'summary' => (object) [
                     'os_count' => $rows->pluck('os_user_id')->unique()->filter()->count(),
-                    'amount_due' => $totals['total'],
-                    'cash_total' => $totals['cash'],
-                    'kpay_total' => $totals['kpay'],
+                    'amount_due' => round($kpaySum + $cashSum, 2),
+                    'cash_total' => $cashSum,
+                    'kpay_total' => $kpaySum,
                     'freight_total' => round((float) $rows->sum('freight_amount'), 2),
                 ],
             ];
@@ -371,38 +376,24 @@ class MoneyTransferService
     }
 
     /**
-     * Combined Money Transfer Total = Daily Check OS to pay (KPay + Cash).
-     * Falls back to settlement Finish batches when Daily Check has no rows.
+     * Combined Money Transfer Total = abs(amount) of settlement finishes in range
+     * (same source as Kpay / Cash tabs — not Daily Check, which can be empty/zero).
      *
      * @return array{kpay: float, cash: float, total: float}
      */
     public function finishTotals(string $fromDay, string $toDay, ?int $osId = null, ?int $branchId = null): array
     {
-        $invoiceRows = $this->dailyCheck->listRows($fromDay, $toDay, 'os', $branchId, $osId, null);
-        if ($branchId && $branchId > 0) {
-            $invoiceRows = $invoiceRows->filter(fn ($row) => (int) ($row->branch_id ?? 0) === $branchId)->values();
-        }
-
-        if ($invoiceRows->isNotEmpty()) {
-            $kpay = round((float) $invoiceRows->sum(fn ($row) => abs((float) ($row->kpay_amount ?? 0))), 2);
-            $cash = round((float) $invoiceRows->sum(fn ($row) => abs((float) ($row->cash_amount ?? 0))), 2);
-            $osToPay = round((float) $invoiceRows->sum(fn ($row) => abs((float) ($row->os_to_pay ?? 0))), 2);
-            $split = round($kpay + $cash, 2);
-
-            return [
-                'kpay' => $kpay,
-                'cash' => $cash,
-                // Total must equal KPay + Cash (OS to pay).
-                'total' => $split >= 0.001 ? $split : $osToPay,
-            ];
-        }
-
-        $batches = $this->batchesInRange($fromDay, $toDay, $osId, null, $branchId);
+        $batches = $this->dedupeSettlementBatches(
+            $this->batchesInRange($fromDay, $toDay, $osId, null, $branchId)
+        );
 
         $kpay = 0.0;
         $cash = 0.0;
         foreach ($batches as $batch) {
             $amount = abs((float) $batch->amount);
+            if ($amount < 0.001) {
+                continue;
+            }
             if ((string) $batch->payment_method === 'cash') {
                 $cash += $amount;
             } else {
@@ -414,6 +405,90 @@ class MoneyTransferService
             'kpay' => round($kpay, 2),
             'cash' => round($cash, 2),
             'total' => round($kpay + $cash, 2),
+        ];
+    }
+
+    /**
+     * Kpay tab: one row per ငွေရှင်းတမ်း Kpay Finish batch (not unique-by-OS),
+     * so table Total matches the Kpay summary card and all proof images show.
+     *
+     * @return array{rows: Collection<int, object>, summary: object}
+     */
+    protected function listKpayFinishRows(string $fromDay, string $toDay, ?int $osId = null, ?int $branchId = null): array
+    {
+        $settlement = app(OsSettlementService::class);
+        $batches = $this->dedupeSettlementBatches(
+            $this->batchesInRange($fromDay, $toDay, $osId, 'kpay', $branchId)
+        );
+        $rows = collect();
+
+        foreach ($batches as $batch) {
+            $user = $batch->osUser;
+            $amount = round(abs((float) $batch->amount), 2);
+            // Zero finishes clutter the sheet and look like duplicate OS rows.
+            if ($amount < 0.001) {
+                continue;
+            }
+            $kpay = $this->kpayDetailsFor($user, $batch);
+            $urls = $this->kpaySlipUrls($batch);
+            $transfer = OsMoneyTransfer::query()
+                ->with('adminKpayAccount')
+                ->where('settlement_batch_id', $batch->id)
+                ->first();
+            $adminAccount = $transfer?->adminKpayAccount
+                ?? $batch->adminKpayAccount
+                ?? null;
+            $rows->push((object) array_merge($this->cashPayoutMeta(null), [
+                'os_user_id' => (int) $batch->os_user_id,
+                'name' => $user?->name ?: ('OS #'.$batch->os_user_id),
+                'os_phone' => normalizeContactNumber((string) ($user?->contact_number ?? '')),
+                'invoice_count' => 0,
+                'item_count' => is_array($batch->item_ids) ? count($batch->item_ids) : 0,
+                'amount_due' => $amount,
+                'cash_amount' => 0,
+                'kpay_amount' => $amount,
+                'freight_amount' => 0,
+                'freight_computed' => 0,
+                'freight_is_override' => false,
+                'paid_total' => $amount,
+                'remaining' => 0,
+                'status' => 'matched',
+                'remitted_count' => 0,
+                'all_remitted' => false,
+                'kpay_name' => $kpay['name'],
+                'kpay_no' => $kpay['no'],
+                'admin_kpay_account_id' => $adminAccount?->id,
+                'admin_kpay_name' => $adminAccount?->kpay_name ?? '',
+                'admin_kpay_phone' => $adminAccount?->kpay_phone ?? '',
+                'kpay_slip_url' => $urls[0] ?? null,
+                'kpay_slip_urls' => $urls,
+                'remark' => '',
+                'has_saved' => false,
+                'transfer_id' => $transfer ? (int) $transfer->id : null,
+                'payment_method' => 'kpay',
+                'settlement_batch_id' => $batch->id,
+                'can_switch_to_cash' => true,
+            ]));
+        }
+
+        $rows = $rows
+            ->sortBy(fn ($row) => mb_strtolower((string) ($row->name ?? '')))
+            ->values();
+
+        $totals = $this->finishTotals($fromDay, $toDay, $osId, $branchId);
+        $kpaySum = round((float) $rows->sum('amount_due'), 2);
+
+        return [
+            'rows' => $rows,
+            'summary' => (object) [
+                'os_count' => $rows->pluck('os_user_id')->unique()->filter()->count(),
+                // OsToPay card = Kpay + Cash overall.
+                'amount_due' => $totals['total'],
+                'cash_total' => $totals['cash'],
+                // Kpay card must match the table footer for this tab.
+                'kpay_total' => $kpaySum,
+                'freight_total' => 0.0,
+            ],
         ];
     }
 
@@ -448,11 +523,31 @@ class MoneyTransferService
 
         $rows = collect();
 
+        // Drop accidental double-created payouts (same OS + amount + period + batch).
+        $payouts = $payouts->unique(function (OsCashPayout $p) {
+            return ((int) $p->os_user_id)
+                .'|'.round(abs((float) $p->amount), 2)
+                .'|'.substr((string) $p->period_from, 0, 10)
+                .'|'.substr((string) $p->period_to, 0, 10)
+                .'|'.((int) ($p->settlement_batch_id ?? 0));
+        })->values();
+
         foreach ($payouts as $payout) {
             $user = $payout->osUser;
             $amount = round(abs((float) $payout->amount), 2);
+            if ($amount < 0.001) {
+                continue;
+            }
             $batch = $payout->settlementBatch;
             $kpay = $this->kpayDetailsFor($user, $batch);
+            $urls = $this->kpaySlipUrls($batch);
+            $payoutUrl = $payout->slipPhotoUrl();
+            if ($payoutUrl && ! in_array($payoutUrl, $urls, true)) {
+                // Prefer settlement proofs; keep payout slip only when batch has none.
+                if ($urls === []) {
+                    $urls = [$payoutUrl];
+                }
+            }
             $rows->push((object) array_merge([
                 'os_user_id' => (int) $payout->os_user_id,
                 'name' => $user?->name ?: ('OS #'.$payout->os_user_id),
@@ -472,7 +567,8 @@ class MoneyTransferService
                 'all_remitted' => false,
                 'kpay_name' => $kpay['name'],
                 'kpay_no' => $kpay['no'],
-                'kpay_slip_url' => $payout->slipPhotoUrl() ?: $this->kpaySlipUrl($batch),
+                'kpay_slip_url' => $urls[0] ?? $payoutUrl,
+                'kpay_slip_urls' => $urls,
                 'remark' => '',
                 'has_saved' => (bool) $payout->money_transfer_id,
                 'transfer_id' => $payout->money_transfer_id,
@@ -481,10 +577,14 @@ class MoneyTransferService
             ], $this->cashPayoutMeta($payout)));
         }
 
-        foreach ($orphanBatches as $batch) {
+        foreach ($this->dedupeSettlementBatches($orphanBatches) as $batch) {
             $user = $batch->osUser;
             $amount = round(abs((float) $batch->amount), 2);
+            if ($amount < 0.001) {
+                continue;
+            }
             $kpay = $this->kpayDetailsFor($user, $batch);
+            $urls = $this->kpaySlipUrls($batch);
             $rows->push((object) array_merge([
                 'os_user_id' => (int) $batch->os_user_id,
                 'name' => $user?->name ?: ('OS #'.$batch->os_user_id),
@@ -504,7 +604,8 @@ class MoneyTransferService
                 'all_remitted' => false,
                 'kpay_name' => $kpay['name'],
                 'kpay_no' => $kpay['no'],
-                'kpay_slip_url' => $this->kpaySlipUrl($batch),
+                'kpay_slip_url' => $urls[0] ?? null,
+                'kpay_slip_urls' => $urls,
                 'remark' => '',
                 'has_saved' => false,
                 'transfer_id' => null,
@@ -518,10 +619,12 @@ class MoneyTransferService
             ->values();
 
         $totals = $this->finishTotals($fromDay, $toDay, $osId, $branchId);
+        $cashSum = round((float) $rows->sum('amount_due'), 2);
         $summary = (object) [
-            'os_count' => $rows->count(),
+            'os_count' => $rows->pluck('os_user_id')->unique()->filter()->count(),
             'amount_due' => $totals['total'],
-            'cash_total' => $totals['cash'],
+            // Cash card must match the table footer for this tab.
+            'cash_total' => $cashSum,
             'kpay_total' => $totals['kpay'],
             'freight_total' => 0.0,
         ];
@@ -577,6 +680,9 @@ class MoneyTransferService
                 'cash_amount' => $method === 'cash' ? $due : 0,
                 'kpay_amount' => $method === 'kpay' ? $due : 0,
                 'freight_amount' => null,
+                'admin_kpay_account_id' => $batch->admin_kpay_account_id
+                    ? (int) $batch->admin_kpay_account_id
+                    : null,
                 'updated_by' => auth()->id(),
             ]
         );
@@ -610,19 +716,25 @@ class MoneyTransferService
     }
 
     /**
-     * Switch an existing Cash transfer to Kpay.
-     * Requires a KBZ Pay slip image. Blocked once a rider is assigned (or payout is pending/done).
+     * Switch payment method between Cash ↔ Kpay.
+     * Cash → Kpay requires a KBZ Pay slip. Blocked once a rider is assigned (or payout is pending/done).
+     * Kpay → Cash creates/updates an unassigned cash payout (Finish proof is reused).
      */
     public function switchPaymentMethod(
         OsMoneyTransfer $transfer,
         string $method,
         ?\Illuminate\Http\UploadedFile $kpaySlip = null
     ): OsMoneyTransfer {
-        if (($transfer->payment_method ?? '') !== 'cash') {
-            throw new \RuntimeException(__('message.cash_payout_invalid_transition'));
+        $method = strtolower(trim($method));
+        if ($method === 'cash') {
+            return $this->switchTransferToCash($transfer);
         }
 
         if ($method !== 'kpay') {
+            throw new \RuntimeException(__('message.cash_payout_invalid_transition'));
+        }
+
+        if (($transfer->payment_method ?? '') !== 'cash') {
             throw new \RuntimeException(__('message.cash_payout_invalid_transition'));
         }
 
@@ -668,7 +780,12 @@ class MoneyTransferService
 
         if ($batch) {
             if ($batch->kpay_slip_path && $batch->kpay_slip_path !== $slipPath) {
-                Storage::disk('public')->delete($batch->kpay_slip_path);
+                $oldPaths = app(OsSettlementService::class)->normalizeSlipPaths($batch->kpay_slip_path);
+                foreach ($oldPaths as $oldPath) {
+                    if ($oldPath !== $slipPath) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
+                }
             }
             $batch->update([
                 'payment_method' => 'kpay',
@@ -708,6 +825,83 @@ class MoneyTransferService
         return $transfer->fresh();
     }
 
+    /**
+     * Switch a finished Kpay settlement batch to Cash (Money Transfer → Cash tab / payout queue).
+     */
+    public function switchBatchToCash(OsSettlementBatch $batch): OsMoneyTransfer
+    {
+        if ((string) ($batch->settlement_side ?? '') === 'kyo_shin') {
+            throw new \RuntimeException(__('message.cash_payout_invalid_transition'));
+        }
+
+        if ((string) ($batch->payment_method ?? '') !== 'kpay') {
+            throw new \RuntimeException(__('message.cash_payout_invalid_transition'));
+        }
+
+        $payout = OsCashPayout::query()
+            ->where('settlement_batch_id', $batch->id)
+            ->orderByDesc('id')
+            ->first();
+        if ($payout && $payout->status !== OsCashPayout::STATUS_UNASSIGNED) {
+            throw new \RuntimeException(__('message.money_transfer_switch_blocked_assigned'));
+        }
+
+        $batch->update(['payment_method' => 'cash']);
+
+        return $this->recordFromSettlementBatch($batch->fresh());
+    }
+
+    protected function switchTransferToCash(OsMoneyTransfer $transfer): OsMoneyTransfer
+    {
+        if ((string) ($transfer->payment_method ?? '') !== 'kpay') {
+            throw new \RuntimeException(__('message.cash_payout_invalid_transition'));
+        }
+
+        if ($transfer->settlement_batch_id) {
+            $batch = OsSettlementBatch::query()->find($transfer->settlement_batch_id);
+            if ($batch) {
+                return $this->switchBatchToCash($batch);
+            }
+        }
+
+        $payout = OsCashPayout::query()
+            ->where('money_transfer_id', $transfer->id)
+            ->orderByDesc('id')
+            ->first();
+        if ($payout && $payout->status !== OsCashPayout::STATUS_UNASSIGNED) {
+            throw new \RuntimeException(__('message.money_transfer_switch_blocked_assigned'));
+        }
+
+        $due = round(max((float) $transfer->cash_amount + (float) $transfer->kpay_amount, 0), 2);
+        $fromDay = optional($transfer->period_from)->toDateString()
+            ?? now('Asia/Yangon')->toDateString();
+        $toDay = optional($transfer->period_to)->toDateString() ?? $fromDay;
+
+        $transfer->update([
+            'payment_method' => 'cash',
+            'cash_amount' => $due,
+            'kpay_amount' => 0,
+            'updated_by' => auth()->id(),
+        ]);
+
+        $payout = $payout ?: OsCashPayout::query()->firstOrNew([
+            'money_transfer_id' => $transfer->id,
+        ]);
+        $payout->os_user_id = (int) $transfer->os_user_id;
+        $payout->money_transfer_id = $transfer->id;
+        $payout->settlement_batch_id = $transfer->settlement_batch_id;
+        $payout->period_from = $fromDay;
+        $payout->period_to = $toDay;
+        $payout->amount = $due;
+        if (! $payout->exists) {
+            $payout->status = OsCashPayout::STATUS_UNASSIGNED;
+            $payout->created_by = auth()->id();
+        }
+        $payout->save();
+
+        return $transfer->fresh();
+    }
+
     protected function storeSwitchKpaySlip(
         OsMoneyTransfer $transfer,
         ?OsSettlementBatch $batch,
@@ -731,7 +925,27 @@ class MoneyTransferService
      */
     protected function kpaySlipUrl(?OsSettlementBatch $batch): ?string
     {
-        return $this->publicStorageUrl($batch?->kpay_slip_path);
+        $urls = $this->kpaySlipUrls($batch);
+
+        return $urls[0] ?? null;
+    }
+
+    /**
+     * All proof / QR images from ငွေရှင်းတမ်း Finish (same count as uploaded).
+     *
+     * @return list<string>
+     */
+    protected function kpaySlipUrls(?OsSettlementBatch $batch): array
+    {
+        $urls = [];
+        foreach (app(OsSettlementService::class)->normalizeSlipPaths($batch?->kpay_slip_path) as $path) {
+            $url = $this->publicStorageUrl($path);
+            if ($url && ! in_array($url, $urls, true)) {
+                $urls[] = $url;
+            }
+        }
+
+        return $urls;
     }
 
     protected function publicStorageUrl(?string $path): ?string
@@ -770,6 +984,7 @@ class MoneyTransferService
                 'pending_photo_url' => null,
                 'done_photo_url' => null,
                 'can_switch_to_kpay' => true,
+                'can_switch_to_cash' => false,
             ];
         }
 
@@ -786,6 +1001,7 @@ class MoneyTransferService
             'pending_photo_url' => $payout->pendingPhotoUrl(),
             'done_photo_url' => $payout->donePhotoUrl(),
             'can_switch_to_kpay' => $status === OsCashPayout::STATUS_UNASSIGNED,
+            'can_switch_to_cash' => false,
         ];
     }
 
@@ -934,7 +1150,7 @@ class MoneyTransferService
         ?int $branchId
     ): Collection {
         $batches = OsSettlementBatch::query()
-            ->with('osUser')
+            ->with(['osUser', 'adminKpayAccount'])
             ->where(function ($q) use ($fromDay, $toDay) {
                 $this->applyBatchPeriod($q, $fromDay, $toDay);
             })
@@ -956,43 +1172,61 @@ class MoneyTransferService
         return $batches;
     }
 
+    /**
+     * Drop accidental double-Finish rows (same OS / amount / period / finish minute).
+     *
+     * @param  Collection<int, OsSettlementBatch>  $batches
+     * @return Collection<int, OsSettlementBatch>
+     */
+    protected function dedupeSettlementBatches(Collection $batches): Collection
+    {
+        return $batches
+            ->sortByDesc(fn (OsSettlementBatch $b) => (int) $b->id)
+            ->unique(function (OsSettlementBatch $b) {
+                return ((int) $b->os_user_id)
+                    .'|'.round(abs((float) $b->amount), 2)
+                    .'|'.substr((string) $b->from_date, 0, 10)
+                    .'|'.substr((string) $b->to_date, 0, 10)
+                    .'|'.substr((string) ($b->finished_at ?? ''), 0, 16)
+                    .'|'.((string) ($b->payment_method ?? ''));
+            })
+            ->values();
+    }
+
+    /**
+     * Money Transfer date filter = when the settlement was Finished (slip / cash job created).
+     * Do NOT OR with from_date/to_date overlap — that pulls next-day finishes whose
+     * settlement period equals the selected day and makes the same OS appear twice.
+     */
     protected function applyBatchPeriod($query, string $fromDay, string $toDay): void
     {
-        $query->where(function ($q) use ($fromDay, $toDay) {
-            $q->where(function ($d) use ($fromDay, $toDay) {
-                $d->whereDate('from_date', '<=', $toDay)
-                    ->whereDate('to_date', '>=', $fromDay);
-            })->orWhere(function ($d) use ($fromDay, $toDay) {
-                $d->whereDate('finished_at', '>=', $fromDay)
-                    ->whereDate('finished_at', '<=', $toDay);
-            });
-        });
+        $query->whereDate('finished_at', '>=', $fromDay)
+            ->whereDate('finished_at', '<=', $toDay);
     }
 
     protected function applyTransferPeriod($query, string $fromDay, string $toDay): void
     {
         $query->where(function ($q) use ($fromDay, $toDay) {
-            $q->where(function ($d) use ($fromDay, $toDay) {
-                $d->whereDate('period_from', '<=', $toDay)
-                    ->whereDate('period_to', '>=', $fromDay);
-            })->orWhereHas('settlementBatch', function ($b) use ($fromDay, $toDay) {
+            $q->whereHas('settlementBatch', function ($b) use ($fromDay, $toDay) {
                 $b->whereDate('finished_at', '>=', $fromDay)
                     ->whereDate('finished_at', '<=', $toDay);
+            })->orWhere(function ($d) use ($fromDay, $toDay) {
+                // Legacy rows without a batch: keep period window.
+                $d->whereNull('settlement_batch_id')
+                    ->whereDate('period_from', '<=', $toDay)
+                    ->whereDate('period_to', '>=', $fromDay);
             });
         });
     }
 
+    /**
+     * Cash payout list filter = when the payout row was created (Finish time),
+     * not settlement period overlap (same double-count issue as batches).
+     */
     protected function applyPayoutPeriod($query, string $fromDay, string $toDay): void
     {
-        $query->where(function ($q) use ($fromDay, $toDay) {
-            $q->where(function ($d) use ($fromDay, $toDay) {
-                $d->whereDate('period_from', '<=', $toDay)
-                    ->whereDate('period_to', '>=', $fromDay);
-            })->orWhere(function ($d) use ($fromDay, $toDay) {
-                $d->whereDate('created_at', '>=', $fromDay)
-                    ->whereDate('created_at', '<=', $toDay);
-            });
-        });
+        $query->whereDate('created_at', '>=', $fromDay)
+            ->whereDate('created_at', '<=', $toDay);
     }
 
     protected function branchIdForBatch(OsSettlementBatch $batch): ?int

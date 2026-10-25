@@ -614,9 +614,11 @@ class ClientController extends Controller
         $payload['os_profile'] = $osProfile;
 
         if ($request->filled('approval_status') && in_array($request->approval_status, User::approvalStatuses(), true)) {
+            // Rejected → Pending/Approved (and reverse) is always allowed from Edit form.
             $user->applyApprovalStatus($request->approval_status);
             $payload['approval_status'] = $user->approval_status;
             $payload['status'] = $user->status;
+            $payload['approval_rejection_reason'] = $user->approval_rejection_reason;
         }
 
         if ($request->filled('password')) {
@@ -634,12 +636,18 @@ class ClientController extends Controller
         $user->assignRole($user->user_type);
 
         finalizeOsClientFirstApproval($user->fresh(), $previousApproval);
+        finalizeOsClientRejection($user->fresh(), $previousApproval);
 
         $message = __('message.update_form', ['form' => __('message.online_shop')]);
         if ($request->is('api/*')) {
             return json_message_response($message);
         }
-        return redirect()->route('users.index')->withSuccess($message);
+        $statusTab = $user->fresh()->approval_status ?? User::APPROVAL_PENDING;
+        if (! in_array($statusTab, ['pending', 'approved', 'rejected'], true)) {
+            $statusTab = 'pending';
+        }
+
+        return redirect()->route('users.index', ['status' => $statusTab])->withSuccess($message);
     }
 
     public function updateApprovalStatus(Request $request, $id)
@@ -653,7 +661,18 @@ class ClientController extends Controller
 
         $request->validate([
             'approval_status' => 'required|in:pending,approved,rejected',
+            'approval_rejection_reason' => 'nullable|string|max:1000',
         ]);
+
+        $status = (string) $request->input('approval_status');
+        $reason = trim((string) $request->input('approval_rejection_reason', ''));
+
+        if ($status === User::APPROVAL_REJECTED && $reason === '') {
+            return response()->json([
+                'status' => false,
+                'message' => __('message.os_rejection_reason_required'),
+            ], 422);
+        }
 
         $user = User::where('id', $id)->where('user_type', 'client')->first();
         if (! $user) {
@@ -664,10 +683,11 @@ class ClientController extends Controller
         }
 
         $previous = (string) ($user->approval_status ?? '');
-        $user->applyApprovalStatus($request->approval_status);
+        $user->applyApprovalStatus($status, $status === User::APPROVAL_REJECTED ? $reason : null);
         $user->save();
 
         $credentials = finalizeOsClientFirstApproval($user->fresh(), $previous);
+        finalizeOsClientRejection($user->fresh(), $previous);
 
         return response()->json([
             'status' => true,
@@ -676,6 +696,7 @@ class ClientController extends Controller
                 'status' => __('message.'.$user->approval_status),
             ]),
             'approval_status' => $user->approval_status,
+            'approval_rejection_reason' => $user->approval_rejection_reason,
             'label' => __('message.'.$user->approval_status),
             'username' => $credentials['username'] ?? null,
             'password' => $credentials['password'] ?? null,

@@ -274,6 +274,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('order/{id}/create-return', [OrderController::class, 'createReturnOrder'])->name('order.create-return');
     Route::post('order/dispatch-store', [OrderController::class, 'dispatchStore'])->name('order.dispatch-store');
     Route::get('dispatch-to-assign', [OrderController::class, 'dispatchToAssign'])->name('order.dispatch.to-assign');
+    Route::get('dispatch-to-assign/data', [OrderController::class, 'dispatchToAssignData'])->name('order.dispatch.to-assign.data');
     Route::get('dispatch-to-assign/{item}/details', [OrderController::class, 'dispatchToAssignDetails'])->name('order.dispatch.to-assign.details');
     Route::post('dispatch-to-assign/reassign-rider', [OrderController::class, 'dispatchToAssignReassignRider'])->name('order.dispatch.to-assign.reassign-rider');
     Route::post('dispatch-to-assign/move', [OrderController::class, 'dispatchMoveToAssign100'])->name('order.dispatch.move-to-assign-100');
@@ -291,6 +292,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('dispatch-assigned-items', [OrderController::class, 'dispatchAssignedItems'])->name('order.dispatch.assigned-items');
     Route::get('dispatch-rider-list', [OrderController::class, 'dispatchRiderList'])->name('order.dispatch.rider-list');
     Route::get('dispatch-rider-list/{riderId}/items', [OrderController::class, 'dispatchRiderItems'])->name('order.dispatch.rider-items');
+    Route::get('dispatch-rider-list/{riderId}/items/export-excel', [OrderController::class, 'dispatchRiderItemsExportExcel'])->name('order.dispatch.rider-items.export-excel');
     Route::post('dispatch-rider-list/{riderId}/items/bulk-update', [OrderController::class, 'dispatchRiderItemsBulkUpdate'])->name('order.dispatch.rider-items.bulk-update');
     Route::post('dispatch-rider-list/{riderId}/items/reassign', [OrderController::class, 'dispatchRiderItemsReassign'])->name('order.dispatch.rider-items.reassign');
     Route::post('dispatch-rider-list/{riderId}/items/return-type', [OrderController::class, 'dispatchRiderItemsSetReturnType'])->name('order.dispatch.rider-items.return-type');
@@ -376,8 +378,15 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('dispatch-os-list/{osId}/kyo-shin-items', [OrderController::class, 'dispatchOsKyoShinItems'])->name('order.dispatch.os-kyo-shin-items');
     Route::get('dispatch-os-list/{osId}/slip-preview', [OrderController::class, 'dispatchOsSettlementSlipPreview'])->name('order.dispatch.os-slip-preview');
     Route::post('dispatch-os-list/{osId}/upload-kpay-slip', [OrderController::class, 'dispatchOsSettlementUploadKpay'])->name('order.dispatch.os-upload-kpay');
+    Route::post('dispatch-os-list/{osId}/remove-kpay-slip', [OrderController::class, 'dispatchOsSettlementRemoveKpay'])->name('order.dispatch.os-remove-kpay');
     Route::post('dispatch-os-list/{osId}/finish', [OrderController::class, 'dispatchOsSettlementFinish'])->name('order.dispatch.os-finish');
     Route::post('dispatch-os-list/finish-all', [OrderController::class, 'dispatchOsSettlementFinishAll'])->name('order.dispatch.os-finish-all');
+    Route::post('dispatch-os-list/admin-kpay-accounts', [OrderController::class, 'dispatchOsAdminKpayStore'])->name('order.dispatch.os-admin-kpay.store');
+    Route::post('dispatch-os-list/admin-kpay-accounts/clear', [OrderController::class, 'dispatchOsAdminKpayClear'])->name('order.dispatch.os-admin-kpay.clear');
+    Route::get('dispatch-os-list/admin-kpay-accounts/{id}/history', [OrderController::class, 'dispatchOsAdminKpayHistory'])->name('order.dispatch.os-admin-kpay.history');
+    Route::put('dispatch-os-list/admin-kpay-accounts/{id}', [OrderController::class, 'dispatchOsAdminKpayUpdate'])->name('order.dispatch.os-admin-kpay.update');
+    Route::post('dispatch-os-list/admin-kpay-accounts/{id}/delete', [OrderController::class, 'dispatchOsAdminKpayDestroy'])->name('order.dispatch.os-admin-kpay.destroy');
+    Route::delete('dispatch-os-list/admin-kpay-accounts/{id}', [OrderController::class, 'dispatchOsAdminKpayDestroy']);
     Route::get('dispatch-os-list/{osId}/items', [OrderController::class, 'dispatchOsItems'])->name('order.dispatch.os-items');
     Route::post('dispatch-os-list/{osId}/items/bulk-update', [OrderController::class, 'dispatchOsItemsBulkUpdate'])->name('order.dispatch.os-items.bulk-update');
     Route::get('dispatch-order/deli-audit', [OrderController::class, 'dispatchDeliAudit'])->name('order.dispatch.deli-audit');
@@ -391,6 +400,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('dispatch-order/{id}/item', [OrderController::class, 'dispatchItemStore'])->name('order.dispatch.item.store');
     Route::get('dispatch-order/{orderId}/item/{itemId}/edit', [OrderController::class, 'dispatchItemEdit'])->name('order.dispatch.item.edit');
     Route::get('dispatch-order/{orderId}/item/{itemId}/view', [OrderController::class, 'dispatchItemView'])->name('order.dispatch.item.view');
+    Route::get('dispatch-order/{orderId}/item/{itemId}/rider-preview', [OrderController::class, 'dispatchItemRiderPreview'])->name('order.dispatch.item.rider-preview');
     Route::patch('dispatch-order/{orderId}/item/{itemId}', [OrderController::class, 'dispatchItemUpdate'])->name('order.dispatch.item.update');
     Route::post('dispatch-order/{orderId}/item/{itemId}/gate', [OrderController::class, 'dispatchItemUpdateGate'])->name('order.dispatch.item.update-gate');
     Route::delete('dispatch-order/{orderId}/item/{itemId}', [OrderController::class, 'dispatchItemDestroy'])->name('order.dispatch.item.destroy');

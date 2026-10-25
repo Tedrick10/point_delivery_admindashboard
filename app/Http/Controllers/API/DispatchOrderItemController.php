@@ -1257,14 +1257,13 @@ class DispatchOrderItemController extends Controller
     }
 
     /**
-     * Rider Delivery list order for route planning:
-     * first status tap (Assigned / On Way / Pending / Delivered / …) → first row.
+     * Rider Delivery list: latest status change first (Assigned / On Way / Delivered / …).
      */
     protected function applyRiderDeliveryRouteOrder(Builder $query): void
     {
         $query->orderByRaw('CASE WHEN status_ordered_at IS NULL THEN 1 ELSE 0 END')
-            ->orderBy('status_ordered_at')
-            ->orderBy('id');
+            ->orderByDesc('status_ordered_at')
+            ->orderByDesc('id');
     }
 
     /**
@@ -1792,11 +1791,12 @@ class DispatchOrderItemController extends Controller
      */
     public function assignDeliveryItemToMe(Request $request, $itemId)
     {
-        return $this->assignAssign100ItemToCurrentRider((int) $itemId, null);
+        return $this->assignAssign100ItemToCurrentRider((int) $itemId, null, false);
     }
 
     /**
      * Rider scans the Assign 100 airway-bill QR and auto-assigns that parcel.
+     * Pass check_only=1 to validate branch / eligibility without assigning (shown right after scan).
      */
     public function assignDeliveryItemByScan(Request $request)
     {
@@ -1809,10 +1809,12 @@ class DispatchOrderItemController extends Controller
             ], 422);
         }
 
-        return $this->assignAssign100ItemToCurrentRider($parsed['item_id'], $parsed['code']);
+        $checkOnly = $request->boolean('check_only');
+
+        return $this->assignAssign100ItemToCurrentRider($parsed['item_id'], $parsed['code'], $checkOnly);
     }
 
-    protected function assignAssign100ItemToCurrentRider(?int $itemId, ?string $code)
+    protected function assignAssign100ItemToCurrentRider(?int $itemId, ?string $code, bool $checkOnly = false)
     {
         $user = auth()->user();
         if (! $user || $user->user_type !== 'delivery_man') {
@@ -1877,17 +1879,49 @@ class DispatchOrderItemController extends Controller
             ], 422);
         }
 
+        // Same-branch only: Assign 100 tabs / rider assign use To branch.
+        $itemBranchId = (int) ($item->to_branch_id ?? 0);
         $riderBranchId = (int) ($user->branch_id ?? 0);
+        if ($riderBranchId <= 0 || $itemBranchId <= 0 || $itemBranchId !== $riderBranchId) {
+            $item->loadMissing(['toBranch:id,name', 'fromBranch:id,name']);
+            $itemBranchName = trim((string) (
+                $item->toBranch?->name
+                ?: $item->fromBranch?->name
+                ?: ''
+            ));
+            $riderBranchName = trim((string) (
+                optional(\App\Models\Branch::query()->select('id', 'name')->find($riderBranchId))->name ?? ''
+            ));
 
-        // Local MDY Assign 100 → delivery rider (unchanged).
-        if ($riderBranchId > 0
-            && (int) ($item->from_branch_id ?? 0) > 0
-            && (int) $item->from_branch_id !== $riderBranchId
-            && (int) ($item->to_branch_id ?? 0) !== $riderBranchId) {
             return json_custom_response([
                 'status' => false,
-                'message' => __('message.access_denied'),
+                'error_code' => 'branch_mismatch',
+                'message' => __('message.assign_100_scan_branch_mismatch', [
+                    'item_branch' => $itemBranchName !== '' ? $itemBranchName : __('message.branch'),
+                    'rider_branch' => $riderBranchName !== '' ? $riderBranchName : __('message.branch'),
+                ]),
+                'item_branch_id' => $itemBranchId > 0 ? $itemBranchId : null,
+                'item_branch_name' => $itemBranchName !== '' ? $itemBranchName : null,
+                'rider_branch_id' => $riderBranchId > 0 ? $riderBranchId : null,
+                'rider_branch_name' => $riderBranchName !== '' ? $riderBranchName : null,
             ], 422);
+        }
+
+        // Preview after QR scan: eligible → app shows confirm; mismatch already returned above.
+        if ($checkOnly) {
+            $item->loadMissing(['toBranch:id,name']);
+
+            return json_custom_response([
+                'status' => true,
+                'can_assign' => true,
+                'message' => 'ok',
+                'data' => [
+                    'id' => (int) $item->id,
+                    'code' => $item->code,
+                    'to_branch_id' => $itemBranchId,
+                    'to_branch' => optional($item->toBranch)->name,
+                ],
+            ]);
         }
 
         $updated = DispatchOrderItem::query()

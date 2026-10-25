@@ -35,13 +35,15 @@
 
                     <div class="collapse navbar-collapse pds-topbar-group pds-topbar-group--tools" id="navbarSupportedContent">
                         <ul class="navbar-nav ml-auto navbar-list align-items-center pds-topbar-tools">
-                            @if(auth()->user()->can('order-list'))
+                            @if(auth()->check() && (auth()->user()->can('order-list') || (function_exists('isAdminPanelUser') && isAdminPanelUser(auth()->user()))))
                                 @php
-                                    $assignedItemCount = \App\Models\DispatchOrderItem::query()
-                                        ->whereHas('messages', function ($q) {
-                                            $q->where('sender_type', 'client')->whereNull('read_at');
-                                        })
-                                        ->count();
+                                    $assignedItemCount = function_exists('unansweredDispatchChatThreadCount')
+                                        ? unansweredDispatchChatThreadCount()
+                                        : \App\Models\DispatchOrderItem::query()
+                                            ->whereHas('messages', function ($q) {
+                                                $q->where('sender_type', 'client')->whereNull('read_at');
+                                            })
+                                            ->count();
                                 @endphp
                                 <li class="nav-item nav-icon pds-message-nav-item">
                                     <a href="{{ route('order.dispatch.assigned-items') }}"

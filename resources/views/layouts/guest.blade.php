@@ -14,19 +14,27 @@
         <!-- Styles -->
         <link rel="stylesheet" href="{{ public_asset_ver('css/backend.css') }}">
         @php
-            $guestTheme = trim(
-                public_css_inline('css/admin-dashboard-theme.css')."\n".
-                public_css_inline('css/admin-themes.css')
-            );
+            $pdsPreferInlineCss = PHP_SAPI === 'cli-server' && filter_var(env('PDS_INLINE_THEME_CSS', true), FILTER_VALIDATE_BOOLEAN);
+            $guestTheme = '';
+            if ($pdsPreferInlineCss) {
+                $guestTheme = trim(
+                    public_css_inline('css/admin-dashboard-theme.css')."\n".
+                    public_css_inline('css/admin-themes.css')."\n".
+                    public_css_inline('css/custom.css')."\n".
+                    public_css_inline('css/pds-layout.css')
+                );
+            }
             $liveBrandHex = $themeColor ?? brandColorHex();
             $liveBrandRgb = $brandColorRgb ?? brandColorRgb();
             $liveFontFamily = $brandFontFamily ?? brandFontCssFamily();
         @endphp
-        @if($guestTheme !== '')
+        @if($pdsPreferInlineCss && $guestTheme !== '')
             <style id="pds-admin-theme-inline">{!! $guestTheme !!}</style>
         @else
+            <link rel="stylesheet" href="{{ public_asset_ver('css/custom.css') }}">
             <link rel="stylesheet" href="{{ public_asset_ver('css/admin-dashboard-theme.css') }}">
             <link rel="stylesheet" href="{{ public_asset_ver('css/admin-themes.css') }}">
+            <link rel="stylesheet" href="{{ public_asset_ver('css/pds-layout.css') }}">
         @endif
         <style id="pds-brand-live">
         :root, html, body.pds-admin {

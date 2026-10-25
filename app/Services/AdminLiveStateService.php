@@ -42,11 +42,15 @@ class AdminLiveStateService
         $assign100 = (int) $hubService->poolCount($isHubUser ? (int) $user->id : null);
         $preOrder = (int) $workflow->preOrderCount();
 
-        $assignedItems = (int) DispatchOrderItem::query()
-            ->whereHas('messages', function ($q) {
-                $q->where('sender_type', 'client')->whereNull('read_at');
-            })
-            ->count();
+        // Messenger badge = unanswered threads (last message from OS), not merely unread.
+        // Opening a chat sets read_at but the OS may still be waiting for a reply.
+        $assignedItems = function_exists('unansweredDispatchChatThreadCount')
+            ? unansweredDispatchChatThreadCount()
+            : (int) DispatchOrderItem::query()
+                ->whereHas('messages', function ($q) {
+                    $q->where('sender_type', 'client')->whereNull('read_at');
+                })
+                ->count();
 
         $pickupError = (int) Order::query()
             ->where('status', 'pickup_error')
@@ -112,8 +116,12 @@ class AdminLiveStateService
             return 0;
         }
 
-        // Light sync only — never load all notifications into memory on the live poll.
-        syncUnreadDispatchItemMessageNotifications($user);
+        try {
+            // Light sync only — never load all notifications into memory on the live poll.
+            syncUnreadDispatchItemMessageNotifications($user);
+        } catch (\Throwable $e) {
+            // Counts must still render even if backfill fails.
+        }
 
         return adminNotificationUnreadCount($user);
     }

@@ -11,7 +11,9 @@ use App\DataTables\ShippedOrderDataTable;
 use App\Http\Requests\OrderRequest;
 use App\Http\Requests\VehicleHistoryRequest;
 use Illuminate\Http\Request;
+use App\Models\AdminKpayAccount;
 use App\Models\DispatchOrderItem;
+use App\Models\OsMoneyTransfer;
 use App\Models\OsSettlementBatch;
 use App\Models\OsSettlementDraft;
 use App\Models\Order;
@@ -59,6 +61,7 @@ use App\Services\DispatchOrderWorkflowService;
 use App\Notifications\CustomerSupportNotification;
 use Illuminate\Support\Facades\Mail;
 use App\Exports\DispatchOrderItemsExport;
+use App\Exports\DispatchRiderItemsExport;
 use Maatwebsite\Excel\Facades\Excel;
 
 class OrderController extends Controller
@@ -660,29 +663,192 @@ class OrderController extends Controller
             session()->save();
         }
 
-        $workflow = app(DispatchOrderWorkflowService::class);
-        $workflow->healPickupErrorChoicesToCancelled();
+        // Throttle heal so Follow Up first paint is not blocked by a full-table UPDATE.
+        $healKey = 'follow_up_heal_pickup_error_'.now('Asia/Yangon')->format('YmdHi');
+        if (! cache()->has($healKey)) {
+            app(DispatchOrderWorkflowService::class)->healPickupErrorChoicesToCancelled();
+            cache()->put($healKey, 1, now()->addMinutes(5));
+        }
 
-        $items = DispatchOrderItem::query()
-            ->whereIn('status', ['collected', 'assigned', 'courier_assigned', 'courier_departed', 'pending', 'completed', 'return', 'os_returned'])
+        $pageTitle = __('message.follow_up');
+        $assets = [];
+        $canReassignFollowUpRider = auth()->user()->can('order-edit') || auth()->user()->user_type === 'admin';
+        $followUpDataUrl = route('order.dispatch.to-assign.data');
+
+        return view('order.dispatch-to-assign', compact(
+            'pageTitle',
+            'assets',
+            'canReassignFollowUpRider',
+            'followUpDataUrl'
+        ));
+    }
+
+    /**
+     * Follow Up — server-side filtered/paginated rows (keeps DOM small for smooth scroll).
+     */
+    public function dispatchToAssignData(Request $request)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $perPage = (int) $request->input('per_page', 50);
+        $perPage = max(25, min(100, $perPage > 0 ? $perPage : 50));
+        $page = max(1, (int) $request->input('page', 1));
+
+        $filters = [
+            'status' => trim((string) $request->input('status', '')),
+            'os' => trim((string) $request->input('os', '')),
+            'pickup_rider' => trim((string) $request->input('pickup_rider', '')),
+            'customer' => trim((string) $request->input('customer', '')),
+        ];
+
+        $query = $this->followUpItemsQuery($filters);
+        $paginator = $query->paginate($perPage, ['dispatch_order_items.*'], 'page', $page);
+        $items = $paginator->getCollection();
+
+        $canReassignFollowUpRider = auth()->user()->can('order-edit') || auth()->user()->user_type === 'admin';
+        $workflow = app(DispatchOrderWorkflowService::class);
+        $rowOffset = ($paginator->currentPage() - 1) * $paginator->perPage();
+
+        $html = view('order.partials._follow_up_table_rows', compact(
+            'items',
+            'canReassignFollowUpRider',
+            'workflow',
+            'rowOffset'
+        ))->render();
+
+        return response()->json([
+            'html' => $html,
+            'total' => $paginator->total(),
+            'from' => $paginator->total() === 0 ? 0 : $paginator->firstItem(),
+            'to' => $paginator->total() === 0 ? 0 : $paginator->lastItem(),
+            'page' => $paginator->currentPage(),
+            'last_page' => max(1, $paginator->lastPage()),
+            'per_page' => $paginator->perPage(),
+        ]);
+    }
+
+    /**
+     * @param  array{status?:string,os?:string,pickup_rider?:string,customer?:string}  $filters
+     */
+    protected function followUpItemsQuery(array $filters)
+    {
+        $status = $filters['status'] ?? '';
+        $os = $filters['os'] ?? '';
+        $pickupRider = $filters['pickup_rider'] ?? '';
+        $customer = $filters['customer'] ?? '';
+
+        // Default "All" skips completed (biggest set) so Follow Up stays workable;
+        // pick Delivered / Completed / Finished from the status filter to load those.
+        $activeStatuses = ['collected', 'assigned', 'courier_assigned', 'courier_departed', 'pending', 'return', 'os_returned'];
+        $allListedStatuses = array_merge($activeStatuses, ['completed']);
+
+        $query = DispatchOrderItem::query()
+            ->select('dispatch_order_items.*')
             ->with([
-                'order.client',
-                'order.delivery_man',
+                'order:id,client_id,delivery_man_id,status,pickup_error_choice,pickup_point,created_at,is_photo_order,is_text_order,is_shop_order,is_gate_order',
+                'order.client:id,name,contact_number,username',
+                'order.delivery_man:id,name,contact_number,username',
                 'order.dispatchItems:id,order_id,status,admin_updated_at',
                 'fromBranch:id,name',
                 'toBranch:id,name',
                 'deliveryMan:id,name',
                 'kyoShinItem',
-            ])
-            ->orderByDesc('received_date')
-            ->orderByDesc('id')
-            ->get();
+            ]);
 
-        $pageTitle = __('message.follow_up');
-        $assets = [];
-        $canReassignFollowUpRider = auth()->user()->can('order-edit') || auth()->user()->user_type === 'admin';
+        $this->applyFollowUpStatusFilter($query, $status, $activeStatuses, $allListedStatuses);
 
-        return view('order.dispatch-to-assign', compact('pageTitle', 'assets', 'items', 'canReassignFollowUpRider'));
+        if ($os !== '' || $pickupRider !== '') {
+            $query->whereHas('order', function ($orderQ) use ($os, $pickupRider) {
+                if ($os !== '') {
+                    $like = '%'.$os.'%';
+                    $orderQ->where(function ($q) use ($like) {
+                        $q->whereHas('client', function ($cq) use ($like) {
+                            $cq->where('name', 'like', $like)
+                                ->orWhere('contact_number', 'like', $like)
+                                ->orWhere('username', 'like', $like);
+                        })->orWhere('pickup_point', 'like', $like);
+                    });
+                }
+                if ($pickupRider !== '') {
+                    $like = '%'.$pickupRider.'%';
+                    $orderQ->whereHas('delivery_man', function ($rq) use ($like) {
+                        $rq->where('name', 'like', $like)
+                            ->orWhere('contact_number', 'like', $like)
+                            ->orWhere('username', 'like', $like);
+                    });
+                }
+            });
+        }
+
+        if ($customer !== '') {
+            $like = '%'.$customer.'%';
+            $query->where(function ($q) use ($like) {
+                $q->where('customer_name', 'like', $like)
+                    ->orWhere('customer_phone', 'like', $like);
+            });
+        }
+
+        return $query
+            ->orderByDesc('dispatch_order_items.received_date')
+            ->orderByDesc('dispatch_order_items.id');
+    }
+
+    protected function applyFollowUpStatusFilter($query, string $status, array $activeStatuses, array $allListedStatuses): void
+    {
+        if ($status === '' || $status === 'all') {
+            $query->whereIn('dispatch_order_items.status', $activeStatuses);
+
+            return;
+        }
+
+        match ($status) {
+            'on_way' => $query->where('dispatch_order_items.status', 'courier_departed'),
+            'assigned' => $query->where('dispatch_order_items.status', 'courier_assigned'),
+            'pending' => $query->where('dispatch_order_items.status', 'pending'),
+            'return' => $query->where('dispatch_order_items.status', 'return')->whereNull('dispatch_order_items.admin_finished_at'),
+            'os_returned' => $query->where('dispatch_order_items.status', 'os_returned'),
+            'delivered' => $query->where('dispatch_order_items.status', 'completed')
+                ->whereNull('dispatch_order_items.admin_completed_at')
+                ->whereNull('dispatch_order_items.admin_finished_at'),
+            'completed' => $query->where('dispatch_order_items.status', 'completed')
+                ->whereNotNull('dispatch_order_items.admin_completed_at')
+                ->whereNull('dispatch_order_items.admin_finished_at'),
+            'finished' => $query->where(function ($q) {
+                $q->where(function ($q2) {
+                    $q2->where('dispatch_order_items.status', 'completed')
+                        ->whereNotNull('dispatch_order_items.admin_finished_at');
+                })->orWhere(function ($q2) {
+                    $q2->where('dispatch_order_items.status', 'return')
+                        ->whereNotNull('dispatch_order_items.admin_finished_at');
+                });
+            }),
+            'cancelled' => $query->whereIn('dispatch_order_items.status', $allListedStatuses)
+                ->whereHas('order', function ($oq) {
+                    $oq->where('status', 'cancelled')
+                        ->orWhereIn('pickup_error_choice', ['cancel', 'express']);
+                }),
+            'pick_up' => $query->whereIn('dispatch_order_items.status', ['collected', 'assigned'])
+                ->whereHas('order', function ($oq) {
+                    $oq->where(function ($q) {
+                        // Not rider-done yet
+                        $q->whereNotIn('status', ['courier_picked_up', 'courier_departed', 'completed'])
+                            // Or admin still incomplete on collected siblings
+                            ->orWhereHas('dispatchItems', function ($iq) {
+                                $iq->where('status', 'collected')->whereNull('admin_updated_at');
+                            });
+                    });
+                }),
+            'assigned_100' => $query->whereIn('dispatch_order_items.status', ['collected', 'assigned'])
+                ->whereHas('order', function ($oq) {
+                    $oq->whereIn('status', ['courier_picked_up', 'courier_departed', 'completed'])
+                        ->whereDoesntHave('dispatchItems', function ($iq) {
+                            $iq->where('status', 'collected')->whereNull('admin_updated_at');
+                        });
+                }),
+            default => $query->whereIn('dispatch_order_items.status', $activeStatuses),
+        };
     }
 
     /**
@@ -1347,8 +1513,13 @@ class OrderController extends Controller
             return redirect()->back()->withErrors($message);
         }
 
-        app(DispatchOrderWorkflowService::class)->reclaimPrematureAssign100Items();
-        app(DispatchOrderWorkflowService::class)->refreshAssign100PoolReceivedDates();
+        $workflow = app(DispatchOrderWorkflowService::class);
+        // Reclaim premature rows, then promote ready Admin-stamped parcels.
+        // Promote used to run only on Order List — opening Assign 100 alone
+        // left many OS parcels stuck as collected.
+        $workflow->reclaimPrematureAssign100Items();
+        $workflow->promoteReadyOrdersToAssign100();
+        $workflow->refreshAssign100PoolReceivedDates();
 
         $hubService = app(\App\Services\DispatchHubService::class);
         $authUser = auth()->user();
@@ -2425,11 +2596,6 @@ class OrderController extends Controller
                 ->withErrors(__('message.delivery_item_status_not_allowed'));
         }
 
-        // Delivered / Completed use status "completed". Finished also includes settled Returns.
-        $queryStatus = in_array($status, ['delivered', 'completed'], true)
-            ? 'completed'
-            : $status;
-
         $rider = User::query()
             ->where('id', $riderId)
             ->where('user_type', 'delivery_man')
@@ -2441,88 +2607,18 @@ class OrderController extends Controller
                 ->withErrors(__('message.not_found_entry', ['name' => __('message.delivery_man')]));
         }
 
-        // Default: All items (no day-by-day). User may apply From/To when they want.
-        $fromDateRaw = trim((string) $request->get('from_date', ''));
-        $toDateRaw = trim((string) $request->get('to_date', ''));
-        $fromDay = null;
-        $toDay = null;
-        $hasDateFilter = $fromDateRaw !== '' || $toDateRaw !== '';
-        if ($hasDateFilter) {
-        if ($fromDateRaw === '') {
-                $fromDateRaw = $toDateRaw;
-        }
-        if ($toDateRaw === '') {
-            $toDateRaw = $fromDateRaw;
-        }
-        $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
-        $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
-        if ($toDay < $fromDay) {
-            $toDay = $fromDay;
-            $toDateRaw = $fromDateRaw;
-        }
-        }
+        [
+            $itemsQuery,
+            $fromDateRaw,
+            $toDateRaw,
+            $fromDay,
+            $toDay,
+            $search,
+        ] = $this->dispatchRiderItemsFilteredQuery($request, $rider, $status);
 
-        $search = trim((string) $request->get('search', ''));
-
-        $itemsQuery = DispatchOrderItem::query()
+        $items = $itemsQuery
             ->with(['order.client', 'fromBranch', 'toBranch', 'deliveryMan', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'kyoShinItem'])
-            ->orderByDesc('id');
-
-        // Hub Assigned tab: Rider List counts status=assigned inbox via hub_user_id,
-        // not delivery_man_id / courier_assigned.
-        if (isDispatchHub($rider) && $status === 'courier_assigned') {
-            $itemsQuery->where(function ($q) use ($rider) {
-                $q->where(function ($own) use ($rider) {
-                    $own->where('delivery_man_id', $rider->id)
-                        ->where('status', 'courier_assigned');
-                })->orWhere(function ($hubInbox) use ($rider) {
-                    $hubInbox->where('hub_user_id', $rider->id)
-                        ->where('status', 'assigned');
-                    if (Schema::hasColumn('dispatch_order_items', 'mdy_inbox_at')) {
-                        $hubInbox->whereNull('mdy_inbox_at');
-                    }
-                });
-            });
-        } elseif ($status === 'finished') {
-            $itemsQuery->where('delivery_man_id', $rider->id)
-                ->whereIn('status', ['completed', 'return'])
-                ->whereNotNull('admin_finished_at');
-        } elseif ($status === 'return') {
-            $itemsQuery->where('delivery_man_id', $rider->id)
-                ->where('status', 'return')
-                ->whereNull('admin_finished_at');
-        } else {
-            $itemsQuery->where('delivery_man_id', $rider->id)
-                ->where('status', $queryStatus);
-        }
-
-        if ($hasDateFilter && $fromDay && $toDay) {
-        $itemsQuery->where(function ($dateQuery) use ($fromDay, $toDay) {
-            $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
-        });
-        }
-
-        if ($status === 'delivered') {
-            $itemsQuery->whereNull('admin_completed_at');
-        } elseif ($status === 'completed') {
-            $itemsQuery->whereNotNull('admin_completed_at')->whereNull('admin_finished_at');
-        }
-
-        if ($search !== '') {
-            $itemsQuery->where(function ($q) use ($search) {
-                $q->where('code', 'like', "%{$search}%")
-                    ->orWhere('customer_name', 'like', "%{$search}%")
-                    ->orWhere('customer_phone', 'like', "%{$search}%")
-                    ->orWhere('customer_address', 'like', "%{$search}%")
-                    ->orWhere('township', 'like', "%{$search}%")
-                    ->orWhere('remark', 'like', "%{$search}%")
-                    ->orWhereHas('pendingRemarks', function ($history) use ($search) {
-                        $history->where('remark', 'like', "%{$search}%");
-                    });
-            });
-        }
-
-        $items = $itemsQuery->get();
+            ->get();
 
         $pageTitle = __('message.item_details');
         $assets = [];
@@ -3741,7 +3837,7 @@ class OrderController extends Controller
             ->get()
             ->keyBy('os_user_id');
 
-        $buildOsRow = function (int $osId, $itemGroup, string $amountMode = 'settlement') use ($clients, $settlementService, $drafts) {
+        $buildOsRow = function (int $osId, $itemGroup, string $amountMode = 'settlement', string $settlementSide = 'pay') use ($clients, $settlementService, $drafts) {
             if ($itemGroup->isEmpty()) {
                 return null;
             }
@@ -3777,13 +3873,18 @@ class OrderController extends Controller
                 ? -1 * (float) $itemGroup->sum(static fn ($item) => $item->kyoShinPayAmount())
                 : (float) $itemGroup->sum(static fn ($item) => $item->settlementOsToPay());
             $draft = $drafts->get($osId);
+            $slipSide = $settlementSide === 'receive' ? 'receive' : 'pay';
             $slipApplies = $amountMode !== 'kyo_shin'
-                && $settlementService->draftSlipAppliesToItems($draft, $itemGroup);
-            $kpaySlipUrl = $slipApplies && $draft && $draft->kpay_slip_path
-                ? Storage::disk('public')->url($draft->kpay_slip_path)
-                : null;
+                && $settlementService->draftSlipAppliesToItems($draft, $itemGroup, $slipSide);
+            $kpaySlipUrls = $slipApplies && $draft
+                ? $settlementService->urlsForStored($draft->kpay_slip_path, $slipSide)
+                : [];
+            $kpaySlipUrl = $kpaySlipUrls[0] ?? null;
             $kpayName = $client ? $settlementService->kpayNameFromUser($client) : '';
             $kpayNo = $client ? $settlementService->kpayNoFromUser($client) : '';
+            $address = $client && function_exists('formatOsClientAddress')
+                ? formatOsClientAddress($client)
+                : '';
 
             return (object) [
                 'id' => $osId,
@@ -3791,12 +3892,14 @@ class OrderController extends Controller
                 'display_name' => $baseName,
                 'city_name' => $cityName,
                 'phone' => $client?->contact_number ?? '-',
+                'address' => $address !== '' ? $address : '-',
                 'amount' => $amount,
                 'kyo_shin_amount' => abs((float) $itemGroup->sum(static fn ($item) => $item->kyoShinPayAmount())),
                 'kpay_name' => $kpayName,
                 'kpay_no' => $kpayNo,
                 'kpay_slip_url' => $kpaySlipUrl,
-                'has_kpay_slip' => ! empty($kpaySlipUrl),
+                'kpay_slip_urls' => $kpaySlipUrls,
+                'has_kpay_slip' => $kpaySlipUrls !== [],
                 'item_count' => $itemGroup->count(),
                 // Lock Show Slip / Finish to exactly the parcels shown for this OS row.
                 'item_ids' => $itemGroup->pluck('id')->map(static fn ($id) => (int) $id)->values()->all(),
@@ -3821,7 +3924,7 @@ class OrderController extends Controller
                 return null;
             }
 
-            return $buildOsRow($osId, $nettable);
+            return $buildOsRow($osId, $nettable, 'settlement', 'pay');
         })->filter()->sortBy(static fn ($row) => mb_strtolower($row->name), SORT_NATURAL)->values();
 
         $receiveFromOsRows = $osIds->map(function ($osId) use ($grouped, $buildOsRow, $settlementService) {
@@ -3835,14 +3938,14 @@ class OrderController extends Controller
                 return null;
             }
 
-            return $buildOsRow($osId, $nettable);
+            return $buildOsRow($osId, $nettable, 'settlement', 'receive');
         })->filter()->sortBy(static fn ($row) => mb_strtolower($row->name), SORT_NATURAL)->values();
 
         $kyoShinGrouped = $kyoShinPayItems->groupBy(fn ($item) => $settlementService->itemOsPartyUserId($item));
         $kyoShinPayRows = $kyoShinGrouped->keys()->map(function ($osId) use ($kyoShinGrouped, $buildOsRow) {
             $osId = (int) $osId;
 
-            return $buildOsRow($osId, $kyoShinGrouped->get($osId, collect()), 'kyo_shin');
+            return $buildOsRow($osId, $kyoShinGrouped->get($osId, collect()), 'kyo_shin', 'pay');
         })->filter()->sortBy(static fn ($row) => mb_strtolower($row->name), SORT_NATURAL)->values();
 
         $rows = $payToOsRows->concat($receiveFromOsRows)->values();
@@ -3858,6 +3961,12 @@ class OrderController extends Controller
         $filterFromDate = $fromDateRaw;
         $filterToDate = $toDateRaw;
         $slipCompany = $this->dispatchOsSlipCompany();
+
+        $adminKpayAccounts = AdminKpayAccount::query()
+            ->whereDate('settlement_date', '>=', $fromDay)
+            ->whereDate('settlement_date', '<=', $toDay)
+            ->orderByDesc('id')
+            ->get();
 
         return view('order.dispatch-os-list', compact(
             'pageTitle',
@@ -3879,7 +3988,8 @@ class OrderController extends Controller
             'branchTabs',
             'branchTabCounts',
             'allBranchCount',
-            'selectedBranchId'
+            'selectedBranchId',
+            'adminKpayAccounts'
         ));
     }
 
@@ -4062,11 +4172,13 @@ class OrderController extends Controller
         );
         $slipSender = $settlementService->resolveSlipSender($osClient ?? new User(), $items, $osName);
         $draft = $settlementService->getDraft($osId, $fromDay, $toDay);
+        $slipSide = $settlementSide === 'receive' ? 'receive' : 'pay';
         $kpayImageUrl = null;
         if ($batch && $batch->kpay_slip_path) {
-            $kpayImageUrl = Storage::disk('public')->url($batch->kpay_slip_path);
-        } elseif ($settlementService->draftSlipAppliesToItems($draft, $items) && $draft?->kpay_slip_path) {
-            $kpayImageUrl = Storage::disk('public')->url($draft->kpay_slip_path);
+            $kpayImageUrl = $settlementService->urlForPath($batch->kpay_slip_path);
+        } elseif ($settlementService->draftSlipAppliesToItems($draft, $items, $slipSide) && $draft?->kpay_slip_path) {
+            $draftUrls = $settlementService->urlsForStored($draft->kpay_slip_path, $slipSide);
+            $kpayImageUrl = $draftUrls[0] ?? null;
         }
 
         $html = view('order.dispatch-os-slip-completed', [
@@ -4099,24 +4211,341 @@ class OrderController extends Controller
         $request->validate([
             'from_date' => 'required|string',
             'to_date' => 'required|string',
-            'kpay_slip' => 'required|image|max:10240',
+            'settlement_side' => 'nullable|string|in:pay,receive',
+            'kpay_slip' => 'nullable|image|max:10240',
+            'kpay_slips' => 'nullable|array|min:1',
+            'kpay_slips.*' => 'image|max:10240',
+        ]);
+
+        $files = [];
+        if ($request->hasFile('kpay_slips')) {
+            foreach ((array) $request->file('kpay_slips') as $file) {
+                if ($file) {
+                    $files[] = $file;
+                }
+            }
+        }
+        if ($request->hasFile('kpay_slip')) {
+            $files[] = $request->file('kpay_slip');
+        }
+        if ($files === []) {
+            return response()->json(['message' => __('message.os_settlement_kpay_slip_required')], 422);
+        }
+
+        $fromDay = $this->parseDispatchDateInput($request->input('from_date'))->toDateString();
+        $toDay = $this->parseDispatchDateInput($request->input('to_date'))->toDateString();
+        $osId = (int) $osId;
+        $settlementSide = $request->input('settlement_side') === 'receive' ? 'receive' : 'pay';
+
+        $settlementService = app(OsSettlementService::class);
+        $draft = $settlementService->uploadKpaySlips(
+            $osId,
+            $fromDay,
+            $toDay,
+            $files,
+            $settlementSide
+        );
+
+        $urls = $settlementService->urlsForStored($draft->kpay_slip_path, $settlementSide);
+
+        return response()->json([
+            'message' => __('message.os_settlement_kpay_uploaded'),
+            'kpay_slip_url' => $urls[0] ?? null,
+            'kpay_slip_urls' => $urls,
+        ]);
+    }
+
+    public function dispatchOsSettlementRemoveKpay(Request $request, $osId)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        if ((int) $osId <= 0) {
+            return response()->json(['message' => __('message.something_went_wrong')], 422);
+        }
+
+        $request->validate([
+            'from_date' => 'required|string',
+            'to_date' => 'required|string',
+            'index' => 'required|integer|min:0',
+            'settlement_side' => 'nullable|string|in:pay,receive',
         ]);
 
         $fromDay = $this->parseDispatchDateInput($request->input('from_date'))->toDateString();
         $toDay = $this->parseDispatchDateInput($request->input('to_date'))->toDateString();
         $osId = (int) $osId;
+        $index = (int) $request->input('index');
+        $settlementSide = $request->input('settlement_side') === 'receive' ? 'receive' : 'pay';
 
         $settlementService = app(OsSettlementService::class);
-        $draft = $settlementService->uploadKpaySlip(
-            $osId,
-            $fromDay,
-            $toDay,
-            $request->file('kpay_slip')
-        );
+
+        try {
+            $draft = $settlementService->removeKpaySlipAt($osId, $fromDay, $toDay, $index, $settlementSide);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage() ?: __('message.something_went_wrong')], 422);
+        }
+
+        $urls = $settlementService->urlsForStored($draft->kpay_slip_path, $settlementSide);
 
         return response()->json([
-            'message' => __('message.os_settlement_kpay_uploaded'),
-            'kpay_slip_url' => Storage::disk('public')->url($draft->kpay_slip_path),
+            'message' => __('message.os_settlement_kpay_removed'),
+            'kpay_slip_url' => $urls[0] ?? null,
+            'kpay_slip_urls' => $urls,
+        ]);
+    }
+
+    public function dispatchOsAdminKpayStore(Request $request)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $request->validate([
+            'settlement_date' => 'required|string',
+            'kpay_name' => 'required|string|max:191',
+            'kpay_phone' => 'required|string|max:64',
+            'amount' => 'required|numeric|min:0.01',
+            'branch_id' => 'nullable|integer',
+        ]);
+
+        $day = $this->parseDispatchDateInput($request->input('settlement_date'))->toDateString();
+        $amount = round((float) $request->input('amount'), 2);
+        [$branchId] = resolveDestinationBranchFilter($request);
+        if ($request->filled('branch_id')) {
+            $branchId = (int) $request->input('branch_id') ?: null;
+        }
+
+        $account = AdminKpayAccount::query()->create([
+            'settlement_date' => $day,
+            'branch_id' => $branchId && $branchId > 0 ? $branchId : null,
+            'kpay_name' => trim((string) $request->input('kpay_name')),
+            'kpay_phone' => trim((string) $request->input('kpay_phone')),
+            'amount' => $amount,
+            'balance' => $amount,
+            'created_by' => auth()->id(),
+        ]);
+
+        return response()->json([
+            'message' => __('message.admin_kpay_account_created'),
+            'account' => [
+                'id' => $account->id,
+                'settlement_date' => optional($account->settlement_date)->format('d-m-Y'),
+                'kpay_name' => $account->kpay_name,
+                'kpay_phone' => $account->kpay_phone,
+                'amount' => (float) $account->amount,
+                'balance' => (float) $account->balance,
+                'label' => $account->label(),
+            ],
+        ]);
+    }
+
+    public function dispatchOsAdminKpayUpdate(Request $request, $id)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $account = AdminKpayAccount::query()->find((int) $id);
+        if (! $account) {
+            return response()->json(['message' => __('message.admin_kpay_account_not_found')], 404);
+        }
+
+        $request->validate([
+            'kpay_name' => 'required|string|max:191',
+            'kpay_phone' => 'required|string|max:64',
+            'amount' => 'required|numeric|min:0.01',
+        ]);
+
+        $newAmount = round((float) $request->input('amount'), 2);
+        $oldAmount = round((float) $account->amount, 2);
+        $oldBalance = round((float) $account->balance, 2);
+        $spent = round(max(0, $oldAmount - $oldBalance), 2);
+
+        if ($newAmount + 0.00001 < $spent) {
+            return response()->json([
+                'message' => __('message.admin_kpay_amount_below_spent', [
+                    'spent' => number_format($spent),
+                ]),
+            ], 422);
+        }
+
+        $account->kpay_name = trim((string) $request->input('kpay_name'));
+        $account->kpay_phone = trim((string) $request->input('kpay_phone'));
+        $account->amount = $newAmount;
+        $account->balance = round($newAmount - $spent, 2);
+        $account->save();
+
+        return response()->json([
+            'message' => __('message.admin_kpay_account_updated'),
+            'account' => [
+                'id' => $account->id,
+                'settlement_date' => optional($account->settlement_date)->format('d-m-Y'),
+                'kpay_name' => $account->kpay_name,
+                'kpay_phone' => $account->kpay_phone,
+                'amount' => (float) $account->amount,
+                'balance' => (float) $account->balance,
+                'label' => $account->label(),
+            ],
+        ]);
+    }
+
+    public function dispatchOsAdminKpayDestroy(Request $request, $id)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $account = AdminKpayAccount::query()->find((int) $id);
+        if (! $account) {
+            return response()->json(['message' => __('message.admin_kpay_account_not_found')], 404);
+        }
+
+        $hasTransfers = OsSettlementBatch::query()
+                ->where('admin_kpay_account_id', (int) $account->id)
+                ->exists()
+            || OsMoneyTransfer::query()
+                ->where('admin_kpay_account_id', (int) $account->id)
+                ->exists();
+
+        if ($hasTransfers || abs((float) $account->balance - (float) $account->amount) > 0.00001) {
+            return response()->json(['message' => __('message.admin_kpay_account_in_use')], 422);
+        }
+
+        $account->delete();
+
+        return response()->json([
+            'message' => __('message.admin_kpay_account_deleted'),
+            'deleted_id' => (int) $account->id,
+        ]);
+    }
+
+    public function dispatchOsAdminKpayClear(Request $request)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $request->validate([
+            'from_date' => 'required|string',
+            'to_date' => 'required|string',
+        ]);
+
+        $fromDay = $this->parseDispatchDateInput($request->input('from_date'))->toDateString();
+        $toDay = $this->parseDispatchDateInput($request->input('to_date'))->toDateString();
+
+        $accounts = AdminKpayAccount::query()
+            ->whereDate('settlement_date', '>=', $fromDay)
+            ->whereDate('settlement_date', '<=', $toDay)
+            ->orderByDesc('id')
+            ->get();
+
+        $deleted = 0;
+        $skipped = 0;
+        $deletedIds = [];
+
+        foreach ($accounts as $account) {
+            if (abs((float) $account->balance - (float) $account->amount) > 0.00001) {
+                $skipped++;
+                continue;
+            }
+            $deletedIds[] = (int) $account->id;
+            $account->delete();
+            $deleted++;
+        }
+
+        if ($deleted === 0 && $skipped > 0) {
+            return response()->json([
+                'message' => __('message.admin_kpay_clear_all_in_use'),
+                'deleted' => 0,
+                'skipped' => $skipped,
+                'deleted_ids' => [],
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => __('message.admin_kpay_clear_all_done', ['count' => $deleted]),
+            'deleted' => $deleted,
+            'skipped' => $skipped,
+            'deleted_ids' => $deletedIds,
+        ]);
+    }
+
+    public function dispatchOsAdminKpayHistory(Request $request, $id)
+    {
+        if (! auth()->user()->can('order-list') && ! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $account = AdminKpayAccount::query()->find((int) $id);
+        if (! $account) {
+            return response()->json(['message' => __('message.admin_kpay_account_not_found')], 404);
+        }
+
+        $batches = OsSettlementBatch::query()
+            ->with([
+                'osUser:id,name,contact_number',
+                'finishedByUser:id,name',
+            ])
+            ->where('admin_kpay_account_id', (int) $account->id)
+            ->where('payment_method', 'kpay')
+            ->orderByDesc('finished_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $dayGroups = [];
+        foreach ($batches as $batch) {
+            $dayKey = optional($batch->finished_at)->timezone(config('app.timezone', 'Asia/Yangon'))->format('Y-m-d')
+                ?: optional($batch->to_date)->format('Y-m-d')
+                ?: optional($batch->from_date)->format('Y-m-d')
+                ?: 'unknown';
+            $dayLabel = optional($batch->finished_at)->timezone(config('app.timezone', 'Asia/Yangon'))->format('d-m-Y')
+                ?: optional($batch->to_date)->format('d-m-Y')
+                ?: optional($batch->from_date)->format('d-m-Y')
+                ?: '—';
+
+            if (! isset($dayGroups[$dayKey])) {
+                $dayGroups[$dayKey] = [
+                    'date' => $dayLabel,
+                    'date_key' => $dayKey,
+                    'total' => 0.0,
+                    'items' => [],
+                ];
+            }
+
+            $amount = abs((float) ($batch->amount ?? 0));
+            $dayGroups[$dayKey]['total'] += $amount;
+            $dayGroups[$dayKey]['items'][] = [
+                'id' => (int) $batch->id,
+                'admin_name' => $batch->finishedByUser?->name ?: '—',
+                'os_name' => $batch->osUser?->name ?: '—',
+                'os_phone' => $batch->osUser?->contact_number ?: '',
+                'os_kpay_name' => $batch->kpay_name ?: '',
+                'os_kpay_phone' => $batch->kpay_no ?: '',
+                'amount' => $amount,
+                'finished_at' => optional($batch->finished_at)
+                    ?->timezone(config('app.timezone', 'Asia/Yangon'))
+                    ->format('d-m-Y H:i') ?: '—',
+            ];
+        }
+
+        $days = array_values($dayGroups);
+        usort($days, static function ($a, $b) {
+            return strcmp((string) ($b['date_key'] ?? ''), (string) ($a['date_key'] ?? ''));
+        });
+
+        return response()->json([
+            'account' => [
+                'id' => (int) $account->id,
+                'kpay_name' => $account->kpay_name,
+                'kpay_phone' => $account->kpay_phone,
+                'amount' => (float) $account->amount,
+                'balance' => (float) $account->balance,
+                'label' => $account->label(),
+            ],
+            'days' => $days,
+            'transfer_count' => $batches->count(),
+            'transfer_total' => round((float) $batches->sum(static fn ($b) => abs((float) ($b->amount ?? 0))), 2),
         ]);
     }
 
@@ -4138,6 +4567,7 @@ class OrderController extends Controller
             'settlement_side' => 'nullable|string|in:pay,receive,kyo_shin',
             'item_ids' => 'nullable|array',
             'item_ids.*' => 'integer',
+            'admin_kpay_account_id' => 'nullable|integer',
         ]);
 
         $fromDay = $this->parseDispatchDateInput($request->input('from_date'))->toDateString();
@@ -4152,6 +4582,9 @@ class OrderController extends Controller
             'intval',
             (array) $request->input('item_ids', [])
         ))));
+        $adminKpayAccountId = $request->filled('admin_kpay_account_id')
+            ? (int) $request->input('admin_kpay_account_id')
+            : null;
         $osId = (int) $osId;
 
         $osClient = $osId > 0 ? User::query()->with('city')->find($osId) : null;
@@ -4176,7 +4609,8 @@ class OrderController extends Controller
                 $paymentMethod,
                 $settlementSide,
                 $itemIds !== [] ? $itemIds : null,
-                $branchId
+                $branchId,
+                $adminKpayAccountId
             );
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -4204,6 +4638,7 @@ class OrderController extends Controller
             'items.*.settlement_side' => 'nullable|string|in:pay,receive,kyo_shin',
             'items.*.item_ids' => 'nullable|array',
             'items.*.item_ids.*' => 'integer',
+            'items.*.admin_kpay_account_id' => 'nullable|integer',
             'delivery_format' => 'nullable|string|in:table',
             'settlement_side' => 'nullable|string|in:pay,receive,kyo_shin',
         ]);
@@ -4218,6 +4653,9 @@ class OrderController extends Controller
                     'intval',
                     (array) ($item['item_ids'] ?? [])
                 ))));
+                $adminId = isset($item['admin_kpay_account_id']) && $item['admin_kpay_account_id'] !== ''
+                    ? (int) $item['admin_kpay_account_id']
+                    : null;
 
                 return [
                     'os_id' => (int) ($item['os_id'] ?? 0),
@@ -4226,6 +4664,7 @@ class OrderController extends Controller
                         : (((string) ($item['payment_method'] ?? 'kpay')) === 'cash' ? 'cash' : 'kpay'),
                     'settlement_side' => $side,
                     'item_ids' => $itemIds,
+                    'admin_kpay_account_id' => $adminId,
                 ];
             })
             ->filter(static fn ($item) => $item['os_id'] >= 0)
@@ -4261,20 +4700,24 @@ class OrderController extends Controller
             $itemIds = array_values(array_filter(array_map('intval', (array) ($itemPayload['item_ids'] ?? []))));
 
             if ($settlementSide !== 'kyo_shin') {
-                $kpayPath = $settlementService->getDraftKpayPath($osId, $fromDay, $toDay, null);
-                if ($kpayPath) {
-                    $pendingItems = $settlementService->filterItemsBySettlementSide(
-                        $settlementService->completedItemsForPeriod($osId, $fromDay, $toDay, $branchId),
-                        $settlementSide
-                    );
-                    if ($itemIds !== []) {
-                        $pendingItems = $pendingItems
-                            ->filter(static fn ($item) => in_array((int) $item->id, $itemIds, true))
-                            ->values();
-                    }
-                    if (! $settlementService->draftSlipAppliesToItems($settlementService->getDraft($osId, $fromDay, $toDay), $pendingItems)) {
-                        $kpayPath = null;
-                    }
+                $pendingItems = $settlementService->filterItemsBySettlementSide(
+                    $settlementService->completedItemsForPeriod($osId, $fromDay, $toDay, $branchId),
+                    $settlementSide
+                );
+                if ($itemIds !== []) {
+                    $pendingItems = $pendingItems
+                        ->filter(static fn ($item) => in_array((int) $item->id, $itemIds, true))
+                        ->values();
+                }
+                $kpayPath = $settlementService->sanitizeStoredSlipPath(
+                    $settlementService->getDraftKpayPath($osId, $fromDay, $toDay, null, $settlementSide)
+                );
+                if ($kpayPath && ! $settlementService->draftSlipAppliesToItems(
+                    $settlementService->getDraft($osId, $fromDay, $toDay),
+                    $pendingItems,
+                    $settlementSide
+                )) {
+                    $kpayPath = null;
                 }
                 if (! $kpayPath) {
                     $errors[] = __('message.os_settlement_kpay_missing_for_os', [
@@ -4301,7 +4744,10 @@ class OrderController extends Controller
                     $paymentMethod,
                     $settlementSide,
                     $itemIds !== [] ? $itemIds : null,
-                    $branchId
+                    $branchId,
+                    ! empty($itemPayload['admin_kpay_account_id'])
+                        ? (int) $itemPayload['admin_kpay_account_id']
+                        : null
                 );
                 $finished++;
                 $finishedIds[] = $osId;
@@ -4628,6 +5074,36 @@ class OrderController extends Controller
         $isViewOnly = true;
 
         return view('order.dispatch-item-form', compact('order', 'item', 'cities', 'deliveryCities', 'isViewOnly'));
+    }
+
+    /**
+     * Rider App–style parcel preview (status + info + pickup/assigned riders).
+     */
+    public function dispatchItemRiderPreview($orderId, $itemId)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $order = Order::with('delivery_man')->findOrFail($orderId);
+        $item = DispatchOrderItem::with([
+            'order.delivery_man',
+            'deliveryMan',
+            'photoMedia',
+            'pendingPhotoMedia',
+            'deliveredPhotoMedia',
+            'kyoShinItem',
+            'fromBranch',
+            'toBranch',
+        ])->where('order_id', $orderId)->findOrFail($itemId);
+
+        if (! $item->relationLoaded('order') || ! $item->order) {
+            $item->setRelation('order', $order);
+        }
+
+        $payload = (new \App\Http\Resources\DispatchOrderItemResource($item))->resolve(request());
+
+        return view('order.dispatch-item-rider-preview', compact('order', 'item', 'payload'));
     }
 
     public function dispatchItemCreate($id)
@@ -5575,6 +6051,144 @@ class OrderController extends Controller
             'rider_remit_date' => null,
             'admin_completed_at' => null,
         ];
+    }
+
+    /**
+     * Shared Rider List → Item Details query (filters match the on-screen table).
+     *
+     * @return array{0:\Illuminate\Database\Eloquent\Builder,1:string,2:string,3:?string,4:?string,5:string}
+     */
+    private function dispatchRiderItemsFilteredQuery(Request $request, User $rider, string $status): array
+    {
+        $queryStatus = in_array($status, ['delivered', 'completed'], true)
+            ? 'completed'
+            : $status;
+
+        $fromDateRaw = trim((string) $request->get('from_date', ''));
+        $toDateRaw = trim((string) $request->get('to_date', ''));
+        $fromDay = null;
+        $toDay = null;
+        $hasDateFilter = $fromDateRaw !== '' || $toDateRaw !== '';
+        if ($hasDateFilter) {
+            if ($fromDateRaw === '') {
+                $fromDateRaw = $toDateRaw;
+            }
+            if ($toDateRaw === '') {
+                $toDateRaw = $fromDateRaw;
+            }
+            $fromDay = $this->parseDispatchDateInput($fromDateRaw)->toDateString();
+            $toDay = $this->parseDispatchDateInput($toDateRaw)->toDateString();
+            if ($toDay < $fromDay) {
+                $toDay = $fromDay;
+                $toDateRaw = $fromDateRaw;
+            }
+        }
+
+        $search = trim((string) $request->get('search', ''));
+
+        $itemsQuery = DispatchOrderItem::query()->orderByDesc('id');
+
+        // Hub Assigned tab: Rider List counts status=assigned inbox via hub_user_id,
+        // not delivery_man_id / courier_assigned.
+        if (isDispatchHub($rider) && $status === 'courier_assigned') {
+            $itemsQuery->where(function ($q) use ($rider) {
+                $q->where(function ($own) use ($rider) {
+                    $own->where('delivery_man_id', $rider->id)
+                        ->where('status', 'courier_assigned');
+                })->orWhere(function ($hubInbox) use ($rider) {
+                    $hubInbox->where('hub_user_id', $rider->id)
+                        ->where('status', 'assigned');
+                    if (Schema::hasColumn('dispatch_order_items', 'mdy_inbox_at')) {
+                        $hubInbox->whereNull('mdy_inbox_at');
+                    }
+                });
+            });
+        } elseif ($status === 'finished') {
+            $itemsQuery->where('delivery_man_id', $rider->id)
+                ->whereIn('status', ['completed', 'return'])
+                ->whereNotNull('admin_finished_at');
+        } elseif ($status === 'return') {
+            $itemsQuery->where('delivery_man_id', $rider->id)
+                ->where('status', 'return')
+                ->whereNull('admin_finished_at');
+        } else {
+            $itemsQuery->where('delivery_man_id', $rider->id)
+                ->where('status', $queryStatus);
+        }
+
+        if ($hasDateFilter && $fromDay && $toDay) {
+            $itemsQuery->where(function ($dateQuery) use ($fromDay, $toDay) {
+                $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
+            });
+        }
+
+        if ($status === 'delivered') {
+            $itemsQuery->whereNull('admin_completed_at');
+        } elseif ($status === 'completed') {
+            $itemsQuery->whereNotNull('admin_completed_at')->whereNull('admin_finished_at');
+        }
+
+        if ($search !== '') {
+            $itemsQuery->where(function ($q) use ($search) {
+                $q->where('code', 'like', "%{$search}%")
+                    ->orWhere('customer_name', 'like', "%{$search}%")
+                    ->orWhere('customer_phone', 'like', "%{$search}%")
+                    ->orWhere('customer_address', 'like', "%{$search}%")
+                    ->orWhere('township', 'like', "%{$search}%")
+                    ->orWhere('remark', 'like', "%{$search}%")
+                    ->orWhereHas('pendingRemarks', function ($history) use ($search) {
+                        $history->where('remark', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        return [$itemsQuery, $fromDateRaw, $toDateRaw, $fromDay, $toDay, $search];
+    }
+
+    /**
+     * Excel export for Admin Rider List → Item Details (same filters as the page).
+     */
+    public function dispatchRiderItemsExportExcel(Request $request, $riderId)
+    {
+        if (! auth()->user()->can('order-list')) {
+            abort(403);
+        }
+
+        $statusMap = [
+            'courier_assigned' => __('message.follow_up_status_assigned'),
+            'courier_departed' => __('message.follow_up_status_on_way'),
+            'pending' => __('message.follow_up_status_pending'),
+            'return' => __('message.follow_up_status_return'),
+            'os_returned' => __('message.follow_up_status_os_returned'),
+            'delivered' => __('message.follow_up_status_delivered'),
+            'completed' => __('message.follow_up_status_completed'),
+            'finished' => __('message.follow_up_status_finished'),
+        ];
+
+        $status = trim((string) $request->get('status', 'courier_assigned'));
+        if (! array_key_exists($status, $statusMap)) {
+            abort(404);
+        }
+
+        $rider = User::query()
+            ->where('id', $riderId)
+            ->where('user_type', 'delivery_man')
+            ->first();
+
+        if (! $rider) {
+            abort(404);
+        }
+
+        [$itemsQuery] = $this->dispatchRiderItemsFilteredQuery($request, $rider, $status);
+        $items = $itemsQuery
+            ->with(['order.client', 'pendingRemarks', 'kyoShinItem'])
+            ->get();
+
+        $safeRider = preg_replace('/[^A-Za-z0-9_-]+/', '_', (string) ($rider->name ?? 'rider')) ?: 'rider';
+        $safeStatus = preg_replace('/[^A-Za-z0-9_-]+/', '_', $status) ?: 'status';
+        $filename = 'rider_'.$rider->id.'_'.$safeRider.'_'.$safeStatus.'_items.xlsx';
+
+        return Excel::download(new DispatchRiderItemsExport($items), $filename);
     }
 
     /**
@@ -7038,7 +7652,7 @@ class OrderController extends Controller
                 'subject'     => __('message.shipped_order', ['id' => $order->id]),
                 'message' => $data['history_message'] ?? null,
             ];
-            $admins = User::admin()->get();
+            $admins = function_exists('getPanelStaffUsers') ? getPanelStaffUsers() : User::admin()->get();
             foreach ($admins as $admin) {
                 $admin->notify(new CustomerSupportNotification($notification_data));
             }

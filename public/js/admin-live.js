@@ -99,23 +99,36 @@
 
     function applyNotificationCount(count) {
         count = Number(count) || 0;
-        var $badge = $('.pds-topbar-notify .notify_count').first();
+        var label = count >= 100 ? '99+' : String(count);
+        var $badge = $('.pds-topbar-notify .notify_count, .pds-topbar-notify .pds-topbar-badge.notify_count').first();
+        if (!$badge.length) {
+            $badge = $('.notify_count.count-mail').first();
+        }
         if ($badge.length) {
             if (count > 0) {
-                $badge.addClass('notification_tag').text(count >= 100 ? '99+' : String(count)).removeClass('d-none');
+                $badge
+                    .addClass('notification_tag pds-topbar-badge')
+                    .text(label)
+                    .removeClass('d-none')
+                    .css('display', '');
             } else {
                 $badge.addClass('d-none').removeClass('notification_tag').text('');
             }
         }
-        if (typeof window.updateNotificationDropdownMeta === 'function'
-            && !$('.pds-notify-menu').hasClass('show')) {
+        if (!$('.pds-notify-menu').hasClass('show')) {
             // Keep closed-dropdown header count in sync without rewriting unread sentence mid-open.
             var $headerCount = $('.pds-notify-header-count');
-            $headerCount.text(count);
-            if (count > 0) {
-                $headerCount.removeClass('d-none');
-            } else {
-                $headerCount.addClass('d-none');
+            if ($headerCount.length) {
+                $headerCount.text(label);
+                if (count > 0) {
+                    $headerCount.removeClass('d-none');
+                } else {
+                    $headerCount.addClass('d-none');
+                }
+            }
+            var $unreadText = $('.pds-notify-unread-text');
+            if ($unreadText.length && !$unreadText.data('pds-lock')) {
+                // Leave sentence to updateNotificationDropdownMeta when available.
             }
         }
     }
@@ -302,6 +315,11 @@
         ensureAdminLiveScrollGuard();
         var $root = $('#adminLiveRoot');
         if (!$root.length) return false;
+        // AJAX-shell pages must not be HTML-swapped (wipes client-loaded tables / CSS jitter).
+        // Also skip auto table reload here — Follow Up boots with refreshContent:false to avoid spinner loops.
+        if ($root.attr('data-live-mode') === 'ajax') {
+            return true;
+        }
         if ($('input:focus, textarea:focus, select:focus, .select2-container--open').length) return true;
         if ($('.flatpickr-calendar.open').length) return true;
         if ($('.modal.show, .jconfirm').length) return true;
@@ -311,6 +329,11 @@
 
         window.__adminLiveSoftReplacing = true;
         var scrollState = captureScrollPositions();
+        // Never re-apply window scroll after soft replace — SPA navigations + scroll
+        // anchoring were landing Rider List / Settlement mid-page (toolbar "missing").
+        scrollState.winX = 0;
+        scrollState.winY = 0;
+        var navGen = window.__pdsAdminLiveNavGen || 0;
 
         $.ajax({
             url: window.location.href,
@@ -319,6 +342,10 @@
             cache: false,
             headers: { 'X-Admin-Live-Fragment': '1' }
         }).done(function (html) {
+            // Drop stale responses from a previous page after SPA navigation.
+            if ((window.__pdsAdminLiveNavGen || 0) !== navGen) {
+                return;
+            }
             // User may have started scrolling while the fragment was loading.
             if (userRecentlyScrolling(800) || $('input:focus, textarea:focus, select:focus, .select2-container--open').length || $('.flatpickr-calendar.open').length || $('.modal.show, .jconfirm').length) {
                 return;
@@ -365,7 +392,11 @@
                     'expenses_from',
                     'expenses_to',
                     'from_date',
-                    'to_date'
+                    'to_date',
+                    'to_assign_status',
+                    'to_assign_os_name',
+                    'to_assign_pickup_rider',
+                    'to_assign_customer_search'
                 ];
                 var preserved = {};
                 preserveIds.forEach(function (id) {
@@ -379,9 +410,13 @@
                     var el = document.getElementById(id);
                     if (el && 'value' in el) el.value = preserved[id];
                 });
+                scrollState.winX = 0;
+                scrollState.winY = 0;
                 restoreScrollPositions(scrollState);
                 $(document).trigger('admin-live:replaced');
-                // Re-apply after listeners (table freeze / animations) finish mutating layout.
+                // Re-apply inner scrolls after listeners; window stays at top.
+                scrollState.winX = 0;
+                scrollState.winY = 0;
                 restoreScrollPositions(scrollState);
             } else if (typeof window.pdsAdminReload === 'function') {
                 window.pdsAdminReload();
@@ -411,7 +446,8 @@
             return;
         }
         var table = resolveDataTable(options.tableSelector || '');
-        var hasLiveRoot = !!document.getElementById('adminLiveRoot');
+        var liveRoot = document.getElementById('adminLiveRoot');
+        var hasLiveRoot = !!liveRoot;
         var tableOnPage = table && table.ajax && typeof table.ajax.reload === 'function' && dataTableIsOnPage(table);
         var tableOwnsThisPage = tableOnPage && (!hasLiveRoot || dataTableInsideLiveRoot(table));
         if (tableOwnsThisPage) {
@@ -437,7 +473,18 @@
             }
             return;
         }
-        if (hasLiveRoot && softReplaceLiveRoot()) return;
+        // AJAX-shell pages (Follow Up, etc.): never soft-replace the shell.
+        var liveMode = liveRoot && liveRoot.getAttribute('data-live-mode');
+        if (liveMode === 'ajax') {
+            if (options.forceAjaxReload && typeof window.reloadDispatchItemsTable === 'function') {
+                window.reloadDispatchItemsTable();
+            }
+            return;
+        }
+        // Soft HTML replace makes the whole admin UI look like CSS is broken
+        // (flicker, faded colors, stuck loading). Opt-in only via data-live-soft="1".
+        var allowSoft = liveRoot && liveRoot.getAttribute('data-live-soft') === '1';
+        if (hasLiveRoot && allowSoft && softReplaceLiveRoot()) return;
         if (options.hardReloadFallback) {
             hardNavigateFallback();
         }

@@ -698,14 +698,88 @@
                 function isTypingTarget(el) {
                     if (!el) return false;
                     var tag = (el.tagName || '').toLowerCase();
-                    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
-                    if (el.isContentEditable) return true;
-                    return false;
+                    var isField = tag === 'input' || tag === 'textarea' || tag === 'select' || !!el.isContentEditable;
+                    if (!isField) return false;
+                    // Modal inputs often keep focus after hide — still treat as "not typing"
+                    // so page shortcuts (/, ., P) keep working more than once.
+                    var $el = $(el);
+                    if (!$el.is(':visible')) return false;
+                    if ($el.closest('.modal').length && !$el.closest('.modal.show').length) return false;
+                    // Closed Select2 search field can keep focus on Windows.
+                    if ($el.hasClass('select2-search__field') && !$el.closest('.select2-container--open').length) {
+                        return false;
+                    }
+                    return true;
+                }
+
+                function isOpenBootstrapModal($modal) {
+                    if (!$modal || !$modal.length) return false;
+                    // Prefer class+aria over :visible — Windows can leave display quirks
+                    // that keep :visible true and permanently eat / . P shortcuts.
+                    return $modal.hasClass('show') && $modal.attr('aria-hidden') !== 'true';
+                }
+
+                function isBlockingOverlayOpen() {
+                    if ($('#assign100LabelPopup').hasClass('is-open')) {
+                        return true;
+                    }
+                    if ($('.swal2-container.swal2-shown, .jconfirm.jconfirm-open').length) {
+                        return true;
+                    }
+                    return $('.modal.show').filter(function () {
+                        return $(this).attr('aria-hidden') !== 'true';
+                    }).length > 0;
+                }
+
+                // Windows: after modal/iframe/print, focus can stick off-document so
+                // document keydown never fires again until full reload.
+                function releaseAssign100ShortcutFocus() {
+                    var ae = document.activeElement;
+                    if (!ae || ae === document.body || ae === document.documentElement) {
+                        return;
+                    }
+                    var tag = (ae.tagName || '').toLowerCase();
+                    if (tag === 'iframe') {
+                        try { ae.blur(); } catch (e) {}
+                        ae = document.activeElement;
+                    }
+                    if (!ae || ae === document.body || ae === document.documentElement) {
+                        return;
+                    }
+                    var $ae = $(ae);
+                    var trap = !$ae.is(':visible')
+                        || $ae.closest('.modal').length
+                        || $ae.closest('.select2-container').length
+                        || $ae.closest('#assign100LabelPopup').length
+                        || tag === 'iframe';
+                    if (trap) {
+                        try { ae.blur(); } catch (e2) {}
+                    }
+                    try {
+                        if (document.body && !document.body.hasAttribute('tabindex')) {
+                            document.body.setAttribute('tabindex', '-1');
+                        }
+                        if (document.body && typeof document.body.focus === 'function') {
+                            document.body.focus({ preventScroll: true });
+                        }
+                    } catch (e3) {}
+                }
+
+                function focusAssign100CustomerSearch() {
+                    var input = document.getElementById('assign_100_customer_search');
+                    if (!input) return;
+                    try {
+                        input.focus({ preventScroll: true });
+                    } catch (err) {
+                        input.focus();
+                    }
+                    try {
+                        input.select();
+                    } catch (err2) {}
                 }
 
                 function isRiderAssignModalOpen() {
-                    var $modal = $('#riderAssignModal');
-                    return $modal.length && ($modal.hasClass('show') || $modal.is(':visible'));
+                    return isOpenBootstrapModal($('#riderAssignModal'));
                 }
 
                 function openAssignRiderFromShortcut() {
@@ -786,7 +860,7 @@
                         setActiveRiderIndex(0);
                     });
                     $('#riderAssignModal')
-                        .off('shown.bs.modal.assign100Rider')
+                        .off('shown.bs.modal.assign100Rider hidden.bs.modal.assign100Rider')
                         .on('shown.bs.modal.assign100Rider', function () {
                             resetRiderTableScroll();
                             setActiveRiderIndex(0);
@@ -803,6 +877,14 @@
                                 resetRiderTableScroll();
                                 setActiveRiderIndex(0);
                             });
+                        })
+                        .on('hidden.bs.modal.assign100Rider', function () {
+                            // Drop focus from hidden modal / iframe so / . P keep working on Windows.
+                            var search = document.getElementById('rider_modal_search');
+                            if (search) {
+                                try { search.blur(); } catch (errBlur) {}
+                            }
+                            releaseAssign100ShortcutFocus();
                         })
                         .modal('show');
                 }
@@ -917,6 +999,8 @@
                     $popup.attr('hidden', true).removeClass('is-open is-loading');
                     $frame.off('load.assign100Labels').attr('src', 'about:blank');
                     $('body').removeClass('pds-label-popup-open');
+                    // Windows: iframe/print can steal focus; return it to the page.
+                    releaseAssign100ShortcutFocus();
                 }
 
                 $(document).on('click', '.js-assign100-label-popup', function (e) {
@@ -943,19 +1027,22 @@
                     try {
                         if (typeof frame.contentWindow.pdsPrintLabels === 'function') {
                             frame.contentWindow.pdsPrintLabels();
-                            return;
+                        } else {
+                            frame.contentWindow.postMessage({ type: 'pds-assign100-labels-print' }, window.location.origin);
                         }
-                        frame.contentWindow.postMessage({ type: 'pds-assign100-labels-print' }, window.location.origin);
                     } catch (e) {
                         try {
-                            frame.contentWindow.focus();
                             frame.contentWindow.print();
                         } catch (e2) {}
                     }
+                    // Don't leave focus inside the iframe (breaks shortcuts on Windows).
+                    setTimeout(releaseAssign100ShortcutFocus, 0);
                 });
 
-                $(document).on('keydown.assign100LabelPopup', function (e) {
+                $(document).off('keydown.assign100LabelPopup')
+                    .on('keydown.assign100LabelPopup', function (e) {
                     if (e.key === 'Escape' && $('#assign100LabelPopup').hasClass('is-open')) {
+                        e.preventDefault();
                         closeAssign100LabelPopup();
                     }
                 });
@@ -1090,16 +1177,21 @@
                     $check.prop('checked', !$check.prop('checked')).trigger('change');
                 });
 
-                // Shortcuts: "." opens Assign Rider; arrows + Enter inside rider modal.
-                $(document).on('keydown.assign100Shortcuts', function (e) {
+                // Shortcuts: "/" focuses customer search; "." Assign Rider; "P" print labels.
+                // Allow . / P from customer search (blur first) — Windows often keeps focus there.
+                $(document).off('keydown.assign100Shortcuts')
+                    .on('keydown.assign100Shortcuts', function (e) {
                     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) {
                         return;
                     }
 
                     var key = e.key;
+                    var code = e.code || '';
                     var riderModalOpen = isRiderAssignModalOpen();
                     var typing = isTypingTarget(e.target);
                     var inRiderSearch = $(e.target).is('#rider_modal_search');
+                    var inCustomerSearch = $(e.target).is('#assign_100_customer_search');
+                    var popupOrModalOpen = isBlockingOverlayOpen();
 
                     if (riderModalOpen) {
                         if (key === 'ArrowDown' || key === 'ArrowUp') {
@@ -1122,31 +1214,63 @@
                         return;
                     }
 
-                    // P → open Print airway bill popup for the selected rows.
-                    if ((key === 'p' || key === 'P') && !typing) {
-                        if ($('#assign100LabelPopup').hasClass('is-open')) {
-                            return;
-                        }
-                        if ($('.modal.show').length) {
+                    // Escape in filters → blur so / . P work again without reload.
+                    if (key === 'Escape' && !popupOrModalOpen && (inCustomerSearch || typing)) {
+                        e.preventDefault();
+                        releaseAssign100ShortcutFocus();
+                        try {
+                            if (document.activeElement && document.activeElement.blur) {
+                                document.activeElement.blur();
+                            }
+                        } catch (escErr) {}
+                        return;
+                    }
+
+                    // Slash (/) → focus Customer Name / Phone (repeatable; skip while typing elsewhere).
+                    if ((key === '/' || code === 'Slash') && !popupOrModalOpen) {
+                        if (typing && !inCustomerSearch) {
                             return;
                         }
                         e.preventDefault();
+                        focusAssign100CustomerSearch();
+                        return;
+                    }
+
+                    // From customer search, still allow . and P (blur then run) — Windows users
+                    // often stay focused in the search box after pressing /.
+                    var allowPageShortcut = !typing || inCustomerSearch;
+
+                    // P → open Print airway bill popup for the selected rows.
+                    if ((key === 'p' || key === 'P') && allowPageShortcut) {
+                        if (popupOrModalOpen) {
+                            return;
+                        }
+                        e.preventDefault();
+                        if (inCustomerSearch) {
+                            try { e.target.blur(); } catch (pBlur) {}
+                        }
                         openAssign100LabelsForIds(getVisibleCheckedItemIds());
                         return;
                     }
 
-                    // Dot (.) → open Assign Rider popup (ignore while typing in filters).
-                    if ((key === '.' || key === 'Period') && !typing) {
-                        if ($('#assign100LabelPopup').hasClass('is-open')) {
-                            return;
-                        }
-                        if ($('.modal.show').length) {
+                    // Dot (.) → open Assign Rider popup.
+                    if ((key === '.' || code === 'Period') && allowPageShortcut) {
+                        if (popupOrModalOpen) {
                             return;
                         }
                         e.preventDefault();
+                        if (inCustomerSearch) {
+                            try { e.target.blur(); } catch (dotBlur) {}
+                        }
                         openAssignRiderFromShortcut();
                     }
                 });
+
+                // After any Bootstrap modal closes on this page, reclaim focus (Windows).
+                $(document).off('hidden.bs.modal.assign100Focus')
+                    .on('hidden.bs.modal.assign100Focus', '.modal', function () {
+                        releaseAssign100ShortcutFocus();
+                    });
 
                 var assign100FilterTimer;
                 $(document).off('change.assign100Os', osInputSelector)

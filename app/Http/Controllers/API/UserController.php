@@ -119,11 +119,22 @@ class UserController extends Controller
         if ($user && \Hash::check($decryptedPassword, $user->password)) {
             if ($user->user_type === 'client' && ! $user->isClientApprovalApproved()) {
                 $approval = $user->approval_status ?? User::APPROVAL_PENDING;
-                $message = $approval === User::APPROVAL_REJECTED
+                $isRejected = $approval === User::APPROVAL_REJECTED;
+                $message = $isRejected
                     ? __('message.os_account_rejected')
                     : __('message.os_account_pending_approval');
 
-                return json_message_response($message, 403);
+                $payload = [
+                    'message' => $message,
+                    'approval_status' => $approval,
+                ];
+                if ($isRejected) {
+                    $payload['approval_rejection_reason'] = (string) ($user->approval_rejection_reason ?? '');
+                    $payload['subject'] = trans('message.push_os_rejected_title', [], 'my');
+                    $payload['push_message'] = \App\Services\AppPushService::OS_REJECTED_PUSH_BODY;
+                }
+
+                return json_custom_response($payload, 403);
             }
 
             Auth::login($user);
@@ -1679,11 +1690,22 @@ class UserController extends Controller
 
         if ($user->user_type === 'client' && ! $user->isClientApprovalApproved()) {
             $approval = $user->approval_status ?? User::APPROVAL_PENDING;
-            $message = $approval === User::APPROVAL_REJECTED
+            $isRejected = $approval === User::APPROVAL_REJECTED;
+            $message = $isRejected
                 ? __('message.os_account_rejected')
                 : __('message.os_account_pending_approval');
 
-            return json_message_response($message, 403);
+            $payload = [
+                'message' => $message,
+                'approval_status' => $approval,
+            ];
+            if ($isRejected) {
+                $payload['approval_rejection_reason'] = (string) ($user->approval_rejection_reason ?? '');
+                $payload['subject'] = trans('message.push_os_rejected_title', [], 'my');
+                $payload['push_message'] = \App\Services\AppPushService::OS_REJECTED_PUSH_BODY;
+            }
+
+            return json_custom_response($payload, 403);
         }
 
         Auth::login($user);
@@ -1936,6 +1958,11 @@ class UserController extends Controller
                 'password' => $password !== '' ? $password : '—',
             ], 'my');
             $payload['subject'] = trans('message.push_os_approved_title', [], 'my');
+        } elseif ($approval === User::APPROVAL_REJECTED) {
+            $payload['approval_rejection_reason'] = (string) ($user->approval_rejection_reason ?? '');
+            $payload['subject'] = trans('message.push_os_rejected_title', [], 'my');
+            $payload['message'] = \App\Services\AppPushService::OS_REJECTED_PUSH_BODY;
+            $payload['push_message'] = \App\Services\AppPushService::OS_REJECTED_PUSH_BODY;
         }
 
         return json_custom_response($payload);

@@ -28,6 +28,10 @@ class AppPushService
     public const TYPE_KYO_SHIN_OVERDUE = 'kyo_shin_overdue';
     public const TYPE_KYO_SHIN_GIVEN = 'kyo_shin';
     public const TYPE_OS_APPROVED = 'os_account_approved';
+    public const TYPE_OS_REJECTED = 'os_account_rejected';
+
+    /** Fixed User App rejection push copy (Burmese). */
+    public const OS_REJECTED_PUSH_BODY = 'အချက်အလက်မပြည့်စုံလို့ Account ပြန်ဖောက်ပါ။';
 
     public function notifyUser(User $user, string $type, string $subject, string $message, array $extra = [], bool $persistDatabase = true): void
     {
@@ -184,6 +188,50 @@ class AppPushService
         );
     }
 
+    public function notifyOsAccountRejected(User $client, ?string $reason = null): void
+    {
+        if (($client->user_type ?? '') !== 'client') {
+            return;
+        }
+
+        $reason = trim((string) $reason);
+        $this->notifyUser(
+            $client,
+            self::TYPE_OS_REJECTED,
+            trans('message.push_os_rejected_title', [], 'my'),
+            self::OS_REJECTED_PUSH_BODY,
+            [
+                'id' => 'OS_REJ_'.$client->id,
+                'order_id' => '',
+                'item_id' => '',
+                'screen' => 'login',
+                'app' => 'os',
+                'approval_rejection_reason' => $reason,
+            ]
+        );
+    }
+
+    /**
+     * Diagnostic for ops / admin: whether FCM service-account JSON is readable.
+     *
+     * @return array{user: bool, delivery: bool, any: bool, paths: array<string, string|null>}
+     */
+    public function credentialsStatus(): array
+    {
+        $userPath = $this->resolveCredentialsPath('client');
+        $deliveryPath = $this->resolveCredentialsPath('delivery_man');
+
+        return [
+            'user' => $userPath !== null,
+            'delivery' => $deliveryPath !== null,
+            'any' => $userPath !== null || $deliveryPath !== null,
+            'paths' => [
+                'user' => $userPath,
+                'delivery' => $deliveryPath,
+            ],
+        ];
+    }
+
     public function notifyClientPickupReady(Order $order): void
     {
         $client = $order->client;
@@ -309,7 +357,7 @@ class AppPushService
             Log::warning('fcm push skipped: missing service-account credentials', [
                 'user_id' => $user->id,
                 'user_type' => $user->user_type ?? '',
-                'hint' => 'Place user-service-account.json in storage/app/firebase/',
+                'hint' => 'Place user-service-account.json / delivery-service-account.json in storage/app/firebase/',
             ]);
 
             return false;
@@ -353,7 +401,11 @@ class AppPushService
 
     protected function credentialsPathForUser(User $user): ?string
     {
-        $userType = (string) ($user->user_type ?? '');
+        return $this->resolveCredentialsPath((string) ($user->user_type ?? ''));
+    }
+
+    protected function resolveCredentialsPath(string $userType): ?string
+    {
         $candidates = [];
 
         if ($userType === 'delivery_man') {
