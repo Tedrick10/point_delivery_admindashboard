@@ -29,8 +29,8 @@
         <thead>
             <tr>
                 <th>{{ __('message.no') }}</th>
-                <th>{{ __('message.date') }}</th>
                 <th>{{ __('message.order_created_date') }}</th>
+                <th>{{ __('message.finished') }}</th>
                 <th>{{ __('message.customer') }}</th>
                 <th>{{ __('message.phone') }}</th>
                 <th>{{ __('message.address') }}</th>
@@ -44,8 +44,8 @@
             @foreach($slipRows as $index => $row)
                 <tr>
                     <td>{{ $index + 1 }}</td>
-                    <td>{{ $row['date'] }}</td>
-                    <td>{{ $row['order_created_date'] ?? $row['date'] }}</td>
+                    <td>{{ $row['assigned_100_date'] ?? $row['order_created_date'] ?? $row['date'] }}</td>
+                    <td>{{ $row['finished_date'] ?? $row['date'] }}</td>
                     <td>{{ $row['customer'] }}@if(!empty($row['is_kyo_shin']) || !empty($slipIsKyoShin)) ({{ __('message.kyo_shin_title') }})@endif</td>
                     <td>{{ $row['phone'] }}</td>
                     <td>{{ stringLong($row['address'], 'title', 20) ?: '-' }}</td>

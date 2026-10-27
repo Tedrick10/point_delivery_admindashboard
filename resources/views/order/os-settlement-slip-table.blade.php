@@ -94,8 +94,8 @@
         <thead>
             <tr>
                 <th>{{ __('message.no') }}</th>
-                <th>{{ __('message.date') }}</th>
-                <th title="Order Created Date">{{ __('message.order_created_date') }}</th>
+                <th title="{{ __('message.follow_up_status_assigned_100') }}">{{ __('message.order_created_date') }}</th>
+                <th>{{ __('message.finished') }}</th>
                 <th>{{ __('message.customer') }}</th>
                 <th>{{ __('message.phone') }}</th>
                 <th>{{ __('message.address') }}</th>
@@ -114,8 +114,8 @@
             @forelse($slipRows as $index => $row)
                 <tr>
                     <td>{{ $index + 1 }}</td>
-                    <td class="date-cell">{{ $row['date'] }}</td>
-                    <td class="date-cell">{{ $row['order_created_date'] ?? $row['date'] }}</td>
+                    <td class="date-cell">{{ $row['assigned_100_date'] ?? $row['order_created_date'] ?? $row['date'] }}</td>
+                    <td class="date-cell">{{ $row['finished_date'] ?? $row['date'] }}</td>
                     <td>
                         {{ $row['customer'] }}
                         @include('order.partials._slip-kyo-shin-badge', ['row' => $row, 'slipIsKyoShin' => $slipIsKyoShin ?? false])

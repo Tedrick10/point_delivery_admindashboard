@@ -16,6 +16,9 @@
         '.pds-daily-check-photo-preview',
         '.pds-ard-upload',
         '.pds-ard-upload-wrap',
+        '.pds-delivered-upload',
+        '.pds-pending-upload',
+        '.pds-pending-upload-wrap',
         '.custom-file'
     ].join(', ');
     var UNSAFE_ZONE = [
@@ -47,10 +50,24 @@
         return IMAGE_EXT.test(file.name || '');
     }
 
+    function isOsSettlementProofInput(input) {
+        if (!input) return false;
+        var id = String(input.id || '');
+        var cls = String(input.className || '');
+        if (cls.indexOf('pds-os-kpay-file-input') !== -1) return true;
+        if (id === 'osReceiveBulkProofInput') return true;
+        try {
+            if (input.closest('.pds-os-kpay-upload-card, #osReceiveBulkUpload, .pds-os-receive-bulk-upload, .pds-dispatch-os-list-page')) {
+                return true;
+            }
+        } catch (err) {}
+        return false;
+    }
+
     function isImageInput(input) {
         if (!input || input.type !== 'file' || input.disabled) return false;
-        // OS settlement proof cells have their own paste handler — avoid double upload.
-        if ((input.className || '').indexOf('pds-os-kpay-file-input') !== -1) return false;
+        // OS settlement proof / bulk QR have their own paste+drop handlers.
+        if (isOsSettlementProofInput(input)) return false;
         var accept = (input.getAttribute('accept') || '').toLowerCase();
         if (accept.indexOf('image') !== -1) return true;
         if (accept && SKIP_ACCEPT.test(accept)) return false;
@@ -270,9 +287,21 @@
     }
 
     function onPaste(event) {
+        // Never steal Cmd/Ctrl+V from OS settlement proof / bulk upload zones.
+        try {
+            var t = event.target;
+            if (t && t.closest && t.closest('.pds-os-kpay-upload-card, #osReceiveBulkUpload, .pds-os-receive-bulk-upload, .pds-dispatch-os-list-page')) {
+                return;
+            }
+            if (typeof document !== 'undefined' && document.querySelector) {
+                var osHover = document.querySelector('.pds-os-kpay-upload-card:hover, #osReceiveBulkUpload:hover');
+                if (osHover) return;
+            }
+        } catch (err) {}
+
         // Paste image only while the mouse is over an upload box.
         var input = findHoveredPasteTarget();
-        if (!input) return;
+        if (!input || isOsSettlementProofInput(input)) return;
 
         var files = pickPasteFiles(event.clipboardData, !!input.multiple);
         if (!files.length) return;

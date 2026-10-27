@@ -252,16 +252,16 @@ class OsSettlementService
                 ? -1 * $slipItem->kyoShinPayAmount()
                 : ($excludeAmount ? 0.0 : $slipItem->displayOsToPay());
             $osToPaySlip = formatDispatchOsToPaySlip($osToPay);
-            $date = $slipItem->received_date
-                ? Carbon::parse($slipItem->received_date)->format('d-m-Y')
-                : $invoiceDate;
-            $orderCreatedDate = $this->slipOrderCreatedDate($slipItem, $date);
+            $finishedDate = $this->slipFinishedDate($slipItem, $invoiceDate);
+            $assigned100Date = $this->slipAssigned100Date($slipItem, $finishedDate);
 
             $gateAmount = (float) ($slipItem->gate_amount ?? 0);
 
             $rows[] = [
-                'date' => $date,
-                'order_created_date' => $orderCreatedDate,
+                'date' => $finishedDate,
+                'order_created_date' => $assigned100Date,
+                'finished_date' => $finishedDate,
+                'assigned_100_date' => $assigned100Date,
                 'customer' => $slipItem->customer_name ?: '-',
                 'phone' => $slipItem->customer_phone ?: '-',
                 'address' => $slipItem->customer_address ?: '-',
@@ -293,19 +293,12 @@ class OsSettlementService
     }
 
     /**
-     * Order start / created day for Show Slip tables (Asia/Yangon).
+     * Finished day for Show Slip tables (Asia/Yangon).
      */
-    protected function slipOrderCreatedDate($slipItem, string $fallback): string
+    protected function slipFinishedDate($slipItem, string $fallback): string
     {
-        $order = null;
-        try {
-            $order = $slipItem->order ?? null;
-        } catch (\Throwable $e) {
-            $order = null;
-        }
-
-        foreach (['created_at', 'date', 'pickup_datetime'] as $field) {
-            $raw = $order->{$field} ?? null;
+        foreach (['admin_finished_at', 'received_date', 'admin_completed_at'] as $field) {
+            $raw = $slipItem->{$field} ?? null;
             if (empty($raw)) {
                 continue;
             }
@@ -313,6 +306,23 @@ class OsSettlementService
                 return Carbon::parse($raw)->timezone('Asia/Yangon')->format('d-m-Y');
             } catch (\Throwable $e) {
                 continue;
+            }
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * Assigned 100 entry day for Show Slip tables (Asia/Yangon).
+     */
+    protected function slipAssigned100Date($slipItem, string $fallback): string
+    {
+        $raw = $slipItem->assigned_at ?? null;
+        if (! empty($raw)) {
+            try {
+                return Carbon::parse($raw)->timezone('Asia/Yangon')->format('d-m-Y');
+            } catch (\Throwable $e) {
+                // fall through
             }
         }
 
@@ -841,12 +851,25 @@ class OsSettlementService
                 );
             }
         } else {
-            $items = $this->completedItemsForPeriod($osId, $fromDay, $toDay, $branchId);
-            $items = $this->filterItemsBySettlementSide($items, $settlementSide);
+            // Prefer exact parcel ids from the list row — same approach as Show Slip.
+            // Re-deriving only via period + side can miss rows when the browser sends a
+            // slightly different date window than the table was rendered with.
             if ($wantedIds !== []) {
-                $items = $items
-                    ->filter(static fn ($item) => in_array((int) $item->id, $wantedIds, true))
+                $lockedQuery = DispatchOrderItem::query()
+                    ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch', 'kyoShinItem'])
+                    ->whereIn('id', $wantedIds)
+                    ->whereNull('admin_finished_at')
+                    ->where('status', 'completed');
+                applyForcedItemOwnership($lockedQuery);
+                if ($branchId !== null && $branchId > 0) {
+                    applyDestinationBranchFilter($lockedQuery, $branchId);
+                }
+                $items = $this->filterItemsForOsParty($lockedQuery->get(), $osId)
+                    ->sortBy(static fn ($item) => array_search((int) $item->id, $wantedIds, true) ?: 9999)
                     ->values();
+            } else {
+                $items = $this->completedItemsForPeriod($osId, $fromDay, $toDay, $branchId);
+                $items = $this->filterItemsBySettlementSide($items, $settlementSide);
             }
         }
 

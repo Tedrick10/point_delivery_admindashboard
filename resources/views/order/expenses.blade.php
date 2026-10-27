@@ -255,9 +255,10 @@
                         <i class="fas fa-times"></i>
                     </button>
                 </header>
-                <div class="pds-expense-image-view">
-                    <img id="expense-image-view-img" src="" alt="">
+                <div class="pds-expense-image-view pds-expense-image-viewport" id="expense-image-view-viewport">
+                    <img id="expense-image-view-img" class="pds-expense-image-view__img" src="" alt="" draggable="false">
                 </div>
+                @include('order.partials._expense-photo-zoom-bar', ['viewportId' => 'expense-image-view-viewport'])
                 <footer class="pds-expense-modal__footer">
                     <button type="button" class="pds-expense-modal__cancel" id="expense-image-view-change">{{ __('message.expenses_image_change') }}</button>
                 </footer>
@@ -285,12 +286,16 @@
                         <i class="fas fa-times"></i>
                     </button>
                 </header>
-                <div class="pds-expense-image-view">
-                    <img id="expense-agent-photo-preview-img" src="" alt="">
+                <div class="pds-expense-image-view pds-expense-image-viewport" id="expense-agent-photo-viewport">
+                    <img id="expense-agent-photo-preview-img" class="pds-expense-image-view__img" src="" alt="" draggable="false">
                 </div>
+                @include('order.partials._expense-photo-zoom-bar', ['viewportId' => 'expense-agent-photo-viewport'])
             </aside>
         </div>
     </div>
+
+    <link rel="stylesheet" href="{{ asset('css/pds-expense-photo-zoom.css') }}?v=2">
+    <script src="{{ asset('js/pds-photo-zoom.js') }}?v=4"></script>
 
     {{-- Delete confirm modal --}}
     <div class="pds-expense-modal" id="expense-delete-modal" hidden>
@@ -363,6 +368,7 @@
                 agentFeePhotos: @json(__('message.expenses_agent_fee_photos')),
                 agentFeePhotosEmpty: @json(__('message.expenses_agent_fee_photos_empty')),
                 agentFeeViewPhotos: @json(__('message.expenses_agent_fee_view_photos')),
+                originalDeli: @json(__('message.expenses_agent_fee_original_deli') ?: __('message.dispatch_audit_field_original_deli')),
                 pointIncome: @json(__('message.point_income')),
                 agentIncome: @json(__('message.agent_income')),
                 deliveryMan: @json(__('message.delivery_man')),
@@ -417,6 +423,23 @@
                 btn.title = hasImage ? i18n.imageView : i18n.imageUpload;
             }
 
+            const imageViewViewport = document.getElementById('expense-image-view-viewport');
+            const agentPhotoViewport = document.getElementById('expense-agent-photo-viewport');
+
+            function mountExpenseZoom(viewport) {
+                if (!viewport || !window.PdsPhotoZoom || typeof window.PdsPhotoZoom.mountExpensePhoto !== 'function') {
+                    return;
+                }
+                window.PdsPhotoZoom.mountExpensePhoto(viewport, { reset: true });
+            }
+
+            function resetExpenseZoom(viewport) {
+                if (!viewport || !window.PdsPhotoZoom || typeof window.PdsPhotoZoom.reset !== 'function') {
+                    return;
+                }
+                window.PdsPhotoZoom.reset(viewport);
+            }
+
             function openImageView(url, row) {
                 if (!url || !imageViewModal || !imageViewImg) return;
                 rowsEl?.querySelectorAll('.pds-expense-modal__row.is-previewing').forEach((el) => {
@@ -431,6 +454,7 @@
                 }
                 imageViewModal.hidden = false;
                 formModal?.classList.add('has-preview');
+                mountExpenseZoom(imageViewViewport);
             }
 
             function closeImageView() {
@@ -439,6 +463,7 @@
                 if (imageViewImg) imageViewImg.removeAttribute('src');
                 imageViewRow = null;
                 formModal?.classList.remove('has-preview');
+                resetExpenseZoom(imageViewViewport);
             }
 
             const agentPhotosModal = document.getElementById('expense-agent-photos-modal');
@@ -455,6 +480,7 @@
                 });
                 if (agentPhotoPreview) agentPhotoPreview.hidden = true;
                 if (agentPhotoPreviewImg) agentPhotoPreviewImg.removeAttribute('src');
+                resetExpenseZoom(agentPhotoViewport);
             }
 
             function openAgentPhotoSidePreview(url, meta) {
@@ -465,6 +491,7 @@
                 }
                 agentPhotoPreview.hidden = false;
                 agentPhotosModal?.classList.add('has-preview');
+                mountExpenseZoom(agentPhotoViewport);
             }
 
             function closeAgentFeePhotos() {
@@ -491,6 +518,7 @@
                         <div class="pds-expense-agent-photos__meta">
                             ${p.order_id ? `<span>Order #${escapeAttr(p.order_id)}</span>` : ''}
                             <strong>${escapeAttr(p.rider_name || i18n.deliveryMan)}: ${fmt(p.agent_amount)}</strong>
+                            <span class="pds-expense-agent-photos__original-deli">${escapeAttr(i18n.originalDeli)}: ${fmt(p.deli_amount)}</span>
                         </div>
                     </article>
                 `).join('');

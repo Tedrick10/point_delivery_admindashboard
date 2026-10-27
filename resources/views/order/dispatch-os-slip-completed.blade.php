@@ -62,8 +62,8 @@
                         <table class="pds-os-slip__table">
                             <colgroup>
                                 <col class="pds-os-slip__col--no">
-                                <col class="pds-os-slip__col--date">
                                 <col class="pds-os-slip__col--created">
+                                <col class="pds-os-slip__col--date">
                                 <col class="pds-os-slip__col--customer">
                                 <col class="pds-os-slip__col--phone">
                                 <col class="pds-os-slip__col--address">
@@ -75,8 +75,8 @@
                             <thead>
                                 <tr>
                                     <th class="text-center">{{ __('message.no') }}</th>
-                                    <th class="pds-os-slip__th--date">{{ __('message.date') }}</th>
-                                    <th class="pds-os-slip__th--created" title="Order Created Date">{{ __('message.order_created_date') }}</th>
+                                    <th class="pds-os-slip__th--created" title="{{ __('message.follow_up_status_assigned_100') }}">{{ __('message.order_created_date') }}</th>
+                                    <th class="pds-os-slip__th--date">{{ __('message.finished') }}</th>
                                     <th>{{ __('message.customer') }}</th>
                                     <th>{{ __('message.phone') }}</th>
                                     <th>{{ __('message.address') }}</th>
@@ -95,8 +95,8 @@
                                 @forelse($slipRows as $index => $row)
                                     <tr>
                                         <td class="text-center">{{ $index + 1 }}</td>
-                                        <td class="pds-os-slip__cell--date">{{ $row['date'] }}</td>
-                                        <td class="pds-os-slip__cell--created">{{ $row['order_created_date'] ?? $row['date'] }}</td>
+                                        <td class="pds-os-slip__cell--created">{{ $row['assigned_100_date'] ?? $row['order_created_date'] ?? $row['date'] }}</td>
+                                        <td class="pds-os-slip__cell--date">{{ $row['finished_date'] ?? $row['date'] }}</td>
                                         <td class="pds-os-slip__cell--customer">
                                             {{ $row['customer'] }}
                                             @include('order.partials._slip-kyo-shin-badge', ['row' => $row])

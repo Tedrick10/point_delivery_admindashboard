@@ -1,6 +1,7 @@
 /**
  * Shared photo zoom / rotate for Admin photo viewers.
- * Supports: data-carousel-zoom, data-inline-photo-zoom, data-dispatch-photo-zoom
+ * Supports: data-carousel-zoom, data-inline-photo-zoom, data-dispatch-photo-zoom,
+ *           data-expense-photo-zoom (Expense Summary / Expenses preview panes)
  */
 (function (window, $) {
     'use strict';
@@ -257,6 +258,14 @@
         if (button.hasAttribute('data-carousel-zoom')) {
             return document.getElementById('photoOrderGallery');
         }
+        if (button.hasAttribute('data-expense-photo-zoom')) {
+            var expenseId = button.getAttribute('data-expense-photo-viewport');
+            if (expenseId) {
+                return document.getElementById(expenseId);
+            }
+            var expenseRoot = button.closest('.pds-expense-modal__preview, .sa-expense-modal__preview');
+            return expenseRoot ? expenseRoot.querySelector('.pds-expense-image-viewport') : null;
+        }
         return null;
     }
 
@@ -264,6 +273,7 @@
         return button.getAttribute('data-inline-photo-zoom')
             || button.getAttribute('data-dispatch-photo-zoom')
             || button.getAttribute('data-carousel-zoom')
+            || button.getAttribute('data-expense-photo-zoom')
             || '';
     }
 
@@ -313,6 +323,9 @@
         if (viewport.id === 'photoOrderGallery') {
             return mountCarousel(viewport);
         }
+        if (viewport.classList && viewport.classList.contains('pds-expense-image-viewport')) {
+            return mountExpensePhoto(viewport, { reset: false });
+        }
         return state;
     }
 
@@ -324,7 +337,7 @@
 
         document.addEventListener('click', function (event) {
             var button = event.target.closest(
-                '[data-inline-photo-zoom], [data-dispatch-photo-zoom], [data-carousel-zoom]'
+                '[data-inline-photo-zoom], [data-dispatch-photo-zoom], [data-carousel-zoom], [data-expense-photo-zoom]'
             );
             if (!button) {
                 return;
@@ -416,6 +429,49 @@
             ? modal.querySelector('[data-dispatch-photo-zoom-level]')
             : null;
         state.mounted = true;
+        bindViewportInteractions(viewport, state);
+        applyTransform(viewport, state);
+        return state;
+    }
+
+    /**
+     * Expense Summary / Expenses side preview (receipt / delivered photo).
+     * Viewport: .pds-expense-image-viewport ; buttons: data-expense-photo-zoom
+     */
+    function mountExpensePhoto(viewport, options) {
+        options = options || {};
+        if (typeof viewport === 'string') {
+            viewport = document.getElementById(viewport);
+        }
+        if (!viewport) {
+            return null;
+        }
+        var img = viewport.querySelector('img');
+        if (!img) {
+            return null;
+        }
+
+        var state = getController(viewport);
+        var root = viewport.closest('.pds-expense-modal__preview, .sa-expense-modal__preview')
+            || viewport.parentElement;
+        state.maxScale = 6;
+        state.getImg = function () {
+            return viewport.querySelector('img');
+        };
+        state.zoomLevelEl = root
+            ? root.querySelector('[data-expense-photo-zoom-level]')
+            : null;
+        state.mounted = true;
+
+        if (options.reset !== false) {
+            state.scale = 1;
+            state.rotation = 0;
+            state.translateX = 0;
+            state.translateY = 0;
+            state.currentSlideKey = String(img.getAttribute('src') || viewport.id || 'expense');
+            state.slideStates = {};
+        }
+
         bindViewportInteractions(viewport, state);
         applyTransform(viewport, state);
         return state;
@@ -594,6 +650,7 @@
         boot: boot,
         mountInlinePhoto: mountInlinePhoto,
         mountDispatchPhoto: mountDispatchPhoto,
+        mountExpensePhoto: mountExpensePhoto,
         mountCarousel: mountCarousel,
         openDispatchPhoto: openDispatchPhoto,
         readInlineRotation: readInlineRotation,

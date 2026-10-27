@@ -9,6 +9,9 @@
 .pds-daily-check-photo-preview.pds-image-dropzone,
 .pds-ard-upload.pds-image-dropzone,
 .pds-ard-upload-wrap.pds-image-dropzone,
+.pds-delivered-upload.pds-image-dropzone,
+.pds-pending-upload.pds-image-dropzone,
+.pds-pending-upload-wrap.pds-image-dropzone,
 .custom-file.pds-image-dropzone,
 input[type="file"].pds-image-dropzone {
     position: relative;
@@ -49,6 +52,12 @@ input[type="file"].pds-image-dropzone {
 .pds-ard-upload.pds-image-dropzone.is-paste-flash::after,
 .pds-ard-upload-wrap.pds-image-dropzone.is-dragover::after,
 .pds-ard-upload-wrap.pds-image-dropzone.is-paste-flash::after,
+.pds-delivered-upload.pds-image-dropzone.is-dragover::after,
+.pds-delivered-upload.pds-image-dropzone.is-paste-flash::after,
+.pds-pending-upload.pds-image-dropzone.is-dragover::after,
+.pds-pending-upload.pds-image-dropzone.is-paste-flash::after,
+.pds-pending-upload-wrap.pds-image-dropzone.is-dragover::after,
+.pds-pending-upload-wrap.pds-image-dropzone.is-paste-flash::after,
 .custom-file.pds-image-dropzone.is-dragover::after,
 .custom-file.pds-image-dropzone.is-paste-flash::after {
     content: attr(data-drop-label);
@@ -79,6 +88,9 @@ input[type="file"].pds-image-dropzone {
 .pds-daily-check-photo-preview.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
 .pds-ard-upload.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
 .pds-ard-upload-wrap.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.pds-delivered-upload.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.pds-pending-upload.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
+.pds-pending-upload-wrap.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after,
 .custom-file.pds-image-dropzone.is-paste-flash:not(.is-dragover)::after {
     content: attr(data-paste-label);
 }

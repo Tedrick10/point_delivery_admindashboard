@@ -41,8 +41,14 @@ class DailyCheckListService
         $rows = collect();
         $pendingGroups = [];
 
+        // Rider invoices must follow the rider home branch (dropdown / branch tabs),
+        // not parcel destination — fix stale destination-based branch_ids in range.
+        if (in_array(DailyCheckInvoice::PARTY_RIDER, $modes, true)) {
+            $this->repairRiderInvoiceBranches($fromDay, $toDay);
+        }
+
         foreach ($modes as $partyType) {
-            $items = $this->baseItemsQuery($fromDay, $toDay, $branchId)
+            $items = $this->baseItemsQuery($fromDay, $toDay, $branchId, $partyType)
                 ->when($partyType === DailyCheckInvoice::PARTY_OS, function ($q) {
                     // OS only after Finish (admin_finished_at). No-fee Os Return stays off Daily Check.
                     // Do not filter by order.client_id here — photo/Viber parcels often store the
@@ -116,7 +122,12 @@ class DailyCheckListService
         ?Collection $items = null
     ): DailyCheckInvoice {
         $branchId = null;
-        if ($items && $items->isNotEmpty()) {
+        if ($partyType === DailyCheckInvoice::PARTY_RIDER && $partyUserId > 0) {
+            // Rider Daily Check belongs on the rider's home branch, not destination.
+            $riderBranch = User::query()->whereKey($partyUserId)->value('branch_id');
+            $branchId = $riderBranch ? (int) $riderBranch : null;
+        }
+        if ($branchId === null && $items && $items->isNotEmpty()) {
             $branchId = $items
                 ->map(fn (DispatchOrderItem $i) => $i->to_branch_id ?: $i->from_branch_id)
                 ->filter()
@@ -310,7 +321,7 @@ class DailyCheckListService
         return $this->listRows($day, $day, DailyCheckInvoice::PARTY_OS, $branchId, null, null);
     }
 
-    protected function baseItemsQuery(string $fromDay, string $toDay, ?int $branchId)
+    protected function baseItemsQuery(string $fromDay, string $toDay, ?int $branchId, ?string $partyType = null)
     {
         // Completed onwards. Invoice day matches Rider ငွေအပ် (10:00 AM Yangon cutoff /
         // stamped rider_remit_date). No-fee Os Return / Return tab parcels are excluded.
@@ -330,8 +341,50 @@ class DailyCheckListService
                         ->whereDate('rider_remit_date', '<=', $toDay);
                 });
             })
-            ->when($branchId && $branchId > 0, function ($q) use ($branchId) {
+            ->when($branchId && $branchId > 0, function ($q) use ($branchId, $partyType) {
+                if ($partyType === DailyCheckInvoice::PARTY_RIDER) {
+                    // Rider tab = rider home branch (same as Delivery Man dropdown).
+                    $q->whereIn('delivery_man_id', function ($sub) use ($branchId) {
+                        $sub->select('id')
+                            ->from('users')
+                            ->where('user_type', 'delivery_man')
+                            ->where('branch_id', $branchId);
+                    });
+
+                    return;
+                }
                 applyDestinationBranchFilter($q, $branchId);
+            });
+    }
+
+    /**
+     * Align stored rider invoice branch_id with users.branch_id for tab counts.
+     */
+    protected function repairRiderInvoiceBranches(string $fromDay, string $toDay): void
+    {
+        DailyCheckInvoice::query()
+            ->where('party_type', DailyCheckInvoice::PARTY_RIDER)
+            ->whereBetween('received_date', [$fromDay, $toDay])
+            ->whereNotNull('party_user_id')
+            ->orderBy('id')
+            ->chunkById(200, function (Collection $invoices) {
+                $riderIds = $invoices->pluck('party_user_id')->map(fn ($id) => (int) $id)->unique()->values();
+                $branchByRider = User::query()
+                    ->whereIn('id', $riderIds)
+                    ->pluck('branch_id', 'id');
+
+                foreach ($invoices as $invoice) {
+                    $home = $branchByRider->get((int) $invoice->party_user_id);
+                    if (! $home) {
+                        continue;
+                    }
+                    $home = (int) $home;
+                    if ((int) ($invoice->branch_id ?? 0) === $home) {
+                        continue;
+                    }
+                    $invoice->branch_id = $home;
+                    $invoice->save();
+                }
             });
     }
 

@@ -195,7 +195,7 @@ class ExpenseAgentFeeSyncService
     /**
      * Delivered proof photos for intercity Agent ရငွေ on an expense day.
      *
-     * @return list<array{item_id:int,order_id:int,code:?string,point_amount:float,agent_amount:float,rider_name:string,photo_url:string}>
+     * @return list<array{item_id:int,order_id:int,code:?string,point_amount:float,agent_amount:float,deli_amount:float,rider_name:string,photo_url:string}>
      */
     public function deliveredProofsForExpenseDay(string $expenseDay, ?int $branchId = null): array
     {
@@ -237,6 +237,7 @@ class ExpenseAgentFeeSyncService
                 $idx = $seen[$photoKey];
                 $rows[$idx]['point_amount'] = round($rows[$idx]['point_amount'] + (float) ($item->point_amount ?? 0), 2);
                 $rows[$idx]['agent_amount'] = round($rows[$idx]['agent_amount'] + (float) ($item->agent_amount ?? 0), 2);
+                $rows[$idx]['deli_amount'] = round($rows[$idx]['deli_amount'] + (float) ($item->deli_amount ?? 0), 2);
                 $names = array_filter(array_map('trim', explode(' · ', (string) $rows[$idx]['rider_name'])));
                 if (! in_array($riderName, $names, true)) {
                     $names[] = $riderName;
@@ -252,6 +253,7 @@ class ExpenseAgentFeeSyncService
                 'code' => $item->code ?: null,
                 'point_amount' => round((float) ($item->point_amount ?? 0), 2),
                 'agent_amount' => round((float) ($item->agent_amount ?? 0), 2),
+                'deli_amount' => round((float) ($item->deli_amount ?? 0), 2),
                 'rider_name' => $riderName,
                 'photo_url' => $url,
             ];

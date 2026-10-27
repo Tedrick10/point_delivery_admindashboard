@@ -126,6 +126,9 @@
                                     'image' => $i->hasUploadedImage() ? $i->image : null,
                                     'image_url' => $i->imageUrl(),
                                     'locked' => $i->isLockedSource(),
+                                    'lockKind' => $i->source === \App\Models\ExpenseItem::SOURCE_AGENT_FEE
+                                        ? 'agent'
+                                        : ($i->source === \App\Models\ExpenseItem::SOURCE_RIDER_FUEL ? 'fuel' : null),
                                 ])->values() ?? collect();
                                 $cardDate = $card?->expense_date?->format('Y-m-d')
                                     ?? $row->summary_date?->format('Y-m-d');
@@ -223,12 +226,44 @@
                     <i class="fas fa-times"></i>
                 </button>
             </header>
-            <div class="sa-expense-image-view">
-                <img id="expense-image-view-img" src="" alt="">
+            <div class="sa-expense-image-view pds-expense-image-viewport" id="expense-image-view-viewport">
+                <img id="expense-image-view-img" class="pds-expense-image-view__img" src="" alt="" draggable="false">
             </div>
+            @include('order.partials._expense-photo-zoom-bar', ['viewportId' => 'expense-image-view-viewport'])
         </aside>
     </div>
 </div>
+
+{{-- Agent ရငွေ delivered photos --}}
+<div class="sa-expense-modal" id="expense-agent-photos-modal" hidden>
+    <div class="sa-expense-modal__backdrop" data-close="agent-photos"></div>
+    <div class="sa-expense-modal__stage sa-expense-agent-photos-stage">
+        <div class="sa-expense-modal__dialog sa-expense-agent-photos-dialog" role="dialog" aria-modal="true">
+            <header class="sa-expense-modal__header">
+                <h5 id="expense-agent-photos-title">{{ __('message.expenses_agent_fee_photos') }}</h5>
+                <button type="button" class="sa-expense-modal__preview-close" id="expense-agent-photos-close" title="{{ __('message.close') }}" data-close="agent-photos">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+            <div class="sa-expense-agent-photos__body" id="expense-agent-photos-body"></div>
+        </div>
+        <aside class="sa-expense-modal__preview" id="expense-agent-photo-preview" hidden>
+            <header class="sa-expense-modal__header">
+                <h5 id="expense-agent-photo-preview-title">{{ __('message.expenses_image_view') }}</h5>
+                <button type="button" class="sa-expense-modal__preview-close" id="expense-agent-photo-preview-close" title="{{ __('message.close') }}">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+            <div class="sa-expense-image-view pds-expense-image-viewport" id="expense-agent-photo-viewport">
+                <img id="expense-agent-photo-preview-img" class="pds-expense-image-view__img" src="" alt="" draggable="false">
+            </div>
+            @include('order.partials._expense-photo-zoom-bar', ['viewportId' => 'expense-agent-photo-viewport'])
+        </aside>
+    </div>
+</div>
+
+<link rel="stylesheet" href="{{ asset('css/pds-expense-photo-zoom.css') }}?v=2">
+<script src="{{ asset('js/pds-photo-zoom.js') }}?v=4"></script>
 
 <style>
     .sa-expense-modal[hidden] { display: none !important; }
@@ -342,14 +377,58 @@
     .sa-expense-modal__preview[hidden] { display: none !important; }
     .sa-expense-image-view { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 220px; }
     .sa-expense-image-view img { max-width: 100%; max-height: 420px; border-radius: 10px; }
+    .sa-expense-modal__preview .pds-expense-image-viewport {
+        position: relative; display: block; flex: 1 1 auto; min-height: 280px;
+        height: min(58vh, 520px); max-height: min(58vh, 520px); overflow: hidden;
+        background: #0f172a; border-radius: 12px; touch-action: none; cursor: grab;
+    }
+    .sa-expense-modal__preview .pds-expense-image-viewport img {
+        position: absolute; top: 50%; left: 50%; max-width: 100%; max-height: 100%;
+        width: auto; height: auto; object-fit: contain; transform: translate(-50%, -50%);
+        pointer-events: none; border-radius: 8px;
+    }
+    .sa-expense-modal__preview .pds-photo-carousel-zoom-bar {
+        display: flex; align-items: center; justify-content: center; gap: 0.4rem; padding: 0.45rem 0.15rem 0;
+    }
+    .sa-expense-modal__preview .pds-photo-carousel-zoom-btn {
+        width: 34px; height: 34px; border: 1px solid #e2e8f0; border-radius: 999px; background: #fff;
+        color: #FE6F07; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .sa-expense-modal__preview .pds-photo-carousel-zoom-btn--reset { width: auto; padding: 0 0.75rem; font-size: 0.72rem; font-weight: 700; }
+    .sa-expense-modal__preview .pds-photo-carousel-zoom-level { min-width: 52px; text-align: center; font-size: 0.78rem; font-weight: 700; }
+    .sa-expense-modal__preview .pds-photo-carousel-zoom-hint { margin: 0.15rem 0 0.35rem; text-align: center; color: #64748b; font-size: 0.68rem; }
     .sa-expense-modal input[type="number"].sa-no-spin { appearance: textfield; -moz-appearance: textfield; }
     .sa-expense-modal input[type="number"].sa-no-spin::-webkit-outer-spin-button,
     .sa-expense-modal input[type="number"].sa-no-spin::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .sa-expense-agent-photos-dialog { flex: 1 1 560px; max-width: 720px; }
+    .sa-expense-agent-photos__body {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 12px; padding: 16px 20px 24px; overflow: auto; max-height: min(70vh, 560px);
+    }
+    .sa-expense-agent-photos__empty { margin: 24px; color: #64748b; text-align: center; }
+    .sa-expense-agent-photos__card {
+        border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; background: #fff;
+    }
+    .sa-expense-agent-photos__card.is-active { border-color: #FE6F07; box-shadow: 0 0 0 2px rgba(254,111,7,0.2); }
+    .sa-expense-agent-photos__thumb {
+        display: block; width: 100%; aspect-ratio: 1; border: 0; padding: 0; background: #f8fafc; cursor: pointer;
+    }
+    .sa-expense-agent-photos__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .sa-expense-agent-photos__meta { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+    .sa-expense-agent-photos__meta span { color: #64748b; }
+    .sa-expense-agent-photos__meta strong { color: #0f172a; }
+    .sa-expense-agent-photos__meta .pds-expense-agent-photos__original-deli,
+    .pds-expense-agent-photos__original-deli { color: #FE6F07 !important; font-size: 0.82rem; font-weight: 800; }
+    #expense-agent-photos-modal.has-preview .sa-expense-agent-photos-dialog { flex: 0 1 420px; }
 </style>
 
 <script>
     (function () {
         const demoImagePath = @json(\App\Models\ExpenseItem::DEMO_IMAGE);
+        const selectedBranchId = @json($saBranchId ?? null);
+        const routes = {
+            agentFeePhotos: @json(route('order.expenses.agent-fee-photos')),
+        };
         const i18n = {
             expenseTitle: @json(__('message.expenses_view_card')),
             incomeTitle: @json(__('message.expenses_view_income_card')),
@@ -360,6 +439,13 @@
             deliAmountLabel: @json(__('message.expenses_income_deli_amount')),
             imageView: @json(__('message.expenses_image_view')),
             lockedHint: @json(__('message.expense_summary_card_locked')),
+            agentFeeSubject: @json(__('message.expenses_agent_fee')),
+            agentFeeViewPhotos: @json(__('message.expenses_agent_fee_view_photos')),
+            agentFeePhotos: @json(__('message.expenses_agent_fee_photos')),
+            agentFeePhotosEmpty: @json(__('message.expenses_agent_fee_photos_empty')),
+            originalDeli: @json(__('message.expenses_agent_fee_original_deli') ?: __('message.dispatch_audit_field_original_deli')),
+            deliveryMan: @json(__('message.delivery_man')),
+            noticeError: @json(__('message.error')),
         };
         const formModal = document.getElementById('expense-form-modal');
         const imageViewModal = document.getElementById('expense-image-view-modal');
@@ -369,16 +455,51 @@
         const colsEl = document.getElementById('expense-form-cols');
         const dateInput = document.getElementById('expense-date-input');
         const titleEl = document.getElementById('expense-form-title');
+        const agentPhotosModal = document.getElementById('expense-agent-photos-modal');
+        const agentPhotosBody = document.getElementById('expense-agent-photos-body');
+        const agentPhotosTitle = document.getElementById('expense-agent-photos-title');
+        const agentPhotoPreview = document.getElementById('expense-agent-photo-preview');
+        const agentPhotoPreviewImg = document.getElementById('expense-agent-photo-preview-img');
+        const agentPhotoPreviewTitle = document.getElementById('expense-agent-photo-preview-title');
+        const imageViewViewport = document.getElementById('expense-image-view-viewport');
+        const agentPhotoViewport = document.getElementById('expense-agent-photo-viewport');
         let activeCardType = 'expense';
+
+        function mountExpenseZoom(viewport) {
+            if (!viewport || !window.PdsPhotoZoom || typeof window.PdsPhotoZoom.mountExpensePhoto !== 'function') {
+                return;
+            }
+            window.PdsPhotoZoom.mountExpensePhoto(viewport, { reset: true });
+        }
+
+        function resetExpenseZoom(viewport) {
+            if (!viewport || !window.PdsPhotoZoom || typeof window.PdsPhotoZoom.reset !== 'function') {
+                return;
+            }
+            window.PdsPhotoZoom.reset(viewport);
+        }
 
         function escapeAttr(s) {
             return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        }
+
+        function fmt(n) {
+            return Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
         }
 
         function isRealImage(item) {
             const path = String(item?.image || '').trim();
             const url = String(item?.image_url || '').trim();
             return (path !== '' && path !== demoImagePath) || url !== '';
+        }
+
+        function resolveLockKind(item) {
+            if (item?.lockKind === 'agent' || item?.lockKind === 'fuel') return item.lockKind;
+            if (item?.subject === i18n.agentFeeSubject || item?.subject === 'Agent ရငွေ' || item?.subject === 'Agent fee') {
+                return 'agent';
+            }
+            if (item?.locked) return 'fuel';
+            return '';
         }
 
         function setColumnLabels(cardType) {
@@ -405,11 +526,107 @@
             const subject = row?.querySelector('.js-subject')?.value?.trim() || '';
             if (imageViewTitle) imageViewTitle.textContent = subject || i18n.imageView;
             imageViewModal.hidden = false;
+            mountExpenseZoom(imageViewViewport);
         }
 
         function closeImageView() {
             if (imageViewModal) imageViewModal.hidden = true;
             if (imageViewImg) imageViewImg.removeAttribute('src');
+            resetExpenseZoom(imageViewViewport);
+        }
+
+        function closeAgentPhotoSidePreview() {
+            agentPhotosBody?.querySelectorAll('.sa-expense-agent-photos__card.is-active').forEach((el) => {
+                el.classList.remove('is-active');
+            });
+            if (agentPhotoPreview) agentPhotoPreview.hidden = true;
+            if (agentPhotoPreviewImg) agentPhotoPreviewImg.removeAttribute('src');
+            agentPhotosModal?.classList.remove('has-preview');
+            resetExpenseZoom(agentPhotoViewport);
+        }
+
+        function openAgentPhotoSidePreview(url, meta) {
+            if (!url || !agentPhotoPreview || !agentPhotoPreviewImg) return;
+            agentPhotoPreviewImg.src = url;
+            if (agentPhotoPreviewTitle) {
+                agentPhotoPreviewTitle.textContent = meta || i18n.imageView;
+            }
+            agentPhotoPreview.hidden = false;
+            agentPhotosModal?.classList.add('has-preview');
+            mountExpenseZoom(agentPhotoViewport);
+        }
+
+        function closeAgentFeePhotos() {
+            closeAgentPhotoSidePreview();
+            if (agentPhotosModal) agentPhotosModal.hidden = true;
+            if (agentPhotosBody) agentPhotosBody.innerHTML = '';
+        }
+
+        function renderAgentFeePhotos(photos) {
+            if (!agentPhotosBody) return;
+            closeAgentPhotoSidePreview();
+            if (!photos.length) {
+                agentPhotosBody.innerHTML = `<p class="sa-expense-agent-photos__empty">${escapeAttr(i18n.agentFeePhotosEmpty)}</p>`;
+                return;
+            }
+            agentPhotosBody.innerHTML = photos.map((p, idx) => `
+                <article class="sa-expense-agent-photos__card" data-photo-index="${idx}">
+                    <button type="button"
+                            class="sa-expense-agent-photos__thumb js-agent-photo-enlarge"
+                            data-url="${escapeAttr(p.photo_url || '')}"
+                            data-label="${escapeAttr(p.order_id ? ('Order #' + p.order_id) : i18n.imageView)}">
+                        <img src="${escapeAttr(p.photo_url || '')}" alt="">
+                    </button>
+                    <div class="sa-expense-agent-photos__meta">
+                        ${p.order_id ? `<span>Order #${escapeAttr(p.order_id)}</span>` : ''}
+                        <strong>${escapeAttr(p.rider_name || i18n.deliveryMan)}: ${fmt(p.agent_amount)}</strong>
+                        <span class="pds-expense-agent-photos__original-deli">${escapeAttr(i18n.originalDeli)}: ${fmt(p.deli_amount)}</span>
+                    </div>
+                </article>
+            `).join('');
+            agentPhotosBody.querySelectorAll('.js-agent-photo-enlarge').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const url = btn.getAttribute('data-url');
+                    if (!url) return;
+                    const card = btn.closest('.sa-expense-agent-photos__card');
+                    agentPhotosBody.querySelectorAll('.sa-expense-agent-photos__card.is-active').forEach((el) => {
+                        el.classList.remove('is-active');
+                    });
+                    card?.classList.add('is-active');
+                    openAgentPhotoSidePreview(url, btn.getAttribute('data-label') || i18n.imageView);
+                });
+            });
+        }
+
+        async function openAgentFeePhotos(date) {
+            const day = date || dateInput?.value || '';
+            if (!day || !agentPhotosModal) return;
+            if (agentPhotosTitle) {
+                agentPhotosTitle.textContent = i18n.agentFeePhotos + ' · ' + day;
+            }
+            if (agentPhotosBody) {
+                agentPhotosBody.innerHTML = '<p class="sa-expense-agent-photos__empty">...</p>';
+            }
+            closeAgentPhotoSidePreview();
+            agentPhotosModal.hidden = false;
+            try {
+                const url = routes.agentFeePhotos
+                    + '?date=' + encodeURIComponent(day)
+                    + (selectedBranchId ? '&branch_id=' + encodeURIComponent(selectedBranchId) : '');
+                const res = await fetch(url, {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin',
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    throw new Error(data.message || i18n.noticeError);
+                }
+                renderAgentFeePhotos(Array.isArray(data.photos) ? data.photos : []);
+            } catch (err) {
+                if (agentPhotosBody) {
+                    agentPhotosBody.innerHTML = `<p class="sa-expense-agent-photos__empty">${escapeAttr(err.message || i18n.noticeError)}</p>`;
+                }
+            }
         }
 
         function refreshFormTotal() {
@@ -425,29 +642,46 @@
 
         function addRow(item) {
             const isIncome = activeCardType === 'income';
-            const isRiderFuel = !!item?.locked;
+            const isLockedAuto = !!item?.locked;
+            const lockKind = resolveLockKind(item);
             const row = document.createElement('div');
             row.className = 'sa-expense-modal__row';
+            if (lockKind) row.dataset.lockKind = lockKind;
             const amountVal = item?.amount === '' || item?.amount == null ? '0' : item.amount;
             const imageUrl = !isIncome && isRealImage(item) ? (item?.image_url || '') : '';
+            const showImage = !isIncome && !isLockedAuto;
+            const showAgentPhotosBtn = !isIncome && isLockedAuto && lockKind === 'agent';
+            let imageCell = '';
+            if (isIncome) {
+                imageCell = '';
+            } else if (showImage) {
+                imageCell = `<button type="button" class="sa-expense-modal__image-btn${imageUrl ? ' has-image' : ''}" title="${escapeAttr(imageUrl ? i18n.imageView : '')}">
+                    ${imageUrl
+                        ? `<span class="sa-expense-modal__image-thumb"><img src="${escapeAttr(imageUrl)}" alt=""></span>`
+                        : '<i class="fas fa-camera"></i>'}
+                </button>`;
+            } else if (showAgentPhotosBtn) {
+                imageCell = `<button type="button" class="sa-expense-modal__image-btn has-image js-agent-fee-photos" title="${escapeAttr(i18n.agentFeeViewPhotos)}">
+                    <i class="fas fa-image"></i>
+                </button>`;
+            } else {
+                imageCell = '<span></span>';
+            }
             row.innerHTML = `
                 <input type="text" class="js-subject" value="${escapeAttr(item?.subject || '')}" readonly>
                 <input type="number" class="js-amount sa-no-spin" value="${amountVal}" readonly>
-                ${isIncome
-                    ? ''
-                    : (isRiderFuel
-                        ? '<span></span>'
-                        : `<button type="button" class="sa-expense-modal__image-btn${imageUrl ? ' has-image' : ''}">
-                        ${imageUrl
-                            ? `<span class="sa-expense-modal__image-thumb"><img src="${escapeAttr(imageUrl)}" alt=""></span>`
-                            : '<i class="fas fa-camera"></i>'}
-                    </button>`)}
+                ${imageCell}
                 <span class="sa-expense-modal__lock" title="${escapeAttr(i18n.lockedHint)}"><i class="fas fa-lock"></i></span>
             `;
-            if (!isIncome) {
+            if (showImage) {
                 row.querySelector('.sa-expense-modal__image-btn')?.addEventListener('click', function () {
                     const url = this.querySelector('img')?.getAttribute('src') || '';
                     if (url) openImageView(url, row);
+                });
+            }
+            if (showAgentPhotosBtn) {
+                row.querySelector('.js-agent-fee-photos')?.addEventListener('click', () => {
+                    openAgentFeePhotos(dateInput?.value || '');
                 });
             }
             rowsEl.appendChild(row);
@@ -477,6 +711,7 @@
 
         function closeForm() {
             closeImageView();
+            closeAgentFeePhotos();
             formModal?.classList.remove('is-income-card');
             formModal.hidden = true;
         }
@@ -485,6 +720,10 @@
         formModal?.querySelector('[data-close="form"]')?.addEventListener('click', closeForm);
         document.getElementById('expense-image-view-close')?.addEventListener('click', closeImageView);
         imageViewModal?.querySelector('[data-close="image-view"]')?.addEventListener('click', closeImageView);
+
+        document.getElementById('expense-agent-photos-close')?.addEventListener('click', closeAgentFeePhotos);
+        agentPhotosModal?.querySelector('[data-close="agent-photos"]')?.addEventListener('click', closeAgentFeePhotos);
+        document.getElementById('expense-agent-photo-preview-close')?.addEventListener('click', closeAgentPhotoSidePreview);
 
         document.querySelectorAll('.js-summary-view-card').forEach((btn) => {
             btn.addEventListener('click', () => {

@@ -644,13 +644,52 @@ body.pds-admin .pds-admin-kpay-history-modal .pds-admin-kpay-history-close:hover
         text-align: left;
     }
 }
-body.pds-admin .pds-admin-kpay-modal {
-    z-index: 1060;
+/* Above proof lightbox (20050) and theme modal stack (10650) so Finished confirm always paints on top. */
+body.pds-admin .pds-admin-kpay-modal,
+body.pds-admin #osAdminKpayConfirmModal.modal,
+body.pds-admin #osAdminKpayFormModal.modal,
+body.pds-admin #osAdminKpayActionModal.modal,
+body.pds-admin #osAdminKpayHistoryModal.modal {
+    z-index: 21060 !important;
 }
-body.pds-admin .modal-backdrop.pds-admin-kpay-backdrop,
-body.pds-admin.modal-open .modal-backdrop {
-    z-index: 1055;
+/* Fade transition can leave opacity:0 mid-frame; force visible once Bootstrap adds .show. */
+body.pds-admin .pds-admin-kpay-modal.show,
+body.pds-admin #osAdminKpayConfirmModal.modal.show {
+    opacity: 1 !important;
+    display: block !important;
+    pointer-events: auto !important;
+    visibility: visible !important;
 }
+body.pds-admin .modal-backdrop.pds-admin-kpay-backdrop {
+    z-index: 21050 !important;
+    opacity: 0.55 !important;
+}
+.pds-os-notify-toast {
+    position: fixed;
+    right: 1rem;
+    bottom: 1.25rem;
+    z-index: 22000;
+    max-width: min(420px, calc(100vw - 2rem));
+    padding: 0.85rem 1.05rem;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 0.92rem;
+    line-height: 1.35;
+    color: #fff;
+    background: #1c1917;
+    box-shadow: 0 16px 40px rgba(28, 25, 23, 0.28);
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+}
+.pds-os-notify-toast.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+.pds-os-notify-toast.is-error { background: #b91c1c; }
+.pds-os-notify-toast.is-success { background: #15803d; }
+.pds-os-notify-toast.is-warning { background: #c2410c; }
 body.pds-admin .pds-admin-kpay-modal .modal-dialog {
     max-width: 440px;
 }
@@ -723,6 +762,8 @@ body.pds-admin .pds-admin-kpay-modal .modal-body {
     padding: 0.35rem 1.3rem 0.4rem;
 }
 body.pds-admin .pds-admin-kpay-modal .modal-footer {
+    position: relative;
+    z-index: 40;
     border-top: 0;
     padding: 0.9rem 1.3rem 1.25rem;
     gap: 0.55rem;
@@ -1810,7 +1851,8 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
         </div>
     </div>
 
-    <div class="modal fade pds-admin-kpay-modal" id="osAdminKpayConfirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+    {{-- No .fade: production SnackBar-less + fade can leave the confirm dialog at opacity 0. --}}
+    <div class="modal pds-admin-kpay-modal" id="osAdminKpayConfirmModal" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content">
                 <div class="modal-header">
@@ -1894,6 +1936,24 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                 var filterFrom = @json($filterFromDate);
                 var filterTo = @json($filterToDate);
                 var filterBranchId = @json($branchFilter ?? 'all');
+
+                // Soft-replace / SPA can leave closure dates stale while the table matches the URL.
+                function currentOsListFilters() {
+                    var params = new URLSearchParams(window.location.search || '');
+                    var fromInput = (document.getElementById('os_list_from_date') || {}).value;
+                    var toInput = (document.getElementById('os_list_to_date') || {}).value;
+                    var from = String(params.get('from_date') || fromInput || filterFrom || '').trim();
+                    var to = String(params.get('to_date') || toInput || filterTo || '').trim();
+                    var branchRaw = params.get('branch_id');
+                    if (branchRaw == null || String(branchRaw).trim() === '') {
+                        branchRaw = filterBranchId;
+                    }
+                    return {
+                        from_date: from,
+                        to_date: to,
+                        branch_id: branchRaw,
+                    };
+                }
                 var uploadUrlTemplate = @json(url('dispatch-os-list/__OS__/upload-kpay-slip'));
                 var removeUrlTemplate = @json(url('dispatch-os-list/__OS__/remove-kpay-slip'));
                 var finishUrlTemplate = @json(url('dispatch-os-list/__OS__/finish'));
@@ -2001,7 +2061,80 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                     status = status || 'error';
                     if (typeof SnackBar === 'function') {
                         SnackBar({ message: message, status: status });
+                        return;
                     }
+                    // Production sometimes ships without SnackBar — never fail silently.
+                    try {
+                        var $t = $('#pdsOsNotifyToast');
+                        if (!$t.length) {
+                            $t = $('<div>', {
+                                id: 'pdsOsNotifyToast',
+                                class: 'pds-os-notify-toast',
+                                role: 'status',
+                                'aria-live': 'polite',
+                            }).appendTo(document.body);
+                        }
+                        $t
+                            .removeClass('is-error is-success is-warning is-visible')
+                            .addClass(status === 'success' ? 'is-success' : (status === 'warning' ? 'is-warning' : 'is-error'))
+                            .text(String(message || ''))
+                            .addClass('is-visible');
+                        clearTimeout(window.__pdsOsNotifyTimer);
+                        window.__pdsOsNotifyTimer = setTimeout(function () {
+                            $t.removeClass('is-visible');
+                        }, 4200);
+                    } catch (eNotify) {
+                        try { console.warn('[os-settlement]', status, message); } catch (e2) {}
+                    }
+                }
+
+                function parseMoneyValue(value) {
+                    if (typeof value === 'number' && isFinite(value)) return value;
+                    var s = String(value == null ? '' : value).replace(/,/g, '').replace(/[^\d.-]/g, '');
+                    var n = Number(s);
+                    return isFinite(n) ? n : 0;
+                }
+
+                function parseRowAmount($row) {
+                    var raw = $row.attr('data-amount');
+                    if (raw == null || String(raw).trim() === '') {
+                        raw = $row.find('.pds-os-amount-pill').first().text();
+                    }
+                    return Math.abs(parseMoneyValue(raw));
+                }
+
+                function hydrateAdminKpayAccountsFromDom() {
+                    if ((adminKpayAccounts || []).length) return;
+                    var fromDom = [];
+                    $('#osAdminKpayList .pds-admin-kpay-chip').each(function () {
+                        var $c = $(this);
+                        var id = parseInt($c.attr('data-account-id'), 10);
+                        if (!id) return;
+                        var name = $c.attr('data-kpay-name') || '';
+                        var phone = $c.attr('data-kpay-phone') || '';
+                        var balance = parseMoneyValue($c.attr('data-balance'));
+                        fromDom.push({
+                            id: id,
+                            kpay_name: name,
+                            kpay_phone: phone,
+                            amount: parseMoneyValue($c.attr('data-amount')),
+                            balance: balance,
+                            label: name + ' · ' + phone + ' (' + formatMoney(balance) + ')',
+                        });
+                    });
+                    if (fromDom.length) {
+                        adminKpayAccounts = fromDom;
+                    }
+                }
+
+                function selectedAdminKpayAccountId($scope) {
+                    var $sel = $();
+                    if ($scope && $scope.length) {
+                        $sel = $scope.find('#osAdminKpayAccountSelect').first();
+                        if (!$sel.length && $scope.is('select')) $sel = $scope.first();
+                    }
+                    if (!$sel.length) $sel = $('#osAdminKpayAccountSelect').first();
+                    return parseInt($sel.val(), 10) || 0;
                 }
 
                 function setPayMethodUi($wrap, method) {
@@ -2194,13 +2327,14 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                             reject(new Error('missing os'));
                             return;
                         }
+                        var filters = currentOsListFilters();
                         $.ajax({
                             url: removeUrlTemplate.replace('__OS__', osId),
                             type: 'POST',
                             data: {
                                 _token: csrf,
-                                from_date: filterFrom,
-                                to_date: filterTo,
+                                from_date: filters.from_date,
+                                to_date: filters.to_date,
                                 index: index,
                                 settlement_side: rowSettlementSide($row),
                             },
@@ -2232,10 +2366,11 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                             reject(new Error(@json(__('message.os_settlement_kpay_slip_required'))));
                             return;
                         }
+                        var filters = currentOsListFilters();
                         var formData = new FormData();
                         formData.append('_token', csrf);
-                        formData.append('from_date', filterFrom);
-                        formData.append('to_date', filterTo);
+                        formData.append('from_date', filters.from_date);
+                        formData.append('to_date', filters.to_date);
                         formData.append('settlement_side', rowSettlementSide($row));
                         if (files.length === 1) {
                             formData.append('kpay_slip', files[0]);
@@ -2878,14 +3013,16 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                 }
 
                 function refreshAdminKpaySelect(needAmount) {
-                    var $sel = $('#osAdminKpayAccountSelect');
+                    hydrateAdminKpayAccountsFromDom();
+                    var $sel = $('#osAdminKpayAccountSelect').first();
                     closeAdminKpayCombo();
                     if ($.fn.select2 && $sel.hasClass('select2-hidden-accessible')) {
                         try { $sel.select2('destroy'); } catch (e) {}
                     }
                     $sel.empty();
+                    var need = Math.abs(parseMoneyValue(needAmount));
                     var usable = (adminKpayAccounts || []).filter(function (a) {
-                        return Number(a.balance) + 0.00001 >= Math.abs(Number(needAmount) || 0);
+                        return parseMoneyValue(a.balance) + 0.00001 >= need;
                     });
                     if (!usable.length) {
                         syncAdminKpayComboLabel();
@@ -2893,7 +3030,7 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                     }
                     usable.forEach(function (a) {
                         $sel.append($('<option>', {
-                            value: a.id,
+                            value: String(a.id),
                             text: (a.kpay_name || '') + ' · ' + (a.kpay_phone || '') + ' (' + formatMoney(a.balance) + ')',
                             'data-name': a.kpay_name || '',
                             'data-phone': a.kpay_phone || '',
@@ -2901,8 +3038,12 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                         }));
                     });
                     $sel.val(String(usable[0].id));
+                    if (String($sel.val() || '') !== String(usable[0].id)) {
+                        try { $sel.find('option').prop('selected', false).first().prop('selected', true); } catch (eSel) {}
+                        $sel.val(String(usable[0].id));
+                    }
                     syncAdminKpayComboLabel();
-                    return true;
+                    return selectedAdminKpayAccountId() > 0;
                 }
 
                 // Use mousedown so document click does not instantly close the panel.
@@ -3046,11 +3187,12 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                 function finishOneOs(osId, $row, $btn, paymentMethod, adminAccountId, onDone) {
                     var settlementSide = normalizeSettlementSide($row.attr('data-section'));
                     $btn.prop('disabled', true);
+                    var filters = currentOsListFilters();
                     var payload = {
                         _token: csrf,
-                        from_date: filterFrom,
-                        to_date: filterTo,
-                        branch_id: filterBranchId,
+                        from_date: filters.from_date,
+                        to_date: filters.to_date,
+                        branch_id: filters.branch_id,
                         delivery_format: 'table',
                         payment_method: settlementSide === 'kyo_shin' ? 'cash' : (paymentMethod || 'kpay'),
                         settlement_side: settlementSide,
@@ -3082,9 +3224,15 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                 }
 
                 function mountAdminKpayModal($modal) {
-                    if (!$modal || !$modal.length) return $modal;
+                    if (!$modal || !$modal.length) return $();
                     try {
-                        if (!$modal.parent().is('body')) {
+                        // Only dedupe this modal's own id — never delete sibling kpay modals.
+                        var id = $modal.attr('id');
+                        if (id) {
+                            $('div#' + id).not($modal.first()).remove();
+                            $modal = $('div#' + id).first();
+                        }
+                        if ($modal.length && !$modal.parent().is('body')) {
                             $modal.appendTo(document.body);
                         }
                     } catch (e) {}
@@ -3129,10 +3277,11 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                             if (typeof onDone === 'function') onDone(false);
                             return;
                         }
-                        var amount = Math.abs(Number($row.attr('data-amount')) || 0);
+                        var amount = parseRowAmount($row);
                         var method = $row.attr('data-payment-method') === 'cash' ? 'cash' : 'kpay';
                         var side = normalizeSettlementSide($row.attr('data-section'));
-                        var needsAdmin = side === 'pay' && method === 'kpay' && amount > 0.00001;
+                        // Pay + KPay always needs the Admin account popup (never silent-finish).
+                        var needsAdmin = side === 'pay' && method === 'kpay';
 
                         if (!needsAdmin) {
                             finishOneOs(osId, $row, $btn, method, null, onDone);
@@ -3165,7 +3314,16 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                             return;
                         }
 
+                        try {
+                            closeProofLightbox();
+                        } catch (eLightbox) {}
+
                         var $modal = mountAdminKpayModal($('#osAdminKpayConfirmModal'));
+                        if (!$modal.length) {
+                            notify(@json(__('message.something_went_wrong')), 'error');
+                            if (typeof onDone === 'function') onDone(false);
+                            return;
+                        }
                         $modal.removeData('finish-confirmed');
                         $modal.removeData('pending-finish');
                         $modal.data('finish-ctx', {
@@ -3178,11 +3336,46 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                         });
 
                         function showConfirmModal() {
-                            $modal.modal({
-                                backdrop: 'static',
-                                keyboard: true,
-                                show: true,
-                            });
+                            try {
+                                $modal.appendTo(document.body);
+                            } catch (eMount) {}
+                            var $confirmBtn = $modal.find('#osAdminKpayConfirmBtn');
+                            try { closeAdminKpayCombo(); } catch (eClose) {}
+                            // Prevent the same click that opened the modal from also hitting Confirm.
+                            $confirmBtn.prop('disabled', true);
+                            $modal.data('confirm-ready-at', Date.now() + 400);
+                            function enableConfirmBtn() {
+                                $confirmBtn.prop('disabled', false);
+                            }
+                            // Always re-enable even if Bootstrap skips shown.bs.modal (no .fade).
+                            window.setTimeout(enableConfirmBtn, 450);
+                            $modal
+                                .off('show.bs.modal.pdsOsBackdrop shown.bs.modal.pdsOsForce')
+                                .on('show.bs.modal.pdsOsBackdrop', function () {
+                                    window.setTimeout(function () {
+                                        $('.modal-backdrop').last().addClass('pds-admin-kpay-backdrop');
+                                    }, 0);
+                                })
+                                .on('shown.bs.modal.pdsOsForce', function () {
+                                    var el = $modal[0];
+                                    if (el) {
+                                        el.style.display = 'block';
+                                        el.style.opacity = '1';
+                                        el.style.visibility = 'visible';
+                                    }
+                                    $('.modal-backdrop').last().addClass('pds-admin-kpay-backdrop');
+                                    try { closeAdminKpayCombo(); } catch (eClose2) {}
+                                    enableConfirmBtn();
+                                });
+                            try {
+                                $modal.modal({
+                                    backdrop: 'static',
+                                    keyboard: true,
+                                    focus: true,
+                                    show: false,
+                                });
+                            } catch (eInit) {}
+                            $modal.modal('show');
                         }
 
                         if ($modal.hasClass('show') || $modal.hasClass('in')) {
@@ -3240,14 +3433,15 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                     var originalText = label.text();
                     $btn.prop('disabled', true);
                     label.text(@json(__('message.processing')));
+                    var filters = currentOsListFilters();
                     $.ajax({
                         url: finishAllUrl,
                         type: 'POST',
                         data: {
                             _token: csrf,
-                            from_date: filterFrom,
-                            to_date: filterTo,
-                            branch_id: filterBranchId,
+                            from_date: filters.from_date,
+                            to_date: filters.to_date,
+                            branch_id: filters.branch_id,
                             items: items,
                             delivery_format: 'table',
                             settlement_side: section,
@@ -3330,13 +3524,21 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                     drainFinishConfirmQueue();
                 });
 
-                $('#osAdminKpayConfirmBtn').off('click.pdsOsAdminConfirm').on('click.pdsOsAdminConfirm', function () {
-                    var $modal = $('#osAdminKpayConfirmModal');
+                $('#osAdminKpayConfirmBtn').off('click.pdsOsAdminConfirm').on('click.pdsOsAdminConfirm', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var $modal = $('#osAdminKpayConfirmModal').first();
                     var ctx = $modal.data('finish-ctx');
                     if (!ctx) return;
-                    var accountId = parseInt($('#osAdminKpayAccountSelect').val(), 10);
+                    if (Date.now() < (Number($modal.data('confirm-ready-at')) || 0)) {
+                        return;
+                    }
+                    var accountId = selectedAdminKpayAccountId($modal);
                     if (!accountId) {
                         notify(@json(__('message.admin_kpay_account_required')), 'error');
+                        try {
+                            openAdminKpayCombo();
+                        } catch (eOpen) {}
                         return;
                     }
                     var $confirmBtn = $(this);
@@ -3957,13 +4159,14 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                     // Do NOT use traditional:true — it serializes item_ids as
                     // item_ids=1&item_ids=2 (PHP keeps only the last id), so Show
                     // Slip showed 1 parcel while the list badge showed N.
+                    var filters = currentOsListFilters();
                     slipPreviewXhr = $.ajax({
                         url: slipPreviewUrlTemplate.replace('__OS__', osId),
                         type: 'GET',
                         data: {
-                            from_date: filterFrom,
-                            to_date: filterTo,
-                            branch_id: filterBranchId,
+                            from_date: filters.from_date,
+                            to_date: filters.to_date,
+                            branch_id: filters.branch_id,
                             settlement_side: settlementSide,
                             item_ids: itemIds,
                         },

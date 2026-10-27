@@ -522,8 +522,11 @@
                     @endif
 
                     <div class="pds-delivered-modal__section-label">{{ __('message.delivered_photo') }}</div>
-                    <label class="pds-delivered-upload" for="riderDeliveredPhotoInput" id="riderDeliveredUploadLabel">
-                        <input type="file" id="riderDeliveredPhotoInput" accept="image/*" hidden>
+                    <label class="pds-delivered-upload"
+                           for="riderDeliveredPhotoInput"
+                           id="riderDeliveredUploadLabel"
+                           title="{{ __('message.delivered_photo_hint') }}">
+                        <input type="file" id="riderDeliveredPhotoInput" name="delivered_photo" accept="image/*" hidden>
                         <span class="pds-delivered-upload__icon" id="riderDeliveredUploadIcon" aria-hidden="true"><i class="fas fa-cloud-upload-alt"></i></span>
                         <img src="" alt="" class="pds-delivered-upload__preview" id="riderDeliveredUploadPreview" hidden>
                         <span class="pds-delivered-upload__title" id="riderDeliveredUploadTitle">{{ __('message.delivered_photo_pick') }}</span>
@@ -1003,6 +1006,9 @@
                         $('#riderDeliveredPhotoInput').val('');
                         resetDeliveredUploadLabel();
                         $('#riderDeliveredTypeModal').modal('show');
+                        if (typeof window.pdsScanImageDrop === 'function') {
+                            window.pdsScanImageDrop(document.getElementById('riderDeliveredTypeModal'));
+                        }
                         return;
                     }
 

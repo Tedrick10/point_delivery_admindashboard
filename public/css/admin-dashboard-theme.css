@@ -16127,7 +16127,7 @@ body.pds-admin .pds-os-slip__sender {
 }
 
 body.pds-admin .pds-os-slip__table-wrap {
-    overflow-x: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     border-radius: 14px;
     border: 1px solid rgba(var(--brand-rgb), 0.22);
@@ -16140,33 +16140,33 @@ body.pds-admin .pds-os-slip__table {
     border-collapse: separate;
     border-spacing: 0;
     table-layout: fixed;
-    min-width: 1180px;
+    min-width: 0;
     margin: 0;
 }
 
-body.pds-admin .pds-os-slip__table col.pds-os-slip__col--no { width: 42px; }
-body.pds-admin .pds-os-slip__table col.pds-os-slip__col--date { width: 118px; }
-body.pds-admin .pds-os-slip__table col.pds-os-slip__col--created { width: 118px; }
-body.pds-admin .pds-os-slip__table col.pds-os-slip__col--customer { width: 10%; }
-body.pds-admin .pds-os-slip__table col.pds-os-slip__col--phone { width: 118px; }
+body.pds-admin .pds-os-slip__table col.pds-os-slip__col--no { width: 3.2%; }
+body.pds-admin .pds-os-slip__table col.pds-os-slip__col--created { width: 9%; }
+body.pds-admin .pds-os-slip__table col.pds-os-slip__col--date { width: 9%; }
+body.pds-admin .pds-os-slip__table col.pds-os-slip__col--customer { width: 12%; }
+body.pds-admin .pds-os-slip__table col.pds-os-slip__col--phone { width: 10%; }
 body.pds-admin .pds-os-slip__table col.pds-os-slip__col--address { width: 16%; }
-body.pds-admin .pds-os-slip__table col.pds-os-slip__col--item { width: 8%; }
-body.pds-admin .pds-os-slip__table col.pds-os-slip__col--deli { width: 14%; }
-body.pds-admin .pds-os-slip__table col.pds-os-slip__col--gate { width: 7%; }
-body.pds-admin .pds-os-slip__table col.pds-os-slip__col--os { width: 8%; }
+body.pds-admin .pds-os-slip__table col.pds-os-slip__col--item { width: 9%; }
+body.pds-admin .pds-os-slip__table col.pds-os-slip__col--deli { width: 13%; }
+body.pds-admin .pds-os-slip__table col.pds-os-slip__col--gate { width: 8%; }
+body.pds-admin .pds-os-slip__table col.pds-os-slip__col--os { width: 10.8%; }
 
 body.pds-admin .pds-os-slip__table thead th {
     background: var(--site-color);
     color: #fff;
-    font-size: 0.66rem;
+    font-size: 0.6rem;
     font-weight: 800;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
-    padding: 0.78rem 0.65rem;
+    padding: 0.55rem 0.35rem;
     border: 0;
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     white-space: nowrap;
-    line-height: 1.25;
+    line-height: 1.2;
     overflow: hidden;
     text-overflow: ellipsis;
     vertical-align: middle;
@@ -16176,12 +16176,12 @@ body.pds-admin .pds-os-slip__table thead th {
 
 body.pds-admin .pds-os-slip__table thead th:first-child {
     border-top-left-radius: 13px;
-    padding-left: 0.75rem;
+    padding-left: 0.45rem;
 }
 
 body.pds-admin .pds-os-slip__table thead th:last-child {
     border-top-right-radius: 13px;
-    padding-right: 0.75rem;
+    padding-right: 0.45rem;
 }
 
 body.pds-admin .pds-os-slip__table thead th.text-right {
@@ -16194,10 +16194,10 @@ body.pds-admin .pds-os-slip__table tbody td.text-center {
 }
 
 body.pds-admin .pds-os-slip__table tbody td {
-    padding: 0.78rem 0.65rem;
+    padding: 0.5rem 0.35rem;
     border: 0;
     border-bottom: 1px solid #f1f5f9;
-    font-size: 0.8125rem;
+    font-size: 0.72rem;
     color: #1e293b;
     vertical-align: middle;
     background: #fff;
@@ -16205,15 +16205,15 @@ body.pds-admin .pds-os-slip__table tbody td {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: 1.4;
+    line-height: 1.3;
 }
 
 body.pds-admin .pds-os-slip__table tbody td:first-child {
-    padding-left: 0.75rem;
+    padding-left: 0.45rem;
 }
 
 body.pds-admin .pds-os-slip__table tbody td:last-child {
-    padding-right: 0.75rem;
+    padding-right: 0.45rem;
 }
 
 body.pds-admin .pds-os-slip__table thead th.pds-os-slip__th--date,
@@ -16221,14 +16221,14 @@ body.pds-admin .pds-os-slip__table thead th.pds-os-slip__th--created,
 body.pds-admin .pds-os-slip__table tbody td.pds-os-slip__cell--date,
 body.pds-admin .pds-os-slip__table tbody td.pds-os-slip__cell--created,
 body.pds-admin .pds-os-slip__table tbody td.pds-os-slip__cell--phone {
-    min-width: 7.5rem;
+    min-width: 0;
     max-width: none;
-    overflow: visible !important;
-    text-overflow: clip !important;
-    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
-    letter-spacing: 0.01em;
+    letter-spacing: 0;
 }
 
 body.pds-admin .pds-os-slip__table tbody td.pds-os-slip__cell--address {
@@ -16263,10 +16263,10 @@ body.pds-admin .pds-os-slip__table tfoot td {
     background: var(--site-color);
     color: #fff !important;
     font-weight: 800;
-    padding: 0.82rem 0.65rem;
+    padding: 0.55rem 0.35rem;
     border: 0;
     border-top: 1px solid rgba(255, 255, 255, 0.18);
-    font-size: 0.8125rem;
+    font-size: 0.72rem;
     vertical-align: middle;
 }
 
@@ -21381,6 +21381,13 @@ body.pds-admin .pds-expense-agent-photos__meta strong {
     font-weight: 700;
 }
 
+body.pds-admin .pds-expense-agent-photos__original-deli {
+    color: var(--site-color, #FE6F07) !important;
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+}
+
 @media (max-width: 860px) {
     body.pds-admin .pds-expense-agent-photos-stage {
         flex-direction: column;
@@ -22357,6 +22364,60 @@ body.pds-admin .pds-expense-image-view img {
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
 }
 
+/* Zoomable expense / delivered-photo preview (Summary + Expenses) */
+body.pds-admin .pds-expense-image-viewport {
+    position: relative;
+    display: block;
+    flex: 1 1 auto;
+    min-height: 280px;
+    height: min(58vh, 520px);
+    max-height: min(58vh, 520px);
+    overflow: hidden;
+    background: #0f172a;
+    border-radius: 12px;
+    padding: 0;
+    touch-action: none;
+    cursor: grab;
+    user-select: none;
+}
+
+body.pds-admin .pds-expense-image-viewport.is-zoomed {
+    cursor: grab;
+}
+
+body.pds-admin .pds-expense-image-viewport.is-zoomed:active {
+    cursor: grabbing;
+}
+
+body.pds-admin .pds-expense-image-viewport img,
+body.pds-admin .pds-expense-image-viewport .pds-expense-image-view__img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    transform: translate(-50%, -50%);
+    transform-origin: center center;
+    pointer-events: none;
+    user-select: none;
+    will-change: transform;
+}
+
+body.pds-admin .pds-expense-photo-zoom-bar {
+    flex-shrink: 0;
+    padding: 0.45rem 0.15rem 0;
+}
+
+body.pds-admin .pds-expense-modal__preview .pds-photo-carousel-zoom-hint {
+    padding: 0 0.25rem 0.35rem;
+}
+
 body.pds-admin .pds-expense-modal__row.is-previewing .pds-expense-modal__image-btn {
     outline: 2px solid #0ea5e9;
     outline-offset: 2px;
@@ -23121,12 +23182,21 @@ body.pds-admin .pds-delivered-upload {
     background: #f8fafc;
     cursor: pointer;
     text-align: center;
-    transition: border-color 0.15s ease, background 0.15s ease;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 body.pds-admin .pds-delivered-upload:hover,
-body.pds-admin .pds-delivered-upload.has-file {
+body.pds-admin .pds-delivered-upload.has-file,
+body.pds-admin .pds-delivered-upload.is-dragover,
+body.pds-admin .pds-delivered-upload.is-paste-ready {
     border-color: var(--site-color);
     background: rgba(var(--brand-rgb), 0.08);
+}
+body.pds-admin .pds-delivered-upload.is-dragover,
+body.pds-admin .pds-delivered-upload.is-paste-ready {
+    box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.16);
+    cursor: copy;
 }
 body.pds-admin .pds-delivered-upload__preview {
     display: block;
