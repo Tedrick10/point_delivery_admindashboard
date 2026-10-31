@@ -14,6 +14,8 @@
             if (is_array($message)) {
                 $message = implode(', ', $message);
             }
+            // Strip trailing .00 from whole amounts already stored in older notifications.
+            $message = preg_replace('/\.00\b/', '', (string) $message);
             $isUnread = empty($notification->read_at);
             $cardClass = 'pds-notify-card' . ($isUnread ? ' is-unread' : '');
         @endphp

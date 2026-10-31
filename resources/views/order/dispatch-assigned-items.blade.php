@@ -60,8 +60,10 @@
                                     ? \Carbon\Carbon::parse($item->last_chat_at)->timezone('Asia/Yangon')->format('d-m H:i')
                                     : '';
                             @endphp
-                            <div
+                            <a
+                                href="{{ route('order.dispatch.item.messages.show', [$item->order_id, $item->id]) }}"
                                 class="pds-msg-thread-card {{ $unread > 0 ? 'is-unread' : '' }} {{ $needsReply ? 'is-unanswered' : 'is-answered' }}"
+                                style="text-decoration:none;color:inherit;"
                                 data-os-name="{{ $osName !== '-' ? $osName : '' }}"
                                 data-os-username="{{ $osUsername }}"
                                 data-os-phone="{{ $osPhone !== '-' ? $osPhone : '' }}"
@@ -107,22 +109,18 @@
                                     @if($unread > 0)
                                         <span class="pds-msg-thread-card__badge">{{ $unread > 99 ? '99+' : $unread }}</span>
                                     @endif
-                                    @include('order.dispatch-item-action', ['item' => $item, 'hideGate' => true, 'hideEdit' => true])
                                 </div>
-                            </div>
+                            </a>
                         @endforeach
                     </div>
                 @endif
             </div>
         </div>
     </div>
-
-    @include('order.partials._dispatch-item-message-modal')
 </div>
 
 
     @section('bottom_script')
-        @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(document).ready(function () {
                 window.reloadDispatchItemsTable = function () {
@@ -173,19 +171,11 @@
                     var openItemId = String(params.get('item_id') || '').trim();
                     if (openItemId) {
                         var $card = $('#assignedTableShell .pds-msg-thread-card[data-item-id="' + openItemId + '"]');
-                        if ($card.length) {
-                            $card.removeClass('d-none');
-                            var $btn = $card.find('.js-dispatch-item-message').first();
-                            if ($btn.length) {
-                                setTimeout(function () { $btn.trigger('click'); }, 250);
-                            }
+                        if ($card.length && $card.attr('href')) {
+                            window.location.href = $card.attr('href');
                         }
                     }
                 } catch (e) {}
-
-                $(document).on('click', '.pds-dispatch-action-edit.loadRemoteModel', function (e) {
-                    e.stopPropagation();
-                });
             });
         </script>
     @endsection

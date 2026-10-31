@@ -51,7 +51,7 @@
         ],
         [
             'label' => __('message.sa_nav_finance'),
-            'keys' => ['kyo-shin', 'rider-remit', 'expense-summary'],
+            'keys' => ['kyo-shin', 'rider-remit', 'expense-summary', 'point-system'],
         ],
         [
             'label' => __('message.sa_nav_people'),

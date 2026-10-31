@@ -1,5 +1,5 @@
 <x-master-layout :assets="$assets ?? []">
-    <div class="container-fluid pds-page-wrap pds-motion-enter">
+    <div class="container-fluid pds-page-wrap pds-motion-enter pds-subadmin-list-page">
         <div class="row">
             <div class="col-lg-12">
                 <div class="card card-block card-stretch card-height pds-page-card">
@@ -15,10 +15,20 @@
                         </div>
                     </div>
                     <div class="card-body pds-page-body">
-                        <div class="card-header-toolbar">
-                            @if(isset($multi_checkbox_delete))
-                               {!! $multi_checkbox_delete !!}
-                            @endif
+                        <div class="pds-subadmin-toolbar">
+                            <div class="pds-subadmin-toolbar__start">
+                                @if(!empty($multi_checkbox_delete))
+                                    {!! $multi_checkbox_delete !!}
+                                @endif
+                            </div>
+                            <div class="pds-subadmin-toolbar__end">
+                                <label class="pds-subadmin-toolbar__search" for="pds-subadmin-search">
+                                    <input type="search"
+                                           id="pds-subadmin-search"
+                                           placeholder="{{ __('message.search') }}"
+                                           autocomplete="off">
+                                </label>
+                            </div>
                         </div>
                         <div class="pds-table-shell">
                             {{ $dataTable->table(['class' => 'table w-100 pds-datatable'],false) }}
@@ -34,6 +44,34 @@
             $(function () {
                 var csrfToken = $('meta[name="csrf-token"]').attr('content');
                 var workStatusBase = @json(url('sub-admin'));
+                var $table = $('.pds-subadmin-list-page table.pds-datatable').first();
+                var $search = $('#pds-subadmin-search');
+
+                function hideDtChrome() {
+                    $('.pds-subadmin-list-page .dataTables_filter').hide();
+                    $('.pds-subadmin-list-page .dataTables_wrapper > .row.align-items-center').hide();
+                    $('#deleteSelectedBtn')
+                        .addClass('is-visible pds-subadmin-delete-btn')
+                        .removeAttr('hidden')
+                        .show();
+                    if (typeof window.toggleDeleteButton === 'function') {
+                        window.toggleDeleteButton();
+                    }
+                }
+
+                hideDtChrome();
+                $table.on('init.dt draw.dt', hideDtChrome);
+                $(document).on('admin-spa:navigated', function () {
+                    setTimeout(hideDtChrome, 50);
+                });
+                window.setTimeout(hideDtChrome, 50);
+                window.setTimeout(hideDtChrome, 300);
+
+                $search.on('keyup input', function () {
+                    if ($.fn.DataTable && $.fn.DataTable.isDataTable($table)) {
+                        $table.DataTable().search($search.val()).draw();
+                    }
+                });
 
                 $(document).on('change', '.js-employee-work-toggle', function () {
                     var $input = $(this);

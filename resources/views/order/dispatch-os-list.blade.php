@@ -1436,6 +1436,7 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                 $adminKpayAccountsJson = $adminKpayAccounts->map(static function ($a) {
                     return [
                         'id' => $a->id,
+                        'branch_id' => $a->branch_id ? (int) $a->branch_id : null,
                         'kpay_name' => $a->kpay_name,
                         'kpay_phone' => $a->kpay_phone,
                         'amount' => (float) $a->amount,
@@ -3723,13 +3724,15 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                 }
 
                 function clearAdminKpayAccounts(onDone) {
+                    var filters = currentOsListFilters();
                     $.ajax({
                         url: adminKpayClearUrl,
                         type: 'POST',
                         data: {
                             _token: csrf,
-                            from_date: filterFrom,
-                            to_date: filterTo,
+                            from_date: filters.from_date || filterFrom,
+                            to_date: filters.to_date || filterTo,
+                            branch_id: filters.branch_id,
                         },
                         headers: {
                             'X-Requested-With': 'XMLHttpRequest',
@@ -3946,6 +3949,7 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                     var $saveBtn = $(this);
                     $saveBtn.prop('disabled', true);
                     var isEdit = !!editId;
+                    var filters = currentOsListFilters();
                     $.ajax({
                         url: isEdit
                             ? adminKpayUpdateUrlTemplate.replace('__ID__', editId)
@@ -3961,11 +3965,11 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                             }
                             : {
                                 _token: csrf,
-                                settlement_date: filterFrom,
+                                settlement_date: filters.from_date || filterFrom,
                                 kpay_name: name,
                                 kpay_phone: phone,
                                 amount: amount,
-                                branch_id: filterBranchId,
+                                branch_id: filters.branch_id,
                             },
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
                         success: function (res) {

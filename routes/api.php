@@ -113,6 +113,7 @@ Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function ()
     Route::get('os-receive/unsettled-summary', [API\OsReceiveSettlementController::class, 'unsettledSummary']);
     Route::get('os-receive/{id}', [API\OsReceiveSettlementController::class, 'show']);
     Route::post('os-receive/{id}/upload-payslip', [API\OsReceiveSettlementController::class, 'uploadPayslip']);
+    Route::post('os-receive/{id}/pay-with-points', [API\OsReceiveSettlementController::class, 'payWithPoints']);
 
     Route::get('user-list', [API\UserController::class, 'userList']);
     Route::get('reference-list', [API\ReferenceController::class, 'getList']);
@@ -186,6 +187,13 @@ Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function ()
     Route::get('deliveryman-dashboard-data', [API\DashboardController::class, 'deliverymandashboard']);
     Route::get('my-payroll-salary', [API\HrSalaryController::class, 'mySalary']);
 
+    Route::get('point-balance', [API\PointController::class, 'balance']);
+    Route::get('point-history', [API\PointController::class, 'history']);
+    Route::post('point-order-pay', [API\PointController::class, 'payOrder']);
+    Route::get('point-order-payments', [API\PointController::class, 'myOrderPayments']);
+    Route::post('point-salary-request', [API\PointController::class, 'requestSalary']);
+    Route::get('point-salary-requests', [API\PointController::class, 'mySalaryRequests']);
+
     Route::post('verify-otp-for-email', [API\UserController::class, 'verifyOTPForEmail']);
     Route::post('resend-otp-for-email', [API\UserController::class, 'resendOTPForEmail']);
 
@@ -200,6 +208,9 @@ Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function ()
     // Route::get('customersupport-list', [API\SupportchatHistoryController::class, 'getList']);
     Route::get('customersupport-list', [API\CustomerSupportController::class, 'getList']);
     Route::post('admin-chat-init', [API\CustomerSupportController::class, 'initAdminChat']);
+    Route::post('channel-chat-init', [API\CustomerSupportController::class, 'initChannelChat']);
+    Route::get('inquiry-auto-replies', [API\CustomerSupportController::class, 'inquiryAutoReplies']);
+    Route::post('inquiry-auto-reply-trigger', [API\CustomerSupportController::class, 'triggerInquiryAutoReply']);
     Route::post('customersupport-save', [Controllers\CustomerSupportController::class, 'store']);
     Route::post('customersupport-delete/{id}', [Controllers\CustomerSupportController::class, 'destroy']);
     Route::post('chatmessage-save', [Controllers\CustomerSupportController::class, 'chatMessage']);

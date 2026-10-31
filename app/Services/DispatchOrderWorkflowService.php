@@ -190,9 +190,124 @@ class DispatchOrderWorkflowService
 
         $reason = (string) ($order->reason ?? '');
 
-        return str_contains(strtolower($reason), 'pickup error')
+        if (str_contains(strtolower($reason), 'pickup error')
             || str_contains($reason, 'User cancelled after pickup error')
-            || str_contains($reason, 'User chose express after pickup error');
+            || str_contains($reason, 'User chose express after pickup error')) {
+            return true;
+        }
+
+        // Admin / Follow Up cancel while still in pickup or last-mile rider stage.
+        return $order->dispatchItems()
+            ->whereIn('status', [
+                'collected',
+                'assigned',
+                'courier_assigned',
+                'courier_departed',
+                'pending',
+                'accepted',
+                'arrived',
+            ])
+            ->exists();
+    }
+
+    /**
+     * When an order is cancelled, drop pickup / last-mile rider links so items
+     * leave Rider List Assigned / On Way and the order can sit in Pick Up Cancelled.
+     *
+     * Already-delivered parcels (status=completed) stay on the rider for ငွေအပ်.
+     * Stamp admin_completed_at when missing so they land in Rider List → Completed
+     * (same ways the remit sheet counts) instead of stuck under Delivered.
+     */
+    public function releaseRiderAssignmentsForCancelledOrder(Order $order): int
+    {
+        if (($order->status ?? '') !== 'cancelled') {
+            return 0;
+        }
+
+        if (! empty($order->delivery_man_id) || ! empty($order->assign_datetime)) {
+            $order->forceFill([
+                'delivery_man_id' => null,
+                'assign_datetime' => null,
+            ])->save();
+        }
+
+        $this->promoteCancelledDeliveredItemsToCompleted($order->id);
+
+        $releasable = [
+            'collected',
+            'assigned',
+            'courier_assigned',
+            'courier_departed',
+            'pending',
+            'accepted',
+            'arrived',
+        ];
+
+        return (int) \App\Models\DispatchOrderItem::query()
+            ->where('order_id', $order->id)
+            ->where(function ($q) use ($releasable) {
+                $q->whereNotNull('delivery_man_id')
+                    ->orWhereIn('status', $releasable);
+            })
+            ->whereIn('status', $releasable)
+            ->update([
+                'status' => 'collected',
+                'delivery_man_id' => null,
+                'assigned_at' => null,
+            ]);
+    }
+
+    /**
+     * Completed (rider-delivered) rows under a cancelled order → Rider List Completed.
+     */
+    public function promoteCancelledDeliveredItemsToCompleted(?int $orderId = null): int
+    {
+        $query = \App\Models\DispatchOrderItem::query()
+            ->where('status', 'completed')
+            ->whereNotNull('delivery_man_id')
+            ->whereNull('admin_completed_at')
+            ->whereNull('admin_finished_at')
+            ->whereHas('order', function ($q) {
+                $q->where('status', 'cancelled');
+            });
+
+        if ($orderId) {
+            $query->where('order_id', $orderId);
+        }
+
+        // Prefer delivered_at / remit stamp so Completed day filters stay honest.
+        return (int) $query->update([
+            'admin_completed_at' => \Illuminate\Support\Facades\DB::raw(
+                'COALESCE(delivered_at, rider_remit_at, updated_at, NOW())'
+            ),
+        ]);
+    }
+
+    /**
+     * Shared Pick Up Cancelled list / badge scope.
+     */
+    public function applyPickupCancelledOrderFilter($query)
+    {
+        return $query->where('status', 'cancelled')
+            ->where(function ($q) {
+                $q->whereNotNull('pickup_error_at')
+                    ->orWhereIn('pickup_error_choice', ['cancel', 'express'])
+                    ->orWhere('reason', 'like', '%pickup error%')
+                    ->orWhere('reason', 'like', '%User cancelled after pickup error%')
+                    ->orWhere('reason', 'like', '%User chose express after pickup error%')
+                    // Admin cancel (and stuck rows): still have open pickup/last-mile items.
+                    ->orWhereHas('dispatchItems', function ($item) {
+                        $item->whereIn('status', [
+                            'collected',
+                            'assigned',
+                            'courier_assigned',
+                            'courier_departed',
+                            'pending',
+                            'accepted',
+                            'arrived',
+                        ]);
+                    });
+            });
     }
 
     /**
@@ -548,14 +663,7 @@ class DispatchOrderWorkflowService
                     $q->whereNull('pickup_error_choice')
                         ->orWhereNotIn('pickup_error_choice', ['cancel', 'express']);
                 }),
-            'rider_pick_up_cancelled' => $query->where('status', 'cancelled')
-                ->where(function ($q) {
-                    $q->whereNotNull('pickup_error_at')
-                        ->orWhereIn('pickup_error_choice', ['cancel', 'express'])
-                        ->orWhere('reason', 'like', '%pickup error%')
-                        ->orWhere('reason', 'like', '%User cancelled after pickup error%')
-                        ->orWhere('reason', 'like', '%User chose express after pickup error%');
-                }),
+            'rider_pick_up_cancelled' => $this->applyPickupCancelledOrderFilter($query),
             // Rider Done only: rider finished pick-up, Admin Item Info still incomplete.
             // When both are done the order leaves Order List for Assign 100 — do not keep it here.
             'rider_pick_up_done' => $query->whereNotNull('delivery_man_id')
@@ -793,14 +901,7 @@ class DispatchOrderWorkflowService
         }
 
         if ($dispatchStatus === 'rider_pick_up_cancelled') {
-            $query->where('status', 'cancelled')
-                ->where(function ($q) {
-                    $q->whereNotNull('pickup_error_at')
-                        ->orWhereIn('pickup_error_choice', ['cancel', 'express'])
-                        ->orWhere('reason', 'like', '%pickup error%')
-                        ->orWhere('reason', 'like', '%User cancelled after pickup error%')
-                        ->orWhere('reason', 'like', '%User chose express after pickup error%');
-                });
+            $this->applyPickupCancelledOrderFilter($query);
 
             return;
         }
@@ -818,14 +919,41 @@ class DispatchOrderWorkflowService
      */
     public function healPickupErrorChoicesToCancelled(): int
     {
-        return Order::query()
+        $ids = Order::query()
             ->whereIn('pickup_error_choice', ['cancel', 'express'])
             ->where('status', '!=', 'cancelled')
+            ->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+
+        $updated = Order::query()
+            ->whereIn('id', $ids)
             ->update([
                 'status' => 'cancelled',
                 'delivery_man_id' => null,
                 'assign_datetime' => null,
             ]);
+
+        \App\Models\DispatchOrderItem::query()
+            ->whereIn('order_id', $ids)
+            ->whereIn('status', [
+                'collected',
+                'assigned',
+                'courier_assigned',
+                'courier_departed',
+                'pending',
+                'accepted',
+                'arrived',
+            ])
+            ->update([
+                'status' => 'collected',
+                'delivery_man_id' => null,
+                'assigned_at' => null,
+            ]);
+
+        return (int) $updated;
     }
 
     public function isDedicatedPickupList(?string $dispatchStatus): bool

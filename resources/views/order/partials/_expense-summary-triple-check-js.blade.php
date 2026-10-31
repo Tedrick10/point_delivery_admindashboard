@@ -27,6 +27,7 @@
             return {
                 from: cal.getAttribute('data-from') || '',
                 to: cal.getAttribute('data-to') || '',
+                branchId: cal.getAttribute('data-branch-id') || '',
             };
         }
 
@@ -132,6 +133,7 @@
                     body: JSON.stringify({
                         from_date: range.from,
                         to_date: range.to,
+                        branch_id: range.branchId ? Number(range.branchId) : undefined,
                     }),
                 });
                 const data = await res.json().catch(() => ({}));

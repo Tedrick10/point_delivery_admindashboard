@@ -125,12 +125,53 @@
 
     function renderMessageContent(item) {
         if (item.chat_image) {
-            return `<a href="${item.chat_image}" target="_blank" rel="noopener" class="pds-messenger-image-link">
-                <img src="${item.chat_image}" alt="image" class="pds-messenger-msg-image" loading="lazy">
-            </a>`;
+            const url = item.chat_image;
+            return `<button type="button" class="pds-messenger-image-link" data-full-src="${url}" title="View image">
+                <img src="${url}" alt="image" class="pds-messenger-msg-image" loading="lazy">
+            </button>`;
         }
         const text = escapeHtml(item.message || '').replace(/\n/g, '<br>');
         return `<div class="pds-messenger-bubble-text">${text}</div>`;
+    }
+
+    function ensureChatLightbox() {
+        let box = document.getElementById('pdsChatImageLightbox');
+        if (box) return box;
+        box = document.createElement('div');
+        box.id = 'pdsChatImageLightbox';
+        box.className = 'pds-chat-lightbox';
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-modal', 'true');
+        box.innerHTML = `
+            <div class="pds-chat-lightbox__shell">
+                <button type="button" class="pds-chat-lightbox__close" aria-label="Close"><i class="fas fa-times"></i></button>
+                <div class="pds-chat-lightbox__stage"><img class="pds-chat-lightbox__img" alt="Chat image"></div>
+                <a class="pds-chat-lightbox__open" href="#" target="_blank" rel="noopener">Open original</a>
+            </div>`;
+        document.body.appendChild(box);
+        const close = function () {
+            box.classList.remove('is-open');
+            document.body.classList.remove('pds-chat-lightbox-open');
+        };
+        box.querySelector('.pds-chat-lightbox__close')?.addEventListener('click', close);
+        box.addEventListener('click', function (e) { if (e.target === box) close(); });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && box.classList.contains('is-open')) close();
+        });
+        return box;
+    }
+
+    function openChatLightbox(url) {
+        if (!url) return;
+        const box = ensureChatLightbox();
+        const img = box.querySelector('.pds-chat-lightbox__img');
+        const openLink = box.querySelector('.pds-chat-lightbox__open');
+        img.classList.remove('is-ready');
+        img.onload = function () { img.classList.add('is-ready'); };
+        img.src = url;
+        if (openLink) openLink.href = url;
+        box.classList.add('is-open');
+        document.body.classList.add('pds-chat-lightbox-open');
     }
 
     function buildMessageHtml(item, showMeta) {
@@ -332,6 +373,13 @@
                 }
             });
         });
+    });
+
+    chatBody?.addEventListener('click', function (e) {
+        const btn = e.target.closest('.pds-messenger-image-link');
+        if (!btn || !chatBody.contains(btn)) return;
+        e.preventDefault();
+        openChatLightbox(btn.getAttribute('data-full-src') || btn.querySelector('img')?.getAttribute('src'));
     });
 
     if (supportId) {

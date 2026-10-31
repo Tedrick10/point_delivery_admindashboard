@@ -452,7 +452,7 @@
         }
 
         var state = getController(viewport);
-        var root = viewport.closest('.pds-expense-modal__preview, .sa-expense-modal__preview')
+        var root = viewport.closest('.pds-expense-modal__preview, .sa-expense-modal__preview, .pds-follow-up-details-photo-preview, .pds-audit-photo-drawer__panel')
             || viewport.parentElement;
         state.maxScale = 6;
         state.getImg = function () {

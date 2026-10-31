@@ -22,17 +22,24 @@ class ExpenseSummaryTripleCheck extends Model
     protected $fillable = [
         'check_date',
         'checker_key',
+        'branch_id',
         'user_id',
         'confirmed_at',
     ];
 
     protected $casts = [
         'check_date' => 'date',
+        'branch_id' => 'integer',
         'confirmed_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
     }
 }

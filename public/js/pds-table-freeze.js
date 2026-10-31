@@ -19,6 +19,7 @@
         '.pds-rider-remit-shell',
         '.pds-daily-check-shell',
         '.pds-dispatch-table-shell',
+        '.pds-expense-summary-table-wrap',
         '.table-responsive'
     ].join(',');
 
@@ -164,14 +165,21 @@
         }
     }
 
+    window.pdsBootTableFreeze = boot;
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', boot);
     } else {
         boot();
     }
     window.addEventListener('load', boot);
+    // Native listeners (admin-spa / admin-live also dispatch CustomEvent).
     document.addEventListener('admin-spa:navigated', boot);
     document.addEventListener('admin-live:replaced', boot);
+    // jQuery fallback if only $(document).trigger(...) fires.
+    if (window.jQuery) {
+        window.jQuery(document).on('admin-spa:navigated.pdsTableFreeze admin-live:replaced.pdsTableFreeze', boot);
+    }
     $(document).on('draw.dt', function (e, settings) {
         try {
             syncDataTableFreeze(settings && settings.nTable ? settings.nTable : null);

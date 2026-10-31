@@ -85,6 +85,9 @@
         setBadge($('#assign100Count'), badges.assign100, 'badge badge-pill badge-warning p-1 animate__animated animate__flash');
         setBadge($('#preOrderCount'), badges.preOrder, 'badge badge-pill badge-info p-1 animate__animated animate__flash');
         setBadge($('#assignedItemListCount'), badges.assignedItems, 'pds-topbar-badge');
+        setBadge($('#inquiryChatCount'), badges.inquiryChat, 'pds-topbar-badge');
+        setBadge($('#saInquiryChatCount'), badges.inquiryChat, 'sa-topbar-chat__badge');
+        setBadge($('#saComplaintChatCount'), badges.complaintChat, 'sa-topbar-chat__badge');
         setBadge($('#pickupErrorCount'), badges.pickupError, 'badge badge-pill badge-danger p-1 animate__animated animate__flash');
         setBadge($('#pickupCancelledCount'), badges.pickupCancelled, 'badge badge-pill badge-danger p-1 animate__animated animate__flash');
         setBadge($('#hubInboxCount'), badges.hubInbox, 'badge badge-pill badge-info p-1');
@@ -413,7 +416,14 @@
                 scrollState.winX = 0;
                 scrollState.winY = 0;
                 restoreScrollPositions(scrollState);
+                // jQuery + native CustomEvent — freeze / drop-upload listen via addEventListener.
                 $(document).trigger('admin-live:replaced');
+                try {
+                    document.dispatchEvent(new CustomEvent('admin-live:replaced'));
+                } catch (e) {}
+                if (typeof window.pdsBootTableFreeze === 'function') {
+                    try { window.pdsBootTableFreeze(); } catch (e) {}
+                }
                 // Re-apply inner scrolls after listeners; window stays at top.
                 scrollState.winX = 0;
                 scrollState.winY = 0;
@@ -672,8 +682,11 @@
         });
     };
 
+    // Mutation callers (Delivered / Finish / Assign) need a real refresh.
+    // Soft HTML replace is opt-in (data-live-soft); without it we must SPA-reload
+    // or the page stays stuck behind a modal backdrop / disabled buttons.
     window.adminLiveReloadPage = function () {
-        reloadPageContent({});
+        reloadPageContent({ hardReloadFallback: true });
     };
 
     window.adminLiveCollectPageData = collectPageData;

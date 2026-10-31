@@ -704,9 +704,13 @@
                     // so page shortcuts (/, ., P) keep working more than once.
                     var $el = $(el);
                     if (!$el.is(':visible')) return false;
-                    if ($el.closest('.modal').length && !$el.closest('.modal.show').length) return false;
-                    // Closed Select2 search field can keep focus on Windows.
-                    if ($el.hasClass('select2-search__field') && !$el.closest('.select2-container--open').length) {
+                    if ($el.closest('.modal').length && !$el.closest('.modal.show, .modal.in').length) return false;
+                    // Closed / sticky Select2 search must NOT block page shortcuts (Windows).
+                    if ($el.hasClass('select2-search__field')) {
+                        return !!$el.closest('.select2-container--open').length;
+                    }
+                    // Native <select> / Select2 hidden primary field — not real typing.
+                    if (tag === 'select' || $el.hasClass('select2-hidden-accessible')) {
                         return false;
                     }
                     return true;
@@ -714,21 +718,34 @@
 
                 function isOpenBootstrapModal($modal) {
                     if (!$modal || !$modal.length) return false;
-                    // Prefer class+aria over :visible — Windows can leave display quirks
-                    // that keep :visible true and permanently eat / . P shortcuts.
-                    return $modal.hasClass('show') && $modal.attr('aria-hidden') !== 'true';
+                    // Windows/BS: aria-hidden can stay "true" (or missing) while .show is on.
+                    if (!($modal.hasClass('show') || $modal.hasClass('in'))) {
+                        return false;
+                    }
+                    // Leftover .show with display:none still blocked shortcuts intermittently.
+                    try {
+                        if ($modal.css('display') === 'none') return false;
+                    } catch (cssErr) {}
+                    return true;
                 }
 
                 function isBlockingOverlayOpen() {
                     if ($('#assign100LabelPopup').hasClass('is-open')) {
                         return true;
                     }
-                    if ($('.swal2-container.swal2-shown, .jconfirm.jconfirm-open').length) {
+                    if ($('.swal2-container.swal2-shown, .jconfirm.jconfirm-open').filter(':visible').length) {
                         return true;
                     }
-                    return $('.modal.show').filter(function () {
-                        return $(this).attr('aria-hidden') !== 'true';
-                    }).length > 0;
+                    var blocked = false;
+                    $('.modal.show, .modal.in').each(function () {
+                        var $m = $(this);
+                        try {
+                            if ($m.css('display') === 'none') return;
+                        } catch (e) {}
+                        blocked = true;
+                        return false;
+                    });
+                    return blocked;
                 }
 
                 // Windows: after modal/iframe/print, focus can stick off-document so
@@ -736,6 +753,12 @@
                 function releaseAssign100ShortcutFocus() {
                     var ae = document.activeElement;
                     if (!ae || ae === document.body || ae === document.documentElement) {
+                        // Still close sticky Select2 so the next / . P is reliable.
+                        try {
+                            if (window.jQuery && $.fn.select2) {
+                                $(osInputSelector).select2('close');
+                            }
+                        } catch (s2err) {}
                         return;
                     }
                     var tag = (ae.tagName || '').toLowerCase();
@@ -747,19 +770,31 @@
                         return;
                     }
                     var $ae = $(ae);
-                    var trap = !$ae.is(':visible')
+                    var keepCustomer = $ae.is('#assign_100_customer_search');
+                    var keepRider = $ae.is('#rider_modal_search') && isRiderAssignModalOpen();
+                    var trap = !keepCustomer && !keepRider && (
+                        !$ae.is(':visible')
                         || $ae.closest('.modal').length
                         || $ae.closest('.select2-container').length
                         || $ae.closest('#assign100LabelPopup').length
-                        || tag === 'iframe';
+                        || tag === 'iframe'
+                        || tag === 'select'
+                        || $ae.hasClass('select2-search__field')
+                        || $ae.hasClass('select2-hidden-accessible')
+                    );
                     if (trap) {
                         try { ae.blur(); } catch (e2) {}
                     }
                     try {
+                        if (window.jQuery && $.fn.select2) {
+                            $(osInputSelector).select2('close');
+                        }
+                    } catch (s2err2) {}
+                    try {
                         if (document.body && !document.body.hasAttribute('tabindex')) {
                             document.body.setAttribute('tabindex', '-1');
                         }
-                        if (document.body && typeof document.body.focus === 'function') {
+                        if (!keepCustomer && !keepRider && document.body && typeof document.body.focus === 'function') {
                             document.body.focus({ preventScroll: true });
                         }
                     } catch (e3) {}
@@ -1177,36 +1212,57 @@
                     $check.prop('checked', !$check.prop('checked')).trigger('change');
                 });
 
-                // Shortcuts: "/" focuses customer search; "." Assign Rider; "P" print labels.
-                // Allow . / P from customer search (blur first) — Windows often keeps focus there.
-                $(document).off('keydown.assign100Shortcuts')
-                    .on('keydown.assign100Shortcuts', function (e) {
-                    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) {
+                // Shortcuts: "/" customer search; "." Assign Rider; "P" print labels.
+                // Reliability: always key off e.code so Myanmar IME (keyCode 229 / isComposing)
+                // and sticky Select2 focus cannot make / . P "sometimes work".
+                function handleAssign100ShortcutKeydown(e) {
+                    if (!e || e.__pdsAssign100Handled) {
+                        return;
+                    }
+                    e.__pdsAssign100Handled = true;
+                    if (e.altKey) {
                         return;
                     }
 
-                    var key = e.key;
+                    var key = e.key || '';
                     var code = e.code || '';
+                    var isSlash = code === 'Slash' || code === 'NumpadDivide' || key === '/';
+                    var isDot = code === 'Period' || code === 'NumpadDecimal' || key === '.' || key === '။';
+                    var isPrintKey = (!e.ctrlKey && !e.metaKey) && (code === 'KeyP' || key === 'p' || key === 'P');
+                    var isEnter = code === 'Enter' || code === 'NumpadEnter' || key === 'Enter';
+                    var isArrowDown = code === 'ArrowDown' || key === 'ArrowDown';
+                    var isArrowUp = code === 'ArrowUp' || key === 'ArrowUp';
+                    var isEsc = code === 'Escape' || key === 'Escape';
+                    var isShortcutCode = isSlash || isDot || isPrintKey || isEnter || isArrowDown || isArrowUp || isEsc;
+
+                    // Only ignore IME composition for normal typing — never for physical shortcut keys.
+                    if (!isShortcutCode && (e.isComposing || e.keyCode === 229)) {
+                        return;
+                    }
+                    if (!isShortcutCode) {
+                        return;
+                    }
+
                     var riderModalOpen = isRiderAssignModalOpen();
-                    var typing = isTypingTarget(e.target);
-                    var inRiderSearch = $(e.target).is('#rider_modal_search');
-                    var inCustomerSearch = $(e.target).is('#assign_100_customer_search');
+                    var $target = $(e.target);
+                    var inRiderSearch = $target.is('#rider_modal_search');
+                    var inCustomerSearch = $target.is('#assign_100_customer_search');
                     var popupOrModalOpen = isBlockingOverlayOpen();
 
                     if (riderModalOpen) {
-                        if (key === 'ArrowDown' || key === 'ArrowUp') {
-                            if (typing && !inRiderSearch) {
-                                return;
-                            }
+                        if (isEsc) {
                             e.preventDefault();
-                            var current = getActiveRiderIndex();
-                            setActiveRiderIndex(key === 'ArrowDown' ? current + 1 : current - 1);
+                            try { $('#riderAssignModal').modal('hide'); } catch (hideErr) {}
+                            setTimeout(releaseAssign100ShortcutFocus, 0);
                             return;
                         }
-                        if (key === 'Enter') {
-                            if (typing && !inRiderSearch) {
-                                return;
-                            }
+                        if (isArrowDown || isArrowUp) {
+                            e.preventDefault();
+                            var current = getActiveRiderIndex();
+                            setActiveRiderIndex(isArrowDown ? current + 1 : current - 1);
+                            return;
+                        }
+                        if (isEnter) {
                             e.preventDefault();
                             assignActiveRider();
                             return;
@@ -1214,8 +1270,7 @@
                         return;
                     }
 
-                    // Escape in filters → blur so / . P work again without reload.
-                    if (key === 'Escape' && !popupOrModalOpen && (inCustomerSearch || typing)) {
+                    if (isEsc) {
                         e.preventDefault();
                         releaseAssign100ShortcutFocus();
                         try {
@@ -1226,9 +1281,14 @@
                         return;
                     }
 
-                    // Slash (/) → focus Customer Name / Phone (repeatable; skip while typing elsewhere).
-                    if ((key === '/' || code === 'Slash') && !popupOrModalOpen) {
-                        if (typing && !inCustomerSearch) {
+                    // Page shortcuts: clear sticky Select2 / hidden modal focus first.
+                    if ((isSlash || isDot || isPrintKey) && !inCustomerSearch) {
+                        releaseAssign100ShortcutFocus();
+                    }
+
+                    if (isSlash && !isOpenBootstrapModal($('#riderAssignModal')) && !$('#assign100LabelPopup').hasClass('is-open')) {
+                        // Allow even if another leftover overlay was mis-detected — only hard-block label popup / rider.
+                        if ($('.swal2-container.swal2-shown:visible, .jconfirm.jconfirm-open:visible').length) {
                             return;
                         }
                         e.preventDefault();
@@ -1236,40 +1296,58 @@
                         return;
                     }
 
-                    // From customer search, still allow . and P (blur then run) — Windows users
-                    // often stay focused in the search box after pressing /.
-                    var allowPageShortcut = !typing || inCustomerSearch;
-
-                    // P → open Print airway bill popup for the selected rows.
-                    if ((key === 'p' || key === 'P') && allowPageShortcut) {
+                    if (isPrintKey) {
                         if (popupOrModalOpen) {
                             return;
                         }
                         e.preventDefault();
-                        if (inCustomerSearch) {
-                            try { e.target.blur(); } catch (pBlur) {}
-                        }
+                        try { if (inCustomerSearch) e.target.blur(); } catch (pBlur) {}
+                        releaseAssign100ShortcutFocus();
                         openAssign100LabelsForIds(getVisibleCheckedItemIds());
                         return;
                     }
 
-                    // Dot (.) → open Assign Rider popup.
-                    if ((key === '.' || code === 'Period') && allowPageShortcut) {
+                    if (isDot) {
                         if (popupOrModalOpen) {
                             return;
                         }
                         e.preventDefault();
-                        if (inCustomerSearch) {
-                            try { e.target.blur(); } catch (dotBlur) {}
-                        }
+                        try { if (inCustomerSearch) e.target.blur(); } catch (dotBlur) {}
+                        releaseAssign100ShortcutFocus();
                         openAssignRiderFromShortcut();
                     }
-                });
+                }
+
+                // Single capture listener on window — more reliable than document bubble on Windows
+                // after print iframe / Select2 / modal focus changes.
+                try {
+                    window.removeEventListener('keydown', window.__pdsAssign100Capture, true);
+                } catch (rmErr) {}
+                $(document).off('keydown.assign100Shortcuts');
+                window.__pdsAssign100Capture = function (e) {
+                    handleAssign100ShortcutKeydown(e);
+                };
+                window.addEventListener('keydown', window.__pdsAssign100Capture, true);
+
+                // Clicking the table / chrome clears sticky Select2 focus so the next shortcut works.
+                $(document).off('mousedown.assign100Focus', '#assign100Table, .pds-assign-100-filter, .pds-dispatch-to-assign-topbar, .pds-assign-100-tabs')
+                    .on('mousedown.assign100Focus', '#assign100Table, .pds-assign-100-filter, .pds-dispatch-to-assign-topbar, .pds-assign-100-tabs', function (ev) {
+                        var t = ev.target;
+                        if (!t) return;
+                        if ($(t).closest('input, textarea, select, button, a, .select2-container, .select2-search__field').length) return;
+                        releaseAssign100ShortcutFocus();
+                    });
 
                 // After any Bootstrap modal closes on this page, reclaim focus (Windows).
                 $(document).off('hidden.bs.modal.assign100Focus')
                     .on('hidden.bs.modal.assign100Focus', '.modal', function () {
-                        releaseAssign100ShortcutFocus();
+                        setTimeout(releaseAssign100ShortcutFocus, 0);
+                        setTimeout(releaseAssign100ShortcutFocus, 50);
+                    });
+                $(document).off('shown.bs.modal.assign100Focus')
+                    .on('shown.bs.modal.assign100Focus', '#riderAssignModal', function () {
+                        // Ensure Enter works even if a phantom backdrop existed.
+                        setActiveRiderIndex(getActiveRiderIndex());
                     });
 
                 var assign100FilterTimer;
@@ -1447,9 +1525,13 @@
                     e.stopPropagation();
                 });
 
-                $(document).on('click', '[data-dispatch-item-delete]', function (e) {
+                $(document)
+                    .off('click.pdsDispatchItemDelete', '[data-dispatch-item-delete]')
+                    .off('click', '[data-dispatch-item-delete]')
+                    .on('click.pdsDispatchItemDelete', '[data-dispatch-item-delete]', function (e) {
                     e.preventDefault();
                     e.stopPropagation();
+                    e.stopImmediatePropagation();
 
                     var $btn = $(this);
                     var url = $btn.data('delete-url');
@@ -1461,6 +1543,15 @@
                     if (!url || typeof $.confirm !== 'function') {
                         return;
                     }
+
+                    try {
+                        if (typeof Swal !== 'undefined' && typeof Swal.close === 'function') {
+                            Swal.close();
+                        }
+                    } catch (err) {}
+                    try {
+                        $('.jconfirm').remove();
+                    } catch (err) {}
 
                     $.confirm({
                         title: title,

@@ -333,6 +333,16 @@ class User extends Authenticatable implements HasMedia
         return $this->hasOne(Wallet::class, 'user_id', 'id');
     }
 
+    public function pointWallet()
+    {
+        return $this->hasOne(PointWallet::class, 'user_id', 'id');
+    }
+
+    public function pointHistories()
+    {
+        return $this->hasMany(PointHistory::class, 'user_id', 'id');
+    }
+
     public function userWithdraw(){
         return $this->hasMany(WithdrawRequest::class, 'user_id', 'id');
     }

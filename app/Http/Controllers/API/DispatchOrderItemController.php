@@ -205,7 +205,10 @@ class DispatchOrderItemController extends Controller
     }
 
     /**
-     * Rider adds an extra parcel during pickup (photo + size only).
+     * Rider adds extra parcel(s) during pickup (photo + size only).
+     * Optional body: { "count": N } — create up to 100 extras in one request
+     * so the Rider app does not POST + full order-detail reload 100 times
+     * (that path OOM / splash-restarts on low-memory devices).
      */
     public function addPickupItem(Request $request, $orderId)
     {
@@ -230,6 +233,14 @@ class DispatchOrderItemController extends Controller
             ], 422);
         }
 
+        $count = (int) $request->input('count', 1);
+        if ($count < 1) {
+            $count = 1;
+        }
+        if ($count > 100) {
+            $count = 100;
+        }
+
         // Seed base parcels first so gate/shop bulk orders don't lose original count.
         $pickupService->ensureDispatchItems($order->fresh());
         $order = $order->fresh();
@@ -240,7 +251,9 @@ class DispatchOrderItemController extends Controller
             ->orderBy('id')
             ->get();
 
+        $seededBase = false;
         if ($existing->isEmpty()) {
+            $seededBase = true;
             $baseCount = max(1, (int) $order->total_parcel);
             $delivery = is_array($order->delivery_point) ? $order->delivery_point : [];
             $itemPrefix = (int) ($order->is_gate_order ?? 0) === 1
@@ -306,25 +319,41 @@ class DispatchOrderItemController extends Controller
             }
         }
 
-        $item = DispatchOrderItem::create([
-            'order_id' => $order->id,
-            'photo_id' => 0,
-            'received_date' => $order->pickup_datetime ?? $order->created_at ?? now(),
-            'status' => 'collected',
-            'code' => DispatchOrderItem::generateCode(),
-            'item_name' => 'ထပ်တိုး Parcel '.$extraNumber,
-            'remark' => 'rider_added',
-            'from_branch_id' => $fromBranchId > 0 ? $fromBranchId : null,
-            'to_branch_id' => $toBranchId > 0 ? $toBranchId : null,
-            'delivery_city' => $deliveryCity !== '' ? $deliveryCity : null,
-            'township' => $township !== '' ? $township : null,
-            'weight' => 0,
-            'item_value' => 0,
-            'deli_amount' => 0,
-            'advance_paid' => 0,
-            'os_paid' => 0,
-            'credit_to' => 'customer',
-        ]);
+        $created = [];
+        \DB::transaction(function () use (
+            $order,
+            $count,
+            &$extraNumber,
+            $fromBranchId,
+            $toBranchId,
+            $deliveryCity,
+            $township,
+            &$created
+        ) {
+            for ($n = 0; $n < $count; $n++) {
+                $item = DispatchOrderItem::create([
+                    'order_id' => $order->id,
+                    'photo_id' => 0,
+                    'received_date' => $order->pickup_datetime ?? $order->created_at ?? now(),
+                    'status' => 'collected',
+                    'code' => DispatchOrderItem::generateCode(),
+                    'item_name' => 'ထပ်တိုး Parcel '.$extraNumber,
+                    'remark' => 'rider_added',
+                    'from_branch_id' => $fromBranchId > 0 ? $fromBranchId : null,
+                    'to_branch_id' => $toBranchId > 0 ? $toBranchId : null,
+                    'delivery_city' => $deliveryCity !== '' ? $deliveryCity : null,
+                    'township' => $township !== '' ? $township : null,
+                    'weight' => 0,
+                    'item_value' => 0,
+                    'deli_amount' => 0,
+                    'advance_paid' => 0,
+                    'os_paid' => 0,
+                    'credit_to' => 'customer',
+                ]);
+                $created[] = $item;
+                $extraNumber++;
+            }
+        });
 
         $collectedCount = DispatchOrderItem::query()
             ->where('order_id', $order->id)
@@ -332,26 +361,53 @@ class DispatchOrderItemController extends Controller
             ->count();
 
         $order->forceFill([
-            'total_parcel' => max($previousTotal + 1, $collectedCount),
+            'total_parcel' => max($previousTotal + $count, $collectedCount),
         ])->save();
 
-        $item->load(['fromBranch', 'toBranch', 'photoMedia']);
-
-        try {
-            app(DispatchOrderAuditService::class)->logItemCreated($order, $item, 'rider');
-        } catch (\Throwable $e) {
-            \Log::warning('dispatch audit failed after rider item add', [
-                'order_id' => $order->id,
-                'item_id' => $item->id,
-                'error' => $e->getMessage(),
-            ]);
+        foreach ($created as $item) {
+            $item->load(['fromBranch', 'toBranch', 'photoMedia']);
+            try {
+                app(DispatchOrderAuditService::class)->logItemCreated($order, $item, 'rider');
+            } catch (\Throwable $e) {
+                \Log::warning('dispatch audit failed after rider item add', [
+                    'order_id' => $order->id,
+                    'item_id' => $item->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
-        return json_custom_response([
+        $createdPayload = array_map(
+            fn (DispatchOrderItem $item) => (new DispatchOrderItemResource($item))->resolve(),
+            $created
+        );
+
+        $payload = [
             'status' => true,
             'message' => __('message.save_form', ['form' => __('message.item')]),
-            'data' => (new DispatchOrderItemResource($item))->resolve(),
-        ]);
+            // Backward compatible: single-add clients still read `data` as one item.
+            'data' => $createdPayload[0] ?? null,
+            'items' => $createdPayload,
+            'added_count' => count($createdPayload),
+            'total_parcel' => (int) $order->total_parcel,
+        ];
+
+        // When base parcels were just seeded, return the full collected list so the
+        // Rider app can sync without a heavy order-detail round-trip.
+        if ($seededBase) {
+            $all = DispatchOrderItem::query()
+                ->where('order_id', $order->id)
+                ->where('status', 'collected')
+                ->with(['fromBranch', 'toBranch', 'photoMedia'])
+                ->orderBy('id')
+                ->get();
+            $payload['all_items'] = $all
+                ->map(fn (DispatchOrderItem $row) => (new DispatchOrderItemResource($row))->resolve())
+                ->values()
+                ->all();
+        }
+
+        return json_custom_response($payload);
     }
 
     /**
@@ -1948,7 +2004,13 @@ class DispatchOrderItemController extends Controller
 
         if ($order) {
             try {
-                app(DispatchOrderAuditService::class)->logDeliveryRiderAssigned($order, $user, 1, $user);
+                app(DispatchOrderAuditService::class)->logDeliveryRiderAssigned(
+                    $order,
+                    $user,
+                    1,
+                    $user,
+                    [(int) $item->id]
+                );
             } catch (\Throwable $e) {
                 \Log::warning('dispatch audit failed after rider self-assign', [
                     'order_id' => $order->id,

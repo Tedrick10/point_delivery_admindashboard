@@ -1470,7 +1470,8 @@ class UserController extends Controller
 
     /**
      * Issue a Sanctum token. Rider (delivery_man) accounts are single-device:
-     * logging in elsewhere revokes every previous token so the old phone is forced out.
+     * logging in on a new phone revokes every previous token so the old device
+     * is forced to Login (401 → auto logout).
      */
     private function createAuthToken(User $user): string
     {

@@ -943,7 +943,405 @@
         .pds-hr-extra__footer span { grid-column: 1; text-align: left; }
         .pds-hr-extra__footer strong { grid-column: 2; }
         .pds-hr-my-salary__grid { grid-template-columns: 1fr 1fr; }
+        .pds-point-salary__form { grid-template-columns: 1fr; }
+        .pds-point-salary__go { width: 100%; }
+        .pds-point-salary__head { gap: 12px; }
     }
+
+    .pds-hr-my-salary__item--point {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 100%;
+        text-align: left;
+        cursor: pointer;
+        background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.12), #ffffff);
+        border: 1px solid #ffd8b0;
+        transition: transform .12s ease, box-shadow .15s ease, border-color .15s ease;
+    }
+    .pds-hr-my-salary__item--point strong { color: var(--site-color); }
+    .pds-hr-my-salary__item--point em {
+        display: block; margin-top: 6px; font-style: normal;
+        font-size: 11px; font-weight: 700; color: var(--site-color); opacity: .85;
+    }
+    .pds-hr-my-salary__item--point:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 22px rgba(var(--brand-rgb), .16);
+        border-color: var(--site-color);
+    }
+
+    body.pds-point-modal-open { overflow: hidden; }
+    .pds-point-modal {
+        position: fixed; inset: 0; z-index: 1200;
+        display: flex; align-items: center; justify-content: center; padding: 1.25rem;
+    }
+    .pds-point-modal[hidden] { display: none !important; }
+    .pds-point-modal__backdrop {
+        position: absolute; inset: 0;
+        background: rgba(15, 23, 42, 0.52);
+        backdrop-filter: blur(6px);
+        opacity: 0; transition: opacity .2s ease;
+    }
+    .pds-point-modal.is-open .pds-point-modal__backdrop { opacity: 1; }
+    .pds-point-modal__panel {
+        position: relative; z-index: 1;
+        width: min(100%, 400px);
+        background: #fff;
+        border: 1px solid rgba(var(--brand-rgb), 0.18);
+        border-radius: 24px;
+        box-shadow: 0 28px 64px rgba(15, 23, 42, .24);
+        overflow: hidden;
+        transform: translateY(14px) scale(.97); opacity: 0;
+        transition: transform .2s ease, opacity .2s ease;
+    }
+    .pds-point-modal.is-open .pds-point-modal__panel {
+        transform: translateY(0) scale(1); opacity: 1;
+    }
+    .pds-point-modal__x {
+        position: absolute; top: 14px; right: 14px; z-index: 2;
+        width: 34px; height: 34px; border: 0; border-radius: 999px;
+        background: #fff; color: var(--site-color);
+        border: 1px solid #ffd8b0;
+        display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+        transition: background .15s ease, color .15s ease;
+    }
+    .pds-point-modal__x:hover { background: var(--site-color); color: #fff; border-color: transparent; }
+    .pds-point-modal__top {
+        display: grid; justify-items: center; text-align: center; gap: 10px;
+        padding: 28px 24px 18px;
+        background:
+            radial-gradient(120% 80% at 50% 0%, rgba(var(--brand-rgb), 0.16) 0%, transparent 62%),
+            linear-gradient(180deg, #fff8f1 0%, #fff 100%);
+        border-bottom: 1px solid #ffe8d4;
+    }
+    .pds-point-modal__icon {
+        width: 56px; height: 56px; border-radius: 18px;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: linear-gradient(145deg, var(--site-color), #ff8a3d);
+        color: #fff; font-size: 22px;
+        box-shadow: 0 12px 24px rgba(var(--brand-rgb), .32);
+    }
+    .pds-point-modal__top h5 {
+        margin: 0; font-size: 18px; font-weight: 800; color: var(--hr-ink); letter-spacing: -0.02em;
+    }
+    .pds-point-modal__bal {
+        display: inline-flex; flex-direction: column; align-items: center; gap: 2px;
+        padding: 10px 18px; border-radius: 16px;
+        background: #fff; border: 1px solid #ffd8b0;
+        box-shadow: 0 6px 16px rgba(var(--brand-rgb), .1);
+        min-width: 140px;
+    }
+    .pds-point-modal__bal span {
+        font-size: 10px; font-weight: 800; letter-spacing: .08em;
+        text-transform: uppercase; color: var(--hr-muted);
+    }
+    .pds-point-modal__bal strong {
+        font-size: 26px; font-weight: 800; color: var(--site-color);
+        font-variant-numeric: tabular-nums; line-height: 1.1;
+    }
+    .pds-point-modal__bal small {
+        font-size: 12px; font-weight: 700; color: var(--hr-muted); text-transform: uppercase;
+    }
+    .pds-point-modal__form {
+        display: grid; gap: 14px; padding: 20px 22px 22px;
+    }
+    .pds-point-modal__field {
+        display: grid; gap: 7px; margin: 0;
+    }
+    .pds-point-modal__field span {
+        font-size: 11px; font-weight: 800; letter-spacing: .06em;
+        text-transform: uppercase; color: var(--hr-muted);
+    }
+    .pds-point-modal__field input {
+        width: 100%; min-height: 48px; border: 1px solid #e8edf5; border-radius: 14px;
+        background: #f8fafc; padding: 0 14px; font: inherit; font-weight: 700;
+        color: var(--hr-ink); outline: 0;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .pds-point-modal__field input:focus {
+        background: #fff;
+        border-color: rgba(var(--brand-rgb), .55);
+        box-shadow: 0 0 0 3px rgba(var(--brand-rgb), .14);
+    }
+    .pds-point-modal__field input[name="points"] {
+        font-size: 22px; font-weight: 800; color: var(--site-color); text-align: center;
+        letter-spacing: -0.02em;
+        -moz-appearance: textfield; appearance: textfield;
+    }
+    .pds-point-modal__field input[name="points"]::-webkit-outer-spin-button,
+    .pds-point-modal__field input[name="points"]::-webkit-inner-spin-button {
+        -webkit-appearance: none; margin: 0;
+    }
+    .pds-point-modal__submit {
+        margin-top: 4px;
+        min-height: 50px; border: 0; border-radius: 14px;
+        background: linear-gradient(135deg, var(--site-color), #ff8a3d);
+        color: #fff; font: inherit; font-size: 15px; font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 12px 26px rgba(var(--brand-rgb), .3);
+        transition: filter .15s ease, transform .12s ease, box-shadow .15s ease;
+    }
+    .pds-point-modal__submit:hover {
+        filter: brightness(0.97);
+        box-shadow: 0 14px 30px rgba(var(--brand-rgb), .36);
+        color: #fff;
+    }
+    .pds-point-modal__submit:active { transform: translateY(1px); }
+    .pds-point-modal__icon--warn {
+        background: linear-gradient(145deg, #dc2626, #f97316) !important;
+        box-shadow: 0 12px 24px rgba(220, 38, 38, .28) !important;
+    }
+    .pds-point-modal__top--empty { padding-bottom: 8px; }
+    .pds-point-modal__hint {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--hr-muted);
+    }
+    .pds-point-modal__hint strong { color: #dc2626; font-weight: 800; }
+    .pds-point-reqs {
+        margin-top: 14px;
+        background: #fff;
+        border: 1px solid #ffd8b0;
+        border-radius: 22px;
+        overflow: hidden;
+        box-shadow: 0 12px 28px rgba(var(--brand-rgb), .08);
+    }
+    .pds-point-reqs__head {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.12) 0%, #fff 70%);
+        border-bottom: 1px solid #ffe4cc;
+    }
+    .pds-point-reqs__title {
+        display: inline-flex; align-items: center; gap: 8px;
+        font-size: 12px; font-weight: 800; letter-spacing: .05em;
+        text-transform: uppercase; color: var(--hr-ink);
+    }
+    .pds-point-reqs__title i { color: var(--site-color); }
+    .pds-point-reqs__head b {
+        min-width: 28px; height: 28px; border-radius: 999px;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: rgba(var(--brand-rgb), 0.12); color: var(--site-color);
+        font-size: 12px; font-weight: 800;
+    }
+    .pds-point-reqs__list {
+        display: grid; gap: 10px; padding: 14px 16px 16px;
+    }
+    .pds-point-reqs__card {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 13px 14px;
+        border-radius: 16px;
+        background: #fffaf5;
+        border: 1px solid #ffe4cc;
+        transition: transform .12s ease, box-shadow .15s ease;
+    }
+    .pds-point-reqs__card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 18px rgba(var(--brand-rgb), .1);
+    }
+    .pds-point-reqs__card--ok {
+        background: #f0fdf4; border-color: #bbf7d0;
+    }
+    .pds-point-reqs__card--no {
+        background: #fef2f2; border-color: #fecaca;
+    }
+    .pds-point-reqs__icon {
+        width: 40px; height: 40px; border-radius: 13px; flex: 0 0 auto;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: linear-gradient(145deg, var(--site-color), #ff8a3d);
+        color: #fff; font-size: 14px;
+        box-shadow: 0 8px 16px rgba(var(--brand-rgb), .24);
+        margin-top: 1px;
+    }
+    .pds-point-reqs__card--ok .pds-point-reqs__icon {
+        background: linear-gradient(145deg, #059669, #10b981);
+        box-shadow: 0 8px 16px rgba(5, 150, 105, .22);
+    }
+    .pds-point-reqs__card--no .pds-point-reqs__icon {
+        background: linear-gradient(145deg, #dc2626, #ef4444);
+        box-shadow: 0 8px 16px rgba(220, 38, 38, .22);
+    }
+    .pds-point-reqs__body { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
+    .pds-point-reqs__line {
+        display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+    .pds-point-reqs__line strong {
+        font-size: 18px; font-weight: 800; color: var(--site-color);
+        font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+    }
+    .pds-point-reqs__card--ok .pds-point-reqs__line strong { color: #047857; }
+    .pds-point-reqs__card--no .pds-point-reqs__line strong { color: #b91c1c; }
+    .pds-point-reqs__unit {
+        font-size: 11px; font-weight: 700; color: var(--hr-muted);
+        text-transform: uppercase;
+    }
+    .pds-point-reqs__tag {
+        margin-left: auto;
+        display: inline-flex; align-items: center;
+        padding: 4px 10px; border-radius: 999px;
+        font-size: 11px; font-weight: 800;
+    }
+    .pds-point-reqs__tag--wait {
+        background: rgba(var(--brand-rgb), .14); color: var(--site-color);
+    }
+    .pds-point-reqs__tag--ok { background: #d1fae5; color: #047857; }
+    .pds-point-reqs__tag--no { background: #fee2e2; color: #b91c1c; }
+    .pds-point-reqs__meta {
+        display: flex; flex-wrap: wrap; gap: 6px 12px;
+        font-size: 12px; font-weight: 600; color: var(--hr-muted);
+    }
+    .pds-point-reqs__note {
+        display: inline-flex; align-items: flex-start; gap: 8px;
+        margin: 2px 0 0;
+        max-width: 100%;
+        width: fit-content;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.04);
+        border: 1px dashed rgba(15, 23, 42, 0.1);
+        color: #3f3a36;
+        font-size: 12.5px;
+        font-weight: 600;
+        line-height: 1.35;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .pds-point-reqs__note > i {
+        margin-top: 3px;
+        color: var(--site-color);
+        font-size: 9px;
+        flex: 0 0 auto;
+        opacity: 0.85;
+    }
+    .pds-point-reqs__card--ok .pds-point-reqs__note > i { color: #059669; }
+    .pds-point-reqs__card--no .pds-point-reqs__note > i { color: #dc2626; }
+    .pds-point-reqs__note span { min-width: 0; }
+    .pds-point-reqs__meta span + span::before {
+        content: "·"; margin-right: 12px; color: #cbd5e1;
+    }
+
+    /* Point → Salary request card */
+    .pds-point-salary {
+        margin-top: 14px;
+        background: #fff;
+        border: 1px solid #ffd8b0;
+        border-radius: 22px;
+        overflow: hidden;
+        box-shadow: 0 12px 28px rgba(var(--brand-rgb), .08);
+    }
+    .pds-point-salary__head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 18px 20px;
+        background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.12) 0%, #fff 70%);
+        border-bottom: 1px solid #ffe4cc;
+    }
+    .pds-point-salary__badge {
+        width: 44px; height: 44px; border-radius: 14px;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: linear-gradient(135deg, var(--site-color), var(--site-color));
+        color: #fff; font-size: 18px;
+        box-shadow: 0 8px 18px rgba(var(--brand-rgb), .28);
+        flex: 0 0 auto;
+    }
+    .pds-point-salary__copy { flex: 1 1 auto; min-width: 0; }
+    .pds-point-salary__eyebrow {
+        display: block; font-size: 11px; font-weight: 800; letter-spacing: .06em;
+        text-transform: uppercase; color: var(--site-color); margin-bottom: 2px;
+    }
+    .pds-point-salary__copy h5 {
+        margin: 0; font-size: 18px; font-weight: 800; color: var(--hr-ink);
+    }
+    .pds-point-salary__balance {
+        display: inline-flex; align-items: baseline; gap: 6px;
+        padding: 10px 14px; border-radius: 999px;
+        background: #fff; border: 1px solid #ffd8b0;
+        box-shadow: 0 4px 12px rgba(var(--brand-rgb), .1);
+    }
+    .pds-point-salary__balance strong {
+        font-size: 22px; font-weight: 800; color: var(--site-color);
+        font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    .pds-point-salary__balance small {
+        font-size: 12px; font-weight: 700; color: var(--hr-muted); text-transform: uppercase;
+    }
+    .pds-point-salary__form {
+        display: grid;
+        grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+        padding: 18px 20px;
+    }
+    .pds-point-salary__field {
+        display: grid; gap: 6px; margin: 0; min-width: 0;
+    }
+    .pds-point-salary__field span {
+        font-size: 11px; font-weight: 800; letter-spacing: .05em;
+        text-transform: uppercase; color: var(--hr-muted);
+    }
+    .pds-point-salary__field input {
+        width: 100%; min-height: 46px; border: 1px solid #e8edf5; border-radius: 14px;
+        background: #fff; padding: 0 14px; font: inherit; font-weight: 700; color: var(--hr-ink);
+        outline: 0; transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .pds-point-salary__field input:focus {
+        border-color: rgba(var(--brand-rgb), .55);
+        box-shadow: 0 0 0 3px rgba(var(--brand-rgb), .14);
+    }
+    .pds-point-salary__field input[name="points"] {
+        font-size: 18px; font-weight: 800; color: var(--site-color);
+        -moz-appearance: textfield; appearance: textfield;
+    }
+    .pds-point-salary__field input[name="points"]::-webkit-outer-spin-button,
+    .pds-point-salary__field input[name="points"]::-webkit-inner-spin-button {
+        -webkit-appearance: none; margin: 0;
+    }
+    .pds-point-salary__go {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        min-height: 46px; border: 0; border-radius: 14px; padding: 0 18px;
+        background: linear-gradient(135deg, var(--site-color), var(--site-color));
+        color: #fff; font: inherit; font-weight: 800; white-space: nowrap; cursor: pointer;
+        box-shadow: 0 10px 22px rgba(var(--brand-rgb), .28);
+        transition: transform .12s ease, box-shadow .15s ease, filter .15s ease;
+    }
+    .pds-point-salary__go:hover {
+        filter: brightness(0.96);
+        box-shadow: 0 12px 26px rgba(var(--brand-rgb), .34);
+        color: #fff;
+    }
+    .pds-point-salary__go:active { transform: translateY(1px); }
+    .pds-point-salary__history {
+        padding: 0 20px 18px;
+        border-top: 1px solid #ffe4cc;
+        background: linear-gradient(180deg, #fff8f2 0%, #fff 40%);
+    }
+    .pds-point-salary__history-label {
+        display: block; padding: 14px 0 8px;
+        font-size: 11px; font-weight: 800; letter-spacing: .06em;
+        text-transform: uppercase; color: var(--hr-muted);
+    }
+    .pds-point-salary__list { display: grid; gap: 8px; }
+    .pds-point-salary__row {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 12px 14px; border-radius: 14px;
+        background: #fff; border: 1px solid #f1e6da;
+    }
+    .pds-point-salary__row-main { display: grid; gap: 2px; min-width: 0; }
+    .pds-point-salary__row-main strong {
+        color: var(--hr-ink); font-size: 14px; font-weight: 800;
+    }
+    .pds-point-salary__row-main small {
+        color: var(--hr-muted); font-size: 12px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pds-point-salary__tag {
+        display: inline-flex; align-items: center; padding: 4px 10px;
+        border-radius: 999px; font-size: 11px; font-weight: 800; flex: 0 0 auto;
+    }
+    .pds-point-salary__tag--wait { background: rgba(var(--brand-rgb), .12); color: var(--site-color); }
+    .pds-point-salary__tag--ok { background: #ecfdf5; color: #047857; }
+    .pds-point-salary__tag--no { background: #fef2f2; color: #b91c1c; }
 </style>
 <script>
 (function () {

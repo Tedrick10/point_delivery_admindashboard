@@ -34,22 +34,16 @@ class CustomerSupportResource extends JsonResource
     }
     protected function getSupportChatHistory()
     {
-        $matches = SupportChathistory::where('support_id', $this->id)->orderBy('created_at', 'desc') ->get();
-        $chat = [];
+        $matches = SupportChathistory::with('user')
+            ->where('support_id', $this->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
 
-        foreach ($matches as $match) {
-            $userType = optional($match->user)->user_type;
+        $formatter = app(\App\Http\Controllers\CustomerSupportController::class);
 
-            $chat[] = [
-                'id' => $match->id,
-                'send_by' => $userType,
-                'message' => $match->message,
-                'message_type' => $match->message_type ?? 'text',
-                'chat_image' => getMediaFileExit($match, 'chat_image') ? getSingleMedia($match, 'chat_image', null) : null,
-                'datetime' => optional($match->datetime ?? $match->created_at)->format('Y-m-d H:i:s'),
-            ];
-        }
-
-        return $chat;
+        return $matches
+            ->map(fn (SupportChathistory $chat) => $formatter->formatChatMessage($chat, auth()->id()))
+            ->values()
+            ->all();
     }
 }

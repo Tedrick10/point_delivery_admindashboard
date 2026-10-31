@@ -7,6 +7,7 @@ use App\Models\Country;
 use App\Models\Coupon;
 use App\Models\CustomerSupport;
 use App\Models\DispatchOrderItem;
+use App\Models\SupportChathistory;
 use App\Models\Document;
 use App\Models\Emergency;
 use App\Models\ExpenseCard;
@@ -61,17 +62,9 @@ class AdminLiveStateService
             })
             ->count();
 
-        $pickupCancelled = (int) Order::query()
-            ->where('status', 'cancelled')
-            ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->whereNotNull('pickup_error_at')
-                    ->orWhereIn('pickup_error_choice', ['cancel', 'express'])
-                    ->orWhere('reason', 'like', '%pickup error%')
-                    ->orWhere('reason', 'like', '%User cancelled after pickup error%')
-                    ->orWhere('reason', 'like', '%User chose express after pickup error%');
-            })
-            ->count();
+        $pickupCancelledQuery = Order::query()->whereNull('deleted_at');
+        app(DispatchOrderWorkflowService::class)->applyPickupCancelledOrderFilter($pickupCancelledQuery);
+        $pickupCancelled = (int) $pickupCancelledQuery->count();
 
         $hubInbox = $isHubUser ? (int) $hubService->inboxCount((int) $user->id) : 0;
 
@@ -95,10 +88,19 @@ class AdminLiveStateService
                 ->count();
         }
 
+        $inquiryChat = function_exists('unansweredInquiryChatCount')
+            ? unansweredInquiryChatCount()
+            : 0;
+        $complaintChat = function_exists('unansweredComplaintChatCount')
+            ? unansweredComplaintChatCount()
+            : 0;
+
         return [
             'assign100' => $assign100,
             'preOrder' => $preOrder,
             'assignedItems' => $assignedItems,
+            'inquiryChat' => (int) $inquiryChat,
+            'complaintChat' => (int) $complaintChat,
             'pickupError' => $pickupError,
             'pickupCancelled' => $pickupCancelled,
             'hubInbox' => $hubInbox,
@@ -206,7 +208,8 @@ class AdminLiveStateService
             str_contains($pageKey, 'expense') => $this->fingerprintModel(ExpenseCard::class),
             str_contains($pageKey, 'os-receive') || str_contains($pageKey, 'daily-check') => $this->fingerprintOrders() . '|' . $this->fingerprintDispatchItems(),
             str_contains($pageKey, 'notification') => $this->fingerprintNotifications($user),
-            str_contains($pageKey, 'customer-suport') || str_contains($pageKey, 'customer_support') || str_contains($pageKey, 'support') => $this->fingerprintModel(CustomerSupport::class),
+            str_contains($pageKey, 'inquiry') || str_contains($pageKey, 'complaint') => $this->fingerprintSupportChat(),
+            str_contains($pageKey, 'customer-suport') || str_contains($pageKey, 'customer_support') || str_contains($pageKey, 'support') => $this->fingerprintModel(CustomerSupport::class) . '|' . $this->fingerprintSupportChat(),
             str_contains($pageKey, 'withdraw') => $this->fingerprintModel(WithdrawRequest::class),
             str_contains($pageKey, 'wallet') => $this->fingerprintModel(WalletHistory::class),
             str_contains($pageKey, 'payment') => $this->fingerprintModel(Payment::class),
@@ -256,6 +259,23 @@ class AdminLiveStateService
             ->first();
 
         return $this->sha([$row->c ?? 0, $row->mid ?? 0, $row->u ?? '', $row->unread ?? 0]);
+    }
+
+    protected function fingerprintSupportChat(): string
+    {
+        try {
+            return $this->sha([
+                CustomerSupport::query()->count(),
+                CustomerSupport::query()->max('id'),
+                CustomerSupport::query()->max('updated_at'),
+                SupportChathistory::query()->count(),
+                SupportChathistory::query()->max('id'),
+                SupportChathistory::query()->max('updated_at'),
+                SupportChathistory::query()->max('datetime'),
+            ]);
+        } catch (\Throwable $e) {
+            return '0';
+        }
     }
 
     protected function fingerprintUsers(?string $userType = null): string

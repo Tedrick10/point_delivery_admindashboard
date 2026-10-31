@@ -3,9 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SupportChathistory;
-use App\Models\User;
 use App\Models\CustomerSupport;
-use App\Notifications\CustomerSupportNotification;
 use Illuminate\Http\Request;
 
 class SupportchatHistoryController extends Controller
@@ -21,17 +19,28 @@ class SupportchatHistoryController extends Controller
         $request->validate([
             'support_id' => 'required|integer|exists:customer_supports,id',
             'message' => 'nullable|string|max:5000',
-            'chat_image' => 'nullable|image|max:10240',
+            'message_type' => 'nullable|in:text,image,emoji,audio,video,sticker,gif',
+            'chat_image' => 'nullable|file|max:51200',
+            'chat_media' => 'nullable|file|max:51200',
         ]);
 
-        if (!$request->filled('message') && !$request->hasFile('chat_image')) {
+        if (!$request->filled('message') && !$request->hasFile('chat_image') && !$request->hasFile('chat_media')) {
             if (request()->ajax()) {
                 return response()->json(['status' => false, 'message' => __('message.message_or_image_required')], 422);
             }
             return back()->withErrors(['message' => __('message.message_or_image_required')]);
         }
 
-        $messageType = $request->hasFile('chat_image') ? 'image' : ($request->input('message_type', 'text'));
+        $messageType = $request->input('message_type', 'text');
+        if ($request->hasFile('chat_image')) {
+            $messageType = in_array($messageType, ['sticker', 'gif'], true) ? $messageType : 'image';
+        }
+        if ($request->hasFile('chat_media')) {
+            $messageType = resolveChatMediaMessageType(
+                $request->file('chat_media'),
+                $request->input('message_type')
+            );
+        }
 
         $supportchat = SupportChathistory::create([
             'support_id' => $request->support_id,
@@ -44,19 +53,25 @@ class SupportchatHistoryController extends Controller
         if ($request->hasFile('chat_image')) {
             uploadMediaFile($supportchat, $request->file('chat_image'), 'chat_image');
         }
+        if ($request->hasFile('chat_media')) {
+            uploadMediaFile($supportchat, $request->file('chat_media'), 'chat_media');
+        }
 
         $support = CustomerSupport::with('user')->find($request->support_id);
         if ($support) {
             $sender = auth()->user();
-            $isImage = $messageType === 'image';
+            $isMedia = in_array($messageType, ['image', 'gif', 'sticker', 'audio', 'video'], true);
             $notification_data = buildCustomerSupportNotificationPayload(
                 $support,
                 $sender,
                 $request->input('message'),
-                $isImage
+                $isMedia
             );
 
-            if ($sender->user_type === 'admin') {
+            $isAdminSender = in_array((string) $sender->user_type, ['admin', 'super_admin', 'demo_admin'], true)
+                || isSuperAdmin($sender);
+
+            if ($isAdminSender) {
                 if ($support->user) {
                     notifyUserCustomerSupport($support->user, $notification_data);
                 }

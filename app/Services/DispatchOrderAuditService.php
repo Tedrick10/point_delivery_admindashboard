@@ -27,6 +27,8 @@ class DispatchOrderAuditService
     public const TYPE_MOVED_TO_ASSIGN_100 = 'dispatch_audit_moved_to_assign_100';
     public const TYPE_DELIVERY_ITEM_STATUS = 'dispatch_audit_delivery_item_status';
     public const TYPE_DELI_AMOUNT = 'dispatch_audit_deli_amount';
+    public const TYPE_ADMIN_COMPLETED = 'dispatch_audit_admin_completed';
+    public const TYPE_ADMIN_FINISHED = 'dispatch_audit_admin_finished';
 
     public function record(Order $order, string $type, string $message, array $data = []): OrderHistory
     {
@@ -184,11 +186,20 @@ class DispatchOrderAuditService
         ]);
     }
 
-    public function logDeliveryRiderAssigned(Order $order, User $rider, int $itemCount = 1, ?User $admin = null): void
-    {
+    public function logDeliveryRiderAssigned(
+        Order $order,
+        User $rider,
+        int $itemCount = 1,
+        ?User $admin = null,
+        array $itemIds = []
+    ): void {
         $admin = $admin ?: auth()->user();
         $adminName = $admin?->name ?: $this->t('dispatch_audit_account_admin');
         $time = $this->formatTime(now());
+        $itemIds = array_values(array_unique(array_filter(array_map('intval', $itemIds), fn (int $id) => $id > 0)));
+        if ($itemCount < 1) {
+            $itemCount = max(1, count($itemIds));
+        }
 
         $this->record($order, self::TYPE_DELIVERY_RIDER_ASSIGNED, $this->t('dispatch_audit_delivery_rider_assigned', [
             'admin' => $adminName,
@@ -202,6 +213,8 @@ class DispatchOrderAuditService
             'rider_id' => $rider->id,
             'rider_name' => $rider->name,
             'item_count' => $itemCount,
+            'item_ids' => $itemIds,
+            'item_id' => $itemIds[0] ?? null,
         ]);
     }
 
@@ -248,6 +261,79 @@ class DispatchOrderAuditService
             'remark' => $remark !== '' ? $remark : null,
             'reason' => $remark !== '' ? $remark : null,
             'photos' => $toStatus === 'pending' ? $this->pendingPhotosMeta($item) : [],
+        ]);
+    }
+
+    /**
+     * Admin marked parcel Completed (after Delivered).
+     */
+    public function logAdminCompleted(Order $order, DispatchOrderItem $item, ?User $admin = null): void
+    {
+        $admin = $admin ?: auth()->user();
+        $adminName = $admin?->name ?: $this->t('dispatch_audit_account_admin');
+        $itemCode = trim((string) ($item->code ?: $item->id));
+
+        $this->record($order, self::TYPE_ADMIN_COMPLETED, $this->t('dispatch_audit_item_completed', [
+            'admin' => $adminName,
+            'order' => $order->id,
+            'item' => $itemCode,
+        ]), [
+            'admin_id' => $admin?->id,
+            'admin_name' => $adminName,
+            'actor_id' => $admin?->id,
+            'actor_name' => $adminName,
+            'item_id' => $item->id,
+            'item_code' => $itemCode,
+            'to_status' => 'admin_completed',
+            'action' => $this->t('follow_up_status_delivered').' → '.$this->t('follow_up_status_completed'),
+        ]);
+    }
+
+    /**
+     * Parcel Finished (OS ငွေရှင်းတမ်း / Rider List Finish).
+     *
+     * @param  'kpay'|'cash'|null  $paymentMethod
+     */
+    public function logAdminFinished(
+        Order $order,
+        DispatchOrderItem $item,
+        ?User $admin = null,
+        ?string $paymentMethod = null,
+        ?int $batchId = null
+    ): void {
+        $admin = $admin ?: auth()->user();
+        $adminName = $admin?->name ?: $this->t('dispatch_audit_account_admin');
+        $itemCode = trim((string) ($item->code ?: $item->id));
+        $method = strtolower(trim((string) ($paymentMethod ?? '')));
+        $methodLabel = match ($method) {
+            'kpay' => $this->t('dispatch_audit_payment_kpay'),
+            'cash' => $this->t('dispatch_audit_payment_cash'),
+            default => null,
+        };
+
+        $messageKey = $methodLabel
+            ? 'dispatch_audit_item_finished_settlement'
+            : 'dispatch_audit_item_finished';
+
+        $this->record($order, self::TYPE_ADMIN_FINISHED, $this->t($messageKey, [
+            'admin' => $adminName,
+            'order' => $order->id,
+            'item' => $itemCode,
+            'method' => $methodLabel ?? '-',
+        ]), [
+            'admin_id' => $admin?->id,
+            'admin_name' => $adminName,
+            'actor_id' => $admin?->id,
+            'actor_name' => $adminName,
+            'item_id' => $item->id,
+            'item_code' => $itemCode,
+            'to_status' => 'admin_finished',
+            'payment_method' => $method !== '' ? $method : null,
+            'payment_method_label' => $methodLabel,
+            'batch_id' => $batchId,
+            'action' => $methodLabel
+                ? ($this->t('follow_up_status_completed').' → '.$this->t('follow_up_status_finished').' · '.$methodLabel)
+                : ($this->t('follow_up_status_completed').' → '.$this->t('follow_up_status_finished')),
         ]);
     }
 
@@ -1105,11 +1191,15 @@ class DispatchOrderAuditService
             self::TYPE_PHOTO_UPLOADED,
             self::TYPE_DELIVERY_ITEM_STATUS,
             self::TYPE_DELI_AMOUNT,
+            self::TYPE_ADMIN_COMPLETED,
+            self::TYPE_ADMIN_FINISHED,
         ];
 
-        return $this->timelineForOrder($order)
-            ->filter(function (array $entry) use ($itemId, $code, $otherCodes, $itemTypes) {
-                return $this->auditEntryMatchesItem($entry, $itemId, $code, $otherCodes, $itemTypes);
+        $orderItemCount = $order->dispatchItems->count();
+
+        $entries = $this->timelineForOrder($order)
+            ->filter(function (array $entry) use ($itemId, $code, $otherCodes, $itemTypes, $orderItemCount) {
+                return $this->auditEntryMatchesItem($entry, $itemId, $code, $otherCodes, $itemTypes, $orderItemCount);
             })
             ->map(function (array $entry) use ($code, $otherCodes) {
                 return $this->scopeAuditEntryToItem($entry, $code, $otherCodes);
@@ -1127,6 +1217,53 @@ class DispatchOrderAuditService
                 return $hasDetail;
             })
             ->values();
+
+        // Keep Completed immediately before Finished for this parcel so it is not lost
+        // among earlier timestamps after noisy order-level Delivered rows.
+        $finished = $entries->first(
+            fn (array $e) => ($e['type'] ?? '') === self::TYPE_ADMIN_FINISHED
+                && (int) ($e['item_id'] ?? 0) === $itemId
+        );
+        if ($finished) {
+            $entries = $entries->map(function (array $e) use ($itemId, $finished) {
+                if (($e['type'] ?? '') !== self::TYPE_ADMIN_COMPLETED) {
+                    return $e;
+                }
+                if ((int) ($e['item_id'] ?? 0) !== $itemId) {
+                    return $e;
+                }
+                $finishedSort = (int) ($finished['sort_at'] ?? 0);
+                if ($finishedSort <= 0 && ! empty($finished['time'])) {
+                    try {
+                        $finishedSort = Carbon::createFromFormat('d-m-Y H:i', (string) $finished['time'], 'Asia/Yangon')->timestamp;
+                    } catch (\Throwable $ex) {
+                        $finishedSort = 0;
+                    }
+                }
+                if ($finishedSort > 0) {
+                    $e['sort_at'] = $finishedSort - 30;
+                }
+
+                return $e;
+            })->sortBy(function (array $e) {
+                if (isset($e['sort_at'])) {
+                    return (int) $e['sort_at'];
+                }
+                try {
+                    return Carbon::createFromFormat('d-m-Y H:i', (string) ($e['time'] ?? ''), 'Asia/Yangon')->timestamp;
+                } catch (\Throwable $ex) {
+                    return 0;
+                }
+            })->values()
+            ->map(function (array $e) {
+                unset($e['sort_at']);
+
+                return $e;
+            })
+            ->values();
+        }
+
+        return $entries;
     }
 
     /**
@@ -1134,10 +1271,17 @@ class DispatchOrderAuditService
      * @param  array<int, string>  $otherCodes
      * @param  array<int, string>  $itemTypes
      */
-    protected function auditEntryMatchesItem(array $entry, int $itemId, string $code, array $otherCodes, array $itemTypes): bool
-    {
+    protected function auditEntryMatchesItem(
+        array $entry,
+        int $itemId,
+        string $code,
+        array $otherCodes,
+        array $itemTypes,
+        int $orderItemCount = 1
+    ): bool {
         $type = (string) ($entry['type'] ?? '');
         $entryItemId = (int) ($entry['item_id'] ?? 0);
+        $entryItemIds = $this->entryItemIds($entry);
         $entryCode = trim((string) ($entry['item_code'] ?? ''));
         $hay = trim(
             (string) ($entry['summary'] ?? '')
@@ -1146,10 +1290,12 @@ class DispatchOrderAuditService
         );
 
         $matchesThis = ($entryItemId > 0 && $entryItemId === $itemId)
+            || ($entryItemIds !== [] && in_array($itemId, $entryItemIds, true))
             || ($entryCode !== '' && $code !== '' && $entryCode === $code)
             || ($code !== '' && str_contains($hay, $code));
 
         $matchesOther = ($entryItemId > 0 && $entryItemId !== $itemId)
+            || ($entryItemIds !== [] && ! in_array($itemId, $entryItemIds, true))
             || ($entryCode !== '' && $code !== '' && $entryCode !== $code);
         if (! $matchesOther) {
             foreach ($otherCodes as $other) {
@@ -1164,7 +1310,47 @@ class DispatchOrderAuditService
             return $matchesThis && ! ($entryItemId > 0 && $entryItemId !== $itemId);
         }
 
+        // Delivery assign is per-parcel. Prefer item_ids; legacy unscoped rows only
+        // belong on single-item orders (otherwise they flood every sibling Details).
+        if ($type === self::TYPE_DELIVERY_RIDER_ASSIGNED) {
+            if ($entryItemIds !== []) {
+                return in_array($itemId, $entryItemIds, true);
+            }
+
+            return $orderItemCount <= 1;
+        }
+
+        // Legacy order-level delivery rows (history_type=completed means UI "Delivered")
+        // have no item_id and flood every parcel Details page — bury Completed/Finished.
+        // Keep them only when the text/code clearly refers to this parcel.
+        if (in_array($type, ['completed', 'courier_departed', 'pending', 'return', 'os_returned'], true)) {
+            return $matchesThis;
+        }
+
         return ! ($matchesOther && ! $matchesThis);
+    }
+
+    /**
+     * @param  array<string, mixed>  $entry
+     * @return array<int, int>
+     */
+    protected function entryItemIds(array $entry): array
+    {
+        $ids = [];
+        if (! empty($entry['item_ids']) && is_array($entry['item_ids'])) {
+            foreach ($entry['item_ids'] as $id) {
+                $id = (int) $id;
+                if ($id > 0) {
+                    $ids[] = $id;
+                }
+            }
+        }
+        $single = (int) ($entry['item_id'] ?? 0);
+        if ($single > 0) {
+            $ids[] = $single;
+        }
+
+        return array_values(array_unique($ids));
     }
 
     /**
@@ -1372,6 +1558,9 @@ class DispatchOrderAuditService
             ]);
         }
 
+        // Backfill Completed / Finished for parcels stamped before audit writes existed.
+        $this->appendCompletedFinishedBackfill($order, $entries);
+
         $choice = (string) ($order->pickup_error_choice ?? '');
         $choiceLabel = pickupErrorChoiceLabel($choice);
         if ($choiceLabel && in_array($choice, ['cancel', 'express'], true)) {
@@ -1569,6 +1758,10 @@ class DispatchOrderAuditService
             'tone' => $this->toneFor($type),
             'order_id' => (int) $order->id,
             'item_id' => (int) ($data['item_id'] ?? 0),
+            'item_ids' => array_values(array_unique(array_filter(array_map(
+                'intval',
+                is_array($data['item_ids'] ?? null) ? $data['item_ids'] : []
+            ), fn (int $id) => $id > 0))),
             'item_code' => trim((string) ($data['item_code'] ?? '')),
             'sort_at' => Carbon::parse($at)->timestamp,
             'action' => $panel['action'] ?? null,
@@ -2095,8 +2288,216 @@ class DispatchOrderAuditService
                 'rider' => $riderName,
                 'order' => $order->id,
             ]),
+            self::TYPE_ADMIN_COMPLETED => $this->t('dispatch_audit_item_completed', [
+                'admin' => (string) ($data['admin_name'] ?? $adminName),
+                'order' => $order->id,
+                'item' => (string) ($data['item_code'] ?? ('#'.($data['item_id'] ?? '-'))),
+            ]),
+            self::TYPE_ADMIN_FINISHED => ! empty($data['payment_method_label'])
+                ? $this->t('dispatch_audit_item_finished_settlement', [
+                    'admin' => (string) ($data['admin_name'] ?? $adminName),
+                    'order' => $order->id,
+                    'item' => (string) ($data['item_code'] ?? ('#'.($data['item_id'] ?? '-'))),
+                    'method' => (string) $data['payment_method_label'],
+                ])
+                : $this->t('dispatch_audit_item_finished', [
+                    'admin' => (string) ($data['admin_name'] ?? $adminName),
+                    'order' => $order->id,
+                    'item' => (string) ($data['item_code'] ?? ('#'.($data['item_id'] ?? '-'))),
+                ]),
             default => $fallback !== '' ? $fallback : null,
         };
+    }
+
+    /**
+     * Synthesize Completed / Finished timeline rows from item stamps + OS settlement batches.
+     *
+     * @param  Collection<int, array<string, mixed>>  $entries
+     */
+    protected function appendCompletedFinishedBackfill(Order $order, Collection $entries): void
+    {
+        $order->loadMissing('dispatchItems');
+        $itemIds = $order->dispatchItems->pluck('id')->map(fn ($id) => (int) $id)->filter()->values()->all();
+        if ($itemIds === []) {
+            return;
+        }
+
+        $batchesByItem = [];
+        try {
+            $batches = \App\Models\OsSettlementBatch::query()
+                ->with('finishedByUser:id,name')
+                ->where(function ($q) use ($itemIds) {
+                    foreach ($itemIds as $id) {
+                        $q->orWhereJsonContains('item_ids', $id)
+                            ->orWhereJsonContains('item_ids', (string) $id);
+                    }
+                })
+                ->orderByDesc('finished_at')
+                ->orderByDesc('id')
+                ->get();
+
+            foreach ($batches as $batch) {
+                $ids = is_array($batch->item_ids) ? $batch->item_ids : [];
+                foreach ($ids as $rawId) {
+                    $id = (int) $rawId;
+                    if ($id > 0 && ! isset($batchesByItem[$id])) {
+                        $batchesByItem[$id] = $batch;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            $batchesByItem = [];
+        }
+
+        foreach ($order->dispatchItems as $item) {
+            $itemId = (int) $item->id;
+            $code = trim((string) ($item->code ?: ('#'.$itemId)));
+            $batch = $batchesByItem[$itemId] ?? null;
+
+            $hasCompletedEntry = $entries->contains(function (array $e) use ($itemId, $code) {
+                if (($e['type'] ?? '') !== self::TYPE_ADMIN_COMPLETED) {
+                    return false;
+                }
+                if ((int) ($e['item_id'] ?? 0) === $itemId) {
+                    return true;
+                }
+                $hay = (string) ($e['message'] ?? '').(string) ($e['summary'] ?? '');
+
+                return $code !== '' && str_contains($hay, $code);
+            });
+
+            // Always show Completed when stamped, or when Finished exists (Delivered → Completed → Finished).
+            $completedAt = $item->admin_completed_at;
+            if (! $completedAt && $item->admin_finished_at) {
+                $completedAt = $item->admin_finished_at;
+            }
+            if ($completedAt && ! $hasCompletedEntry) {
+                $adminName = $this->inferCompletedActorName($entries, $itemId, $code, $batch)
+                    ?: $this->t('dispatch_audit_account_admin');
+                $msg = $this->t('dispatch_audit_item_completed', [
+                    'admin' => $adminName,
+                    'order' => $order->id,
+                    'item' => $code,
+                ]);
+                // Keep Completed just before Finished when we only know finished_at.
+                $completedSort = Carbon::parse($completedAt)->timestamp;
+                if (! $item->admin_completed_at && $item->admin_finished_at) {
+                    $completedSort = max(1, $completedSort - 60);
+                }
+                $entries->push([
+                    'type' => self::TYPE_ADMIN_COMPLETED,
+                    'title' => $this->t('dispatch_audit_title_admin_completed'),
+                    'message' => $msg,
+                    'summary' => $msg,
+                    'item_id' => $itemId,
+                    'item_code' => $code,
+                    'time' => $this->formatTime(
+                        $item->admin_completed_at
+                            ?: Carbon::createFromTimestamp($completedSort, 'Asia/Yangon')
+                    ),
+                    'icon' => $this->iconFor(self::TYPE_ADMIN_COMPLETED),
+                    'tone' => $this->toneFor(self::TYPE_ADMIN_COMPLETED),
+                    'action' => $this->t('follow_up_status_delivered').' → '.$this->t('follow_up_status_completed'),
+                    'action_parts' => [
+                        $this->t('follow_up_status_delivered').' → '.$this->t('follow_up_status_completed'),
+                    ],
+                    'reason' => null,
+                    'changes' => [],
+                    'items' => [],
+                    'photos' => [],
+                    'sort_at' => $completedSort,
+                ]);
+            }
+
+            if ($item->admin_finished_at) {
+                $already = $entries->contains(function (array $e) use ($itemId, $code) {
+                    if (($e['type'] ?? '') !== self::TYPE_ADMIN_FINISHED) {
+                        return false;
+                    }
+                    if ((int) ($e['item_id'] ?? 0) === $itemId) {
+                        return true;
+                    }
+                    $hay = (string) ($e['message'] ?? '').(string) ($e['summary'] ?? '');
+
+                    return $code !== '' && str_contains($hay, $code);
+                });
+                if ($already) {
+                    continue;
+                }
+
+                $adminName = optional($batch?->finishedByUser)->name
+                    ?: $this->t('dispatch_audit_account_admin');
+                $method = strtolower(trim((string) ($batch?->payment_method ?? '')));
+                $methodLabel = match ($method) {
+                    'kpay' => $this->t('dispatch_audit_payment_kpay'),
+                    'cash' => $this->t('dispatch_audit_payment_cash'),
+                    default => null,
+                };
+                $msg = $methodLabel
+                    ? $this->t('dispatch_audit_item_finished_settlement', [
+                        'admin' => $adminName,
+                        'order' => $order->id,
+                        'item' => $code,
+                        'method' => $methodLabel,
+                    ])
+                    : $this->t('dispatch_audit_item_finished', [
+                        'admin' => $adminName,
+                        'order' => $order->id,
+                        'item' => $code,
+                    ]);
+                $actionParts = [
+                    $this->t('follow_up_status_completed').' → '.$this->t('follow_up_status_finished'),
+                ];
+                if ($methodLabel) {
+                    $actionParts[] = $methodLabel;
+                }
+                $finishedAt = $batch?->finished_at ?? $item->admin_finished_at;
+                $entries->push([
+                    'type' => self::TYPE_ADMIN_FINISHED,
+                    'title' => $this->t('dispatch_audit_title_admin_finished'),
+                    'message' => $msg,
+                    'summary' => $msg,
+                    'item_id' => $itemId,
+                    'item_code' => $code,
+                    'time' => $this->formatTime($finishedAt),
+                    'icon' => $this->iconFor(self::TYPE_ADMIN_FINISHED),
+                    'tone' => $this->toneFor(self::TYPE_ADMIN_FINISHED),
+                    'action' => implode(' · ', $actionParts),
+                    'action_parts' => $actionParts,
+                    'reason' => null,
+                    'changes' => [],
+                    'items' => [],
+                    'photos' => [],
+                    'sort_at' => Carbon::parse($finishedAt)->timestamp,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Best-effort actor for historical Completed rows (no audit write yet).
+     *
+     * @param  Collection<int, array<string, mixed>>  $entries
+     */
+    protected function inferCompletedActorName(Collection $entries, int $itemId, string $code, $batch = null): ?string
+    {
+        // Prefer an earlier Completed history actor for this item.
+        foreach ($entries as $e) {
+            if (($e['type'] ?? '') !== self::TYPE_ADMIN_COMPLETED) {
+                continue;
+            }
+            if ((int) ($e['item_id'] ?? 0) === $itemId) {
+                // already have entry — not used for infer
+            }
+        }
+
+        // Reuse finisher name only as last resort when Completed stamp missing.
+        $name = optional($batch?->finishedByUser)->name;
+        if (is_string($name) && trim($name) !== '') {
+            return trim($name);
+        }
+
+        return null;
     }
 
     protected function itemCreatedMessage(
@@ -2796,6 +3197,8 @@ class DispatchOrderAuditService
             self::TYPE_PRE_PICKUP_MOVED => $this->t('dispatch_audit_title_pre_pickup_moved'),
             self::TYPE_MOVED_TO_ASSIGN_100 => $this->t('dispatch_audit_title_moved_to_assign_100'),
             self::TYPE_DELIVERY_ITEM_STATUS => $this->t('dispatch_audit_title_delivery_item_status'),
+            self::TYPE_ADMIN_COMPLETED => $this->t('dispatch_audit_title_admin_completed'),
+            self::TYPE_ADMIN_FINISHED => $this->t('dispatch_audit_title_admin_finished'),
             'courier_departed' => __('message.follow_up_status_on_way', [], 'my'),
             'completed' => __('message.follow_up_status_delivered', [], 'my'),
             'pending' => __('message.follow_up_status_pending', [], 'my'),
@@ -2816,6 +3219,8 @@ class DispatchOrderAuditService
             self::TYPE_PICKUP_COMPLETED, 'courier_picked_up' => 'fa-solid fa-box-open',
             self::TYPE_DELIVERY_RIDER_ASSIGNED => 'fa-solid fa-truck',
             self::TYPE_DELIVERY_ITEM_STATUS => 'fa-solid fa-arrows-rotate',
+            self::TYPE_ADMIN_COMPLETED => 'fa-solid fa-clipboard-check',
+            self::TYPE_ADMIN_FINISHED => 'fa-solid fa-flag-checkered',
             self::TYPE_RESTORED => 'fa-solid fa-rotate-left',
             self::TYPE_USER_CHOICE => 'fa-solid fa-hand-pointer',
             self::TYPE_ITEM_CREATED => 'fa-solid fa-plus',
@@ -2838,6 +3243,8 @@ class DispatchOrderAuditService
             self::TYPE_PICKUP_RIDER_ASSIGNED, 'courier_assigned', self::TYPE_DELIVERY_RIDER_ASSIGNED => 'assign',
             self::TYPE_ADMIN_ITEM_INFO, self::TYPE_RIDER_ITEM_INFO, self::TYPE_OS_ITEM_INFO, self::TYPE_ITEM_CREATED, self::TYPE_DELI_AMOUNT => 'edit',
             self::TYPE_PICKUP_COMPLETED, 'courier_picked_up', 'completed', self::TYPE_PHOTO_UPLOADED => 'success',
+            self::TYPE_ADMIN_COMPLETED => 'completed',
+            self::TYPE_ADMIN_FINISHED => 'finished',
             self::TYPE_DELIVERY_ITEM_STATUS, 'courier_departed', 'pending' => 'info',
             self::TYPE_RESTORED, self::TYPE_PRE_PICKUP_MOVED, self::TYPE_MOVED_TO_ASSIGN_100 => 'restore',
             self::TYPE_USER_CHOICE => 'info',

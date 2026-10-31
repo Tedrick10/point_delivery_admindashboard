@@ -1121,21 +1121,24 @@ class MoneyTransferService
 
     public function backfillTransferBranches(): void
     {
+        // Align Money Transfer branch_id to parcel destination (ငွေရှင်းတမ်း tabs).
+        // Also repairs rows previously forced onto OS home (MDY) when parcels
+        // were delivered elsewhere.
         $transfers = OsMoneyTransfer::query()
             ->with('settlementBatch')
-            ->where(function ($q) {
-                $q->whereNull('branch_id')->orWhere('branch_id', 0);
-            })
             ->whereNotNull('settlement_batch_id')
+            ->orderBy('id')
             ->get();
 
         foreach ($transfers as $transfer) {
-            $branchId = $transfer->settlementBatch
-                ? $this->branchIdForBatch($transfer->settlementBatch)
-                : null;
-            if ($branchId) {
-                $transfer->forceFill(['branch_id' => $branchId])->save();
+            if (! $transfer->settlementBatch) {
+                continue;
             }
+            $branchId = $this->branchIdForBatch($transfer->settlementBatch);
+            if (! $branchId || (int) ($transfer->branch_id ?? 0) === $branchId) {
+                continue;
+            }
+            $transfer->forceFill(['branch_id' => $branchId])->save();
         }
     }
 
@@ -1231,11 +1234,19 @@ class MoneyTransferService
 
     protected function branchIdForBatch(OsSettlementBatch $batch): ?int
     {
-        return $this->branchIdForItemIds((array) ($batch->item_ids ?? []));
+        // Money Transfer tabs follow parcel destination (same as ငွေရှင်းတမ်း),
+        // so Yangon / POL / Sagaing finishes land on those branches — not all under MDY.
+        $fromItems = $this->branchIdForItemIds((array) ($batch->item_ids ?? []));
+        if ($fromItems) {
+            return $fromItems;
+        }
+
+        return osHomeBranchId((int) ($batch->os_user_id ?? 0));
     }
 
     /**
-     * Destination branch for a settlement (to_branch, else from_branch).
+     * Fallback branch from parcel destination (to_branch, else from_branch)
+     * when the Online Shop has no home branch set.
      *
      * @param  list<int|string>  $itemIds
      */

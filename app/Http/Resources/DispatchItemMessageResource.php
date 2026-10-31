@@ -9,6 +9,7 @@ class DispatchItemMessageResource extends JsonResource
     public function toArray($request)
     {
         $imageUrl = $this->imageUrl();
+        $mediaUrl = $this->mediaUrl();
 
         return [
             'id' => $this->id,
@@ -18,9 +19,10 @@ class DispatchItemMessageResource extends JsonResource
             'sender_id' => $this->sender_id,
             'sender_type' => $this->sender_type,
             'sender_name' => optional($this->sender)->name,
-            'message_type' => $this->message_type ?: ($imageUrl ? 'image' : 'text'),
+            'message_type' => $this->message_type ?: ($imageUrl ? 'image' : ($mediaUrl ? 'audio' : 'text')),
             'message' => $this->message,
             'chat_image' => $imageUrl,
+            'chat_media' => $mediaUrl,
             'read_at' => optional($this->read_at)?->toDateTimeString(),
             'created_at' => optional($this->created_at)?->toDateTimeString(),
             'is_mine' => auth()->id() && (int) $this->sender_id === (int) auth()->id(),

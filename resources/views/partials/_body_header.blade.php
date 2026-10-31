@@ -59,6 +59,25 @@
                                               data-live-badge="assignedItemListCount">{{ $assignedItemCount > 0 ? ($assignedItemCount >= 100 ? '99+' : $assignedItemCount) : '' }}</span>
                                     </a>
                                 </li>
+                                @php
+                                    $inquiryChatCount = function_exists('unansweredInquiryChatCount')
+                                        ? unansweredInquiryChatCount()
+                                        : 0;
+                                @endphp
+                                <li class="nav-item nav-icon pds-inquiry-nav-item">
+                                    <a href="{{ route('inquiry.inbox') }}"
+                                       class="pds-topbar-tool pds-topbar-inquiry{{ request()->routeIs('inquiry.inbox') ? ' is-active' : '' }}"
+                                       id="pdsInquiryNavLink"
+                                       title="{{ __('message.inquiry_chat') }}"
+                                       aria-label="{{ __('message.inquiry_chat') }}">
+                                        <span class="pds-topbar-tool-icon pds-topbar-inquiry__icon" aria-hidden="true">
+                                            <i class="fas fa-comments"></i>
+                                        </span>
+                                        <span class="pds-topbar-badge{{ $inquiryChatCount > 0 ? '' : ' d-none' }}"
+                                              id="inquiryChatCount"
+                                              data-live-badge="inquiryChat">{{ $inquiryChatCount > 0 ? ($inquiryChatCount >= 100 ? '99+' : $inquiryChatCount) : '' }}</span>
+                                    </a>
+                                </li>
                             @endif
                             <li class="nav-item nav-icon dropdown pds-notify-dropdown">
                                 <a href="#" class="pds-topbar-tool pds-topbar-notify notification_list" id="pdsNotificationDropdownToggle" aria-haspopup="true" aria-expanded="false" title="{{ __('message.notification') }}">

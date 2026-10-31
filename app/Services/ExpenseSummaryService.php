@@ -2,8 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\DailyCheckInvoice;
+use App\Models\DispatchOrderItem;
 use App\Models\ExpenseCard;
 use App\Models\ExpenseSummary;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ExpenseSummaryService
@@ -14,7 +17,9 @@ class ExpenseSummaryService
     }
 
     /**
-     * Income = Daily Check List OS DeliAmount for the card date (settled OS only).
+     * Income = settled OS DeliAmount for the card date, by parcel destination.
+     * Summary / Income Card follow the branch that received the parcel — not OS home —
+     * so Yangon / POL / Sagaing income leaves the Mandalay tab.
      * AKO's Given = Income − Expense (set in generateFromCard).
      */
     public function incomeForDate(string $day, $user = null, ?int $branchId = null): float
@@ -53,22 +58,70 @@ class ExpenseSummaryService
             }
         }
 
-        // Prefer stored Daily Check OS invoices (stable for Summary Income Card).
-        $fromInvoices = $this->dailyCheckList->osInvoiceRowsForDate($day, $branchId);
-        if ($branchId && $branchId > 0) {
-            $fromInvoices = $fromInvoices->filter(fn ($row) => (int) ($row->branch_id ?? 0) === $branchId)->values();
-        }
-        if ($fromInvoices->isNotEmpty()) {
-            return $fromInvoices;
-        }
+        // Load network-wide settled OS invoices for the day, then attribute
+        // Income to parcel destination (not OS home branch).
+        $fromInvoices = $this->dailyCheckList->osInvoiceRowsForDate($day, null);
+        $rows = $fromInvoices->isNotEmpty()
+            ? $fromInvoices
+            : $this->dailyCheckList->listRows($day, $day, 'os', null, null, null);
 
-        // Fallback: live Daily Check list query (same day window).
-        $rows = $this->dailyCheckList->listRows($day, $day, 'os', $branchId, null, null);
         if ($branchId && $branchId > 0) {
-            $rows = $rows->filter(fn ($row) => (int) ($row->branch_id ?? 0) === $branchId)->values();
+            $rows = $this->scopeIncomeDeliToDestinationBranch($rows, $branchId);
         }
 
         return $rows;
+    }
+
+    /**
+     * Recalculate each OS row's deli_amount using only parcels delivered to $branchId.
+     *
+     * @param  Collection<int, object>  $rows
+     * @return Collection<int, object>
+     */
+    protected function scopeIncomeDeliToDestinationBranch(Collection $rows, int $branchId): Collection
+    {
+        $invoiceIds = $rows->pluck('id')->map(fn ($id) => (int) $id)->filter()->unique()->values();
+        if ($invoiceIds->isEmpty()) {
+            return $rows;
+        }
+
+        $invoices = DailyCheckInvoice::query()
+            ->whereIn('id', $invoiceIds->all())
+            ->get(['id', 'item_ids'])
+            ->keyBy('id');
+
+        $allItemIds = $invoices
+            ->flatMap(fn (DailyCheckInvoice $inv) => collect($inv->item_ids ?? [])->map(fn ($id) => (int) $id))
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        $itemsById = DispatchOrderItem::query()
+            ->whereIn('id', $allItemIds->all() ?: [0])
+            ->get(['id', 'to_branch_id', 'from_branch_id', 'deli_amount'])
+            ->keyBy('id');
+
+        return $rows
+            ->map(function ($row) use ($invoices, $itemsById, $branchId) {
+                $inv = $invoices->get((int) ($row->id ?? 0));
+                $deli = 0.0;
+                foreach ((array) ($inv?->item_ids ?? []) as $rawId) {
+                    $item = $itemsById->get((int) $rawId);
+                    if (! $item) {
+                        continue;
+                    }
+                    $dest = (int) ($item->to_branch_id ?: $item->from_branch_id ?: 0);
+                    if ($dest !== $branchId) {
+                        continue;
+                    }
+                    $deli += (float) ($item->deli_amount ?? 0);
+                }
+                $row->deli_amount = round($deli, 2);
+
+                return $row;
+            })
+            ->filter(fn ($row) => (float) ($row->deli_amount ?? 0) > 0.0001)
+            ->values();
     }
 
     public function generateFromCard(ExpenseCard $card, ?int $userId = null): ExpenseSummary
@@ -112,8 +165,8 @@ class ExpenseSummaryService
     }
 
     /**
-     * Refresh stored Summary Income / AKO from live Daily Check OS DeliAmount.
-     * Keeps Income Card and Summary table in sync after new settlements.
+     * Refresh stored Summary Income / AKO from live Daily Check OS DeliAmount
+     * attributed by parcel destination (not OS home).
      *
      * @param  \Illuminate\Support\Collection<int, ExpenseSummary>  $rows
      * @return \Illuminate\Support\Collection<int, ExpenseSummary>
@@ -143,9 +196,34 @@ class ExpenseSummaryService
     }
 
     /**
+     * Repair rows that still look like the old OS-home Generate bug:
+     * non-MDY branch with Expense > 0 but Income stuck at 0.
+     * Cheap enough for Summary page load (only touches stale rows).
+     *
+     * @param  \Illuminate\Support\Collection<int, ExpenseSummary>  $rows
+     * @return \Illuminate\Support\Collection<int, ExpenseSummary>
+     */
+    public function syncStaleZeroIncomeRows($rows, $user = null)
+    {
+        $stale = $rows->filter(function (ExpenseSummary $row) {
+            return (float) ($row->income ?? 0) <= 0.0001
+                && (float) ($row->expense ?? 0) > 0.0001
+                && (int) ($row->branch_id ?? 0) > 0;
+        })->values();
+
+        if ($stale->isEmpty()) {
+            return $rows;
+        }
+
+        $this->syncIncomeOnRows($stale, $user);
+
+        return $rows;
+    }
+
+    /**
      * Generated Summary rows only (Expense Generate နှိပ်ပြီးသား).
-     * Page load skips live Daily Check sync — that was 10s+ and blocked SPA entry.
-     * Income is written at Generate; pass $syncIncome=true only for admin refresh jobs.
+     * Auto-repairs stale Income=0 rows (old OS-home Generate) by destination.
+     * Full-period live sync stays opt-in — it was 10s+ and blocked SPA entry.
      *
      * @return \Illuminate\Support\Collection<int, ExpenseSummary>
      */
@@ -161,6 +239,8 @@ class ExpenseSummaryService
 
         if ($syncIncome) {
             $this->syncIncomeOnRows($summaries, $user);
+        } else {
+            $this->syncStaleZeroIncomeRows($summaries, $user);
         }
 
         return $summaries->values();

@@ -59,25 +59,31 @@ class DailyCheckListController extends Controller
 
         $rows = $service->listRows($fromDay, $toDay, $mode, $branchId, $osId, $riderId);
 
-        $branchTabCounts = DailyCheckInvoice::query()
-            ->whereBetween('received_date', [$fromDay, $toDay])
-            ->when($mode === 'os', fn ($q) => $q->where('party_type', DailyCheckInvoice::PARTY_OS))
-            ->when($mode === 'rider', fn ($q) => $q->where('party_type', DailyCheckInvoice::PARTY_RIDER))
-            ->whereNotNull('branch_id')
-            ->selectRaw('branch_id, COUNT(*) as total')
-            ->groupBy('branch_id')
-            ->pluck('total', 'branch_id');
-        $allBranchCount = DailyCheckInvoice::query()
-            ->whereBetween('received_date', [$fromDay, $toDay])
-            ->when($mode === 'os', fn ($q) => $q->where('party_type', DailyCheckInvoice::PARTY_OS))
-            ->when($mode === 'rider', fn ($q) => $q->where('party_type', DailyCheckInvoice::PARTY_RIDER))
-            ->count();
+        if ($mode === 'os') {
+            // OS tabs count by parcel destination (not OS home branch).
+            $branchTabCounts = $service->osDestinationTabCounts($fromDay, $toDay);
+            $allBranchCount = (int) $branchTabCounts->sum();
+        } else {
+            $branchTabCounts = DailyCheckInvoice::query()
+                ->whereBetween('received_date', [$fromDay, $toDay])
+                ->when($mode === 'rider', fn ($q) => $q->where('party_type', DailyCheckInvoice::PARTY_RIDER))
+                ->whereNotNull('branch_id')
+                ->selectRaw('branch_id, COUNT(*) as total')
+                ->groupBy('branch_id')
+                ->pluck('total', 'branch_id');
+            $allBranchCount = DailyCheckInvoice::query()
+                ->whereBetween('received_date', [$fromDay, $toDay])
+                ->when($mode === 'rider', fn ($q) => $q->where('party_type', DailyCheckInvoice::PARTY_RIDER))
+                ->count();
+        }
 
-        $osOptions = User::query()
-            ->where('user_type', 'client')
-            ->where('status', 1)
-            ->orderBy('name')
-            ->get(['id', 'name', 'contact_number']);
+        $osOptions = onlineShopFilterOptions([
+            'ensure_ids' => ($mode === 'os'
+                ? collect($rows)->pluck('party_user_id')
+                : collect())
+                ->merge(is_numeric($osFilter) ? [(int) $osFilter] : [])
+                ->all(),
+        ]);
 
         $riderOptions = User::query()
             ->where('user_type', 'delivery_man')

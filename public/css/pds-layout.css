@@ -347,6 +347,21 @@ body.pds-admin.pds-header-nav.sidebar-main .content-page.pds-content-shell {
     padding-right: 1.35rem !important;
 }
 
+/* Support / Order Message chat: keep shell locked so composer is visible and body scrolls */
+body.pds-admin .content-page.pds-content-shell:has(.pds-support-page),
+body.pds-admin.pds-header-nav .content-page.pds-content-shell:has(.pds-support-page),
+body.pds-admin.pds-header-nav.sidebar-main .content-page.pds-content-shell:has(.pds-support-page) {
+    --pds-support-footer-h: 3.6rem;
+    height: calc(100dvh - var(--pds-support-footer-h)) !important;
+    max-height: calc(100dvh - var(--pds-support-footer-h)) !important;
+    min-height: 0 !important;
+    padding-top: calc(var(--pds-topbar-h, 60px) + 0.85rem) !important;
+    padding-bottom: 0.45rem !important;
+    padding-left: 1.35rem !important;
+    padding-right: 1.35rem !important;
+    overflow: hidden !important;
+}
+
 body.pds-admin.pds-header-nav.pds-theme-liquid_glass .content-page.pds-content-shell,
 body.pds-admin.pds-header-nav.pds-theme-liquid_glass .content-page,
 body.pds-admin.pds-header-nav.pds-theme-liquid_glass.sidebar-main .content-page.pds-content-shell,

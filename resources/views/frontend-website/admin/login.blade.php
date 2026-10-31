@@ -365,7 +365,6 @@
                 </div>
                 <div>
                     <div class="login-card__app-name">{{ SettingData('app_content', 'app_name') }}</div>
-                    <h1 class="login-card__title">Branch Admin</h1>
                     <p class="login-card__subtitle">{{ __('message.Please_enter_your_login_credentials') }}</p>
                 </div>
             </div>

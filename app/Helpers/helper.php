@@ -1391,6 +1391,53 @@ function uploadMediaFile($model, $file, $name)
     return true;
 }
 
+/**
+ * Resolve chat media message_type from upload.
+ * Prefer client-requested type for ambiguous containers (webm/m4a/mp4),
+ * because PHP mime sniffing often reports voice notes as video/*.
+ */
+function resolveChatMediaMessageType($file, $requestedType = null): string
+{
+    $requestedType = strtolower((string) $requestedType);
+    $mime = strtolower((string) $file->getMimeType());
+    $ext = strtolower((string) $file->getClientOriginalExtension());
+    $name = strtolower((string) $file->getClientOriginalName());
+    $looksLikeVoice = str_contains($name, 'voice') || str_contains($name, 'audio');
+
+    if (in_array($requestedType, ['audio', 'video', 'image', 'gif', 'sticker'], true)) {
+        // Trust explicit client intent for voice/video picks.
+        if (in_array($requestedType, ['audio', 'video'], true)) {
+            return $requestedType;
+        }
+        if (in_array($requestedType, ['image', 'gif', 'sticker'], true) &&
+            (str_starts_with($mime, 'image/') || in_array($ext, ['gif', 'png', 'jpg', 'jpeg', 'webp', 'bmp'], true))) {
+            return $requestedType;
+        }
+    }
+
+    if (in_array($ext, ['m4a', 'mp3', 'aac', 'ogg', 'wav'], true) || str_starts_with($mime, 'audio/')) {
+        return 'audio';
+    }
+
+    if ($ext === 'webm' || str_contains($mime, 'webm')) {
+        // MediaRecorder audio-only blobs are frequently sniffed as video/webm.
+        return ($requestedType === 'video' && ! $looksLikeVoice) ? 'video' : 'audio';
+    }
+
+    if (in_array($ext, ['mp4', 'mov', 'm4v', 'mkv'], true) || str_starts_with($mime, 'video/')) {
+        if ($looksLikeVoice || $requestedType === 'audio') {
+            return 'audio';
+        }
+        return 'video';
+    }
+
+    if (str_starts_with($mime, 'image/') || in_array($ext, ['gif', 'png', 'jpg', 'jpeg', 'webp', 'bmp'], true)) {
+        return $ext === 'gif' ? 'gif' : 'image';
+    }
+
+    return in_array($requestedType, ['text', 'emoji'], true) ? 'text' : ($requestedType ?: 'audio');
+}
+
 function renderStars($rating) {
     $rating = is_numeric($rating) ? min(5, max(0, $rating)) : 0;
     $fullStars = floor($rating);
@@ -2451,6 +2498,115 @@ function applyDestinationBranchFilter($query, ?int $branchId, string $table = ''
 }
 
 /**
+ * Exact city.name → branch.id map (e.g. "Other City" → Other City branch).
+ * Avoids fuzzy matches like city "MDY" → "MDY Branch" vs မန္တလေး.
+ *
+ * @return array<int, int>
+ */
+function osCityNameToBranchIdMap(): array
+{
+    static $map = null;
+    if ($map !== null) {
+        return $map;
+    }
+
+    $map = [];
+    $cities = \Illuminate\Support\Facades\DB::table('cities')->get(['id', 'name']);
+    $branches = \Illuminate\Support\Facades\DB::table('branches')->get(['id', 'name']);
+    foreach ($cities as $city) {
+        $cityKey = mb_strtolower(trim((string) $city->name));
+        if ($cityKey === '') {
+            continue;
+        }
+        foreach ($branches as $branch) {
+            if (mb_strtolower(trim((string) $branch->name)) === $cityKey) {
+                $map[(int) $city->id] = (int) $branch->id;
+                break;
+            }
+        }
+    }
+
+    return $map;
+}
+
+/**
+ * Online Shop home branch — Daily Check / Money Transfer party tabs.
+ * Prefer users.branch_id, but when the client's city name exactly matches a
+ * branch (Other City shops saved under Mandalay), use that branch instead.
+ */
+function osHomeBranchId(int $osUserId): ?int
+{
+    if ($osUserId <= 0) {
+        return null;
+    }
+
+    static $cache = [];
+    if (array_key_exists($osUserId, $cache)) {
+        return $cache[$osUserId];
+    }
+
+    $user = \App\Models\User::query()->whereKey($osUserId)->first(['id', 'branch_id', 'city_id']);
+    if (! $user) {
+        return $cache[$osUserId] = null;
+    }
+
+    $branchId = (int) ($user->branch_id ?? 0) ?: null;
+    $cityId = (int) ($user->city_id ?? 0);
+    $cityBranch = $cityId > 0 ? (osCityNameToBranchIdMap()[$cityId] ?? null) : null;
+    if ($cityBranch && (! $branchId || (int) $cityBranch !== (int) $branchId)) {
+        // Exact city↔branch name match wins (fixes Other City OS stuck on MDY).
+        $branchId = (int) $cityBranch;
+    }
+
+    return $cache[$osUserId] = $branchId;
+}
+
+/**
+ * Branch key for an OS settlement parcel: delivery destination (to, else from).
+ * ငွေရှင်းတမ်း / Money Transfer / OS Receive tabs follow the branch that handled the parcel,
+ * so Yangon / POL / Sagaing deliveries leave the Mandalay tab.
+ */
+function osSettlementBranchIdForItem($item): int
+{
+    return (int) ($item->to_branch_id ?: $item->from_branch_id ?: 0);
+}
+
+/**
+ * Keep parcels whose destination branch matches the tab.
+ *
+ * @param  \Illuminate\Support\Collection<int, mixed>|iterable  $items
+ * @return \Illuminate\Support\Collection<int, mixed>
+ */
+function filterItemsByOsHomeBranch($items, ?int $branchId)
+{
+    $collection = collect($items)->values();
+    if ($branchId === null || $branchId <= 0) {
+        return $collection;
+    }
+
+    $branchId = (int) $branchId;
+
+    return $collection
+        ->filter(fn ($item) => osSettlementBranchIdForItem($item) === $branchId)
+        ->values();
+}
+
+/**
+ * Tab counts keyed by parcel destination branch.
+ *
+ * @param  \Illuminate\Support\Collection<int, mixed>|iterable  $items
+ * @return \Illuminate\Support\Collection<int|string, int>
+ */
+function osHomeBranchTabCounts($items)
+{
+    return collect($items)
+        ->map(fn ($item) => osSettlementBranchIdForItem($item))
+        ->filter(fn ($id) => (int) $id > 0)
+        ->countBy()
+        ->map(fn ($n) => (int) $n);
+}
+
+/**
  * Items this panel actually owns — stops MDY local rows leaking onto other-city screens.
  */
 function applyForcedItemOwnership($query, ?User $user = null, string $table = '')
@@ -2553,6 +2709,64 @@ function excludeScrubbedOnlineShops($query)
                     ->where('name', 'not like', 'Deleted % Client');
             });
     });
+}
+
+/**
+ * Online Shop <select> options for settlement / Money Transfer / Daily Check toolbars.
+ * Always includes active clients (optionally branch-scoped), plus any OS IDs that
+ * appear on the current screen's date-scoped data — even if inactive/rejected —
+ * so shops with rows remain searchable (Follow Up uses ajax; these screens use
+ * static options + Select2 matcher).
+ *
+ * @param  array{
+ *     ensure_ids?: iterable<int|string>,
+ *     apply_branch_scope?: bool,
+ *     branch_id?: int|null,
+ *     user?: \App\Models\User|null
+ * }  $opts
+ * @return \Illuminate\Support\Collection<int, \App\Models\User>
+ */
+function onlineShopFilterOptions(array $opts = [])
+{
+    $ensureIds = collect($opts['ensure_ids'] ?? [])
+        ->map(static fn ($id) => (int) $id)
+        ->filter(static fn ($id) => $id > 0)
+        ->unique()
+        ->values();
+
+    $base = \App\Models\User::query()
+        ->where('user_type', 'client')
+        ->where('status', 1);
+    excludeScrubbedOnlineShops($base);
+
+    if (! empty($opts['apply_branch_scope'])) {
+        applyClientBranchScope(
+            $base,
+            $opts['user'] ?? auth()->user(),
+            isset($opts['branch_id']) ? (int) $opts['branch_id'] : null
+        );
+    } elseif (! empty($opts['branch_id']) && (int) $opts['branch_id'] > 0) {
+        $base->where('branch_id', (int) $opts['branch_id']);
+    }
+
+    $options = $base->orderBy('name')->get(['id', 'name', 'contact_number']);
+    $have = $options->pluck('id')->map(static fn ($id) => (int) $id)->flip();
+    $missingIds = $ensureIds->filter(static fn ($id) => ! $have->has($id))->values();
+
+    if ($missingIds->isEmpty()) {
+        return $options->values();
+    }
+
+    $extraQuery = \App\Models\User::withTrashed()
+        ->whereIn('id', $missingIds->all());
+    excludeScrubbedOnlineShops($extraQuery);
+    $extra = $extraQuery->get(['id', 'name', 'contact_number']);
+
+    return $options
+        ->concat($extra)
+        ->unique('id')
+        ->sortBy(static fn ($u) => mb_strtolower((string) ($u->name ?? '')), SORT_NATURAL)
+        ->values();
 }
 
 function applyOnlineShopApprovalTab($query, ?string $status = null)
@@ -2896,6 +3110,47 @@ function classifyOrderNotificationCategory(string $historyType, ?User $actor = n
     return 'admin_changes';
 }
 
+/**
+ * Points System notifications — Super Admin bell only (never Admin Panel).
+ */
+function isPointsSystemNotification(array $data): bool
+{
+    $type = strtolower((string) ($data['type'] ?? ''));
+    $category = strtolower((string) ($data['category'] ?? ''));
+
+    return $category === 'points' || str_starts_with($type, 'point_');
+}
+
+/**
+ * Which panel should show this notification: super_admin | admin
+ * - Super Admin: Points System only
+ * - Admin Panel: everything except Points System
+ */
+function notificationPanelAudience(array $data): string
+{
+    return isPointsSystemNotification($data) ? 'super_admin' : 'admin';
+}
+
+function notificationVisibleOnPanel(array $data, string $panel): bool
+{
+    $panel = $panel === 'super_admin' ? 'super_admin' : 'admin';
+
+    return notificationPanelAudience($data) === $panel;
+}
+
+/**
+ * Pretty number for notification copy (no trailing .00).
+ */
+function formatPointNotifyNumber(float|int|string|null $value): string
+{
+    $n = (float) $value;
+    if (abs($n - round($n)) < 0.00001) {
+        return number_format((float) round($n), 0);
+    }
+
+    return rtrim(rtrim(number_format($n, 2, '.', ','), '0'), '.');
+}
+
 function inferNotificationCategory(array $data): string
 {
     if (!empty($data['category'])) {
@@ -2912,6 +3167,10 @@ function inferNotificationCategory(array $data): string
         return 'user_orders';
     }
 
+    if (str_starts_with($type, 'point_')) {
+        return 'points';
+    }
+
     return 'admin_changes';
 }
 
@@ -2921,6 +3180,7 @@ function notificationCategoryLabel(string $category): string
         'user_messages' => __('message.notification_category_user_messages'),
         'user_orders' => __('message.notification_category_user_orders'),
         'admin_changes' => __('message.notification_category_admin_changes'),
+        'points' => __('message.notification_category_points'),
         default => __('message.notification_category_all'),
     };
 }
@@ -2972,10 +3232,38 @@ function buildCustomerSupportNotificationPayload(CustomerSupport $support, User 
 
 function notificationRouteForData(array $data): ?string
 {
+    $type = strtolower((string) ($data['type'] ?? ''));
+
+    if (str_starts_with($type, 'point_')) {
+        if (str_contains($type, 'salary')) {
+            return route('super-admin.screens.show', [
+                'screen' => 'point-system',
+                'tab' => 'salary',
+                'salary_status' => 'pending',
+            ]);
+        }
+
+        if ($type === 'point_payment_pending_admin') {
+            return route('point-system.follow-up', ['status' => 'pending_admin']);
+        }
+
+        return route('super-admin.screens.show', [
+            'screen' => 'point-system',
+            'tab' => 'follow-up',
+            'status' => 'pending_super_admin',
+        ]);
+    }
+
     if (!empty($data['dispatch_order_item_id'])) {
+        $itemId = (int) $data['dispatch_order_item_id'];
+        $orderId = !empty($data['order_id']) ? (int) $data['order_id'] : 0;
+        if ($orderId > 0 && $itemId > 0) {
+            return route('order.dispatch.item.messages.show', [$orderId, $itemId]);
+        }
+
         return route('order.dispatch.assigned-items', array_filter([
-            'item_id' => (int) $data['dispatch_order_item_id'],
-            'order_id' => !empty($data['order_id']) ? (int) $data['order_id'] : null,
+            'item_id' => $itemId,
+            'order_id' => $orderId > 0 ? $orderId : null,
         ]));
     }
 
@@ -3001,7 +3289,19 @@ function notifyAdminsCustomerSupport(array $notification_data): void
         $payload['category'] = inferNotificationCategory($payload);
     }
 
+    // Complaints go to Super Admin only.
+    if (($payload['support_type'] ?? $payload['channel'] ?? '') === 'Complaint') {
+        notifySuperAdminsCustomerSupport($payload);
+
+        return;
+    }
+
     getPanelStaffUsers()->each(function ($admin) use ($payload) {
+        // Branch admins get Inquiry + general support; SuperAdmin also gets Inquiry.
+        if (($payload['support_type'] ?? '') === 'Inquiry' && isSuperAdmin($admin)) {
+            // SuperAdmin can watch inquiries but primary inbox is branch admin header icon.
+        }
+
         $admin->notify(new \App\Notifications\CustomerSupportNotification($payload));
 
         if (!empty($admin->player_id) && pushNotificationsEnabled()) {
@@ -3011,6 +3311,89 @@ function notifyAdminsCustomerSupport(array $notification_data): void
             $admin->notify(new CommonNotification('customersupport', $pushData));
         }
     });
+}
+
+function getSuperAdminUsers()
+{
+    return User::query()
+        ->where(function ($q) {
+            $q->where('user_type', 'super_admin')
+                ->orWhereHas('roles', fn ($r) => $r->where('name', 'super_admin'));
+        })
+        ->where(function ($q) {
+            $q->whereNull('status')->orWhere('status', 1)->orWhere('status', '1');
+        })
+        ->get()
+        ->unique('id')
+        ->values();
+}
+
+function notifySuperAdminsCustomerSupport(array $notification_data): void
+{
+    $payload = array_merge([
+        'type' => 'customersupport',
+        'category' => 'user_messages',
+        'support_type' => 'Complaint',
+        'channel' => 'Complaint',
+    ], $notification_data);
+    $payload['type'] = 'customersupport';
+
+    getSuperAdminUsers()->each(function ($admin) use ($payload) {
+        $admin->notify(new \App\Notifications\CustomerSupportNotification($payload));
+
+        if (!empty($admin->player_id) && pushNotificationsEnabled()) {
+            $pushData = $payload;
+            $pushData['id'] = 'COMPLAINT_' . ($payload['support_id'] ?? '');
+            $pushData['subject'] = $payload['subject'] ?? 'Complaint';
+            $admin->notify(new CommonNotification('customersupport', $pushData));
+        }
+    });
+}
+
+/** Inquiry threads where last message is from user (needs staff reply). */
+function unansweredInquiryChatCount(): int
+{
+    try {
+        return channelChatNeedsReplyCount('Inquiry');
+    } catch (\Throwable $e) {
+        return 0;
+    }
+}
+
+/** Complaint threads where last message is from user (Super Admin). */
+function unansweredComplaintChatCount(): int
+{
+    try {
+        return channelChatNeedsReplyCount('Complaint');
+    } catch (\Throwable $e) {
+        return 0;
+    }
+}
+
+function channelChatNeedsReplyCount(string $supportType): int
+{
+    $ids = \App\Models\CustomerSupport::query()
+        ->where('support_type', $supportType)
+        ->whereIn('status', ['open', 'pending', 'inreview'])
+        ->pluck('id');
+    if ($ids->isEmpty()) {
+        return 0;
+    }
+
+    $lastIds = \App\Models\SupportChathistory::query()
+        ->selectRaw('MAX(id) as id')
+        ->whereIn('support_id', $ids)
+        ->groupBy('support_id')
+        ->pluck('id');
+
+    if ($lastIds->isEmpty()) {
+        return 0;
+    }
+
+    return (int) \App\Models\SupportChathistory::query()
+        ->whereIn('id', $lastIds)
+        ->whereHas('user', fn ($u) => $u->whereIn('user_type', ['client', 'delivery_man']))
+        ->count();
 }
 
 /**
@@ -3118,38 +3501,22 @@ function unansweredDispatchChatThreadCount(): int
 }
 
 /**
- * Unread badge count — actionable only (User Messages / User Orders).
- * Admin Changes stay in the list/filters but do not flood the bell badge.
+ * Unread badge count — panel-scoped (Admin vs Super Admin) + actionable categories.
  */
-function adminNotificationUnreadCount(?\App\Models\User $user = null): int
+function adminNotificationUnreadCount(?\App\Models\User $user = null, ?string $panel = null): int
 {
     $user = $user ?? auth()->user();
     if (! $user) {
         return 0;
     }
 
+    $panel = $panel ?: (request()->get('panel')
+        ?: ((function_exists('isSuperAdmin') && isSuperAdmin($user) && request()->is('super-admin*'))
+            ? 'super_admin'
+            : 'admin'));
+    $panel = $panel === 'super_admin' ? 'super_admin' : 'admin';
+
     try {
-        $filtered = (int) $user->unreadNotifications()
-            ->where(function ($q) {
-                $q->whereIn('data->category', ['user_messages', 'user_orders'])
-                    ->orWhereIn('data->type', [
-                        'dispatch_item_message',
-                        'customersupport',
-                        'create',
-                        'draft',
-                        'active',
-                        'cancelled',
-                        'bid_placed',
-                        'payment_status_message',
-                    ]);
-            })
-            ->count();
-
-        if ($filtered > 0) {
-            return $filtered;
-        }
-
-        // Some MySQL/MariaDB JSON path filters miss rows — fall back to PHP classify.
         $total = (int) $user->unreadNotifications()->count();
         if ($total === 0) {
             return 0;
@@ -3159,11 +3526,19 @@ function adminNotificationUnreadCount(?\App\Models\User $user = null): int
             ->orderByDesc('created_at')
             ->limit(250)
             ->get(['id', 'data'])
-            ->filter(function ($notification) {
+            ->filter(function ($notification) use ($panel) {
                 $data = is_array($notification->data) ? $notification->data : [];
-                $category = function_exists('inferNotificationCategory')
-                    ? inferNotificationCategory($data)
-                    : (string) ($data['category'] ?? '');
+                if (! notificationVisibleOnPanel($data, $panel)) {
+                    return false;
+                }
+
+                // Super Admin bell: Points only.
+                if ($panel === 'super_admin') {
+                    return isPointsSystemNotification($data);
+                }
+
+                // Admin Panel bell: never Points; keep messages/orders.
+                $category = inferNotificationCategory($data);
 
                 return in_array($category, ['user_messages', 'user_orders'], true);
             })

@@ -32,6 +32,7 @@ class DispatchItemMessage extends Model implements HasMedia
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('chat_image')->singleFile();
+        $this->addMediaCollection('chat_media')->singleFile();
     }
 
     public function item()
@@ -51,6 +52,15 @@ class DispatchItemMessage extends Model implements HasMedia
         }
 
         return getSingleMedia($this, 'chat_image', null) ?: null;
+    }
+
+    public function mediaUrl(): ?string
+    {
+        if (! getMediaFileExit($this, 'chat_media')) {
+            return null;
+        }
+
+        return getSingleMedia($this, 'chat_media', null) ?: null;
     }
 
     /**
@@ -99,8 +109,16 @@ class DispatchItemMessage extends Model implements HasMedia
 
             $last = $lastMessages->get($row->last_message_id);
             $lastText = trim((string) ($last?->message ?? ''));
-            if ($lastText === '' && $last && getMediaFileExit($last, 'chat_image')) {
-                $lastText = '[Image]';
+            if ($lastText === '' && $last) {
+                $type = strtolower((string) ($last->message_type ?? ''));
+                $lastText = match ($type) {
+                    'audio' => '🎤 Voice message',
+                    'video' => '🎬 Video',
+                    'image' => '[Image]',
+                    default => (getMediaFileExit($last, 'chat_image')
+                        ? '[Image]'
+                        : (getMediaFileExit($last, 'chat_media') ? '📎 Attachment' : '')),
+                };
             }
 
             $item->chat_message_count = (int) $row->message_count;

@@ -144,11 +144,12 @@
 
         function toggleDeleteButton() {
             const btn = $('#deleteSelectedBtn');
-            // Rider List toolbar + Online Shop bulk bar: keep Delete Selected always visible.
-            const keepVisible = btn.closest('.pds-dm-toolbar, .pds-os-list-bulk').length > 0
+            // Rider List / Online Shop / Account Creation: keep Delete Selected always visible.
+            const keepVisible = btn.closest('.pds-dm-toolbar, .pds-os-list-bulk, .pds-subadmin-toolbar, .pds-subadmin-toolbar__start, .pds-subadmin-toolbar__end').length > 0
                 || btn.hasClass('pds-os-delete-btn')
-                || btn.hasClass('pds-dm-delete-btn');
-            const bulk = btn.closest('.pds-os-list-bulk, .mb-3');
+                || btn.hasClass('pds-dm-delete-btn')
+                || btn.hasClass('pds-subadmin-delete-btn');
+            const bulk = btn.closest('.pds-os-list-bulk, .pds-subadmin-toolbar, .pds-subadmin-toolbar__start, .pds-subadmin-toolbar__end, .mb-3');
             if (!btn.length) {
                 bulk.hide();
                 return;
@@ -693,13 +694,16 @@
             });
 
             if (selectedIds.length == 0) {
-                alert('Please select at least one record to delete.');
+                var pickMsg = 'Please select at least one record to delete.';
+                if (typeof Snackbar !== 'undefined') {
+                    Snackbar.show({ text: pickMsg, pos: 'bottom-center', backgroundColor: '#dc3545' });
+                } else {
+                    alert(pickMsg);
+                }
                 return;
             }
 
-            // Add the confirmation dialog here
-            var r = confirm("{{ __('message.delete_msg') }}");
-            if (r == true) {
+            function runBulkDelete() {
                 $.ajax({
                     url: "{{ route('datatble.destroySelected') }}",
                     method: 'DELETE',
@@ -716,132 +720,186 @@
                             }
                             showMessage(response.message);
                             $('.dataTable').DataTable().ajax.reload( null, false );
-                            // location.reload();
                         } else {
                             errorMessage(response.message);
                         }
                     }
                 });
-            } else {
+            }
+
+            if (typeof window.pdsConfirmDelete === 'function') {
+                window.pdsConfirmDelete({
+                    title: "{{ __('message.delete_form_title', ['form' => __('message.account_creation')]) }}",
+                    message: "{{ __('message.delete_msg') }}",
+                    onConfirm: runBulkDelete,
+                });
+            } else if (confirm("{{ __('message.delete_msg') }}")) {
+                runBulkDelete();
+            }
+        });
+
+        $(document).off('click.pdsConfirmDelete', '[data--confirmation="true"]').on('click.pdsConfirmDelete', '[data--confirmation="true"]', function(e){
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            var $el = $(this);
+            if ($el.data('pds-confirm-open')) {
+                return false;
+            }
+            var form = $el.attr('data--submit');
+            var title = $el.attr('data-title');
+            var message = $el.attr('data-message');
+            var ajaxtype = $el.attr('data--ajax');
+            if(form == 'confirm_form') {
+                $('#confirm_form').attr('action', $el.attr('href'));
+            }
+            confirmation(form, title, message, ajaxtype, this);
+            return false;
+        });
+
+        window.pdsConfirmDelete = function (opts) {
+            opts = opts || {};
+            var title = opts.title || "{{ __('message.confirmation') }}";
+            var message = opts.message || "{{ __('message.delete_msg') }}";
+            var onConfirm = typeof opts.onConfirm === 'function' ? opts.onConfirm : function () {};
+            if (typeof $.confirm !== 'function') {
+                if (confirm(message)) onConfirm();
                 return;
             }
-        });
-
-        $(document).on('click','[data--confirmation="true"]',function(e){
-            e.preventDefault();
-            var form = $(this).attr('data--submit');
-
-            var title = $(this).attr('data-title');
-
-            var message = $(this).attr('data-message');
-
-            var ajaxtype = $(this).attr('data--ajax');
-            if(form == 'confirm_form') {
-                $('#confirm_form').attr('action', $(this).attr('href'));
-            }
-            let __this = this
-
-            confirmation(form,title,message,ajaxtype,__this);
-        });
-
-        function confirmation(form,title = "{{ __('message.confirmation') }}",message = "{{ __('message.delete_msg') }}",ajaxtype=false,_this){
-            const storageDark = localStorage.getItem('dark');
-            const theme = (storageDark == "false") ? 'material' : 'dark';
             $.confirm({
-            content: message,
-            type: '',
-            title: title,
-            buttons: {
-                yes: {
-                    action: function () {
-
-                        if(ajaxtype == 'true') {
-                            var $trigger = $(_this);
-                            var $form = $(document).find('form[data--submit="'+form+'"]');
-                            if (!$form.length) {
-                                $form = $trigger.closest('form');
-                            }
-                            var url = $trigger.attr('href') || $form.attr('action');
-                            if (!url || url === 'javascript:void(0)' || url.indexOf('javascript:') === 0) {
-                                url = $form.attr('action');
-                            }
-                            var method = String($trigger.attr('data-method') || $form.find('input[name="_method"]').val() || $form.attr('method') || 'POST').toUpperCase();
-                            var data = $form.serializeArray();
-                            if (method !== 'GET' && method !== 'POST') {
-                                // Laravel method spoofing for PUT/PATCH/DELETE over AJAX POST.
-                                if (!data.some(function (item) { return item.name === '_method'; })) {
-                                    data.push({ name: '_method', value: method });
-                                }
-                                method = 'POST';
-                            }
-
-                            $.ajax({
-                                url: url,
-                                type: method,
-                                data: data,
-                                headers: {
-                                    'X-Requested-With': 'XMLHttpRequest'
-                                }
-                            }).done(function (response) {
-                                if(response.status) {
-                                    if(response.event == 'norefresh') {
-                                        getAssignList(response.type);
-                                    }
-                                    if(response.image != null){
-                                        $(_this).remove();
-                                        $('#'+response.preview).attr('src',response.image)
-                                        if (jQuery.inArray(response.preview, ["service_attachment_preview"]) !== -1) {
-                                            $('#'+response.preview+"_"+response.id).remove()
-                                            let total_file = $('.remove-file').length;
-                                            if(total_file == 0){
-                                                $('.service_attachment_div').remove();
-                                            }
-                                        }
-                                        if(response.preview == 'site_logo_preview'){
-                                            $('.'+response.preview).attr('src',response.image);
-                                        }
-                                        if(response.preview == 'site_favicon_preview'){
-                                            $('.'+response.preview).attr('href',response.image);
-                                        }
-
-                                        if(response.preview == 'site_dark_logo_preview'){
-                                            $('.'+response.preview).attr('src',response.image);
-                                        }
-
-                                        showMessage(response.message)
-                                        return true;
-                                    }
-                                    if ($.fn.DataTable && $('.dataTable').length) {
-                                        $('.dataTable').DataTable().ajax.reload( null, false );
-                                    }
-                                    showMessage(response.message)
-                                }
-                                if(response.status == false){
-                                    errorMessage(response.message)
-                                }
-                            }).fail(function (xhr) {
-                                var msg = (xhr.responseJSON && xhr.responseJSON.message)
-                                    ? xhr.responseJSON.message
-                                    : "{{ __('message.something_went_wrong') }}";
-                                errorMessage(msg);
-                            });
-                        } else {
-                            if (form !== undefined && form){
-                                $(document).find('[data--submit="'+form+'"]').submit();
-                            }else{
-                                return true;
-                            }
+                title: title,
+                content: ''
+                    + '<div class="pds-delete-pop">'
+                    +   '<div class="pds-delete-pop__icon"><i class="fas fa-trash-alt" aria-hidden="true"></i></div>'
+                    +   '<p class="pds-delete-pop__text">' + $('<div>').text(message).html() + '</p>'
+                    + '</div>',
+                type: 'red',
+                typeAnimated: true,
+                theme: 'modern',
+                animation: 'scale',
+                closeAnimation: 'scale',
+                animateFromElement: false,
+                boxWidth: '400px',
+                useBootstrap: false,
+                backgroundDismiss: true,
+                columnClass: 'pds-delete-confirm-box',
+                onOpenBefore: function () {
+                    this.$el.addClass('pds-delete-confirm');
+                },
+                buttons: {
+                    cancel: {
+                        text: "{{ __('message.cancel') }}",
+                        btnClass: 'pds-delete-confirm__btn is-ghost',
+                        action: function () {}
+                    },
+                    confirm: {
+                        text: "{{ __('message.delete') }}",
+                        btnClass: 'pds-delete-confirm__btn is-danger',
+                        action: function () {
+                            onConfirm();
                         }
                     }
-                },
-                no: {
-                    action: function () {}
-                },
-            },
-            theme: theme
-        });
-        return false;
-    }
+                }
+            });
+        };
+
+        function confirmation(form,title = "{{ __('message.confirmation') }}",message = "{{ __('message.delete_msg') }}",ajaxtype=false,_this){
+            var $trigger = $(_this);
+            $trigger.data('pds-confirm-open', true);
+            window.pdsConfirmDelete({
+                title: title,
+                message: message,
+                onConfirm: function () {
+                    if (String(ajaxtype) === 'true') {
+                        if ($trigger.data('pds-deleting')) {
+                            return;
+                        }
+                        $trigger.data('pds-deleting', true);
+                        var $form = $(document).find('form[data--submit="'+form+'"]');
+                        if (!$form.length) {
+                            $form = $trigger.closest('form');
+                        }
+                        var url = $trigger.attr('href') || $form.attr('action');
+                        if (!url || url === 'javascript:void(0)' || url.indexOf('javascript:') === 0) {
+                            url = $form.attr('action');
+                        }
+                        var method = String($trigger.attr('data-method') || $form.find('input[name="_method"]').val() || $form.attr('method') || 'POST').toUpperCase();
+                        var data = $form.serializeArray();
+                        if (method !== 'GET' && method !== 'POST') {
+                            if (!data.some(function (item) { return item.name === '_method'; })) {
+                                data.push({ name: '_method', value: method });
+                            }
+                            method = 'POST';
+                        }
+
+                        $.ajax({
+                            url: url,
+                            type: method,
+                            data: data,
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        }).done(function (response) {
+                            if(response.status) {
+                                if(response.event == 'norefresh') {
+                                    getAssignList(response.type);
+                                }
+                                if(response.image != null){
+                                    $(_this).remove();
+                                    $('#'+response.preview).attr('src',response.image)
+                                    if (jQuery.inArray(response.preview, ["service_attachment_preview"]) !== -1) {
+                                        $('#'+response.preview+"_"+response.id).remove()
+                                        let total_file = $('.remove-file').length;
+                                        if(total_file == 0){
+                                            $('.service_attachment_div').remove();
+                                        }
+                                    }
+                                    if(response.preview == 'site_logo_preview'){
+                                        $('.'+response.preview).attr('src',response.image);
+                                    }
+                                    if(response.preview == 'site_favicon_preview'){
+                                        $('.'+response.preview).attr('href',response.image);
+                                    }
+
+                                    if(response.preview == 'site_dark_logo_preview'){
+                                        $('.'+response.preview).attr('src',response.image);
+                                    }
+
+                                    showMessage(response.message)
+                                    return true;
+                                }
+                                if ($.fn.DataTable && $('.dataTable').length) {
+                                    $('.dataTable').DataTable().ajax.reload( null, false );
+                                }
+                                showMessage(response.message)
+                            }
+                            if(response.status == false){
+                                errorMessage(response.message)
+                            }
+                        }).fail(function (xhr) {
+                            var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                                ? xhr.responseJSON.message
+                                : "{{ __('message.something_went_wrong') }}";
+                            errorMessage(msg);
+                        }).always(function () {
+                            $trigger.removeData('pds-deleting');
+                            $trigger.removeData('pds-confirm-open');
+                        });
+                    } else {
+                        $trigger.removeData('pds-confirm-open');
+                        if (form !== undefined && form){
+                            $(document).find('[data--submit="'+form+'"]').submit();
+                        }
+                    }
+                }
+            });
+            // Allow opening again after dialog is closed without confirm.
+            setTimeout(function () {
+                if (!$trigger.data('pds-deleting')) {
+                    $trigger.removeData('pds-confirm-open');
+                }
+            }, 800);
+            return false;
+        }
 
         window.pdsNotificationCategory = 'all';
 
@@ -929,7 +987,7 @@
             $.ajax({
                 type: 'get',
                 url: url,
-                data: {'type': type, 'category': category},
+                data: {'type': type, 'category': category, 'panel': 'admin'},
                 success: function(res){
                     $('.notification_data').html(res.data);
                     if (typeof res.unread_count !== 'undefined') {
@@ -1018,6 +1076,7 @@
             $.ajax({
                 type: 'get',
                 url: url,
+                data: { panel: 'admin' },
                 success: function(res){
                     var $badge = $('.pds-topbar-notify .notify_count').first();
                     var count = Number(res.counts) || 0;
@@ -1078,7 +1137,11 @@
             });
 
             // Dedicated fingerprint poll for order list / detail (existing endpoints).
-            if (!window.__pdsPageLiveBooted && typeof window.bootAdminPageLiveRefresh === 'function') {
+            // Rider ငွေအပ် is a dense editable grid — page-version reloads race autosave
+            // and make typed denoms / +/- look like they vanished after refresh.
+            var skipPageLive = (pageName || '').indexOf('rider-remit') !== -1
+                || $('.pds-rider-remit-page, .pds-disable-live-reload').length > 0;
+            if (!window.__pdsPageLiveBooted && !skipPageLive && typeof window.bootAdminPageLiveRefresh === 'function') {
                 if (pageName === 'order.index' || (pageName || '').indexOf('order.') === 0) {
                     // Keep using generic page-version unless a view already booted a specific URL.
                     window.bootAdminPageLiveRefresh({

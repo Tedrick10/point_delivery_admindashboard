@@ -244,16 +244,33 @@
     @endif
 
     <div class="modal fade" id="followUpDetailsModal" tabindex="-1" role="dialog" aria-labelledby="followUpDetailsModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
-            <div class="modal-content pds-follow-up-details-modal">
-                <div class="modal-header pds-follow-up-details-modal__header">
-                    <h5 class="modal-title" id="followUpDetailsModalLabel">{{ __('message.details') }}</h5>
-                    <div class="pds-follow-up-details-header-actions" id="followUpDetailsHeaderActions" aria-label="{{ __('message.details') }}"></div>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="{{ __('message.close') }}">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
+        <div class="modal-dialog modal-dialog-centered pds-follow-up-details-dialog" role="document">
+            <div class="pds-follow-up-details-stage">
+                <div class="modal-content pds-follow-up-details-modal">
+                    <div class="modal-header pds-follow-up-details-modal__header">
+                        <h5 class="modal-title" id="followUpDetailsModalLabel">{{ __('message.details') }}</h5>
+                        <div class="pds-follow-up-details-header-actions" id="followUpDetailsHeaderActions" aria-label="{{ __('message.details') }}"></div>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="{{ __('message.close') }}">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body" id="followUpDetailsModalBody"></div>
                 </div>
-                <div class="modal-body" id="followUpDetailsModalBody"></div>
+                <aside class="pds-follow-up-details-photo-preview" id="followUpDetailsPhotoPreview" hidden>
+                    <header class="pds-follow-up-details-photo-preview__top">
+                        <div class="pds-follow-up-details-photo-preview__title">
+                            <i class="fas fa-image" aria-hidden="true"></i>
+                            <span id="followUpDetailsPhotoTitle">{{ __('message.dispatch_audit_photos_label') }}</span>
+                        </div>
+                        <button type="button" class="pds-follow-up-details-photo-preview__close" id="followUpDetailsPhotoClose" aria-label="{{ __('message.close') }}">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </header>
+                    <div class="pds-expense-image-viewport" id="pds-audit-photo-viewport">
+                        <img id="followUpDetailsPhotoImg" class="pds-expense-image-view__img" alt="" draggable="false">
+                    </div>
+                    @include('order.partials._expense-photo-zoom-bar', ['viewportId' => 'pds-audit-photo-viewport'])
+                </aside>
             </div>
         </div>
     </div>
@@ -261,6 +278,8 @@
 
 
     @section('bottom_script')
+        <link rel="stylesheet" href="{{ asset('css/pds-expense-photo-zoom.css') }}?v=2">
+        <script src="{{ asset('js/pds-photo-zoom.js') }}?v=5"></script>
         <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
         <script>
             (function () {
@@ -680,6 +699,9 @@
                     var url = $(this).data('url');
                     var $body = $('#followUpDetailsModalBody');
                     if (!url) return;
+                    if (typeof window.__pdsCloseFollowUpPhotoPreview === 'function') {
+                        window.__pdsCloseFollowUpPhotoPreview();
+                    }
                     $('#followUpDetailsHeaderActions').empty();
                     $body.html('<p class="text-center py-4 mb-0">{{ __('message.splash_loading') }}</p>');
                     $('#followUpDetailsModal').modal('show');
@@ -694,15 +716,22 @@
                 $('#followUpDetailsModal').on('hidden.bs.modal', function () {
                     $('#followUpDetailsHeaderActions').empty();
                     $('#followUpDetailsModalBody').empty();
+                    if (typeof window.__pdsCloseFollowUpPhotoPreview === 'function') {
+                        window.__pdsCloseFollowUpPhotoPreview();
+                    }
                 });
 
                 $(document).on('click', '#followUpDetailsHeaderActions .loadRemoteModel, .pds-dispatch-action-edit.loadRemoteModel, .pds-dispatch-action-cancel.loadRemoteModel', function (e) {
                     e.stopPropagation();
                 });
 
-                $(document).on('click', '[data-dispatch-item-delete]', function (e) {
+                $(document)
+                    .off('click.pdsDispatchItemDelete', '[data-dispatch-item-delete]')
+                    .off('click', '[data-dispatch-item-delete]')
+                    .on('click.pdsDispatchItemDelete', '[data-dispatch-item-delete]', function (e) {
                     e.preventDefault();
                     e.stopPropagation();
+                    e.stopImmediatePropagation();
 
                     var $btn = $(this);
                     var url = $btn.data('delete-url');
@@ -712,6 +741,15 @@
                     var theme = (storageDark == 'false') ? 'material' : 'dark';
 
                     if (!url || typeof $.confirm !== 'function') return;
+
+                    try {
+                        if (typeof Swal !== 'undefined' && typeof Swal.close === 'function') {
+                            Swal.close();
+                        }
+                    } catch (err) {}
+                    try {
+                        $('.jconfirm').remove();
+                    } catch (err) {}
 
                     $.confirm({
                         title: title,
@@ -748,6 +786,100 @@
                         }
                     });
                 });
+
+                (function bindAuditPhotoViewer() {
+                    if (window.__pdsAuditPhotoViewerBound) {
+                        return;
+                    }
+                    window.__pdsAuditPhotoViewerBound = true;
+
+                    var defaultLabel = @json(__('message.dispatch_audit_photos_label'));
+                    var modal = document.getElementById('followUpDetailsModal');
+                    var preview = document.getElementById('followUpDetailsPhotoPreview');
+                    var img = document.getElementById('followUpDetailsPhotoImg');
+                    var title = document.getElementById('followUpDetailsPhotoTitle');
+                    var closeBtn = document.getElementById('followUpDetailsPhotoClose');
+                    var viewportId = 'pds-audit-photo-viewport';
+
+                    function mountZoom() {
+                        var viewport = document.getElementById(viewportId);
+                        if (!viewport || !window.PdsPhotoZoom || typeof window.PdsPhotoZoom.mountExpensePhoto !== 'function') {
+                            return;
+                        }
+                        window.PdsPhotoZoom.mountExpensePhoto(viewport, { reset: true });
+                    }
+
+                    function resetZoom() {
+                        var viewport = document.getElementById(viewportId);
+                        if (!viewport || !window.PdsPhotoZoom || typeof window.PdsPhotoZoom.reset !== 'function') {
+                            return;
+                        }
+                        window.PdsPhotoZoom.reset(viewport);
+                    }
+
+                    function closePreview() {
+                        if (preview) {
+                            preview.hidden = true;
+                        }
+                        if (modal) {
+                            modal.classList.remove('has-photo-preview');
+                        }
+                        resetZoom();
+                        if (img) {
+                            img.onload = null;
+                            img.removeAttribute('src');
+                        }
+                    }
+
+                    function openPreview(url, label) {
+                        if (!url || !preview || !img) {
+                            return;
+                        }
+                        if (title) {
+                            title.textContent = label || defaultLabel;
+                        }
+                        img.onload = function () {
+                            mountZoom();
+                        };
+                        img.src = url;
+                        img.alt = label || defaultLabel;
+                        preview.hidden = false;
+                        if (modal) {
+                            modal.classList.add('has-photo-preview');
+                        }
+                        if (img.complete) {
+                            mountZoom();
+                        } else {
+                            mountZoom();
+                        }
+                    }
+
+                    window.__pdsCloseFollowUpPhotoPreview = closePreview;
+
+                    if (closeBtn) {
+                        closeBtn.addEventListener('click', closePreview);
+                    }
+
+                    document.addEventListener('click', function (e) {
+                        var btn = e.target.closest('.js-pds-audit-photo');
+                        if (!btn) {
+                            return;
+                        }
+                        e.preventDefault();
+                        openPreview(btn.getAttribute('data-photo-url') || '', btn.getAttribute('data-photo-label') || '');
+                    });
+
+                    document.addEventListener('keydown', function (e) {
+                        if (e.key !== 'Escape') {
+                            return;
+                        }
+                        if (!preview || preview.hidden) {
+                            return;
+                        }
+                        e.stopPropagation();
+                        closePreview();
+                    });
+                })();
 
                 loadFollowUpPage(1);
             })();

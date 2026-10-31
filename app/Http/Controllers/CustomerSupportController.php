@@ -21,7 +21,13 @@ class CustomerSupportController extends Controller
      */
     public function index(CustomerSupportDataTable $dataTable)
     {
-        $pageTitle = __('message.list_form_title', ['form' => __('message.customer_support')]);
+        $type = request('support_type');
+        $formLabel = match ($type) {
+            'Inquiry' => __('message.inquiry_chat'),
+            'Complaint' => __('message.complaint_chat'),
+            default => __('message.customer_support'),
+        };
+        $pageTitle = __('message.list_form_title', ['form' => $formLabel]);
         $auth_user = authSession();
         $assets = ['datatable'];
 
@@ -90,9 +96,18 @@ class CustomerSupportController extends Controller
     public function show($id)
     {
         $current_user = auth()->user();
-        $pageTitle = __('message.add_form_title', ['form' => __('message.customer_support')]);
         $data = CustomerSupport::findOrFail($id);
+        $pageTitle = match ((string) ($data->support_type ?? '')) {
+            'Inquiry' => __('message.inquiry_chat'),
+            'Complaint' => __('message.complaint_chat'),
+            default => __('message.customer_support'),
+        };
         $match  = SupportChathistory::with('user')->where('support_id', $id)->orderBy('datetime', 'asc')->get();
+
+        if ($current_user && ! in_array($current_user->user_type, ['client', 'delivery_man'], true)) {
+            $data->staff_read_at = now();
+            $data->save();
+        }
 
         if ($current_user && $current_user->unreadNotifications->isNotEmpty()) {
             $current_user->unreadNotifications
@@ -152,18 +167,25 @@ class CustomerSupportController extends Controller
         $request->validate([
             'support_id' => 'required|integer|exists:customer_supports,id',
             'message' => 'nullable|string|max:5000',
-            'message_type' => 'nullable|in:text,image,emoji',
-            'chat_image' => 'nullable|image|max:10240',
+            'message_type' => 'nullable|in:text,image,emoji,audio,video,sticker,gif',
+            'chat_image' => 'nullable|file|max:51200',
+            'chat_media' => 'nullable|file|max:51200',
         ]);
 
-        if (!$request->filled('message') && !$request->hasFile('chat_image')) {
+        if (!$request->filled('message') && !$request->hasFile('chat_image') && !$request->hasFile('chat_media')) {
             return json_message_response(__('message.message_or_image_required'), 422);
         }
 
         $user = auth()->user();
         $messageType = $request->input('message_type', 'text');
         if ($request->hasFile('chat_image')) {
-            $messageType = 'image';
+            $messageType = in_array($messageType, ['sticker', 'gif'], true) ? $messageType : 'image';
+        }
+        if ($request->hasFile('chat_media')) {
+            $messageType = resolveChatMediaMessageType(
+                $request->file('chat_media'),
+                $request->input('message_type')
+            );
         }
 
         $data = [
@@ -179,6 +201,9 @@ class CustomerSupportController extends Controller
         if ($request->hasFile('chat_image')) {
             uploadMediaFile($chat, $request->file('chat_image'), 'chat_image');
         }
+        if ($request->hasFile('chat_media')) {
+            uploadMediaFile($chat, $request->file('chat_media'), 'chat_media');
+        }
 
         $support = CustomerSupport::with('user')->find($request->support_id);
         if ($support) {
@@ -186,7 +211,7 @@ class CustomerSupportController extends Controller
                 $support,
                 $user,
                 $request->input('message'),
-                $messageType === 'image'
+                in_array($messageType, ['image', 'gif', 'sticker', 'audio', 'video'], true)
             );
         }
 
@@ -198,35 +223,88 @@ class CustomerSupportController extends Controller
 
     public function formatChatMessage(SupportChathistory $chat, ?int $currentUserId = null): array
     {
+        if (! $chat->relationLoaded('user')) {
+            $chat->load('user');
+        }
         $user = $chat->user;
-        $currentUserId = $currentUserId ?? auth()->id();
-        $isCurrentUser = $chat->user_id === $currentUserId;
-        $userType = optional($user)->user_type;
+        $userType = (string) (optional($user)->user_type ?? '');
+        $rawMessageType = strtolower((string) ($chat->message_type ?? 'text'));
+        $isBot = in_array($rawMessageType, ['bot', 'bot_image', 'auto_reply', 'ai'], true)
+            || $this->isInquiryAutoReplyText((string) ($chat->message ?? ''));
 
-        if ($isCurrentUser && $userType === 'admin') {
+        // Admin panel: align by party (customer left, staff/AI right) — not only "my" messages.
+        $isCustomerSender = in_array($userType, ['client', 'delivery_man'], true);
+        if ($isBot) {
+            $senderRole = 'ai';
             $currentUserClass = 'mm-current-user';
             $messageClass = 'justify-content-end';
-        } elseif ($isCurrentUser && $userType === 'client') {
-            $currentUserClass = 'mm-other-user';
-            $messageClass = 'justify-content-start';
+            $displayName = 'AI';
+            $sendBy = 'ai';
+        } elseif (! $isCustomerSender) {
+            $senderRole = 'admin';
+            $currentUserClass = 'mm-current-user';
+            $messageClass = 'justify-content-end';
+            $displayName = optional($user)->name ?: 'Admin';
+            $sendBy = $userType !== '' ? $userType : 'admin';
         } else {
+            $senderRole = 'user';
             $currentUserClass = 'mm-other-user';
             $messageClass = 'justify-content-start';
+            $displayName = optional($user)->name;
+            $sendBy = $userType !== '' ? $userType : 'client';
         }
+
+        // Keep media types for the UI renderer; bot is a sender flag, not a media type.
+        $messageType = match ($rawMessageType) {
+            'bot', 'auto_reply', 'ai' => 'text',
+            'bot_image' => 'image',
+            default => $chat->message_type ?? 'text',
+        };
+
+        $mediaUrl = getMediaFileExit($chat, 'chat_media')
+            ? getSingleMedia($chat, 'chat_media', null)
+            : (getMediaFileExit($chat, 'chat_image') ? getSingleMedia($chat, 'chat_image', null) : null);
 
         return [
             'id' => $chat->id,
-            'send_by' => $userType,
+            'send_by' => $sendBy,
+            'sender_role' => $senderRole,
+            'is_bot' => $isBot,
             'message' => $chat->message,
-            'message_type' => $chat->message_type ?? 'text',
+            'message_type' => $messageType,
             'chat_image' => getMediaFileExit($chat, 'chat_image') ? getSingleMedia($chat, 'chat_image', null) : null,
+            'chat_media' => $mediaUrl,
             'datetime' => optional($chat->datetime ?? $chat->created_at)->format('Y-m-d H:i:s'),
-            'user_name' => optional($user)->name,
+            'user_name' => $displayName,
             'profile_image' => getSingleMedia($user, 'profile_image', null),
             'time_label' => date('h:i A', strtotime(dateAgoFormate($chat->datetime ?? $chat->created_at))),
             'current_user_class' => $currentUserClass,
             'message_class' => $messageClass,
         ];
+    }
+
+    protected function isInquiryAutoReplyText(string $message): bool
+    {
+        $text = trim($message);
+        if ($text === '') {
+            return false;
+        }
+
+        static $autoReplyTexts = null;
+        if ($autoReplyTexts === null) {
+            try {
+                $autoReplyTexts = \App\Models\InquiryAutoReply::query()
+                    ->pluck('reply_message')
+                    ->map(fn ($m) => trim((string) $m))
+                    ->filter()
+                    ->values()
+                    ->all();
+            } catch (\Throwable $e) {
+                $autoReplyTexts = [];
+            }
+        }
+
+        return in_array($text, $autoReplyTexts, true);
     }
 
     protected function notifyChatParticipants(CustomerSupport $support, User $sender, ?string $messageText, bool $isImage = false): void
@@ -237,11 +315,18 @@ class CustomerSupportController extends Controller
             $messageText,
             $isImage
         );
+        $notification_data['support_type'] = $support->support_type;
+        $notification_data['channel'] = $support->support_type;
 
-        if ($sender->user_type === 'admin') {
+        if (in_array($sender->user_type, ['admin', 'super_admin'], true) || isSuperAdmin($sender)) {
             if ($support->user) {
                 notifyUserCustomerSupport($support->user, $notification_data);
             }
+            return;
+        }
+
+        if ($support->support_type === 'Complaint') {
+            notifySuperAdminsCustomerSupport($notification_data);
             return;
         }
 

@@ -783,9 +783,13 @@
                     });
                 }
 
-                $(document).on('click', '[data-dispatch-item-delete]', function (e) {
+                $(document)
+                    .off('click.pdsDispatchItemDelete', '[data-dispatch-item-delete]')
+                    .off('click', '[data-dispatch-item-delete]')
+                    .on('click.pdsDispatchItemDelete', '[data-dispatch-item-delete]', function (e) {
                     e.preventDefault();
                     e.stopPropagation();
+                    e.stopImmediatePropagation();
 
                     var $btn = $(this);
                     var url = $btn.data('delete-url');
@@ -797,6 +801,15 @@
                     if (!url || typeof $.confirm !== 'function') {
                         return;
                     }
+
+                    try {
+                        if (typeof Swal !== 'undefined' && typeof Swal.close === 'function') {
+                            Swal.close();
+                        }
+                    } catch (err) {}
+                    try {
+                        $('.jconfirm').remove();
+                    } catch (err) {}
 
                     $.confirm({
                         title: title,

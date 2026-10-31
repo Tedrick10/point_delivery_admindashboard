@@ -620,7 +620,17 @@
         setTimeout(forceScrollTop, 0);
         setTimeout(forceScrollTop, 50);
         setTimeout(forceScrollTop, 200);
+        // jQuery + native CustomEvent — pds-table-freeze / animations listen via addEventListener.
         $(document).trigger('admin-spa:navigated', [finalUrl]);
+        try {
+            document.dispatchEvent(new CustomEvent('admin-spa:navigated', { detail: { url: finalUrl } }));
+        } catch (e) {}
+        if (typeof window.pdsBootTableFreeze === 'function') {
+            try { window.pdsBootTableFreeze(); } catch (e) {}
+            setTimeout(function () {
+                try { window.pdsBootTableFreeze(); } catch (e2) {}
+            }, 50);
+        }
         if (typeof window.adminLiveRefreshNow === 'function') {
             window.adminLiveRefreshNow();
         }

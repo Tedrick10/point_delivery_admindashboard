@@ -357,9 +357,7 @@ class FronthomeController extends Controller
 
         if ($request->filled('admin_login') && $request->admin_login === "admin_login") {
             if (isSuperAdmin($user) || $role === 'super_admin') {
-                Auth::logout();
-                return redirect()->route('super-admin.login')
-                    ->withErrors(['email' => 'Use the Super Admin login page for this account.']);
+                return redirect()->route('super-admin.dashboard');
             }
             if (isDispatchHub($user) || $role === 'dispatch_hub') {
                 app(\App\Services\DispatchHubService::class)->ensureAccess($user);

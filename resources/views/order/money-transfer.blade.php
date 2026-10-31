@@ -470,16 +470,21 @@
                             <strong id="mtSwitchKpayNo">—</strong>
                         </div>
                     </div>
-                    <label class="d-block border rounded p-4 text-center"
-                           style="cursor:pointer;border-style:dashed !important;background:#f8fafc;"
-                           for="mtSwitchKpayFile">
-                        <i class="fas fa-cloud-upload-alt fa-2x mb-2 text-primary" aria-hidden="true"></i>
-                        <div class="font-weight-bold">{{ __('message.upload_kpay_slip') }}</div>
-                        <div class="small text-muted mt-1">JPG / PNG · max 10MB</div>
+                    <div class="pds-mt-switch-kpay-dropzone" id="mtSwitchKpayDropzone" tabindex="0" role="button"
+                         aria-label="{{ __('message.upload_kpay_slip') }}">
                         <input type="file" id="mtSwitchKpayFile" accept="image/*" class="d-none">
-                    </label>
-                    <div id="mtSwitchKpayPreviewWrap" class="mt-3 text-center" style="display:none;">
-                        <img id="mtSwitchKpayPreview" alt="KBZ Pay Slip" style="max-width:100%;max-height:220px;border-radius:8px;border:1px solid #e2e8f0;">
+                        <div class="pds-mt-switch-kpay-dropzone__empty" id="mtSwitchKpayEmpty">
+                            <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i>
+                            <div class="pds-mt-switch-kpay-dropzone__title">{{ __('message.upload_kpay_slip') }}</div>
+                            <div class="pds-mt-switch-kpay-dropzone__hint">JPG / PNG · max 10MB</div>
+                            <div class="pds-mt-switch-kpay-dropzone__hint">Click / Drop / Ctrl+V (Paste)</div>
+                        </div>
+                        <div class="pds-mt-switch-kpay-dropzone__preview" id="mtSwitchKpayPreviewWrap" hidden>
+                            <img id="mtSwitchKpayPreview" alt="KBZ Pay Slip">
+                            <button type="button" class="pds-mt-switch-kpay-dropzone__clear" id="mtSwitchKpayClear" aria-label="{{ __('message.cancel') }}">
+                                <i class="fas fa-times" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -892,6 +897,87 @@
         body.pds-admin .pds-money-transfer-page table.pds-money-transfer-table.is-kpay-compact td.pds-money-transfer-actions {
             overflow: visible !important; text-overflow: clip; text-align: center; white-space: nowrap;
         }
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone {
+            position: relative;
+            display: block;
+            border: 1.5px dashed #cbd5e1;
+            border-radius: 14px;
+            background: #f8fafc;
+            min-height: 148px;
+            padding: 1.1rem;
+            text-align: center;
+            cursor: pointer;
+            outline: none;
+            transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+        }
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone:hover,
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone:focus,
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone.is-dragover {
+            border-color: var(--site-color, #ea580c);
+            background: #fff7ed;
+            box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.12);
+        }
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone.has-file {
+            border-style: solid;
+            border-color: #fdba74;
+            background: #fff;
+            padding: 0.65rem;
+        }
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone__empty i {
+            display: block;
+            font-size: 1.75rem;
+            color: var(--site-color, #ea580c);
+            margin-bottom: 0.45rem;
+        }
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone__title {
+            font-weight: 800;
+            color: #1e293b;
+            font-size: 0.95rem;
+        }
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone__hint {
+            margin-top: 0.2rem;
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone__preview {
+            position: relative;
+            display: none;
+            margin: 0;
+        }
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone.has-file .pds-mt-switch-kpay-dropzone__empty {
+            display: none;
+        }
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone.has-file .pds-mt-switch-kpay-dropzone__preview,
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone__preview:not([hidden]) {
+            display: block !important;
+        }
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone__preview img {
+            display: block;
+            width: 100%;
+            max-height: 240px;
+            object-fit: contain;
+            border-radius: 10px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+        }
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone__clear {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 30px;
+            height: 30px;
+            border: 0;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.72);
+            color: #fff;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        body.pds-admin #mtSwitchKpayModal .pds-mt-switch-kpay-dropzone__clear:hover {
+            background: rgba(15, 23, 42, 0.9);
+        }
     </style>
     {{-- Inline boot: @section/@push is skipped by x-master-layout (same pattern as Daily Check). --}}
     <script src="{{ asset('js/dispatch-os-fields.js') }}?v=14"></script>
@@ -1175,6 +1261,7 @@
             var pendingSwitchCashBatchId = null;
             var pendingSwitchCashTransferId = null;
             var previewObjectUrl = null;
+            var pendingSwitchKpayFile = null;
 
             function num(v) {
                 var n = parseFloat(String(v || '').replace(/,/g, ''));
@@ -1230,16 +1317,92 @@
 
             function resetSwitchKpayModal() {
                 pendingSwitchTransferId = null;
-                $('#mtSwitchKpayFile').val('');
-                $('#mtSwitchKpayPreviewWrap').hide();
-                $('#mtSwitchKpayPreview').attr('src', '');
+                pendingSwitchKpayFile = null;
+                var $file = $('#mtSwitchKpayFile');
+                if ($file.length) $file.val('');
+                clearSwitchKpayPreview();
                 $('#mtSwitchKpayName').text('—');
                 $('#mtSwitchKpayNo').text('—');
+                $('#mtSwitchKpayDropzone').removeClass('has-file is-dragover');
+                $('#mtSwitchKpayConfirm').prop('disabled', false);
+            }
+
+            function clearSwitchKpayPreview() {
                 if (previewObjectUrl) {
-                    URL.revokeObjectURL(previewObjectUrl);
+                    try { URL.revokeObjectURL(previewObjectUrl); } catch (e) {}
                     previewObjectUrl = null;
                 }
-                $('#mtSwitchKpayConfirm').prop('disabled', false);
+                $('#mtSwitchKpayPreview').attr('src', '');
+                $('#mtSwitchKpayPreviewWrap').attr('hidden', true);
+                $('#mtSwitchKpayDropzone').removeClass('has-file');
+            }
+
+            function isSwitchKpayImageFile(file) {
+                if (!file) return false;
+                if (file.type && String(file.type).indexOf('image/') === 0) return true;
+                var name = String(file.name || '').toLowerCase();
+                return /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/.test(name);
+            }
+
+            function assignSwitchKpayFileInput(file) {
+                var input = document.getElementById('mtSwitchKpayFile');
+                if (!input || !file) return;
+                try {
+                    var dt = new DataTransfer();
+                    dt.items.add(file);
+                    input.files = dt.files;
+                } catch (e) {
+                    // Keep pendingSwitchKpayFile — FormData still uses that.
+                }
+            }
+
+            function setSwitchKpayFile(file) {
+                if (!isSwitchKpayImageFile(file)) {
+                    var badMsg = @json(__('message.money_transfer_kpay_slip_required'));
+                    if (window.toastr) toastr.error(badMsg);
+                    else alert(badMsg);
+                    return;
+                }
+                if (file.size > 10 * 1024 * 1024) {
+                    if (window.toastr) toastr.error('Max 10MB');
+                    else alert('Max 10MB');
+                    return;
+                }
+                pendingSwitchKpayFile = file;
+                assignSwitchKpayFileInput(file);
+                if (previewObjectUrl) {
+                    try { URL.revokeObjectURL(previewObjectUrl); } catch (e) {}
+                }
+                previewObjectUrl = URL.createObjectURL(file);
+                var $img = $('#mtSwitchKpayPreview');
+                var $wrap = $('#mtSwitchKpayPreviewWrap');
+                $img.attr('src', previewObjectUrl);
+                $wrap.removeAttr('hidden').css('display', 'block');
+                $('#mtSwitchKpayDropzone').addClass('has-file');
+            }
+
+            function clipboardImageFile(clipboard) {
+                if (!clipboard) return null;
+                var file = null;
+                if (clipboard.items && clipboard.items.length) {
+                    Array.prototype.some.call(clipboard.items, function (item) {
+                        if (item.kind === 'file' && item.type && item.type.indexOf('image/') === 0) {
+                            file = item.getAsFile();
+                            return !!file;
+                        }
+                        return false;
+                    });
+                }
+                if (!file && clipboard.files && clipboard.files.length) {
+                    Array.prototype.some.call(clipboard.files, function (f) {
+                        if (isSwitchKpayImageFile(f)) {
+                            file = f;
+                            return true;
+                        }
+                        return false;
+                    });
+                }
+                return file;
             }
 
             $(document).on('click', '.js-mt-save', function () {
@@ -1258,66 +1421,119 @@
                 $('#mtSwitchKpayModal').modal('show');
             });
 
-            $('#mtSwitchKpayModal').on('hidden.bs.modal', function () {
-                resetSwitchKpayModal();
-            });
-
-            $('#mtSwitchKpayFile').on('change', function () {
-                var file = this.files && this.files[0];
-                if (!file) {
-                    $('#mtSwitchKpayPreviewWrap').hide();
-                    return;
-                }
-                if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
-                previewObjectUrl = URL.createObjectURL(file);
-                $('#mtSwitchKpayPreview').attr('src', previewObjectUrl);
-                $('#mtSwitchKpayPreviewWrap').show();
-            });
-
-            $('#mtSwitchKpayConfirm').on('click', function () {
-                var $btn = $(this);
-                var fileInput = document.getElementById('mtSwitchKpayFile');
-                var file = fileInput && fileInput.files && fileInput.files[0];
-                if (!pendingSwitchTransferId) return;
-                if (!file) {
-                    var needMsg = @json(__('message.money_transfer_kpay_slip_required'));
-                    if (window.toastr) toastr.error(needMsg);
-                    else alert(needMsg);
-                    return;
-                }
-
-                var fd = new FormData();
-                fd.append('_token', csrf);
-                fd.append('transfer_id', pendingSwitchTransferId);
-                fd.append('payment_method', 'kpay');
-                fd.append('kpay_slip', file);
-
-                $btn.prop('disabled', true);
-                $.ajax({
-                    url: switchUrl,
-                    method: 'POST',
-                    data: fd,
-                    processData: false,
-                    contentType: false,
-                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }
-                }).done(function (res) {
-                    if (window.toastr && res.message) toastr.success(res.message);
-                    $('#mtSwitchKpayModal').modal('hide');
-                    var mtUrl = @json(route('order.money-transfer')) + '?method=kpay'
-                        + '&from_date=' + encodeURIComponent(fromDate)
-                        + '&to_date=' + encodeURIComponent(toDate)
-                        + '&branch_id=' + encodeURIComponent(branchId);
-                    if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(mtUrl);
-                    else window.location.href = mtUrl;
-                }).fail(function (xhr) {
-                    var msg = (xhr.responseJSON && xhr.responseJSON.message)
-                        || (xhr.responseJSON && xhr.responseJSON.errors && xhr.responseJSON.errors.kpay_slip && xhr.responseJSON.errors.kpay_slip[0])
-                        || 'Switch failed';
-                    if (window.toastr) toastr.error(msg);
-                    else alert(msg);
-                    $btn.prop('disabled', false);
+            $(document)
+                .off('hidden.bs.modal.pdsMtSwitchKpay', '#mtSwitchKpayModal')
+                .on('hidden.bs.modal.pdsMtSwitchKpay', '#mtSwitchKpayModal', function () {
+                    resetSwitchKpayModal();
+                })
+                .off('shown.bs.modal.pdsMtSwitchKpay', '#mtSwitchKpayModal')
+                .on('shown.bs.modal.pdsMtSwitchKpay', '#mtSwitchKpayModal', function () {
+                    var zone = document.getElementById('mtSwitchKpayDropzone');
+                    if (zone && typeof zone.focus === 'function') {
+                        try { zone.focus({ preventScroll: true }); } catch (e) { zone.focus(); }
+                    }
                 });
-            });
+
+            $(document)
+                .off('click.pdsMtSwitchKpay', '#mtSwitchKpayDropzone')
+                .on('click.pdsMtSwitchKpay', '#mtSwitchKpayDropzone', function (e) {
+                    if ($(e.target).closest('#mtSwitchKpayClear').length) return;
+                    var input = document.getElementById('mtSwitchKpayFile');
+                    if (input) input.click();
+                })
+                .off('click.pdsMtSwitchKpay', '#mtSwitchKpayClear')
+                .on('click.pdsMtSwitchKpay', '#mtSwitchKpayClear', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    pendingSwitchKpayFile = null;
+                    $('#mtSwitchKpayFile').val('');
+                    clearSwitchKpayPreview();
+                })
+                .off('change.pdsMtSwitchKpay', '#mtSwitchKpayFile')
+                .on('change.pdsMtSwitchKpay', '#mtSwitchKpayFile', function () {
+                    var file = this.files && this.files[0];
+                    if (!file) {
+                        pendingSwitchKpayFile = null;
+                        clearSwitchKpayPreview();
+                        return;
+                    }
+                    setSwitchKpayFile(file);
+                })
+                .off('dragenter.pdsMtSwitchKpay dragover.pdsMtSwitchKpay', '#mtSwitchKpayDropzone')
+                .on('dragenter.pdsMtSwitchKpay dragover.pdsMtSwitchKpay', '#mtSwitchKpayDropzone', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    $(this).addClass('is-dragover');
+                })
+                .off('dragleave.pdsMtSwitchKpay drop.pdsMtSwitchKpay', '#mtSwitchKpayDropzone')
+                .on('dragleave.pdsMtSwitchKpay', '#mtSwitchKpayDropzone', function () {
+                    $(this).removeClass('is-dragover');
+                })
+                .on('drop.pdsMtSwitchKpay', '#mtSwitchKpayDropzone', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    $(this).removeClass('is-dragover');
+                    var dt = e.originalEvent && e.originalEvent.dataTransfer;
+                    var file = dt && dt.files && dt.files[0];
+                    if (file) setSwitchKpayFile(file);
+                })
+                .off('paste.pdsMtSwitchKpay')
+                .on('paste.pdsMtSwitchKpay', function (e) {
+                    var $modal = $('#mtSwitchKpayModal');
+                    if (!$modal.length || !$modal.hasClass('show')) return;
+                    var file = clipboardImageFile(e.originalEvent && e.originalEvent.clipboardData);
+                    if (!file) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setSwitchKpayFile(file);
+                })
+                .off('click.pdsMtSwitchKpay', '#mtSwitchKpayConfirm')
+                .on('click.pdsMtSwitchKpay', '#mtSwitchKpayConfirm', function () {
+                    var $btn = $(this);
+                    var fileInput = document.getElementById('mtSwitchKpayFile');
+                    var file = pendingSwitchKpayFile
+                        || (fileInput && fileInput.files && fileInput.files[0])
+                        || null;
+                    if (!pendingSwitchTransferId) return;
+                    if (!file) {
+                        var needMsg = @json(__('message.money_transfer_kpay_slip_required'));
+                        if (window.toastr) toastr.error(needMsg);
+                        else alert(needMsg);
+                        return;
+                    }
+
+                    var fd = new FormData();
+                    fd.append('_token', csrf);
+                    fd.append('transfer_id', pendingSwitchTransferId);
+                    fd.append('payment_method', 'kpay');
+                    fd.append('kpay_slip', file, file.name || 'kpay-slip.jpg');
+
+                    $btn.prop('disabled', true);
+                    $.ajax({
+                        url: switchUrl,
+                        method: 'POST',
+                        data: fd,
+                        processData: false,
+                        contentType: false,
+                        headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }
+                    }).done(function (res) {
+                        if (window.toastr && res.message) toastr.success(res.message);
+                        $('#mtSwitchKpayModal').modal('hide');
+                        var mtUrl = @json(route('order.money-transfer')) + '?method=kpay'
+                            + '&from_date=' + encodeURIComponent(fromDate)
+                            + '&to_date=' + encodeURIComponent(toDate)
+                            + '&branch_id=' + encodeURIComponent(branchId);
+                        if (typeof window.pdsAdminGo === 'function') window.pdsAdminGo(mtUrl);
+                        else window.location.href = mtUrl;
+                    }).fail(function (xhr) {
+                        var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                            || (xhr.responseJSON && xhr.responseJSON.errors && xhr.responseJSON.errors.kpay_slip && xhr.responseJSON.errors.kpay_slip[0])
+                            || 'Switch failed';
+                        if (window.toastr) toastr.error(msg);
+                        else alert(msg);
+                        $btn.prop('disabled', false);
+                    });
+                });
 
             function resetSwitchCashModal() {
                 pendingSwitchCashBatchId = null;

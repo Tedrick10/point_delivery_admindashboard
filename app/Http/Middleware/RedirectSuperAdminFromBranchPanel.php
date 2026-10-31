@@ -39,6 +39,19 @@ class RedirectSuperAdminFromBranchPanel
         'welcome-promotion',
         'remove.file',
         'ajax-list',
+        // Point System (manual credit + follow up confirm)
+        'point-system',
+        // In-app notification inbox (bell on Super Admin topbar)
+        'notification.',
+        // Complaint / Inquiry support threads (Complaint → SuperAdmin)
+        'customersupport',
+        'supportchathistory',
+        'inquiry-auto-replies',
+        'inquiry.inbox',
+        'complaint.inbox',
+        // Customer / OS profile opened from support chat
+        'users.',
+        'users-view.',
     ];
 
     public function handle(Request $request, Closure $next)

@@ -331,13 +331,26 @@
                     e.preventDefault();
                 });
 
-                $(document).on('click', '[data-dispatch-item-delete]', function (e) {
+                $(document)
+                    .off('click.pdsDispatchItemDelete', '[data-dispatch-item-delete]')
+                    .off('click', '[data-dispatch-item-delete]')
+                    .on('click.pdsDispatchItemDelete', '[data-dispatch-item-delete]', function (e) {
                     e.preventDefault();
+                    e.stopImmediatePropagation();
                     var $btn = $(this);
                     var url = $btn.data('delete-url');
                     var title = $btn.data('title') || '';
                     var message = $btn.data('message') || '';
                     if (!url) return;
+
+                    try {
+                        if (typeof Swal !== 'undefined' && typeof Swal.close === 'function') {
+                            Swal.close();
+                        }
+                    } catch (err) {}
+                    try {
+                        $('.jconfirm').remove();
+                    } catch (err) {}
 
                     Swal.fire({
                         title: title,

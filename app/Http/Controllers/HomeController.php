@@ -929,24 +929,42 @@ class HomeController extends Controller
                 });
                 break;
             case 'os_dispatch_search':
-                $items = User::select('id', 'name as text', 'contact_number', 'address', 'city_id')
+                // New Order → To Find Online Shop / Select2: all Approved OS across
+                // branches (not capped at 200, not forced to one destination branch).
+                $items = User::select('id', 'name as text', 'contact_number', 'address', 'city_id', 'branch_id')
                     ->where('user_type', 'client')
-                    ->whereStatus(1);
-                applyClientBranchScope($items);
+                    ->whereStatus(1)
+                    ->where(function ($q) {
+                        $q->where('approval_status', User::APPROVAL_APPROVED)
+                            ->orWhereNull('approval_status');
+                    });
+                excludeScrubbedOnlineShops($items);
+                // Optional explicit branch filter only — default is all branches.
+                $osBranchId = (int) $request->get('branch_id', 0);
+                if ($osBranchId > 0) {
+                    $items->where('branch_id', $osBranchId);
+                }
                 if ($request->filled('id')) {
                     $items->where('id', $request->id);
                 } elseif ($value != '') {
                     applyOnlineShopNameOrPhoneSearch($items, $value, 'name', 'contact_number');
                 }
                 $items = $items->orderBy('name');
-                if (!$request->filled('id') && ($request->boolean('list_all') || $value === null || $value === '')) {
-                    $items = $items->limit(200);
+                if ($request->filled('id')) {
+                    // single lookup
+                } elseif ($request->boolean('list_all') || $value === null || $value === '') {
+                    // Full Approved list for modal / Select2 open (was wrongly limited to 200).
+                    $items = $items->limit(10000);
                 } else {
-                    $items = $items->limit(50);
+                    $items = $items->limit(100);
                 }
-                $items = $items->get()->map(function ($user) {
-                    $city = \App\Models\City::find($user->city_id ?? null);
-                    $displayName = $user->text . ($city && $city->name ? ' (' . $city->name . ')' : '');
+                $cityIds = (clone $items)->pluck('city_id')->filter()->unique()->values();
+                $cities = $cityIds->isEmpty()
+                    ? collect()
+                    : \App\Models\City::whereIn('id', $cityIds)->pluck('name', 'id');
+                $items = $items->get()->map(function ($user) use ($cities) {
+                    $cityName = $cities[$user->city_id ?? null] ?? null;
+                    $displayName = $user->text . ($cityName ? ' (' . $cityName . ')' : '');
 
                     return [
                         'id' => $user->id,

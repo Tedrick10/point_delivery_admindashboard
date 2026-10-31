@@ -44,24 +44,34 @@ class OsReceiveSettlementController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $itemBranchMap = \App\Models\DispatchOrderItem::query()
-            ->select('id', 'from_branch_id', 'to_branch_id')
-            ->get()
-            ->mapWithKeys(function ($row) {
-                $branch = (int) ($row->to_branch_id ?: $row->from_branch_id);
+        // Tabs follow parcel destination (same as ငွေရှင်းတမ်း), not OS home.
+        $itemBranchMap = null;
+        $settlementBranchId = function (OsReceiveSettlement $row) use (&$itemBranchMap) {
+            if ($itemBranchMap === null) {
+                $itemBranchMap = \App\Models\DispatchOrderItem::query()
+                    ->select('id', 'from_branch_id', 'to_branch_id')
+                    ->get()
+                    ->mapWithKeys(function ($item) {
+                        $branch = (int) ($item->to_branch_id ?: $item->from_branch_id ?: 0);
 
-                return [(int) $row->id => $branch];
-            });
+                        return [(int) $item->id => $branch];
+                    });
+            }
 
-        $settlementBranchId = function (OsReceiveSettlement $row) use ($itemBranchMap) {
+            $destCounts = [];
             foreach (collect($row->settlementBatch?->item_ids ?? []) as $itemId) {
                 $bid = (int) ($itemBranchMap[(int) $itemId] ?? 0);
                 if ($bid > 0) {
-                    return $bid;
+                    $destCounts[$bid] = ($destCounts[$bid] ?? 0) + 1;
                 }
             }
+            if ($destCounts !== []) {
+                arsort($destCounts);
 
-            return 0;
+                return (int) array_key_first($destCounts);
+            }
+
+            return (int) (osHomeBranchId((int) ($row->os_user_id ?? 0)) ?: 0);
         };
 
         if ($branchId) {
@@ -87,8 +97,16 @@ class OsReceiveSettlementController extends Controller
         });
         $allBranchCount = $allSettlements->count();
 
+        // Group by settlement period day (from_date), not Finish click time (created_at).
+        // created_at can be a later calendar day (e.g. Finished on 27th for a 25th sheet).
         $groupedItems = $items
             ->groupBy(function (OsReceiveSettlement $item) {
+                $day = normalizeYangonDateOnly($item->from_date ?? null)
+                    ?: normalizeYangonDateOnly($item->to_date ?? null);
+                if ($day) {
+                    return $day;
+                }
+
                 return optional($item->created_at)->timezone('Asia/Yangon')->toDateString()
                     ?? 'unknown';
             })

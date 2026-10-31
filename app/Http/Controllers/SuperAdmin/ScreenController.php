@@ -60,6 +60,7 @@ class ScreenController extends Controller
         $appStoreUpdate = null;
         $uiTheme = null;
         $appCopy = null;
+        $pointSystem = null;
         if ($screen === 'late-fine') {
             $payroll = app(HrPayrollService::class);
             $payroll->syncStaffFromAccounts();
@@ -228,6 +229,8 @@ class ScreenController extends Controller
                 max(1, (int) $request->get('page', 1)),
                 40
             );
+        } elseif ($screen === 'point-system') {
+            $pointSystem = \App\Http\Controllers\PointSystemController::screenPayload($request);
         }
 
         return view('super-admin.screens.show', [
@@ -268,6 +271,7 @@ class ScreenController extends Controller
             'appStoreUpdate' => $appStoreUpdate,
             'uiTheme' => $uiTheme,
             'appCopy' => $appCopy,
+            'pointSystem' => $pointSystem,
         ]);
     }
 }

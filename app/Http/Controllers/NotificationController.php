@@ -28,11 +28,21 @@ class NotificationController extends Controller
 
         $type = $request->type;
         $category = $request->get('category', 'all');
+        $panel = $request->get('panel') === 'super_admin' ? 'super_admin' : 'admin';
 
         if ($type == 'markas_read') {
             $user->last_notification_seen = now();
             $user->save();
-            $user->unreadNotifications()->update(['read_at' => now()]);
+            $user->unreadNotifications()
+                ->orderByDesc('created_at')
+                ->limit(300)
+                ->get()
+                ->each(function ($notification) use ($panel) {
+                    $data = is_array($notification->data) ? $notification->data : [];
+                    if (notificationVisibleOnPanel($data, $panel)) {
+                        $notification->markAsRead();
+                    }
+                });
         }
 
         // Keep Notification "User Messages" in sync with Message menu unread chats.
@@ -54,6 +64,9 @@ class NotificationController extends Controller
                         ->orWhereIn('data->type', [
                             'create', 'draft', 'active', 'cancelled', 'bid_placed', 'payment_status_message',
                         ]);
+                } elseif ($category === 'points') {
+                    $q->where('data->category', 'points')
+                        ->orWhere('data->type', 'like', 'point_%');
                 } else {
                     $q->where('data->category', $category);
                 }
@@ -61,10 +74,13 @@ class NotificationController extends Controller
         }
 
         // Fetch a small recent window, then de-dupe message threads for the dropdown.
-        $fetched = $query->limit(40)->get();
+        $fetched = $query->limit(80)->get();
         $seenMessageItems = [];
-        $notifications = $fetched->filter(function ($notification) use (&$seenMessageItems) {
+        $notifications = $fetched->filter(function ($notification) use (&$seenMessageItems, $panel) {
             $data = is_array($notification->data) ? $notification->data : [];
+            if (! notificationVisibleOnPanel($data, $panel)) {
+                return false;
+            }
             if (($data['type'] ?? '') !== 'dispatch_item_message') {
                 return true;
             }
@@ -80,12 +96,13 @@ class NotificationController extends Controller
             return true;
         })->take(5)->values();
 
-        $all_unread_count = adminNotificationUnreadCount($user);
+        $all_unread_count = adminNotificationUnreadCount($user, $panel);
         $active_category = $category;
         $response = [
             'status'     => true,
             'type'       => $type,
             'category'   => $category,
+            'panel'      => $panel,
             'unread_count' => $all_unread_count,
             'unread_text' => __('message.you_have_unread_notification', ['number' => $all_unread_count]),
             'data'       => view('notification.dropdown-items', compact('notifications', 'all_unread_count', 'user', 'active_category'))->render()
@@ -97,6 +114,7 @@ class NotificationController extends Controller
     public function notificationCounts(Request $request)
     {
         $user = auth()->user();
+        $panel = $request->get('panel') === 'super_admin' ? 'super_admin' : 'admin';
 
         try {
             clearNoisyAdminUnreadNotifications($user);
@@ -105,11 +123,12 @@ class NotificationController extends Controller
             // Still return counts if backfill fails.
         }
 
-        $unread_count = adminNotificationUnreadCount($user);
+        $unread_count = adminNotificationUnreadCount($user, $panel);
         $response = [
             'status'            => true,
             'counts'            => $unread_count,
             'unread_total_count'=> $unread_count,
+            'panel'             => $panel,
         ];
 
         return json_custom_response($response);
@@ -118,6 +137,7 @@ class NotificationController extends Controller
     public function markRead(Request $request, string $id)
     {
         $user = auth()->user();
+        $panel = $request->get('panel') === 'super_admin' ? 'super_admin' : 'admin';
         $notification = $user->notifications()->where('id', $id)->first();
         if ($notification && $notification->read_at === null) {
             $notification->markAsRead();
@@ -125,7 +145,7 @@ class NotificationController extends Controller
 
         return json_custom_response([
             'status' => true,
-            'unread_count' => adminNotificationUnreadCount($user),
+            'unread_count' => adminNotificationUnreadCount($user, $panel),
         ]);
     }
 }

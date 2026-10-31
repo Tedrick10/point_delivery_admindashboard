@@ -3,10 +3,27 @@
     $saCssVersion = file_exists($saCssPath) ? (string) filemtime($saCssPath) : (string) time();
     $saCssUrl = url('/css/super-admin-panel.css').'?v='.$saCssVersion;
     $saScreenKey = (string) request()->route('screen');
+    $saChatMode = request()->routeIs([
+        'inquiry.inbox',
+        'complaint.inbox',
+        'customersupport.show',
+        'customersupport.*',
+        'inquiry-auto-replies.*',
+        'users.show',
+        'users-view.show',
+    ]);
+    $saChatSupportType = null;
+    if (request()->routeIs('customersupport.show')) {
+        $saChatSupportId = (int) (request()->route('customersupport') ?? request()->route('id') ?? 0);
+        if ($saChatSupportId > 0) {
+            $saChatSupportType = \App\Models\CustomerSupport::query()->whereKey($saChatSupportId)->value('support_type');
+        }
+    }
     $saBodyClass = 'sa-panel'
         .(request()->routeIs('super-admin.screens.show') ? ' sa-page-module' : '')
         .(request()->routeIs('super-admin.screens.hub') ? ' sa-page-hub' : '')
-        .($saScreenKey !== '' ? ' sa-screen-'.$saScreenKey : '');
+        .($saScreenKey !== '' ? ' sa-screen-'.$saScreenKey : '')
+        .($saChatMode ? ' pds-admin sa-chat-mode' : '');
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -25,6 +42,9 @@
     <link rel="stylesheet" href="{{ $saCssUrl }}">
     <link rel="stylesheet" href="{{ url('/vendor/@fortawesome/fontawesome-free/css/all.min.css') }}">
     <link rel="stylesheet" href="{{ public_asset_ver('css/image-drop-upload.css') }}">
+    @if(!empty($saChatMode))
+        @include('super-admin.partials.admin-chat-assets')
+    @endif
     @stack('styles')
 </head>
 <body class="{{ $saBodyClass }}">
@@ -55,6 +75,29 @@
     <main class="sa-main">
         <header class="sa-topbar">
             <div class="sa-topbar-tools">
+                @php
+                    $saInquiryCount = function_exists('unansweredInquiryChatCount') ? unansweredInquiryChatCount() : 0;
+                    $saComplaintCount = function_exists('unansweredComplaintChatCount') ? unansweredComplaintChatCount() : 0;
+                @endphp
+                <a href="{{ route('inquiry.inbox') }}"
+                   class="sa-topbar-chat sa-topbar-chat--inquiry{{ request()->routeIs('inquiry.inbox') || $saChatSupportType === 'Inquiry' ? ' is-active' : '' }}"
+                   title="{{ __('message.inquiry_chat') }}"
+                   aria-label="{{ __('message.inquiry_chat') }}">
+                    <i class="fas fa-comments" aria-hidden="true"></i>
+                    <span class="sa-topbar-chat__badge{{ $saInquiryCount > 0 ? '' : ' d-none' }}"
+                          id="saInquiryChatCount"
+                          data-live-badge="inquiryChat">{{ $saInquiryCount > 0 ? ($saInquiryCount > 99 ? '99+' : $saInquiryCount) : '' }}</span>
+                </a>
+                <a href="{{ route('complaint.inbox') }}"
+                   class="sa-topbar-chat sa-topbar-chat--complaint{{ request()->routeIs('complaint.inbox') || $saChatSupportType === 'Complaint' ? ' is-active' : '' }}"
+                   title="{{ __('message.complaint_chat') }}"
+                   aria-label="{{ __('message.complaint_chat') }}">
+                    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                    <span class="sa-topbar-chat__badge{{ $saComplaintCount > 0 ? '' : ' d-none' }}"
+                          id="saComplaintChatCount"
+                          data-live-badge="complaintChat">{{ $saComplaintCount > 0 ? ($saComplaintCount > 99 ? '99+' : $saComplaintCount) : '' }}</span>
+                </a>
+                @include('super-admin.partials.notifications')
                 @include('super-admin.partials.language-switcher')
                 <div class="sa-topbar-meta">{{ now('Asia/Yangon')->locale(app()->getLocale())->translatedFormat('D, d M Y') }}</div>
             </div>
@@ -161,6 +204,26 @@
     <script src="{{ public_asset_ver('js/myanmar-text.js') }}"></script>
     <script>window.PDS_IMAGE_DROP_LABEL = @json(__('message.image_drop_hint'));</script>
     <script src="{{ public_asset_ver('js/image-drop-upload.js') }}"></script>
+    @if(!empty($saChatMode))
+        <script src="{{ public_asset_ver('js/backend-bundle.min.js') }}"></script>
+        <script src="{{ public_asset_ver('js/admin-live.js') }}"></script>
+        <script type="module" src="{{ asset('vendor/emoji-picker-element/index.js') }}"></script>
+        <script>
+        (function bootSaChatBadges() {
+            if (typeof window.jQuery === 'undefined' || typeof window.bootAdminGlobalLive !== 'function') return;
+            window.bootAdminGlobalLive({
+                stateUrl: @json(route('admin.live.state')),
+                intervalMs: 4000,
+                page: @json(optional(request()->route())->getName() ?? 'super-admin'),
+                includeDashboard: false,
+                refreshContent: false,
+                hardReloadFallback: false
+            });
+        })();
+        </script>
+    @endif
     @stack('scripts')
+    @yield('bottom_script')
+    @stack('bottom_script')
 </body>
 </html>

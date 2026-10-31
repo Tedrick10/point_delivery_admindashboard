@@ -62,13 +62,11 @@ class OsSettlementService
 
         $this->applyUnfinishedSettlementConstraints($query, $fromDay, $toDay);
 
+        // Branch tab = parcel destination (to/from). Apply SQL filter when set;
+        // PHP filterItemsByOsHomeBranch still re-checks for callers that skip SQL.
         return $query
-            ->when($branchId !== null && $branchId > 0, function ($query) use ($branchId) {
-                applyDestinationBranchFilter($query, $branchId);
-            })
-            ->when(true, function ($query) {
-                applyForcedItemOwnership($query);
-            })
+            ->tap(fn ($q) => applyForcedItemOwnership($q))
+            ->tap(fn ($q) => applyDestinationBranchFilter($q, $branchId))
             ->orderByDesc('id');
     }
 
@@ -105,16 +103,16 @@ class OsSettlementService
      */
     public function completedItemsForPeriod(?int $osId, string $fromDay, string $toDay, ?int $branchId = null)
     {
-        $items = $this->completedItemsQuery(null, $fromDay, $toDay, $branchId)
+        $items = $this->completedItemsQuery(null, $fromDay, $toDay, null)
             ->get()
             ->filter(fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
             ->values();
 
-        if ($osId === null) {
-            return $items;
+        if ($osId !== null) {
+            $items = $this->filterItemsForOsParty($items, (int) $osId);
         }
 
-        return $this->filterItemsForOsParty($items, (int) $osId);
+        return filterItemsByOsHomeBranch($items, $branchId);
     }
 
     /**
@@ -146,15 +144,15 @@ class OsSettlementService
             });
 
         applyForcedItemOwnership($query);
-        if ($branchId !== null && $branchId > 0) {
-            applyDestinationBranchFilter($query, $branchId);
-        }
 
-        return $query
-            ->orderByDesc('id')
-            ->get()
-            ->filter(fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
-            ->values();
+        return filterItemsByOsHomeBranch(
+            $query
+                ->orderByDesc('id')
+                ->get()
+                ->filter(fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
+                ->values(),
+            $branchId
+        );
     }
 
     /**
@@ -184,17 +182,17 @@ class OsSettlementService
             });
 
         applyForcedItemOwnership($query);
-        if ($branchId !== null && $branchId > 0) {
-            applyDestinationBranchFilter($query, $branchId);
-        }
 
-        return $this->filterItemsForOsParty(
-            $query
-                ->orderByDesc('id')
-                ->get()
-                ->filter(fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
-                ->values(),
-            $osId
+        return filterItemsByOsHomeBranch(
+            $this->filterItemsForOsParty(
+                $query
+                    ->orderByDesc('id')
+                    ->get()
+                    ->filter(fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
+                    ->values(),
+                $osId
+            ),
+            $branchId
         );
     }
 
@@ -840,10 +838,11 @@ class OsSettlementService
                     ->where('status', 'completed')
                     ->whereHas('kyoShinItem');
                 applyForcedItemOwnership($kyoShinQuery);
-                if ($branchId !== null && $branchId > 0) {
-                    applyDestinationBranchFilter($kyoShinQuery, $branchId);
-                }
-                $items = $this->filterItemsForOsParty($kyoShinQuery->get(), $osId);
+                // Locked item_ids already belong to this OS row — do not re-filter by
+                // party name (pickup vs client_id drift left parcels unfinished).
+                $items = $kyoShinQuery->get()
+                    ->sortBy(static fn ($item) => array_search((int) $item->id, $wantedIds, true) ?: 9999)
+                    ->values();
             } else {
                 $items = $this->filterItemsForOsParty(
                     $this->finishedKyoShinItemsForPeriod($fromDay, $toDay, $branchId),
@@ -861,10 +860,9 @@ class OsSettlementService
                     ->whereNull('admin_finished_at')
                     ->where('status', 'completed');
                 applyForcedItemOwnership($lockedQuery);
-                if ($branchId !== null && $branchId > 0) {
-                    applyDestinationBranchFilter($lockedQuery, $branchId);
-                }
-                $items = $this->filterItemsForOsParty($lockedQuery->get(), $osId)
+                // Trust the sheet row ids — re-running party match dropped Cust/Os Pay
+                // parcels whose pickup shop name no longer maps to the same client id.
+                $items = $lockedQuery->get()
                     ->sortBy(static fn ($item) => array_search((int) $item->id, $wantedIds, true) ?: 9999)
                     ->values();
             } else {
@@ -958,15 +956,44 @@ class OsSettlementService
                 'finished_at' => now(),
             ]);
 
-            DispatchOrderItem::query()
+            $finishedItems = DispatchOrderItem::query()
                 ->whereIn('id', $itemIds)
-                ->update([
-                    'admin_finished_at' => now(),
-                    'admin_updated_at' => now(),
-                    'updated_at' => now(),
-                ]);
+                ->with('order')
+                ->get();
+
+            $now = now();
+            foreach ($finishedItems as $item) {
+                $item->forceFill([
+                    'admin_finished_at' => $now,
+                    'admin_updated_at' => $now,
+                    'updated_at' => $now,
+                ])->save();
+            }
 
             app(\App\Services\KyoShinService::class)->syncFinishedForItemIds($itemIds, $finishedBy);
+
+            try {
+                $audit = app(DispatchOrderAuditService::class);
+                $finisher = $finishedBy ? User::query()->find($finishedBy) : null;
+                foreach ($finishedItems as $item) {
+                    $order = $item->order;
+                    if (! $order) {
+                        continue;
+                    }
+                    $audit->logAdminFinished(
+                        $order,
+                        $item->fresh(),
+                        $finisher,
+                        (string) $paymentMethod,
+                        (int) $created->id
+                    );
+                }
+            } catch (\Throwable $e) {
+                Log::warning('dispatch audit failed after os settlement finish', [
+                    'batch_id' => $created->id ?? null,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             // Clear this tab's proof so the other tab (pay↔receive) never inherits it.
             if (! $isKyoShinSide) {

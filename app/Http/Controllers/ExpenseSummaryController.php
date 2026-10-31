@@ -73,7 +73,8 @@ class ExpenseSummaryController extends Controller
         [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request);
         $summaryService = app(\App\Services\ExpenseSummaryService::class);
         $authUser = auth()->user();
-        // Fast path: stored rows only. Income card lines load on eye-click (AJAX).
+        // Stored rows + auto-repair Income=0 stale rows (destination DeliAmount).
+        // Full live sync stays off for SPA speed; Income Card lines load on eye-click.
         $rows = $summaryService->rowsForPeriod($from, $to, $branchId, $authUser, false);
         $incomeItemsByDate = [];
 
@@ -84,7 +85,7 @@ class ExpenseSummaryController extends Controller
         $triple = app(ExpenseSummaryTripleCheckService::class);
         $monthStart = $month->copy()->startOfMonth()->toDateString();
         $monthEnd = $month->copy()->endOfMonth()->toDateString();
-        $tripleChecks = $triple->checksBetween($monthStart, $monthEnd);
+        $tripleChecks = $triple->checksBetween($monthStart, $monthEnd, $branchId ? (int) $branchId : null);
         $checkerKey = $triple->checkerKeyForUser($authUser);
         $calendarDays = $triple->calendarGrid($month, $from, $to, $tripleChecks);
 
@@ -135,7 +136,13 @@ class ExpenseSummaryController extends Controller
         $from = self::parseDate((string) $request->input('from_date', ''))
             ?? now('Asia/Yangon')->toDateString();
         $to = self::parseDate((string) $request->input('to_date', '')) ?: $from;
-        $result = app(ExpenseSummaryTripleCheckService::class)->confirmRange($user, $from, $to);
+        [$branchId] = resolveDestinationBranchFilter($request);
+        $result = app(ExpenseSummaryTripleCheckService::class)->confirmRange(
+            $user,
+            $from,
+            $to,
+            $branchId ? (int) $branchId : null
+        );
 
         return response()->json([
             'success' => true,
@@ -143,6 +150,7 @@ class ExpenseSummaryController extends Controller
             'checker_key' => $result['key'],
             'dates' => $result['dates'],
             'checks' => $result['checks'],
+            'branch_id' => $result['branch_id'],
         ]);
     }
 

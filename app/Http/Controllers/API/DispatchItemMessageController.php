@@ -12,31 +12,40 @@ use Illuminate\Support\Facades\DB;
 class DispatchItemMessageController extends Controller
 {
     /**
-     * Threads for the logged-in OS client: items that have messages, with unread counts.
+     * Threads for the logged-in OS client: all their dispatch items, with chat preview when present.
      */
     public function threads(Request $request)
     {
         $user = auth()->user();
         $clientId = (int) $user->id;
 
-        $threads = DispatchItemMessage::query()
-            ->select([
-                'dispatch_order_item_id',
-                DB::raw('MAX(id) as last_message_id'),
-                DB::raw('COUNT(*) as message_count'),
-                DB::raw("SUM(CASE WHEN sender_type != 'client' AND read_at IS NULL THEN 1 ELSE 0 END) as unread_count"),
-            ])
-            ->where('client_id', $clientId)
-            ->groupBy('dispatch_order_item_id')
-            ->orderByDesc('last_message_id')
-            ->get();
-
-        $itemIds = $threads->pluck('dispatch_order_item_id')->all();
+        // Include every parcel belonging to this OS so Order Chat is never empty when they have orders.
         $items = DispatchOrderItem::query()
             ->with(['order:id,client_id'])
-            ->whereIn('id', $itemIds)
+            ->whereHas('order', function ($q) use ($clientId) {
+                $q->where('client_id', $clientId);
+            })
+            ->orderByDesc('id')
+            ->limit(250)
             ->get()
             ->keyBy('id');
+
+        $itemIds = $items->keys()->all();
+
+        $threads = collect();
+        if (! empty($itemIds)) {
+            $threads = DispatchItemMessage::query()
+                ->select([
+                    'dispatch_order_item_id',
+                    DB::raw('MAX(id) as last_message_id'),
+                    DB::raw('COUNT(*) as message_count'),
+                    DB::raw("SUM(CASE WHEN sender_type != 'client' AND read_at IS NULL THEN 1 ELSE 0 END) as unread_count"),
+                ])
+                ->whereIn('dispatch_order_item_id', $itemIds)
+                ->groupBy('dispatch_order_item_id')
+                ->get()
+                ->keyBy('dispatch_order_item_id');
+        }
 
         $lastMessages = DispatchItemMessage::query()
             ->with('media')
@@ -51,37 +60,33 @@ class DispatchItemMessageController extends Controller
             : ($user->contact_number ?? '')));
         $osProfileImage = resolveUploadedProfileImageUrl($user, true);
 
-        $data = $threads->map(function ($row) use ($items, $lastMessages, $osName, $osUsername, $osPhone, $osProfileImage) {
-            $item = $items->get($row->dispatch_order_item_id);
-            $last = $lastMessages->get($row->last_message_id);
-            $lastText = trim((string) ($last?->message ?? ''));
-            if ($lastText === '' && $last && getMediaFileExit($last, 'chat_image')) {
-                $lastText = '[Image]';
-            }
-
+        $data = $items->map(function (DispatchOrderItem $item) use ($threads, $lastMessages, $osName, $osUsername, $osPhone, $osProfileImage) {
+            $row = $threads->get($item->id);
+            $last = $row ? $lastMessages->get($row->last_message_id) : null;
+            $lastText = $this->previewMessageText($last);
             $senderIsOs = ($last?->sender_type === 'client');
 
             return [
-                'dispatch_order_item_id' => (int) $row->dispatch_order_item_id,
-                'order_id' => $item?->order_id,
-                'parcel_id' => $item?->code ?: ('#'.$row->dispatch_order_item_id),
+                'dispatch_order_item_id' => (int) $item->id,
+                'order_id' => $item->order_id,
+                'parcel_id' => $item->code ?: ('#'.$item->id),
                 'os_name' => $osName !== '' ? $osName : null,
                 'os_username' => $osUsername !== '' ? $osUsername : null,
                 'os_phone' => $osPhone !== '' ? $osPhone : null,
                 'os_profile_image' => $osProfileImage,
-                'customer_name' => trim((string) ($item?->customer_name ?? '')) ?: null,
-                'customer_phone' => trim((string) ($item?->customer_phone ?? '')) ?: null,
-                'message_count' => (int) $row->message_count,
-                'unread_count' => (int) $row->unread_count,
+                'customer_name' => trim((string) ($item->customer_name ?? '')) ?: null,
+                'customer_phone' => trim((string) ($item->customer_phone ?? '')) ?: null,
+                'message_count' => (int) ($row->message_count ?? 0),
+                'unread_count' => (int) ($row->unread_count ?? 0),
                 'last_message' => $lastText !== '' ? $lastText : null,
                 'last_message_at' => optional($last?->created_at)?->toDateTimeString(),
                 'last_sender_type' => $last?->sender_type,
-                'last_sender_label' => $senderIsOs
-                    ? ($osName !== '' ? $osName : 'Os')
-                    : 'Admin',
+                'last_sender_label' => $last
+                    ? ($senderIsOs ? ($osName !== '' ? $osName : 'Os') : 'Admin')
+                    : null,
             ];
         })
-            // Unread / unreplied threads stay on top; read/replied sink to the bottom.
+            // Unread first, then threads with messages, then newest parcels.
             ->sort(function ($a, $b) {
                 $aUnread = ((int) ($a['unread_count'] ?? 0) > 0) ? 1 : 0;
                 $bUnread = ((int) ($b['unread_count'] ?? 0) > 0) ? 1 : 0;
@@ -89,7 +94,18 @@ class DispatchItemMessageController extends Controller
                     return $bUnread <=> $aUnread;
                 }
 
-                return strcmp((string) ($b['last_message_at'] ?? ''), (string) ($a['last_message_at'] ?? ''));
+                $aHasMsg = ((int) ($a['message_count'] ?? 0) > 0) ? 1 : 0;
+                $bHasMsg = ((int) ($b['message_count'] ?? 0) > 0) ? 1 : 0;
+                if ($aHasMsg !== $bHasMsg) {
+                    return $bHasMsg <=> $aHasMsg;
+                }
+
+                $byTime = strcmp((string) ($b['last_message_at'] ?? ''), (string) ($a['last_message_at'] ?? ''));
+                if ($byTime !== 0) {
+                    return $byTime;
+                }
+
+                return ((int) ($b['dispatch_order_item_id'] ?? 0)) <=> ((int) ($a['dispatch_order_item_id'] ?? 0));
             })
             ->values();
 
@@ -103,6 +119,44 @@ class DispatchItemMessageController extends Controller
             'data' => $data,
             'total_unread' => $totalUnread,
         ]);
+    }
+
+    protected function previewMessageText($message): string
+    {
+        if (! $message) {
+            return '';
+        }
+
+        $text = trim((string) ($message->message ?? ''));
+        if ($text !== '') {
+            return $text;
+        }
+
+        $type = strtolower((string) ($message->message_type ?? ''));
+        if (in_array($type, ['audio', 'video', 'image'], true)) {
+            return match ($type) {
+                'audio' => '🎤 Voice message',
+                'video' => '🎬 Video',
+                default => '[Image]',
+            };
+        }
+
+        if (getMediaFileExit($message, 'chat_image')) {
+            return '[Image]';
+        }
+        if (getMediaFileExit($message, 'chat_media')) {
+            $mime = (string) (optional($message->getFirstMedia('chat_media'))->mime_type ?? '');
+            if (str_starts_with($mime, 'video/')) {
+                return '🎬 Video';
+            }
+            if (str_starts_with($mime, 'audio/')) {
+                return '🎤 Voice message';
+            }
+
+            return '📎 Attachment';
+        }
+
+        return '';
     }
 
     public function unreadCount()
@@ -162,10 +216,12 @@ class DispatchItemMessageController extends Controller
         $request->validate([
             'dispatch_order_item_id' => 'required|integer',
             'message' => 'nullable|string|max:5000',
+            'message_type' => 'nullable|in:text,image,audio,video',
             'chat_image' => 'nullable|image|max:10240',
+            'chat_media' => 'nullable|file|max:51200',
         ]);
 
-        if (! $request->filled('message') && ! $request->hasFile('chat_image')) {
+        if (! $request->filled('message') && ! $request->hasFile('chat_image') && ! $request->hasFile('chat_media')) {
             return json_custom_response([
                 'message' => __('message.required', ['name' => __('message.chat')]),
                 'success' => false,
@@ -182,6 +238,18 @@ class DispatchItemMessageController extends Controller
 
         $body = trim((string) $request->input('message', ''));
         $hasImage = $request->hasFile('chat_image');
+        $hasMedia = $request->hasFile('chat_media');
+        $messageType = 'text';
+        if ($hasImage) {
+            $messageType = 'image';
+        }
+        if ($hasMedia) {
+            $mime = (string) $request->file('chat_media')->getMimeType();
+            $messageType = str_starts_with($mime, 'video/') ? 'video' : 'audio';
+            if ($request->filled('message_type') && in_array($request->input('message_type'), ['audio', 'video'], true)) {
+                $messageType = (string) $request->input('message_type');
+            }
+        }
 
         $message = DispatchItemMessage::create([
             'dispatch_order_item_id' => $item->id,
@@ -189,13 +257,16 @@ class DispatchItemMessageController extends Controller
             'client_id' => $item->order?->client_id,
             'sender_id' => $user->id,
             'sender_type' => $senderType,
-            'message_type' => $hasImage ? 'image' : 'text',
+            'message_type' => $messageType,
             'message' => $body,
             'read_at' => null,
         ]);
 
         if ($hasImage) {
             uploadMediaFile($message, $request->file('chat_image'), 'chat_image');
+        }
+        if ($hasMedia) {
+            uploadMediaFile($message, $request->file('chat_media'), 'chat_media');
         }
 
         // Admin/staff reply marks client messages as handled (sort unread threads down).
@@ -217,7 +288,13 @@ class DispatchItemMessageController extends Controller
         // Client replies stay unread for admin until admin opens the thread.
         // Admin/staff messages notify the OS client app.
         if ($senderType !== 'client' && $item->order?->client) {
-            $pushPreview = $body !== '' ? $body : ($hasImage ? __('message.image') : '');
+            $pushPreview = $body !== ''
+                ? $body
+                : ($messageType === 'audio'
+                    ? '🎤 Voice message'
+                    : ($messageType === 'video'
+                        ? '🎬 Video'
+                        : ($hasImage ? __('message.image') : '')));
             try {
                 app(\App\Services\AppPushService::class)->notifyClientItemMessage(
                     $item->order->client,

@@ -24,6 +24,7 @@ class HrOfficeSalaryRow extends Model
         'bag_deduction',
         'personal_expense',
         'deposit',
+        'point_salary_amount',
         'notes',
     ];
 
@@ -42,6 +43,7 @@ class HrOfficeSalaryRow extends Model
             'bag_deduction' => 'float',
             'personal_expense' => 'float',
             'deposit' => 'float',
+            'point_salary_amount' => 'float',
         ];
     }
 
@@ -106,16 +108,16 @@ class HrOfficeSalaryRow extends Model
     }
 
     /**
-     * Office: Total လစာ = Basic (way columns removed from Office UI)
-     * Rider:  Total လစာ = Way လစာ only
+     * Office: Total လစာ = Basic + approved Point→Salary
+     * Rider:  Total လစာ = Way လစာ + approved Point→Salary
      */
     public function getTotalSalaryAttribute(): float
     {
-        if (($this->staff?->staff_group ?? 'office') === 'rider') {
-            return $this->way_pay;
-        }
+        $base = (($this->staff?->staff_group ?? 'office') === 'rider')
+            ? $this->way_pay
+            : $this->basic_salary;
 
-        return $this->basic_salary;
+        return round((float) $base + (float) ($this->point_salary_amount ?? 0), 2);
     }
 
     /**
@@ -133,7 +135,7 @@ class HrOfficeSalaryRow extends Model
     }
 
     /**
-     * Google Sheet: နှုတ်ပြီးကျန်ငွေ = Total လစာ − Total နှုတ်ငွေ
+     * နှုတ်ပြီးကျန်ငွေ = Total လစာ (Point ပေါင်းပြီး) − Total နှုတ်ငွေ
      */
     public function getNetPayAttribute(): float
     {

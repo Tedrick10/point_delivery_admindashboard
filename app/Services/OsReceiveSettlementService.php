@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Models\OsReceiveSettlement;
 use App\Models\OsSettlementBatch;
+use App\Models\PointOrderPayment;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -108,11 +110,111 @@ class OsReceiveSettlementService
             throw new \RuntimeException(__('message.os_receive_cannot_approve'));
         }
 
+        $updated = $this->markReceived($receive, $reviewedBy);
+
+        // Points path: Admin approve → Super Admin Confirm (Point Follow Up).
+        $pointPayment = PointOrderPayment::query()
+            ->where('os_receive_settlement_id', $receive->id)
+            ->where('status', PointOrderPayment::STATUS_PENDING_ADMIN)
+            ->latest('id')
+            ->first();
+
+        if ($pointPayment) {
+            $admin = User::query()->find($reviewedBy);
+            if ($admin) {
+                app(PointOrderPaymentService::class)->approveByAdmin($pointPayment, $admin, null);
+            }
+        }
+
+        return $updated;
+    }
+
+    /**
+     * OS pays receive with Points (1:1 MMK). Points held; Admin must Approve,
+     * then Super Admin Confirm on Point Follow Up.
+     */
+    public function payWithPoints(OsReceiveSettlement $receive, User $osUser): OsReceiveSettlement
+    {
+        if ((int) $receive->os_user_id !== (int) $osUser->id) {
+            throw new \RuntimeException(__('message.demo_permission_denied'));
+        }
+
+        if (! in_array($receive->status, [
+            OsReceiveSettlement::STATUS_PENDING,
+            OsReceiveSettlement::STATUS_REJECTED,
+        ], true)) {
+            throw new \RuntimeException(__('message.os_receive_cannot_pay_points'));
+        }
+
+        $amount = round((float) $receive->displayAmount(), 2);
+        if ($amount <= 0) {
+            throw new \RuntimeException(__('message.os_receive_cannot_pay_points'));
+        }
+
+        return DB::transaction(function () use ($receive, $osUser, $amount) {
+            $existingOpen = PointOrderPayment::query()
+                ->where('os_receive_settlement_id', $receive->id)
+                ->whereIn('status', [
+                    PointOrderPayment::STATUS_PENDING_ADMIN,
+                    PointOrderPayment::STATUS_PENDING_SUPER_ADMIN,
+                    PointOrderPayment::STATUS_CONFIRMED,
+                ])
+                ->exists();
+
+            if ($existingOpen) {
+                throw new \RuntimeException(__('message.point_payment_already_exists'));
+            }
+
+            app(PointWalletService::class)->debit(
+                (int) $osUser->id,
+                $amount,
+                'os_receive_settlement',
+                (int) $osUser->id,
+                __('message.os_receive_points_debit_note', [
+                    'id' => $receive->id,
+                    'amount' => number_format($amount),
+                ]),
+                [
+                    'reference_id' => (int) $receive->id,
+                    'reference_type' => OsReceiveSettlement::class,
+                    'data' => [
+                        'settlement_batch_id' => $receive->settlement_batch_id,
+                        'payment_method' => 'points',
+                    ],
+                ]
+            );
+
+            $pointPayment = PointOrderPayment::create([
+                'user_id' => (int) $osUser->id,
+                'order_id' => null,
+                'os_receive_settlement_id' => (int) $receive->id,
+                'payment_kind' => PointOrderPayment::KIND_OS_RECEIVE,
+                'points' => $amount,
+                'status' => PointOrderPayment::STATUS_PENDING_ADMIN,
+                'remark' => 'Os Receive #'.$receive->id.' · Paid with Points',
+            ]);
+
+            $receive->update([
+                'os_payslip_path' => null,
+                'os_payslip_paths' => null,
+                'status' => OsReceiveSettlement::STATUS_WAITING,
+                'os_submitted_at' => now(),
+                'admin_remark' => 'Paid with Points',
+                'rejected_at' => null,
+            ]);
+
+            app(PointOrderPaymentService::class)->notifyAdminsPendingPublic($pointPayment->fresh(['user']));
+
+            return $receive->fresh();
+        });
+    }
+
+    protected function markReceived(OsReceiveSettlement $receive, int $reviewedBy): OsReceiveSettlement
+    {
         $receive->update([
             'status' => OsReceiveSettlement::STATUS_RECEIVED,
             'reviewed_by' => $reviewedBy,
             'approved_at' => now(),
-            'admin_remark' => null,
             'rejected_at' => null,
         ]);
 
@@ -148,20 +250,38 @@ class OsReceiveSettlementService
             throw new \RuntimeException(__('message.os_receive_remark_required'));
         }
 
-        $receive->update([
-            'status' => OsReceiveSettlement::STATUS_REJECTED,
-            'reviewed_by' => $reviewedBy,
-            'admin_remark' => $remark,
-            'rejected_at' => now(),
-            'approved_at' => null,
-        ]);
+        return DB::transaction(function () use ($receive, $reviewedBy, $remark) {
+            $pointPayment = PointOrderPayment::query()
+                ->where('os_receive_settlement_id', $receive->id)
+                ->whereIn('status', [
+                    PointOrderPayment::STATUS_PENDING_ADMIN,
+                    PointOrderPayment::STATUS_PENDING_SUPER_ADMIN,
+                ])
+                ->latest('id')
+                ->first();
 
-        $osClient = $receive->osUser;
-        if ($osClient) {
-            $this->notifyRejected($osClient, $receive);
-        }
+            if ($pointPayment) {
+                $actor = User::query()->find($reviewedBy) ?? $receive->osUser;
+                if ($actor) {
+                    app(PointOrderPaymentService::class)->reject($pointPayment, $actor, $remark);
+                }
+            }
 
-        return $receive->fresh();
+            $receive->update([
+                'status' => OsReceiveSettlement::STATUS_REJECTED,
+                'reviewed_by' => $reviewedBy,
+                'admin_remark' => $remark,
+                'rejected_at' => now(),
+                'approved_at' => null,
+            ]);
+
+            $osClient = $receive->osUser;
+            if ($osClient) {
+                $this->notifyRejected($osClient, $receive);
+            }
+
+            return $receive->fresh();
+        });
     }
 
     public function notifyPending(User $osClient, OsReceiveSettlement $receive): void
@@ -225,7 +345,7 @@ class OsReceiveSettlementService
         ];
     }
 
-    public function toApiArray(OsReceiveSettlement $receive): array
+    public function toApiArray(OsReceiveSettlement $receive, ?User $viewer = null): array
     {
         $receive->loadMissing('settlementBatch');
         $batch = $receive->settlementBatch;
@@ -245,11 +365,23 @@ class OsReceiveSettlementService
             $slipTableUrl = $urls['slip_table_url'] ?? null;
         }
 
+        $canUpload = in_array($receive->status, [
+            OsReceiveSettlement::STATUS_PENDING,
+            OsReceiveSettlement::STATUS_REJECTED,
+        ], true);
+
+        $pointBalance = null;
+        if ($viewer && (int) $viewer->id === (int) $receive->os_user_id) {
+            $pointBalance = app(PointWalletService::class)->balance((int) $viewer->id);
+        }
+
+        $amount = (float) $receive->displayAmount();
+
         return [
             'id' => $receive->id,
             'settlement_batch_id' => $receive->settlement_batch_id,
             'settlement_id' => $settlementId,
-            'amount' => $receive->displayAmount(),
+            'amount' => $amount,
             'status' => $receive->status,
             'from_date' => $receive->from_date?->format('d-m-Y'),
             'to_date' => $receive->to_date?->format('d-m-Y'),
@@ -260,10 +392,9 @@ class OsReceiveSettlementService
             'os_submitted_at' => $receive->os_submitted_at?->toIso8601String(),
             'approved_at' => $receive->approved_at?->toIso8601String(),
             'rejected_at' => $receive->rejected_at?->toIso8601String(),
-            'can_upload' => in_array($receive->status, [
-                OsReceiveSettlement::STATUS_PENDING,
-                OsReceiveSettlement::STATUS_REJECTED,
-            ], true),
+            'can_upload' => $canUpload,
+            'point_balance' => $pointBalance,
+            'can_pay_with_points' => $canUpload && $pointBalance !== null && $pointBalance >= $amount && $amount > 0,
             'slip_rows' => $slipRows,
             'slip_totals' => $slipTotals,
             'slip_table_url' => $slipTableUrl,

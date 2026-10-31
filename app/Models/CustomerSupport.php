@@ -12,11 +12,12 @@ class CustomerSupport extends Model implements HasMedia
 {
     use HasFactory;
     use InteractsWithMedia;
-    protected $fillable =['message','support_type','user_id','order_id','status','resolution_detail'];
+    protected $fillable =['message','support_type','user_id','order_id','status','resolution_detail','staff_read_at'];
 
     protected $casts = [
         'user_id' => 'integer',
         'order_id' => 'integer',
+        'staff_read_at' => 'datetime',
     ];
     public function user(){
         return $this->belongsTo(User::class, 'user_id','id');
@@ -36,6 +37,9 @@ class CustomerSupport extends Model implements HasMedia
     }
     public function scopeMyCustomersupport($query){
         $user = auth()->user();
+        if ($user && (function_exists('isSuperAdmin') && isSuperAdmin($user))) {
+            return $query;
+        }
         if($user->user_type == 'admin') {
             return $query;
         }

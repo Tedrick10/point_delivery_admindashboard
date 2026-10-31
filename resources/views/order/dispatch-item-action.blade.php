@@ -27,20 +27,8 @@
         </a>
     @endif
     @if(auth()->user()->can('order-edit'))
-        <a href="javascript:void(0)"
-           class="pds-dispatch-action-message js-dispatch-item-message"
-           data-order-id="{{ $orderId }}"
-           data-item-id="{{ $item->id }}"
-           data-os-name="{{ e($osName !== '-' ? $osName : '') }}"
-           data-os-profile-image="{{ e($osProfileImage ?? '') }}"
-           data-customer="{{ e($item->customer_name ?? '') }}"
-           data-meta="{{ e($metaLine) }}"
-           data-list-url="{{ route('order.dispatch.item.messages', [$orderId, $item->id]) }}"
-           data-store-url="{{ route('order.dispatch.item.messages.store', [$orderId, $item->id]) }}"
-           data-rider-preview-url="{{ route('order.dispatch.item.rider-preview', [$orderId, $item->id]) }}"
-           @if($canEditInfo)
-           data-edit-url="{{ route('order.dispatch.item.edit', [$orderId, $item->id]) }}"
-           @endif
+        <a href="{{ route('order.dispatch.item.messages.show', [$orderId, $item->id]) }}"
+           class="pds-dispatch-action-message"
            title="{{ __('message.chat') }}">
             <i class="fab fa-facebook-messenger"></i>
             @if($unreadClientReplies > 0)

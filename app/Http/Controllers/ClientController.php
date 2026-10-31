@@ -239,19 +239,23 @@ class ClientController extends Controller
                 ->first();
 
             if ($existingUser) {
-                $existingUser->update([
+                // New Order re-save must surface on Online Shop Approved list
+                // under the destination branch (not stay Pending / unassigned).
+                $existingUser->fill([
                     'name' => $request->name,
                     'username' => $username !== '' ? $username : $existingUser->username,
                     'contact_number' => $request->contact_number ?: $existingUser->contact_number,
                     'address' => $address !== '' ? $address : $existingUser->address,
                     'city_id' => $city?->id ?? $existingUser->city_id,
                     'country_id' => $city?->country_id ?? $existingUser->country_id,
-                    'branch_id' => $existingUser->branch_id ?: $branchId,
+                    'branch_id' => $branchId ?: ($existingUser->branch_id ?: defaultDestinationBranchId()),
                     'os_profile' => array_merge(
                         is_array($existingUser->os_profile) ? $existingUser->os_profile : [],
                         $osProfile
                     ),
                 ]);
+                $existingUser->applyApprovalStatus(User::APPROVAL_APPROVED);
+                $existingUser->save();
                 if ($request->hasFile('profile_image')) {
                     uploadMediaFile($existingUser, $request->profile_image, 'profile_image');
                 }

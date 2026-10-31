@@ -475,10 +475,29 @@ class RiderRemitService
 
     public function parseDate(string $value): Carbon
     {
+        $raw = trim($value);
+        if ($raw === '') {
+            return now('Asia/Yangon')->startOfDay();
+        }
+
         try {
-            return Carbon::createFromFormat('d-m-Y', trim($value))->startOfDay();
+            return Carbon::createFromFormat('d-m-Y', $raw)->startOfDay();
         } catch (\Throwable $e) {
-            return Carbon::parse($value)->startOfDay();
+            // ignore and try other formats
+        }
+
+        try {
+            return Carbon::createFromFormat('Y-m-d', $raw)->startOfDay();
+        } catch (\Throwable $e) {
+            // ignore and try other formats
+        }
+
+        // jQuery sometimes stringifies Date objects; strip the trailing parenthetical TZ name.
+        $cleaned = preg_replace('/\s*\([^)]*\)\s*$/', '', $raw) ?? $raw;
+        try {
+            return Carbon::parse($cleaned)->startOfDay();
+        } catch (\Throwable $e) {
+            return now('Asia/Yangon')->startOfDay();
         }
     }
 
@@ -559,24 +578,42 @@ class RiderRemitService
                 continue;
             }
 
-            RiderRemit::query()->updateOrCreate(
-                [
+            // Only sync system fields (due / fuel / fee). Never rewrite typed cash
+            // (denoms / kpay / prepaid / ကြိုရှင်းတာဝန်ခံ) — stale reads during page-load
+            // races were wiping amounts the cashier just autosaved.
+            $existing = $open ?: RiderRemit::query()
+                ->where('remit_date', $day)
+                ->where('branch_id', $branchStore)
+                ->where('delivery_man_id', $riderId)
+                ->first();
+
+            $system = [
+                'due_amount' => $nextDue,
+                'fuel_amount' => $fuel,
+                'fee_amount' => $fee,
+                'is_off' => false,
+                'updated_by' => $userId ?? auth()->id(),
+            ];
+
+            if ($existing) {
+                // Keep any already-typed cash; reopen only when this helper is syncing open ways.
+                $existing->fill($system);
+                if ($existing->submitted_at !== null) {
+                    $existing->submitted_at = null;
+                }
+                $existing->save();
+            } else {
+                RiderRemit::query()->create(array_merge($system, [
                     'remit_date' => $day,
                     'branch_id' => $branchStore,
                     'delivery_man_id' => $riderId,
-                ],
-                [
-                    'due_amount' => $nextDue,
-                    'prepaid_amount' => (float) ($open?->prepaid_amount ?? 0),
-                    'fuel_amount' => $fuel,
-                    'fee_amount' => $fee,
-                    'kpay_amount' => (float) ($open?->kpay_amount ?? 0),
-                    'denominations' => $this->normalizeDenoms($open?->denominations ?? []),
-                    'is_off' => false,
+                    'prepaid_amount' => 0,
+                    'kpay_amount' => 0,
+                    'kyo_shin_incharge_amount' => 0,
+                    'denominations' => $this->normalizeDenoms([]),
                     'submitted_at' => null,
-                    'updated_by' => $userId ?? auth()->id(),
-                ]
-            );
+                ]));
+            }
             $updated++;
         }
 
@@ -1309,7 +1346,15 @@ class RiderRemitService
         $src = is_array($raw) ? $raw : [];
         $out = [];
         foreach (RiderRemit::DENOMS as $note) {
-            $out[(string) $note] = max(0, (int) ($src[(string) $note] ?? $src[$note] ?? 0));
+            // Cashiers enter negative note counts to correct over-stated cash
+            // (e.g. 100 × -3). Do not clamp to zero — that wiped adjustments on save/refresh.
+            $qty = (int) ($src[(string) $note] ?? $src[$note] ?? 0);
+            if ($qty > 99999) {
+                $qty = 99999;
+            } elseif ($qty < -99999) {
+                $qty = -99999;
+            }
+            $out[(string) $note] = $qty;
         }
 
         return $out;

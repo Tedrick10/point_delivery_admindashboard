@@ -70,9 +70,16 @@ class CustomerSupportDataTable extends DataTable
 
     public function query(CustomerSupport $model)
     {
-        return CustomerSupport::query()
+        $query = CustomerSupport::query()
             ->with('user')
             ->orderByDesc('created_at');
+
+        $type = request('support_type');
+        if (is_string($type) && $type !== '') {
+            $query->where('support_type', $type);
+        }
+
+        return $query;
     }
 
     protected function getColumns()

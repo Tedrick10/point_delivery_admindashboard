@@ -113,7 +113,8 @@ class SubAdminDataTable extends DataTable
             $model->where('user_type', request('role'));
         }
 
-        return $model->withTrashed();
+        // Soft-deleted accounts must leave the list immediately (one-click delete).
+        return $model->whereNull('deleted_at');
     }
 
     /**
@@ -164,7 +165,7 @@ class SubAdminDataTable extends DataTable
             ->exportable(false)
             ->printable(false)
             ->title(__('message.action'))
-            ->width(60)
+            ->width(110)
             ->addClass('text-center hide-search');
 
         return $columns;

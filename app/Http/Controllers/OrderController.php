@@ -993,7 +993,13 @@ class OrderController extends Controller
         foreach ($items->groupBy('order_id') as $orderId => $orderItems) {
             $order = Order::find($orderId);
             if ($order) {
-                $audit->logDeliveryRiderAssigned($order, $toRider, $orderItems->count());
+                $audit->logDeliveryRiderAssigned(
+                    $order,
+                    $toRider,
+                    $orderItems->count(),
+                    null,
+                    $orderItems->pluck('id')->map(fn ($id) => (int) $id)->values()->all()
+                );
             }
         }
 
@@ -2242,8 +2248,14 @@ class OrderController extends Controller
         foreach ($orderIds as $orderId) {
             $order = Order::find($orderId);
             if ($order) {
-                $count = $items->where('order_id', $orderId)->count();
-                $audit->logDeliveryRiderAssigned($order, $rider, $count);
+                $orderItems = $items->where('order_id', $orderId);
+                $audit->logDeliveryRiderAssigned(
+                    $order,
+                    $rider,
+                    $orderItems->count(),
+                    null,
+                    $orderItems->pluck('id')->map(fn ($id) => (int) $id)->values()->all()
+                );
             }
         }
 
@@ -2442,7 +2454,16 @@ class OrderController extends Controller
                 COUNT(*) as total
             ")
             ->whereNotNull('delivery_man_id')
-            ->whereIn('status', $statuses);
+            ->whereIn('status', $statuses)
+            // Cancelled parents: hide only still-open Assigned/On Way/Pending
+            // (those belong in Pick Up Cancelled). Keep Delivered/Completed/
+            // Finished/Return so ငွေရှင်းတမ်း ways/money still match Rider List.
+            ->where(function ($q) {
+                $q->whereNotIn('status', ['courier_assigned', 'courier_departed', 'pending'])
+                    ->orWhereDoesntHave('order', function ($order) {
+                        $order->where('status', 'cancelled');
+                    });
+            });
 
         $countRows = $countQuery->groupBy('delivery_man_id')->get();
 
@@ -2619,6 +2640,13 @@ class OrderController extends Controller
         $items = $itemsQuery
             ->with(['order.client', 'fromBranch', 'toBranch', 'deliveryMan', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'kyoShinItem'])
             ->get();
+
+        // Completed tab shares ငွေရှင်းတမ်း sheet day (10:00 AM / rider_remit_date).
+        if ($status === 'completed' && $fromDay && $toDay) {
+            $items = $items
+                ->filter(static fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
+                ->values();
+        }
 
         $pageTitle = __('message.item_details');
         $assets = [];
@@ -2941,7 +2969,13 @@ class OrderController extends Controller
         foreach ($items->groupBy('order_id') as $orderId => $orderItems) {
             $order = Order::find($orderId);
             if ($order) {
-                $audit->logDeliveryRiderAssigned($order, $toRider, $orderItems->count());
+                $audit->logDeliveryRiderAssigned(
+                    $order,
+                    $toRider,
+                    $orderItems->count(),
+                    null,
+                    $orderItems->pluck('id')->map(fn ($id) => (int) $id)->values()->all()
+                );
             }
         }
 
@@ -3133,19 +3167,16 @@ class OrderController extends Controller
         $updated = 0;
 
         if ($toStatus === 'admin_finished') {
-            $updated = DispatchOrderItem::query()
+            $items = DispatchOrderItem::query()
                 ->where('delivery_man_id', $rider->id)
                 ->where('status', 'completed')
                 ->whereNotNull('admin_completed_at')
                 ->whereNull('admin_finished_at')
                 ->whereIn('id', $ids)
-                ->update([
-                    'admin_finished_at' => now(),
-                    'admin_updated_at' => now(),
-                    'updated_at' => now(),
-                ]);
+                ->with('order')
+                ->get();
 
-            if ($updated <= 0) {
+            if ($items->isEmpty()) {
                 $alreadyFinished = DispatchOrderItem::query()
                     ->where('delivery_man_id', $rider->id)
                     ->where('status', 'completed')
@@ -3164,6 +3195,29 @@ class OrderController extends Controller
                 return response()->json([
                     'message' => __('message.rider_items_mark_finished_none'),
                 ], 422);
+            }
+
+            $now = now();
+            foreach ($items as $item) {
+                $item->forceFill([
+                    'admin_finished_at' => $now,
+                    'admin_updated_at' => $now,
+                    'updated_at' => $now,
+                ])->save();
+                $updated++;
+
+                $order = $item->order;
+                if ($order) {
+                    try {
+                        $audit->logAdminFinished($order, $item->fresh(), $admin);
+                    } catch (\Throwable $e) {
+                        \Log::warning('dispatch audit failed after admin finished', [
+                            'order_id' => $order->id,
+                            'item_id' => $item->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
             }
 
             app(\App\Services\KyoShinService::class)->syncFinishedForItemIds($ids, $admin?->id);
@@ -3228,18 +3282,15 @@ class OrderController extends Controller
         }
 
         if ($toStatus === 'admin_completed') {
-            $updated = DispatchOrderItem::query()
+            $items = DispatchOrderItem::query()
                 ->where('delivery_man_id', $rider->id)
                 ->where('status', 'completed')
                 ->whereNull('admin_completed_at')
                 ->whereIn('id', $ids)
-                ->update([
-                    'admin_completed_at' => now(),
-                    'admin_updated_at' => now(),
-                    'updated_at' => now(),
-                ]);
+                ->with('order')
+                ->get();
 
-            if ($updated <= 0) {
+            if ($items->isEmpty()) {
                 // Idempotent: duplicate submit / race after a successful mark — already Completed.
                 $alreadyCompleted = DispatchOrderItem::query()
                     ->where('delivery_man_id', $rider->id)
@@ -3259,6 +3310,29 @@ class OrderController extends Controller
                 return response()->json([
                     'message' => __('message.rider_items_mark_completed_none'),
                 ], 422);
+            }
+
+            $now = now();
+            foreach ($items as $item) {
+                $item->forceFill([
+                    'admin_completed_at' => $now,
+                    'admin_updated_at' => $now,
+                    'updated_at' => $now,
+                ])->save();
+                $updated++;
+
+                $order = $item->order;
+                if ($order) {
+                    try {
+                        $audit->logAdminCompleted($order, $item->fresh(), $admin);
+                    } catch (\Throwable $e) {
+                        \Log::warning('dispatch audit failed after admin completed', [
+                            'order_id' => $order->id,
+                            'item_id' => $item->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
             }
 
             return response()->json([
@@ -3761,31 +3835,30 @@ class OrderController extends Controller
         $branchTabs = $branches;
         $selectedBranchId = $branchId;
 
-        $unfinishedItems = $settlementService
-            ->completedItemsForPeriod(null, $fromDay, $toDay, $branchId)
-            ->filter(function ($item) use ($osFilter, $settlementService) {
-                $osId = $settlementService->itemOsPartyUserId($item);
-                if ($osFilter === '' || $osFilter === 'all') {
-                    return true;
-                }
-                if ($osFilter === '0' || strtolower($osFilter) === 'none') {
-                    return $osId === 0;
-                }
-                if (is_numeric($osFilter)) {
-                    return $osId === (int) $osFilter;
-                }
-
+        $applyOsFilter = function ($item) use ($osFilter, $settlementService) {
+            $osId = $settlementService->itemOsPartyUserId($item);
+            if ($osFilter === '' || $osFilter === 'all') {
                 return true;
-            });
+            }
+            if ($osFilter === '0' || strtolower($osFilter) === 'none') {
+                return $osId === 0;
+            }
+            if (is_numeric($osFilter)) {
+                return $osId === (int) $osFilter;
+            }
 
-        $branchTabCountsQuery = DispatchOrderItem::query();
-        $settlementService->applyUnfinishedSettlementConstraints($branchTabCountsQuery, $fromDay, $toDay);
-        applyForcedItemOwnership($branchTabCountsQuery);
-        $branchTabCounts = $branchTabCountsQuery
-            ->selectRaw('COALESCE(NULLIF(to_branch_id, 0), from_branch_id) as branch_key, COUNT(*) as total')
-            ->groupBy('branch_key')
-            ->pluck('total', 'branch_key');
-        $allBranchCount = (int) $branchTabCounts->sum();
+            return true;
+        };
+
+        // Load all unfinished first — branch tabs use parcel destination (to/from).
+        $allUnfinishedItems = $settlementService
+            ->completedItemsForPeriod(null, $fromDay, $toDay, null)
+            ->filter($applyOsFilter)
+            ->values();
+
+        $branchTabCounts = osHomeBranchTabCounts($allUnfinishedItems);
+        $allBranchCount = (int) $allUnfinishedItems->count();
+        $unfinishedItems = filterItemsByOsHomeBranch($allUnfinishedItems, $branchId);
 
         // Only unfinished OS remain on ငွေရှင်းတမ်း; Finished rows move to Daily Check / Money Transfer.
         // Group by Online Shop party (pickup shop → client), not raw order.client_id.
@@ -3795,23 +3868,11 @@ class OrderController extends Controller
             ->unique()
             ->values();
 
-        $kyoShinPayItems = $settlementService
-            ->finishedKyoShinItemsForPeriod($fromDay, $toDay, $branchId)
-            ->filter(function ($item) use ($osFilter, $settlementService) {
-                $osId = $settlementService->itemOsPartyUserId($item);
-                if ($osFilter === '' || $osFilter === 'all') {
-                    return true;
-                }
-                if ($osFilter === '0' || strtolower($osFilter) === 'none') {
-                    return $osId === 0;
-                }
-                if (is_numeric($osFilter)) {
-                    return $osId === (int) $osFilter;
-                }
-
-                return true;
-            })
+        $allKyoShinPayItems = $settlementService
+            ->finishedKyoShinItemsForPeriod($fromDay, $toDay, null)
+            ->filter($applyOsFilter)
             ->values();
+        $kyoShinPayItems = filterItemsByOsHomeBranch($allKyoShinPayItems, $branchId);
 
         $kyoShinOsIds = $kyoShinPayItems
             ->map(fn ($item) => $settlementService->itemOsPartyUserId($item))
@@ -3950,11 +4011,16 @@ class OrderController extends Controller
 
         $rows = $payToOsRows->concat($receiveFromOsRows)->values();
 
-        $osOptions = User::query()
-            ->where('user_type', 'client')
-            ->where('status', 1);
-        applyClientBranchScope($osOptions);
-        $osOptions = $osOptions->orderBy('name')->get(['id', 'name', 'contact_number']);
+        // Include every OS that has unfinished / ကြိုရှင်း rows for this date, even if
+        // inactive/rejected — otherwise Search cannot find shops that still show on ငွေရှင်းတမ်း.
+        $osOptions = onlineShopFilterOptions([
+            'apply_branch_scope' => true,
+            'branch_id' => $branchId,
+            'ensure_ids' => array_merge(
+                $clientIds,
+                is_numeric($osFilter) ? [(int) $osFilter] : []
+            ),
+        ]);
 
         $pageTitle = __('message.os_list');
         $assets = [];
@@ -3965,6 +4031,7 @@ class OrderController extends Controller
         $adminKpayAccounts = AdminKpayAccount::query()
             ->whereDate('settlement_date', '>=', $fromDay)
             ->whereDate('settlement_date', '<=', $toDay)
+            ->when($branchId, static fn ($q) => $q->where('branch_id', $branchId))
             ->orderByDesc('id')
             ->get();
 
@@ -4111,12 +4178,10 @@ class OrderController extends Controller
 
         $batch = null;
         if ($requestedItemIds !== []) {
+            // Locked item_ids from the list row — never filter by parcel destination.
             $lockedQuery = DispatchOrderItem::query()
                 ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch', 'kyoShinItem'])
                 ->whereIn('id', $requestedItemIds);
-            if ($branchId !== null && $branchId > 0) {
-                applyDestinationBranchFilter($lockedQuery, $branchId);
-            }
             $items = $settlementService
                 ->filterItemsForOsParty($lockedQuery->get(), $osId)
                 ->sortBy(static fn ($item) => array_search((int) $item->id, $requestedItemIds, true) ?: 9999)
@@ -4142,9 +4207,6 @@ class OrderController extends Controller
                 $batchQuery = DispatchOrderItem::query()
                     ->with(['order.client.city', 'order.city', 'fromBranch', 'toBranch', 'kyoShinItem'])
                     ->whereIn('id', $itemIds);
-                if ($branchId !== null && $branchId > 0) {
-                    applyDestinationBranchFilter($batchQuery, $branchId);
-                }
                 $items = $settlementService
                     ->filterItemsForOsParty($batchQuery->get(), $osId)
                     ->sortBy(static fn ($item) => array_search((int) $item->id, $itemIds, true) ?: 9999)
@@ -4331,6 +4393,7 @@ class OrderController extends Controller
             'account' => [
                 'id' => $account->id,
                 'settlement_date' => optional($account->settlement_date)->format('d-m-Y'),
+                'branch_id' => $account->branch_id ? (int) $account->branch_id : null,
                 'kpay_name' => $account->kpay_name,
                 'kpay_phone' => $account->kpay_phone,
                 'amount' => (float) $account->amount,
@@ -4381,6 +4444,7 @@ class OrderController extends Controller
             'account' => [
                 'id' => $account->id,
                 'settlement_date' => optional($account->settlement_date)->format('d-m-Y'),
+                'branch_id' => $account->branch_id ? (int) $account->branch_id : null,
                 'kpay_name' => $account->kpay_name,
                 'kpay_phone' => $account->kpay_phone,
                 'amount' => (float) $account->amount,
@@ -4429,14 +4493,17 @@ class OrderController extends Controller
         $request->validate([
             'from_date' => 'required|string',
             'to_date' => 'required|string',
+            'branch_id' => 'nullable',
         ]);
 
         $fromDay = $this->parseDispatchDateInput($request->input('from_date'))->toDateString();
         $toDay = $this->parseDispatchDateInput($request->input('to_date'))->toDateString();
+        [$branchId] = resolveDestinationBranchFilter($request);
 
         $accounts = AdminKpayAccount::query()
             ->whereDate('settlement_date', '>=', $fromDay)
             ->whereDate('settlement_date', '<=', $toDay)
+            ->when($branchId, static fn ($q) => $q->where('branch_id', $branchId))
             ->orderByDesc('id')
             ->get();
 
@@ -5427,6 +5494,49 @@ class OrderController extends Controller
         return redirect()->route('order.dispatch.items', $orderId)->withSuccess(__('message.delete_form', ['form' => __('message.item_name')]));
     }
 
+    public function dispatchItemMessageShow($orderId, $itemId)
+    {
+        if (! auth()->user()->can('order-list')) {
+            return redirect()->back()->withErrors(__('message.permission_denied_for_account'));
+        }
+
+        $item = DispatchOrderItem::with([
+            'order.client.media',
+            'deliveryMan:id,name',
+        ])->where('order_id', $orderId)->findOrFail($itemId);
+
+        \App\Models\DispatchItemMessage::query()
+            ->where('dispatch_order_item_id', $item->id)
+            ->where('sender_type', 'client')
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        markDispatchItemMessageNotificationsRead(auth()->user(), (int) $item->id);
+
+        $messages = \App\Models\DispatchItemMessage::query()
+            ->with(['sender:id,name,user_type', 'media'])
+            ->where('dispatch_order_item_id', $item->id)
+            ->orderBy('created_at')
+            ->get();
+
+        $order = $item->order;
+        $osName = resolveDispatchOsName($order);
+        $pageTitle = __('message.chat').' — '.($item->code ? '#'.$item->code : '#'.$item->id);
+        $canEditInfo = $order
+            ? app(\App\Services\DispatchOrderWorkflowService::class)->canAdminEditDispatchItemInfo($order, $item)
+            : false;
+
+        return view('order.dispatch-item-message-show', [
+            'item' => $item,
+            'order' => $order,
+            'messages' => $messages,
+            'pageTitle' => $pageTitle,
+            'osName' => $osName !== '-' ? $osName : null,
+            'osProfileImage' => resolveUploadedProfileImageUrl(optional($order)->client),
+            'canEditInfo' => $canEditInfo,
+        ]);
+    }
+
     public function dispatchItemMessages($orderId, $itemId)
     {
         if (! auth()->user()->can('order-list')) {
@@ -5449,20 +5559,7 @@ class OrderController extends Controller
             ->where('dispatch_order_item_id', $item->id)
             ->orderBy('created_at')
             ->get()
-            ->map(function ($m) {
-                $imageUrl = $m->imageUrl();
-
-                return [
-                    'id' => $m->id,
-                    'message' => $m->message,
-                    'message_type' => $m->message_type ?: ($imageUrl ? 'image' : 'text'),
-                    'chat_image' => $imageUrl,
-                    'sender_type' => $m->sender_type,
-                    'sender_name' => optional($m->sender)->name,
-                    'created_at' => optional($m->created_at)?->format('d-m-Y H:i'),
-                    'is_admin' => $m->sender_type !== 'client',
-                ];
-            });
+            ->map(fn ($m) => $this->formatDispatchItemChatMessage($m, auth()->id()));
 
         $order = $item->order;
         $osName = resolveDispatchOsName($order);
@@ -5474,6 +5571,7 @@ class OrderController extends Controller
         );
 
         return response()->json([
+            'status' => true,
             'item_id' => $item->id,
             'customer_name' => $item->customer_name,
             'os_name' => $osName !== '-' ? $osName : null,
@@ -5491,10 +5589,12 @@ class OrderController extends Controller
 
         $request->validate([
             'message' => 'nullable|string|max:5000',
-            'chat_image' => 'nullable|image|max:10240',
+            'message_type' => 'nullable|in:text,image,emoji,audio,video,sticker,gif',
+            'chat_image' => 'nullable|file|max:51200',
+            'chat_media' => 'nullable|file|max:51200',
         ]);
 
-        if (! $request->filled('message') && ! $request->hasFile('chat_image')) {
+        if (! $request->filled('message') && ! $request->hasFile('chat_image') && ! $request->hasFile('chat_media')) {
             return response()->json(['message' => __('message.required', ['name' => __('message.chat')])], 422);
         }
 
@@ -5503,6 +5603,18 @@ class OrderController extends Controller
         $user = auth()->user();
         $body = trim((string) $request->input('message', ''));
         $hasImage = $request->hasFile('chat_image');
+        $hasMedia = $request->hasFile('chat_media');
+
+        $messageType = $request->input('message_type', 'text');
+        if ($hasImage) {
+            $messageType = in_array($messageType, ['sticker', 'gif'], true) ? $messageType : 'image';
+        }
+        if ($hasMedia) {
+            $messageType = resolveChatMediaMessageType(
+                $request->file('chat_media'),
+                $request->input('message_type')
+            );
+        }
 
         $message = \App\Models\DispatchItemMessage::create([
             'dispatch_order_item_id' => $item->id,
@@ -5510,8 +5622,8 @@ class OrderController extends Controller
             'client_id' => $order->client_id,
             'sender_id' => $user->id,
             'sender_type' => 'admin',
-            'message_type' => $hasImage ? 'image' : 'text',
-            'message' => $body !== '' ? $body : ($hasImage ? '' : ''),
+            'message_type' => $messageType,
+            'message' => $body,
         ]);
 
         // Admin reply counts as handling the thread — unread client messages sink to the bottom.
@@ -5524,9 +5636,19 @@ class OrderController extends Controller
         if ($hasImage) {
             uploadMediaFile($message, $request->file('chat_image'), 'chat_image');
         }
+        if ($hasMedia) {
+            uploadMediaFile($message, $request->file('chat_media'), 'chat_media');
+        }
 
-        $imageUrl = $message->fresh()->imageUrl();
-        $pushPreview = $body !== '' ? $body : ($hasImage ? __('message.image') : '');
+        $fresh = $message->fresh(['sender:id,name,user_type', 'media']);
+        $isMedia = in_array($messageType, ['image', 'gif', 'sticker', 'audio', 'video'], true);
+        $pushPreview = $body !== ''
+            ? $body
+            : match ($messageType) {
+                'audio' => '🎤 Voice message',
+                'gif', 'sticker', 'image' => __('message.image'),
+                default => ($isMedia ? __('message.image') : ''),
+            };
 
         try {
             if ($order->client) {
@@ -5540,18 +5662,40 @@ class OrderController extends Controller
         }
 
         return response()->json([
+            'status' => true,
             'message' => __('message.save_form', ['form' => __('message.chat')]),
-            'data' => [
-                'id' => $message->id,
-                'message' => $message->message,
-                'message_type' => $message->message_type,
-                'chat_image' => $imageUrl,
-                'sender_type' => $message->sender_type,
-                'sender_name' => $user->name,
-                'created_at' => optional($message->created_at)?->format('d-m-Y H:i'),
-                'is_admin' => true,
-            ],
+            'data' => $this->formatDispatchItemChatMessage($fresh, auth()->id()),
         ]);
+    }
+
+    public function formatDispatchItemChatMessage(\App\Models\DispatchItemMessage $m, ?int $currentUserId = null): array
+    {
+        $imageUrl = $m->imageUrl();
+        $mediaUrl = $m->mediaUrl() ?: $imageUrl;
+        $sender = $m->relationLoaded('sender') ? $m->sender : $m->sender()->first();
+        $isAdmin = $m->sender_type !== 'client';
+        $isCurrentUser = $currentUserId && (int) $m->sender_id === (int) $currentUserId;
+        $currentUserClass = ($isCurrentUser && $isAdmin) ? 'mm-current-user' : 'mm-other-user';
+        $created = $m->created_at;
+
+        return [
+            'id' => $m->id,
+            'send_by' => $m->sender_type,
+            'message' => $m->message,
+            'message_type' => $m->message_type ?: ($imageUrl ? 'image' : 'text'),
+            'chat_image' => $imageUrl,
+            'chat_media' => $mediaUrl,
+            'sender_type' => $m->sender_type,
+            'sender_name' => optional($sender)->name,
+            'user_name' => optional($sender)->name ?: ($isAdmin ? 'Admin' : 'OS'),
+            'profile_image' => $sender ? getSingleMedia($sender, 'profile_image', null) : null,
+            'created_at' => optional($created)?->format('d-m-Y H:i'),
+            'time_label' => $created ? date('h:i A', strtotime($created)) : '',
+            'datetime' => optional($created)?->format('Y-m-d H:i:s'),
+            'is_admin' => $isAdmin,
+            'current_user_class' => $currentUserClass,
+            'message_class' => $isAdmin ? 'justify-content-end' : 'justify-content-start',
+        ];
     }
 
     private function dispatchDeliveryCities(): array
@@ -6116,9 +6260,18 @@ class OrderController extends Controller
                 ->where('status', $queryStatus);
         }
 
+        // Cancelled parents: drop open Assigned/On Way/Pending only.
+        // Delivered / Completed / Finished / Return stay — rider still holds money.
+        if (in_array($status, ['courier_assigned', 'courier_departed', 'pending'], true)
+            || (isDispatchHub($rider) && $status === 'courier_assigned')) {
+            $itemsQuery->whereDoesntHave('order', function ($q) {
+                $q->where('status', 'cancelled');
+            });
+        }
+
         if ($hasDateFilter && $fromDay && $toDay) {
-            $itemsQuery->where(function ($dateQuery) use ($fromDay, $toDay) {
-                $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay);
+            $itemsQuery->where(function ($dateQuery) use ($fromDay, $toDay, $status) {
+                $this->applyRiderListDateFilter($dateQuery, $fromDay, $toDay, $status);
             });
         }
 
@@ -6179,10 +6332,16 @@ class OrderController extends Controller
             abort(404);
         }
 
-        [$itemsQuery] = $this->dispatchRiderItemsFilteredQuery($request, $rider, $status);
+        [$itemsQuery, , , $fromDay, $toDay] = $this->dispatchRiderItemsFilteredQuery($request, $rider, $status);
         $items = $itemsQuery
             ->with(['order.client', 'pendingRemarks', 'kyoShinItem'])
             ->get();
+
+        if ($status === 'completed' && $fromDay && $toDay) {
+            $items = $items
+                ->filter(static fn ($item) => osSettlementItemInPeriod($item, $fromDay, $toDay))
+                ->values();
+        }
 
         $safeRider = preg_replace('/[^A-Za-z0-9_-]+/', '_', (string) ($rider->name ?? 'rider')) ?: 'rider';
         $safeStatus = preg_replace('/[^A-Za-z0-9_-]+/', '_', $status) ?: 'status';
@@ -6194,12 +6353,62 @@ class OrderController extends Controller
     /**
      * Rider List date filter (From–To inclusive) — day-by-day window.
      *
-     * Delivered / Completed / Finished: dated activity in range.
-     * Assigned / On Way / Pending: also include still-open items that started
-     * on or before toDay (so On Way keeps showing on later days until delivered).
+     * Completed: same ငွေရှင်းတမ်း list day (rider_remit_date / 10:00 AM Completed bounds),
+     * so parcels do not linger on Rider Completed for a day they are not on the settlement sheet.
+     * Finished: admin_finished_at Yangon day — settlement Finish must show under today's Finished.
+     * Delivered / open tabs: dated activity + still-open carry-forward.
      */
-    private function applyRiderListDateFilter($dateQuery, string $fromDay, string $toDay): void
+    private function applyRiderListDateFilter($dateQuery, string $fromDay, string $toDay, ?string $status = null): void
     {
+        $fromDay = Carbon::parse($fromDay)->toDateString();
+        $toDay = Carbon::parse($toDay)->toDateString();
+
+        if ($status === 'finished') {
+            $start = Carbon::parse($fromDay, 'Asia/Yangon')->startOfDay()->utc();
+            $end = Carbon::parse($toDay, 'Asia/Yangon')->addDay()->startOfDay()->utc();
+            $dateQuery->whereNotNull('admin_finished_at')
+                ->where('admin_finished_at', '>=', $start)
+                ->where('admin_finished_at', '<', $end);
+
+            return;
+        }
+
+        if ($status === 'completed') {
+            // Match OsSettlementService::applyUnfinishedSettlementConstraints fetch window,
+            // then PHP osSettlementItemInPeriod keeps exact sheet days.
+            $boundsStart = dailyCheckListDayBounds($fromDay)['start'];
+            $boundsEnd = dailyCheckListDayBounds($toDay)['end'];
+            $dateQuery->where(function ($q) use ($fromDay, $toDay, $boundsStart, $boundsEnd) {
+                $q->where(function ($byCompleted) use ($boundsStart, $boundsEnd) {
+                    $byCompleted->whereNotNull('admin_completed_at')
+                        ->where('admin_completed_at', '>=', $boundsStart)
+                        ->where('admin_completed_at', '<', $boundsEnd);
+                })->orWhere(function ($byRemit) use ($fromDay, $toDay) {
+                    $byRemit->whereNotNull('rider_remit_date')
+                        ->whereDate('rider_remit_date', '>=', $fromDay)
+                        ->whereDate('rider_remit_date', '<=', $toDay);
+                });
+            });
+
+            return;
+        }
+
+        if ($status === 'delivered') {
+            $dateQuery->where(function ($when) use ($fromDay, $toDay) {
+                $when->where(function ($d) use ($fromDay, $toDay) {
+                    $d->whereNotNull('delivered_at')
+                        ->whereDate('delivered_at', '>=', $fromDay)
+                        ->whereDate('delivered_at', '<=', $toDay);
+                })->orWhere(function ($r) use ($fromDay, $toDay) {
+                    $r->whereNotNull('rider_remit_date')
+                        ->whereDate('rider_remit_date', '>=', $fromDay)
+                        ->whereDate('rider_remit_date', '<=', $toDay);
+                });
+            });
+
+            return;
+        }
+
         $dateQuery->whereBetween('received_date', [$fromDay, $toDay])
             ->orWhere(function ($assigned) use ($fromDay, $toDay) {
                 $assigned->whereNotNull('assigned_at')
@@ -6580,7 +6789,12 @@ class OrderController extends Controller
 
         if ($request->cancelorderreturn == 1) {
             $updateSuccessful = Order::where('id', $request->order_id)
-                ->update(['status' => 'cancelled', 'reason' => $request->reason]);
+                ->update([
+                    'status' => 'cancelled',
+                    'reason' => $request->reason,
+                    'delivery_man_id' => null,
+                    'assign_datetime' => null,
+                ]);
             if ($updateSuccessful) {
                 $data['history_type'] = 'cancelled';
                 $data['history_message'] = __('message.cancelled_order');
@@ -6589,6 +6803,11 @@ class OrderController extends Controller
                     'status' => 'cancelled',
                 ];
                 OrderHistory::create($data);
+                $cancelledOrder = Order::find($request->order_id);
+                if ($cancelledOrder) {
+                    app(DispatchOrderWorkflowService::class)
+                        ->releaseRiderAssignmentsForCancelledOrder($cancelledOrder);
+                }
             }
         }
 
@@ -7159,6 +7378,8 @@ class OrderController extends Controller
             }
             if ($order->status == 'cancelled') {
                 $this->walletTransactionCancelled($order->id);
+                app(DispatchOrderWorkflowService::class)
+                    ->releaseRiderAssignmentsForCancelledOrder($order->fresh());
             }
             DB::commit();
         } catch (\Exception $e) {
@@ -8271,7 +8492,15 @@ class OrderController extends Controller
 
         $order->status = 'cancelled';
         $order->reason = $reason;
+        $order->delivery_man_id = null;
+        $order->assign_datetime = null;
         $order->save();
+
+        // Drop last-mile / pickup rider links so items leave Rider List and
+        // the cancelled order appears under Pick Up Cancelled.
+        app(DispatchOrderWorkflowService::class)
+            ->releaseRiderAssignmentsForCancelledOrder($order->fresh());
+
         $message = __('message.cancelled_order');
 
         if ($order->payment_id) {

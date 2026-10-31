@@ -127,8 +127,8 @@
                 </div>
             </div>
 
-            <div class="pds-expense-summary-table-wrap">
-                <table class="pds-expense-summary-table">
+            <div class="pds-expense-summary-table-wrap pds-plain-freeze">
+                <table class="pds-expense-summary-table pds-sticky-freeze">
                     <thead>
                         <tr>
                             <th>{{ __('message.expense_summary_no') }}</th>

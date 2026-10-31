@@ -65,19 +65,25 @@
         @if($deliveredPhotoUrl || $deliveredType !== '')
             <div class="pds-follow-up-details-item pds-follow-up-details-item-wide">
                 <span class="pds-follow-up-details-label">{{ __('message.delivered_image') }}</span>
-                <span class="pds-follow-up-details-value">
+                <span class="pds-follow-up-details-value pds-follow-up-details-delivered">
                     @if($deliveredType === 'gate')
-                        <span class="pds-follow-up-details-note">
+                        <span class="pds-follow-up-details-type-pill is-gate">
                             {{ __('message.delivered_type_gate') }}
                             · {{ __('message.transport_fee') }} {{ number_format((float) ($item->gate_amount ?? 0)) }}
                         </span>
                     @elseif($deliveredType === 'other')
-                        <span class="pds-follow-up-details-note">{{ __('message.delivered_type_other') }}</span>
+                        <span class="pds-follow-up-details-type-pill is-city">{{ __('message.delivered_type_other') }}</span>
+                    @elseif($deliveredType !== '')
+                        <span class="pds-follow-up-details-type-pill">{{ $deliveredType }}</span>
                     @endif
                     @if($deliveredPhotoUrl)
-                        <a href="{{ $deliveredPhotoUrl }}" target="_blank" rel="noopener" class="pds-follow-up-pending-photo pds-follow-up-details-deliver-photo">
+                        <button type="button"
+                                class="pds-follow-up-details-deliver-photo js-pds-audit-photo"
+                                data-photo-url="{{ $deliveredPhotoUrl }}"
+                                data-photo-label="{{ __('message.delivered_image') }}"
+                                title="{{ __('message.delivered_image') }}">
                             <img src="{{ $deliveredPhotoUrl }}" alt="{{ __('message.delivered_image') }}" loading="lazy">
-                        </a>
+                        </button>
                     @endif
                 </span>
             </div>
@@ -158,7 +164,11 @@
                                         <span class="pds-follow-up-audit-meta-label">{{ __('message.dispatch_audit_photos_label') }}</span>
                                         <div class="pds-follow-up-audit-photo-grid">
                                             @foreach($photos as $photo)
-                                                <a href="{{ $photo['url'] }}" target="_blank" rel="noopener" class="pds-follow-up-audit-photo" title="{{ $photo['label'] ?? __('message.dispatch_audit_photos_label') }}">
+                                                <button type="button"
+                                                        class="pds-follow-up-audit-photo js-pds-audit-photo"
+                                                        data-photo-url="{{ $photo['url'] }}"
+                                                        data-photo-label="{{ $photo['label'] ?? __('message.dispatch_audit_photos_label') }}"
+                                                        title="{{ $photo['label'] ?? __('message.dispatch_audit_photos_label') }}">
                                                     <span class="pds-follow-up-audit-photo-frame">
                                                         <img src="{{ $photo['url'] }}" alt="{{ $photo['label'] ?? 'Parcel photo' }}" loading="lazy">
                                                         <span class="pds-follow-up-audit-photo-zoom" aria-hidden="true">
@@ -168,7 +178,7 @@
                                                     @if(!empty($photo['label']))
                                                         <span class="pds-follow-up-audit-photo-caption">{{ $photo['label'] }}</span>
                                                     @endif
-                                                </a>
+                                                </button>
                                             @endforeach
                                         </div>
                                     </div>

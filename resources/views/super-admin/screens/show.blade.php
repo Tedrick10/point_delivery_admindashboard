@@ -7,7 +7,9 @@
 
 @section('title', $screenTitle)
 @section('page_title', $screenTitle)
-@if(! in_array((string) ($screenKey ?? ''), ['kyo-shin', 'rider-remit', 'account-creation', 'roles-permissions', 'office-salary', 'rider-salary', 'late-fine', 'welcome-promotion', 'general-setting', 'company-contact', 'api-server-setting', 'ui-theme', 'delivery-route'], true))
+@if(($screenKey ?? '') === 'point-system')
+@section('page_sub', $screenSub)
+@elseif(! in_array((string) ($screenKey ?? ''), ['kyo-shin', 'rider-remit', 'account-creation', 'roles-permissions', 'office-salary', 'rider-salary', 'late-fine', 'welcome-promotion', 'general-setting', 'company-contact', 'api-server-setting', 'ui-theme', 'delivery-route'], true))
 @section('page_sub', $monthLabel)
 @endif
 
@@ -617,6 +619,10 @@
         @include('super-admin.screens.partials.welcome-promotion-board')
     @endif
 
+    @if(($screenKey ?? '') === 'point-system' && !empty($pointSystem))
+        @include('super-admin.screens.partials.point-system-board')
+    @endif
+
     @if(($screenKey ?? '') === 'account-creation' && !empty($accountCreation))
         @include('super-admin.screens.partials.account-creation-board')
     @endif
@@ -790,6 +796,7 @@
             'delivery-route', 'rider-remit', 'late-fine', 'rider-salary', 'office-salary', 'kyo-shin',
             'expense-summary', 'welcome-promotion', 'account-creation', 'roles-permissions',
             'general-setting', 'company-contact', 'app-store-update', 'api-server-setting', 'ui-theme', 'app-copy', 'network',
+            'point-system',
         ], true);
     @endphp
     @if(! $saHasOwnBoard)

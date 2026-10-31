@@ -688,13 +688,27 @@
                     });
                 });
 
-                $(document).on('click', '[data-dispatch-item-delete]', function (e) {
+                // Namespace + off: SPA re-runs this script and was stacking confirm dialogs.
+                $(document)
+                    .off('click.pdsDispatchItemDelete', '[data-dispatch-item-delete]')
+                    .off('click', '[data-dispatch-item-delete]')
+                    .on('click.pdsDispatchItemDelete', '[data-dispatch-item-delete]', function (e) {
                     e.preventDefault();
+                    e.stopImmediatePropagation();
                     var $btn = $(this);
                     var url = $btn.data('delete-url');
                     var title = $btn.data('title') || '';
                     var message = $btn.data('message') || '';
                     if (!url) return;
+
+                    try {
+                        if (typeof Swal !== 'undefined' && typeof Swal.close === 'function') {
+                            Swal.close();
+                        }
+                    } catch (err) {}
+                    try {
+                        $('.jconfirm').remove();
+                    } catch (err) {}
 
                     Swal.fire({
                         title: title,
@@ -722,7 +736,16 @@
                                 if (res && res.message) {
                                     SnackBar({ message: res.message, status: 'success' });
                                 }
-                                typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
+                                // Drop the row immediately so soft-delete always feels instant,
+                                // then hard-reload so Item Count / badges stay correct.
+                                $btn.closest('tr').remove();
+                                if (typeof window.pdsAdminReload === 'function') {
+                                    window.pdsAdminReload();
+                                } else if (typeof window.adminLiveReloadPage === 'function') {
+                                    window.adminLiveReloadPage();
+                                } else {
+                                    window.location.reload();
+                                }
                             },
                             error: function (xhr) {
                                 var msg = (xhr.responseJSON && xhr.responseJSON.message)
@@ -850,6 +873,28 @@
                     var $btn = $('#riderItemsBulkUpdate');
                     bulkUpdateInFlight = true;
                     $btn.prop('disabled', true);
+
+                    function cleanupRiderModals() {
+                        try {
+                            $('.modal').modal('hide');
+                            $('.modal-backdrop').remove();
+                            $('body').removeClass('modal-open').css({ paddingRight: '', overflow: '' });
+                        } catch (e) {}
+                    }
+
+                    function reloadRiderItemsPage() {
+                        cleanupRiderModals();
+                        if (typeof window.pdsAdminReload === 'function') {
+                            window.pdsAdminReload();
+                            return;
+                        }
+                        if (typeof window.adminLiveReloadPage === 'function') {
+                            window.adminLiveReloadPage();
+                            return;
+                        }
+                        window.location.reload();
+                    }
+
                     $.ajax({
                         url: bulkUpdateUrl,
                         type: 'POST',
@@ -861,16 +906,16 @@
                             'Accept': 'application/json',
                         },
                         success: function (res) {
+                            cleanupRiderModals();
                             if (res && res.message) {
                                 notify(res.message, 'success', function () {
-                                    typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
+                                    reloadRiderItemsPage();
                                 });
                             } else {
-                                typeof window.adminLiveReloadPage === 'function' ? window.adminLiveReloadPage() : window.location.reload();
+                                reloadRiderItemsPage();
                             }
                         },
                         error: function (xhr) {
-                            bulkUpdateInFlight = false;
                             var msg = (xhr.responseJSON && xhr.responseJSON.message)
                                 ? xhr.responseJSON.message
                                 : @json(__('message.something_went_wrong'));
@@ -878,6 +923,9 @@
                                 msg = Object.values(xhr.responseJSON.errors).flat().join('\n');
                             }
                             notify(msg, 'error');
+                        },
+                        complete: function () {
+                            bulkUpdateInFlight = false;
                             $btn.prop('disabled', false);
                         },
                     });

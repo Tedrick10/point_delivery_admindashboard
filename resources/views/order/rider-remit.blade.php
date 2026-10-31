@@ -1,7 +1,7 @@
 <x-master-layout :assets="$assets ?? []">
     
-<div id="adminLiveRoot" data-live-page="auto">
-<div class="container-fluid pds-page-wrap pds-motion-enter pds-dispatch-to-assign-page pds-rider-remit-page">
+<div id="adminLiveRoot" data-live-page="auto" class="pds-disable-live-reload">
+<div class="container-fluid pds-page-wrap pds-dispatch-to-assign-page pds-rider-remit-page">
         <div class="pds-dispatch-to-assign-screen pds-rider-screen">
             <div class="pds-rider-hero">
                 <div class="pds-rider-hero__copy">
@@ -126,7 +126,7 @@
                                     <th class="pds-rider-remit-label">{{ __('message.rider_remit_prepaid') }}</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}">
-                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="prepaid_amount" type="number" min="0" step="1" value="{{ $rider->prepaid_amount ?: '' }}" placeholder="0" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
+                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="prepaid_amount" type="text" inputmode="decimal" autocomplete="off" value="{{ $rider->prepaid_amount ?: '' }}" placeholder="0" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
                                         </td>
                                     @endforeach
                                     <td class="pds-rider-remit-total-cell">
@@ -234,7 +234,7 @@
                                         <th class="pds-rider-remit-label">{{ number_format($note) }}</th>
                                         @foreach($riders as $rider)
                                             <td data-rider="{{ $rider->delivery_man_id }}">
-                                                <input class="js-rr-denom" data-rider="{{ $rider->delivery_man_id }}" data-note="{{ $note }}" type="number" min="0" step="1" value="{{ ($rider->denoms[(string) $note] ?? 0) ?: '' }}" placeholder="0" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
+                                                <input class="js-rr-denom" data-rider="{{ $rider->delivery_man_id }}" data-note="{{ $note }}" type="text" inputmode="decimal" autocomplete="off" value="{{ ($rider->denoms[(string) $note] ?? 0) == 0 ? '' : ($rider->denoms[(string) $note] ?? 0) }}" placeholder="0" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
                                             </td>
                                         @endforeach
                                         <td class="pds-rider-remit-total-cell">
@@ -258,7 +258,7 @@
                                     <th class="pds-rider-remit-label">Kpay</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}">
-                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="kpay_amount" type="number" min="0" step="1" value="{{ $rider->kpay_amount ?: '' }}" placeholder="0" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
+                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="kpay_amount" type="text" inputmode="decimal" autocomplete="off" value="{{ $rider->kpay_amount ?: '' }}" placeholder="0" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
                                         </td>
                                     @endforeach
                                     <td class="pds-rider-remit-total-cell">
@@ -280,7 +280,7 @@
                                     <th class="pds-rider-remit-label">{{ __('message.rider_remit_kyo_shin_incharge') }}</th>
                                     @foreach($riders as $rider)
                                         <td data-rider="{{ $rider->delivery_man_id }}">
-                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="kyo_shin_incharge_amount" type="number" min="0" step="1" value="{{ ($rider->kyo_shin_incharge_amount ?? 0) ?: '' }}" placeholder="0" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
+                                            <input class="js-rr-field" data-rider="{{ $rider->delivery_man_id }}" data-field="kyo_shin_incharge_amount" type="text" inputmode="decimal" autocomplete="off" value="{{ ($rider->kyo_shin_incharge_amount ?? 0) ?: '' }}" placeholder="0" @disabled(! $canEdit || ! ($rider->can_edit ?? true))>
                                         </td>
                                     @endforeach
                                     <td class="pds-rider-remit-total-cell">
@@ -428,16 +428,47 @@
                 var $grid = $('#riderRemitGrid');
                 if (! $grid.length) return;
                 var csrf = $('meta[name="csrf-token"]').attr('content');
-                var saveUrl = $grid.data('save-url');
-                var remitDate = $grid.data('date');
-                var branchId = $grid.data('branch');
-                var canEdit = String($grid.data('can-edit')) === '1';
+                // Use attr() — jQuery .data() can coerce YYYY-MM-DD into a Date and break autosave.
+                var saveUrl = $grid.attr('data-save-url') || $grid.data('save-url');
+                var remitDate = String($grid.attr('data-date') || $grid.data('date') || '');
+                var branchId = $grid.attr('data-branch') || $grid.data('branch');
+                var canEdit = String($grid.attr('data-can-edit') || $grid.data('can-edit') || '') === '1';
                 var denoms = @json($denoms);
                 var timers = {};
+                var pendingSaves = {};
 
                 function num(v) {
-                    var n = parseFloat(String(v == null ? '' : v).replace(/,/g, ''));
-                    return isNaN(n) ? 0 : n;
+                    var n = parseFloat(String(v == null ? '' : v).replace(/,/g, '').replace(/[^\d.-]/g, ''));
+                    if (isNaN(n) || !isFinite(n)) return 0;
+                    return n < 0 ? 0 : n;
+                }
+                // Note counts may be negative (cash correction). Money fields stay >= 0.
+                function numSigned(v) {
+                    var n = parseFloat(String(v == null ? '' : v).replace(/,/g, '').replace(/[^\d.-]/g, ''));
+                    if (isNaN(n) || !isFinite(n)) return 0;
+                    return Math.round(n);
+                }
+                // While typing: allow "-" (and digits). Persist signed note counts on blur.
+                function sanitizeQtyInput(el, finalPass) {
+                    var $el = $(el);
+                    var allowNegative = $el.hasClass('js-rr-denom');
+                    var raw = String($el.val() == null ? '' : $el.val());
+                    if (!finalPass) {
+                        if (raw === '-' || /^-?\d*$/.test(raw)) return raw;
+                        var soft = raw.replace(/[^\d-]/g, '');
+                        if (soft.indexOf('-') > 0) soft = soft.replace(/-/g, '');
+                        if (!allowNegative) soft = soft.replace(/-/g, '');
+                        if (soft !== raw) $el.val(soft);
+                        return soft;
+                    }
+                    if (raw.trim() === '-' || raw.trim() === '') {
+                        $el.val('');
+                        return '';
+                    }
+                    var n = allowNegative ? numSigned(raw) : num(raw);
+                    var cleaned = n === 0 ? '' : String(n);
+                    if (cleaned !== raw) $el.val(cleaned);
+                    return cleaned;
                 }
                 function fmt(n) {
                     return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -473,7 +504,7 @@
                     var kyoShinIncharge = num($grid.find('.js-rr-field[data-rider="' + riderId + '"][data-field="kyo_shin_incharge_amount"]').val());
                     var cash = 0;
                     denoms.forEach(function (note) {
-                        cash += note * num($grid.find('.js-rr-denom[data-rider="' + riderId + '"][data-note="' + note + '"]').val());
+                        cash += note * numSigned($grid.find('.js-rr-denom[data-rider="' + riderId + '"][data-note="' + note + '"]').val());
                     });
                     // ကြိုရှင်း Os Returned is additive; ကြိုရှင်းတာဝန်ခံ is a manual deduction.
                     var remaining = dueOf(riderId) + kyoOsReturnOf(riderId) - prepaid - fuel - fee - kyoShinIncharge;
@@ -493,7 +524,7 @@
                 function payload(riderId) {
                     var dens = {};
                     denoms.forEach(function (note) {
-                        dens[note] = num($grid.find('.js-rr-denom[data-rider="' + riderId + '"][data-note="' + note + '"]').val());
+                        dens[note] = numSigned($grid.find('.js-rr-denom[data-rider="' + riderId + '"][data-note="' + note + '"]').val());
                     });
                     return {
                         _token: csrf,
@@ -524,7 +555,7 @@
                     denoms.forEach(function (note) {
                         var sum = 0;
                         $grid.find('.js-rr-denom[data-note="' + note + '"]').each(function () {
-                            sum += num($(this).val());
+                            sum += numSigned($(this).val());
                         });
                         $grid.find('.js-rr-note-total[data-note-total="' + note + '"]').text(fmt(sum));
                     });
@@ -565,16 +596,23 @@
                     $('#rrBalanceCard').toggleClass('is-ok', ok === count && count > 0).toggleClass('is-warn', !(ok === count && count > 0));
                     syncColumnStyles();
                 }
-                function saveRider(riderId) {
+                function saveRider(riderId, opts) {
+                    opts = opts || {};
                     if (! canEdit || ! canEditRider(riderId)) return;
                     compute(riderId);
                     refreshSummary();
+                    pendingSaves[riderId] = true;
                     $.ajax({
                         url: saveUrl,
                         type: 'POST',
                         data: payload(riderId),
+                        async: opts.async !== false,
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                        success: function () {
+                            delete pendingSaves[riderId];
+                        },
                         error: function (xhr) {
+                            delete pendingSaves[riderId];
                             var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : @json(__('message.something_went_wrong'));
                             if (typeof errorMessage === 'function') errorMessage(msg);
                         }
@@ -584,12 +622,55 @@
                     if (! canEditRider(riderId)) return;
                     compute(riderId);
                     refreshSummary();
+                    // Don't autosave while cashier is mid-typing "-" / partial value.
+                    var $focus = $(document.activeElement);
+                    if ($focus.is('.js-rr-field, .js-rr-denom')) {
+                        var typing = String($focus.val() == null ? '' : $focus.val());
+                        if (typing === '-' || typing === '' || /^-?\d+$/.test(typing) === false && typing.length > 0) {
+                            // still recompute UI; save on blur / after a complete number
+                            if (typing === '-' || typing === '') {
+                                clearTimeout(timers[riderId]);
+                                timers[riderId] = setTimeout(function () {
+                                    if (String($focus.val() || '') === '-' || String($focus.val() || '') === '') return;
+                                    saveRider(riderId);
+                                }, 800);
+                                return;
+                            }
+                        }
+                    }
                     clearTimeout(timers[riderId]);
                     timers[riderId] = setTimeout(function () { saveRider(riderId); }, 450);
                 }
+                function flushPendingSaves() {
+                    Object.keys(timers).forEach(function (riderId) {
+                        clearTimeout(timers[riderId]);
+                        delete timers[riderId];
+                        saveRider(riderId, { async: false });
+                    });
+                }
 
+                // type=number + scroll wheel silently changes values and autosaves zeros.
+                $grid.on('wheel.pdsRiderRemit', '.js-rr-field, .js-rr-denom', function (e) {
+                    e.preventDefault();
+                });
                 $grid.on('input.pdsRiderRemit change.pdsRiderRemit', '.js-rr-field, .js-rr-denom', function () {
-                    schedule($(this).data('rider'));
+                    sanitizeQtyInput(this, false);
+                    schedule($(this).attr('data-rider') || $(this).data('rider'));
+                });
+                $grid.on('blur.pdsRiderRemit', '.js-rr-field, .js-rr-denom', function () {
+                    sanitizeQtyInput(this, true);
+                    var riderId = $(this).attr('data-rider') || $(this).data('rider');
+                    if (!riderId || !canEditRider(riderId)) return;
+                    clearTimeout(timers[riderId]);
+                    delete timers[riderId];
+                    saveRider(riderId);
+                });
+                $(window).off('beforeunload.pdsRiderRemit').on('beforeunload.pdsRiderRemit', function () {
+                    flushPendingSaves();
+                });
+                // Capture page hide / SPA leave as well as full refresh.
+                $(document).off('visibilitychange.pdsRiderRemit').on('visibilitychange.pdsRiderRemit', function () {
+                    if (document.visibilityState === 'hidden') flushPendingSaves();
                 });
 
                 $grid.on('keydown.pdsRiderRemit', '.js-rr-field, .js-rr-denom', function (e) {

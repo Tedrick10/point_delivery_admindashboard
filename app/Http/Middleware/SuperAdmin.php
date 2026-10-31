@@ -32,7 +32,7 @@ class SuperAdmin
         Auth::logout();
 
         return redirect()
-            ->route('super-admin.login')
+            ->route('admin-login')
             ->withErrors(__('message.access_denied'));
     }
 }

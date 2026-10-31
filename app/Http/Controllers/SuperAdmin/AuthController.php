@@ -3,53 +3,25 @@
 namespace App\Http\Controllers\SuperAdmin;
 
 use App\Http\Controllers\Controller;
-use App\Traits\LoginHistoryTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    use LoginHistoryTrait;
-
     public function showLogin()
     {
         if (Auth::check() && isSuperAdmin(Auth::user())) {
             return redirect()->route('super-admin.dashboard');
         }
 
-        if (Auth::check()) {
-            Auth::logout();
-        }
-
-        return view('super-admin.login');
+        // Unified Admin Login — Super Admin uses the same Admin Login page.
+        return redirect()->route('admin-login');
     }
 
     public function login(Request $request)
     {
-        $credentials = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string'],
-        ]);
-
-        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
-            throw ValidationException::withMessages([
-                'email' => [__('auth.failed')],
-            ]);
-        }
-
-        $user = Auth::user();
-        if (! isSuperAdmin($user)) {
-            Auth::logout();
-            throw ValidationException::withMessages([
-                'email' => ['Super Admin account only. Use Branch Admin login for branch accounts.'],
-            ]);
-        }
-
-        $request->session()->regenerate();
-        $this->saveLoginHistory($user);
-
-        return redirect()->intended(route('super-admin.dashboard'));
+        // POST /super-admin/login kept for old bookmarks; send to unified login.
+        return redirect()->route('admin-login');
     }
 
     public function logout(Request $request)
@@ -58,6 +30,6 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('super-admin.login');
+        return redirect()->route('admin-login');
     }
 }

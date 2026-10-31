@@ -186,16 +186,10 @@
                 ->prepend('<i class="fas fa-exclamation-triangle"></i>')
                 ->link->attr(['class' => '']);
 
-            $pickupCancelledCount = Order::where('status', 'cancelled')
-                ->whereNull('deleted_at')
-                ->where(function ($q) {
-                    $q->whereNotNull('pickup_error_at')
-                        ->orWhereIn('pickup_error_choice', ['cancel', 'express'])
-                        ->orWhere('reason', 'like', '%pickup error%')
-                        ->orWhere('reason', 'like', '%User cancelled after pickup error%')
-                        ->orWhere('reason', 'like', '%User chose express after pickup error%');
-                })
-                ->count();
+            $pickupCancelledQuery = Order::query()->whereNull('deleted_at');
+            app(\App\Services\DispatchOrderWorkflowService::class)
+                ->applyPickupCancelledOrderFilter($pickupCancelledQuery);
+            $pickupCancelledCount = $pickupCancelledQuery->count();
             $pickupCancelledBadgeClass = 'badge badge-pill badge-danger p-1 animate__animated animate__flash' . ($pickupCancelledCount > 0 ? '' : ' d-none');
             $pickupCancelledLabel =
                 '<span>' . __('message.pickup_cancelled_order_list') . ' ' .

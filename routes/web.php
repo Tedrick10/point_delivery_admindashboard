@@ -59,6 +59,7 @@ use App\Http\Controllers\HrMySalaryController;
 use App\Http\Controllers\HrOfficeSalaryController;
 use App\Http\Controllers\HrRiderSalaryController;
 use App\Http\Controllers\HrStaffController;
+use App\Http\Controllers\PointSystemController;
 use App\Http\Controllers\RiderRemitController;
 use App\Http\Controllers\WhyDeliveryController;
 use App\Http\Controllers\WithdrawRequestController;
@@ -353,6 +354,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::delete('delivery-route-locations/townships/{id}', [DeliveryRouteLocationController::class, 'destroyTownship'])->name('delivery-route-locations.townships.destroy');
 
     Route::get('hr/my-salary', [HrMySalaryController::class, 'index'])->name('hr.my-salary.index');
+    Route::post('hr/my-salary/point-request', [HrMySalaryController::class, 'requestPoints'])->name('hr.my-salary.point-request');
     Route::get('hr/staff', [HrStaffController::class, 'index'])->name('hr.staff.index');
     Route::post('hr/staff', [HrStaffController::class, 'store'])->name('hr.staff.store');
     Route::put('hr/staff/{id}', [HrStaffController::class, 'update'])->name('hr.staff.update');
@@ -369,6 +371,18 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('hr/rider-salary', [HrRiderSalaryController::class, 'index'])->name('hr.rider-salary.index');
     Route::put('hr/rider-salary/row/{id}', [HrRiderSalaryController::class, 'updateRow'])->name('hr.rider-salary.row.update');
     Route::post('hr/rider-salary/sync', [HrRiderSalaryController::class, 'syncFromLateFine'])->name('hr.rider-salary.sync');
+
+    Route::get('point-system', [PointSystemController::class, 'index'])->name('point-system.index');
+    Route::get('point-system/follow-up', [PointSystemController::class, 'followUp'])->name('point-system.follow-up');
+    Route::get('point-system/payments/{id}', [PointSystemController::class, 'showPayment'])->name('point-system.payment.show');
+    Route::post('point-system/payments/{id}/approve', [PointSystemController::class, 'approvePayment'])->name('point-system.payment.approve');
+    Route::post('point-system/payments/{id}/confirm', [PointSystemController::class, 'confirmPayment'])->name('point-system.payment.confirm');
+    Route::post('point-system/payments/{id}/reject', [PointSystemController::class, 'rejectPayment'])->name('point-system.payment.reject');
+    Route::get('point-system/salary-requests', [PointSystemController::class, 'salaryRequests'])->name('point-system.salary-requests');
+    Route::post('point-system/salary-requests/{id}/approve', [PointSystemController::class, 'approveSalaryRequest'])->name('point-system.salary.approve');
+    Route::post('point-system/salary-requests/{id}/reject', [PointSystemController::class, 'rejectSalaryRequest'])->name('point-system.salary.reject');
+    Route::get('point-system/search-users', [PointSystemController::class, 'searchUsers'])->name('point-system.search-users');
+    Route::post('point-system/credit', [PointSystemController::class, 'credit'])->name('point-system.credit');
 
     Route::get('rider-remit', [RiderRemitController::class, 'index'])->name('order.rider-remit');
     Route::post('rider-remit/save', [RiderRemitController::class, 'save'])->name('order.rider-remit.save');
@@ -405,6 +419,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('dispatch-order/{orderId}/item/{itemId}/gate', [OrderController::class, 'dispatchItemUpdateGate'])->name('order.dispatch.item.update-gate');
     Route::delete('dispatch-order/{orderId}/item/{itemId}', [OrderController::class, 'dispatchItemDestroy'])->name('order.dispatch.item.destroy');
     Route::get('dispatch-order/{orderId}/item/{itemId}/messages', [OrderController::class, 'dispatchItemMessages'])->name('order.dispatch.item.messages');
+    Route::get('dispatch-order/{orderId}/item/{itemId}/messages/chat', [OrderController::class, 'dispatchItemMessageShow'])->name('order.dispatch.item.messages.show');
     Route::post('dispatch-order/{orderId}/item/{itemId}/messages', [OrderController::class, 'dispatchItemMessageStore'])->name('order.dispatch.item.messages.store');
     Route::get('dispatch-order/{id}/edit', [OrderController::class, 'dispatchEdit'])->name('order.dispatch.edit');
     Route::patch('dispatch-order/{id}', [OrderController::class, 'dispatchUpdate'])->name('order.dispatch.update');
@@ -540,6 +555,15 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::get('customersupport/{id}/chat-messages', [CustomerSupportController::class, 'chatMessages'])->name('customersupport.chat-messages');
     Route::post('order/{id}/ensure-chat', [CustomerSupportController::class, 'ensureOrderChat'])->name('order.ensure-chat');
     Route::resource('customersupport', CustomerSupportController::class);
+    Route::get('inquiry-inbox', [\App\Http\Controllers\ChannelChatInboxController::class, 'inquiry'])->name('inquiry.inbox');
+    Route::get('inquiry-inbox/live', [\App\Http\Controllers\ChannelChatInboxController::class, 'inquiryLive'])->name('inquiry.inbox.live');
+    Route::get('complaint-inbox', [\App\Http\Controllers\ChannelChatInboxController::class, 'complaint'])->name('complaint.inbox');
+    Route::get('complaint-inbox/live', [\App\Http\Controllers\ChannelChatInboxController::class, 'complaintLive'])->name('complaint.inbox.live');
+    Route::get('inquiry-auto-replies', [\App\Http\Controllers\InquiryAutoReplyController::class, 'index'])->name('inquiry-auto-replies.index');
+    Route::post('inquiry-auto-replies', [\App\Http\Controllers\InquiryAutoReplyController::class, 'store'])->name('inquiry-auto-replies.store');
+    Route::post('inquiry-auto-replies/reorder', [\App\Http\Controllers\InquiryAutoReplyController::class, 'reorder'])->name('inquiry-auto-replies.reorder');
+    Route::put('inquiry-auto-replies/{id}', [\App\Http\Controllers\InquiryAutoReplyController::class, 'update'])->name('inquiry-auto-replies.update');
+    Route::delete('inquiry-auto-replies/{id}', [\App\Http\Controllers\InquiryAutoReplyController::class, 'destroy'])->name('inquiry-auto-replies.destroy');
     Route::resource('supportchathistory', SupportchatHistoryController::class);
 
     Route::put('/courier/{id}/couriercompany_id', [OrderController::class, 'updateCourierCompany'])->name('courier.couriercompany');

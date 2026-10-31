@@ -765,7 +765,7 @@ class HrPayrollService
         $this->ensureSalaryRows($month, $group);
 
         $row = HrOfficeSalaryRow::query()
-            ->with(['staff.user'])
+            ->with(['staff.user.pointWallet'])
             ->whereDate('period_month', $month->toDateString())
             ->where('staff_id', $staff->id)
             ->first();
@@ -794,6 +794,8 @@ class HrPayrollService
             'bag_deduction' => round((float) $row->bag_deduction, 2),
             'personal_expense' => round((float) $row->personal_expense, 2),
             'deposit' => round((float) $row->deposit, 2),
+            'point_salary_amount' => round((float) ($row->point_salary_amount ?? 0), 2),
+            'point_balance' => round((float) (optional($row->staff?->user?->pointWallet)->balance ?? 0), 2),
             'total_salary' => round((float) $row->total_salary, 2),
             'total_deduction' => round((float) $row->total_deduction, 2),
             'net_pay' => round((float) $row->net_pay, 2),

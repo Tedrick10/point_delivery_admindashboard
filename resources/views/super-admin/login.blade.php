@@ -329,13 +329,6 @@
                 </label>
                 <button type="submit" class="sa-btn">{{ __('message.sa_enter_panel') }}</button>
             </form>
-            <div class="sa-foot">
-                {{ __('message.sa_branch_admin_q') }}
-                <a href="{{ route('admin-login') }}">
-                    <i class="fas fa-store" aria-hidden="true"></i>
-                    {{ __('message.sa_admin_hub_login') }}
-                </a>
-            </div>
         </div>
     </div>
     <script>

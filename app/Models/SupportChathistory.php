@@ -21,6 +21,7 @@ class SupportChathistory extends Model implements HasMedia
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('chat_image')->singleFile();
+        $this->addMediaCollection('chat_media')->singleFile();
     }
 
     public function user()

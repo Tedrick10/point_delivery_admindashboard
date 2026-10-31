@@ -41,14 +41,19 @@ class DailyCheckListService
         $rows = collect();
         $pendingGroups = [];
 
-        // Rider invoices must follow the rider home branch (dropdown / branch tabs),
-        // not parcel destination — fix stale destination-based branch_ids in range.
+        // Rider invoices follow rider home branch; OS invoices follow parcel destination
+        // (same as ငွေရှင်းတမ်း) so Other City / Yangon deliveries leave the MDY tab.
         if (in_array(DailyCheckInvoice::PARTY_RIDER, $modes, true)) {
             $this->repairRiderInvoiceBranches($fromDay, $toDay);
         }
+        if (in_array(DailyCheckInvoice::PARTY_OS, $modes, true)) {
+            $this->repairOsInvoiceBranches($fromDay, $toDay);
+        }
 
         foreach ($modes as $partyType) {
-            $items = $this->baseItemsQuery($fromDay, $toDay, $branchId, $partyType)
+            // OS: load all destinations then filter the sheet by parcel destination tab.
+            $itemBranchId = $partyType === DailyCheckInvoice::PARTY_OS ? null : $branchId;
+            $items = $this->baseItemsQuery($fromDay, $toDay, $itemBranchId, $partyType)
                 ->when($partyType === DailyCheckInvoice::PARTY_OS, function ($q) {
                     // OS only after Finish (admin_finished_at). No-fee Os Return stays off Daily Check.
                     // Do not filter by order.client_id here — photo/Viber parcels often store the
@@ -97,8 +102,18 @@ class DailyCheckListService
                     ? $this->osPartyUserId($first)
                     : (int) ($first->delivery_man_id ?? 0);
 
+                $displayItems = $groupItems;
+                if ($partyType === DailyCheckInvoice::PARTY_OS && $branchId !== null && $branchId > 0) {
+                    $displayItems = $groupItems
+                        ->filter(static fn (DispatchOrderItem $item) => osSettlementBranchIdForItem($item) === (int) $branchId)
+                        ->values();
+                    if ($displayItems->isEmpty()) {
+                        continue;
+                    }
+                }
+
                 $invoice = $this->ensureInvoice($partyType, $partyId, $day, $groupItems);
-                $pendingGroups[] = [$invoice, $groupItems, $partyType];
+                $pendingGroups[] = [$invoice, $displayItems, $partyType];
             }
         }
 
@@ -127,10 +142,24 @@ class DailyCheckListService
             $riderBranch = User::query()->whereKey($partyUserId)->value('branch_id');
             $branchId = $riderBranch ? (int) $riderBranch : null;
         }
+        if ($partyType === DailyCheckInvoice::PARTY_OS && $items && $items->isNotEmpty()) {
+            // OS sheet tab = parcel destination majority (to, else from) — matches ငွေရှင်းတမ်း.
+            $branchId = $items
+                ->map(static fn (DispatchOrderItem $i) => osSettlementBranchIdForItem($i))
+                ->filter(static fn ($id) => (int) $id > 0)
+                ->countBy()
+                ->sortDesc()
+                ->keys()
+                ->first();
+            $branchId = $branchId ? (int) $branchId : null;
+        } elseif ($partyType === DailyCheckInvoice::PARTY_OS && $partyUserId > 0) {
+            $osBranch = osHomeBranchId($partyUserId);
+            $branchId = $osBranch ? (int) $osBranch : null;
+        }
         if ($branchId === null && $items && $items->isNotEmpty()) {
             $branchId = $items
-                ->map(fn (DispatchOrderItem $i) => $i->to_branch_id ?: $i->from_branch_id)
-                ->filter()
+                ->map(static fn (DispatchOrderItem $i) => osSettlementBranchIdForItem($i))
+                ->filter(static fn ($id) => (int) $id > 0)
                 ->countBy()
                 ->sortDesc()
                 ->keys()
@@ -353,6 +382,10 @@ class DailyCheckListService
 
                     return;
                 }
+                if ($partyType === DailyCheckInvoice::PARTY_OS) {
+                    // OS tab = Online Shop home branch (filtered after party resolution).
+                    return;
+                }
                 applyDestinationBranchFilter($q, $branchId);
             });
     }
@@ -362,19 +395,71 @@ class DailyCheckListService
      */
     protected function repairRiderInvoiceBranches(string $fromDay, string $toDay): void
     {
+        $this->repairPartyInvoiceBranches(DailyCheckInvoice::PARTY_RIDER, $fromDay, $toDay);
+    }
+
+    /**
+     * Align stored OS invoice branch_id with parcel destination majority.
+     */
+    protected function repairOsInvoiceBranches(string $fromDay, string $toDay): void
+    {
         DailyCheckInvoice::query()
-            ->where('party_type', DailyCheckInvoice::PARTY_RIDER)
+            ->where('party_type', DailyCheckInvoice::PARTY_OS)
+            ->whereBetween('received_date', [$fromDay, $toDay])
+            ->orderBy('id')
+            ->chunkById(100, function (Collection $invoices) {
+                $allIds = $invoices
+                    ->flatMap(static fn (DailyCheckInvoice $inv) => collect($inv->item_ids ?? [])->map(static fn ($id) => (int) $id))
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+                $destByItem = DispatchOrderItem::query()
+                    ->whereIn('id', $allIds ?: [0])
+                    ->get(['id', 'to_branch_id', 'from_branch_id'])
+                    ->keyBy('id');
+
+                foreach ($invoices as $invoice) {
+                    $destCounts = collect($invoice->item_ids ?? [])
+                        ->map(static function ($id) use ($destByItem) {
+                            $item = $destByItem->get((int) $id);
+                            if (! $item) {
+                                return 0;
+                            }
+
+                            return osSettlementBranchIdForItem($item);
+                        })
+                        ->filter(static fn ($id) => (int) $id > 0)
+                        ->countBy()
+                        ->sortDesc();
+                    $dest = (int) ($destCounts->keys()->first() ?? 0);
+                    if ($dest <= 0 || (int) ($invoice->branch_id ?? 0) === $dest) {
+                        continue;
+                    }
+                    $invoice->branch_id = $dest;
+                    $invoice->save();
+                }
+            });
+    }
+
+    /**
+     * Align stored Rider Daily Check invoice branch_id with the rider home branch.
+     */
+    protected function repairPartyInvoiceBranches(string $partyType, string $fromDay, string $toDay): void
+    {
+        DailyCheckInvoice::query()
+            ->where('party_type', $partyType)
             ->whereBetween('received_date', [$fromDay, $toDay])
             ->whereNotNull('party_user_id')
             ->orderBy('id')
             ->chunkById(200, function (Collection $invoices) {
-                $riderIds = $invoices->pluck('party_user_id')->map(fn ($id) => (int) $id)->unique()->values();
-                $branchByRider = User::query()
-                    ->whereIn('id', $riderIds)
+                $partyIds = $invoices->pluck('party_user_id')->map(fn ($id) => (int) $id)->unique()->values();
+                $branchByParty = User::query()
+                    ->whereIn('id', $partyIds)
                     ->pluck('branch_id', 'id');
 
                 foreach ($invoices as $invoice) {
-                    $home = $branchByRider->get((int) $invoice->party_user_id);
+                    $home = $branchByParty->get((int) $invoice->party_user_id);
                     if (! $home) {
                         continue;
                     }
@@ -386,6 +471,36 @@ class DailyCheckListService
                     $invoice->save();
                 }
             });
+    }
+
+    /**
+     * OS tab counts by parcel destination (party|day rows that have items for that branch).
+     *
+     * @return \Illuminate\Support\Collection<int|string, int>
+     */
+    public function osDestinationTabCounts(string $fromDay, string $toDay): Collection
+    {
+        $items = $this->baseItemsQuery($fromDay, $toDay, null, DailyCheckInvoice::PARTY_OS)
+            ->whereNotNull('admin_finished_at')
+            ->whereHas('order')
+            ->with(['order'])
+            ->get();
+
+        $buckets = [];
+        foreach ($items as $item) {
+            if (! dailyCheckListItemInPeriod($item, $fromDay, $toDay)) {
+                continue;
+            }
+            $dest = osSettlementBranchIdForItem($item);
+            if ($dest <= 0) {
+                continue;
+            }
+            $partyId = $this->osPartyUserId($item);
+            $day = $this->itemDay($item);
+            $buckets[$dest][$partyId.'|'.$day] = true;
+        }
+
+        return collect($buckets)->map(static fn ($parties) => count($parties));
     }
 
     protected function reloadItemsForInvoice(DailyCheckInvoice $invoice): Collection
@@ -411,7 +526,15 @@ class DailyCheckListService
                     return false;
                 }
                 if ($invoice->isOs()) {
-                    return $this->osPartyUserId($item) === (int) $invoice->party_user_id;
+                    if ($this->osPartyUserId($item) !== (int) $invoice->party_user_id) {
+                        return false;
+                    }
+                    $invBranch = (int) ($invoice->branch_id ?? 0);
+                    if ($invBranch > 0 && osSettlementBranchIdForItem($item) !== $invBranch) {
+                        return false;
+                    }
+
+                    return true;
                 }
 
                 return true;

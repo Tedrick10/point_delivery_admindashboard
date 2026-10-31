@@ -50,11 +50,11 @@ class MoneyTransferController extends Controller
         $branchTabCounts = $service->branchFinishedCounts($fromDay, $toDay);
         $allBranchCount = array_sum($branchTabCounts);
 
-        $osOptions = User::query()
-            ->where('user_type', 'client')
-            ->where('status', 1)
-            ->orderBy('name')
-            ->get(['id', 'name', 'contact_number']);
+        $osOptions = onlineShopFilterOptions([
+            'ensure_ids' => collect($rows)->pluck('os_user_id')
+                ->merge(is_numeric($osFilter) ? [(int) $osFilter] : [])
+                ->all(),
+        ]);
 
         $pageTitle = __('message.money_transfer_list');
         $assets = [];

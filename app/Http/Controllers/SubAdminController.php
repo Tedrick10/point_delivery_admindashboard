@@ -48,7 +48,13 @@ class SubAdminController extends Controller
 
         $auth_user = authSession();
         $assets = ['datatable'];
-        $multi_checkbox_delete = $auth_user->can('users-delete') ? '<button id="deleteSelectedBtn" checked-title = "users-checked" class="float-left btn btn-sm ">' . __('message.delete_selected') . '</button>' : '';
+        $canDelete = $auth_user->can('subadmin-delete') || $auth_user->can('users-delete');
+        // Keep bulk Delete always visible (same pattern as Rider List / Online Shop).
+        $multi_checkbox_delete = $canDelete
+            ? '<button type="button" id="deleteSelectedBtn" checked-title="users-checked" class="btn btn-sm pds-subadmin-delete-btn is-visible">'
+                . '<i class="fas fa-trash-alt" aria-hidden="true"></i> <span>' . e(__('message.delete_selected')) . '</span>'
+                . '</button>'
+            : '';
         $createRoute = route('sub-admin.create', array_filter([
             'employee_type' => request('employee_type'),
             'role' => $roleFilter,
@@ -265,25 +271,35 @@ class SubAdminController extends Controller
      */
     public function destroy($id)
     {
-        $user = User::find($id);
+        $user = User::query()
+            ->whereNotIn('user_type', ['admin', 'client', 'delivery_man', 'super_admin'])
+            ->find($id);
         $status = 'error';
         $message = __('message.not_found_entry', ['name' => __('message.sub_admin')]);
 
-        if($user != '') {
+        if ($user) {
+            if (env('APP_DEMO')) {
+                $message = __('message.demo_permission_denied');
+                if (request()->is('api/*') || request()->ajax()) {
+                    return response()->json(['status' => false, 'message' => $message], 403);
+                }
+
+                return redirect()->back()->withErrors($message);
+            }
+
             $user->delete();
             $status = 'success';
             $message = __('message.delete_form', ['form' => __('message.sub_admin')]);
         }
 
-        if(request()->is('api/*')){
-            return response()->json(['status' => true, 'message' => $message ]);
+        if (request()->is('api/*') || request()->ajax()) {
+            return response()->json([
+                'status' => $status === 'success',
+                'message' => $message,
+            ]);
         }
 
-        if(request()->ajax()) {
-            return response()->json(['status' => true, 'message' => $message ]);
-        }
-
-        return redirect()->back()->with($status,$message);
+        return redirect()->back()->with($status, $message);
     }
 
     public function action(Request $request)

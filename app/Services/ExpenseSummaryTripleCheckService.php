@@ -134,10 +134,17 @@ class ExpenseSummaryTripleCheckService
     /**
      * @return array<string, array<string, bool>>
      */
-    public function checksBetween(string $from, string $to): array
+    public function checksBetween(string $from, string $to, ?int $branchId = null): array
     {
         $rows = ExpenseSummaryTripleCheck::query()
             ->whereBetween('check_date', [$from, $to])
+            ->when(
+                $branchId !== null && $branchId > 0,
+                static fn ($q) => $q->where('branch_id', $branchId),
+                // Without a branch tab, never reuse legacy global (branch_id=0) rows
+                // as if every branch were confirmed.
+                static fn ($q) => $q->whereRaw('1 = 0')
+            )
             ->get(['check_date', 'checker_key']);
 
         $map = [];
@@ -194,13 +201,18 @@ class ExpenseSummaryTripleCheckService
     }
 
     /**
-     * @return array{key: string, dates: list<string>, checks: array<string, array<string, bool>>}
+     * @return array{key: string, dates: list<string>, checks: array<string, array<string, bool>>, branch_id: int}
      */
-    public function confirmRange(User $user, string $from, string $to): array
+    public function confirmRange(User $user, string $from, string $to, ?int $branchId = null): array
     {
         $key = $this->checkerKeyForUser($user);
         if (! $key) {
             abort(403, __('message.expense_summary_confirm_denied'));
+        }
+
+        $branchId = (int) ($branchId ?? 0);
+        if ($branchId <= 0) {
+            abort(422, __('message.something_went_wrong'));
         }
 
         $start = Carbon::parse($from, 'Asia/Yangon')->startOfDay();
@@ -217,6 +229,7 @@ class ExpenseSummaryTripleCheckService
                 'key' => $key,
                 'dates' => [],
                 'checks' => [],
+                'branch_id' => $branchId,
             ];
         }
         if ($start->diffInDays($end) > 62) {
@@ -232,6 +245,7 @@ class ExpenseSummaryTripleCheckService
                 [
                     'check_date' => $ymd,
                     'checker_key' => $key,
+                    'branch_id' => $branchId,
                 ],
                 [
                     'user_id' => $user->id,
@@ -243,7 +257,8 @@ class ExpenseSummaryTripleCheckService
         return [
             'key' => $key,
             'dates' => $dates,
-            'checks' => $this->checksBetween($start->toDateString(), $end->toDateString()),
+            'checks' => $this->checksBetween($start->toDateString(), $end->toDateString(), $branchId),
+            'branch_id' => $branchId,
         ];
     }
 

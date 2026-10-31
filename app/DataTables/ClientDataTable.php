@@ -40,19 +40,28 @@ class ClientDataTable extends DataTable
                 return maskSensitiveInfo('contact_number', $phone !== '' ? $phone : $query->contact_number);
             })
             ->order(function ($query) {
-                if (request()->has('order')) {
-                    $order = request()->order[0];
-                    $column_index = $order['column'];
+                // Newest Online Shops (New Order creates) first. Without an
+                // explicit ORDER BY, MySQL returns id ASC and new rows bury on
+                // the last page (~1490+) so staff think they are "missing".
+                if (! request()->has('order')) {
+                    $query->orderBy('users.id', 'desc');
 
-                    $column_name = 'id';
-                    $direction = 'desc';
-                    if ($column_index != 0) {
-                        $column_name = request()->columns[$column_index]['data'];
-                        $direction = $order['dir'];
-                    }
-
-                    $query->orderBy($column_name, $direction);
+                    return;
                 }
+
+                $order = request()->order[0];
+                $column_index = (int) ($order['column'] ?? 0);
+                $column_name = 'users.id';
+                $direction = 'desc';
+                if ($column_index !== 0) {
+                    $requested = (string) (request()->columns[$column_index]['data'] ?? '');
+                    if ($requested !== '' && $requested !== 'checkbox' && $requested !== 'DT_RowIndex') {
+                        $column_name = $requested === 'id' ? 'users.id' : $requested;
+                        $direction = ($order['dir'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+                    }
+                }
+
+                $query->orderBy($column_name, $direction);
             })
             ->editColumn('city_id', function ($query) {
                 return optional($query->city)->name ?? '-';

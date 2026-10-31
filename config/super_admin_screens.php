@@ -100,6 +100,14 @@ return [
         'workspace' => null,
         'links' => [],
     ],
+    'point-system' => [
+        'title_key' => 'sa_screen_point_system',
+        'subtitle_key' => 'sa_screen_point_system_sub',
+        'icon' => 'fa-medal',
+        // Embedded board — tabs live inside the screen (no external workspace links).
+        'workspace' => null,
+        'links' => [],
+    ],
     'welcome-promotion' => [
         'title_key' => 'sa_screen_welcome_promotion',
         'subtitle_key' => 'sa_screen_welcome_promotion_sub',
@@ -183,5 +191,15 @@ return [
         'icon' => 'fa-font',
         'workspace' => null,
         'links' => [],
+    ],
+    'complaints' => [
+        'title_key' => 'complaint_chat',
+        'subtitle_key' => 'sa_screen_complaints_sub',
+        'icon' => 'fa-exclamation-triangle',
+        'workspace' => 'complaint.inbox',
+        'links' => [
+            ['route' => 'complaint.inbox', 'label_key' => 'complaint_chat'],
+            ['route' => 'inquiry.inbox', 'label_key' => 'inquiry_chat'],
+        ],
     ],
 ];

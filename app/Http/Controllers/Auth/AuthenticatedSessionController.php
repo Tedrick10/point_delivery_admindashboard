@@ -81,9 +81,7 @@ class AuthenticatedSessionController extends Controller
 
         if (isset($request->admin_login) && $request->admin_login === "admin_login") {
             if (isSuperAdmin($user) || $user->hasRole('super_admin')) {
-                Auth::logout();
-                return redirect()->route('super-admin.login')
-                    ->withErrors(['email' => 'Use the Super Admin login page for this account.']);
+                return redirect()->route('super-admin.dashboard');
             }
             if ($user->hasRole('admin') || ($user->user_type ?? '') === 'admin') {
                 return redirect()->route('home');

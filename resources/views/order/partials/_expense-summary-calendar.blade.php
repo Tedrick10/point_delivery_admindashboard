@@ -15,7 +15,7 @@
     $confirmTo = $selectedToYmd && $selectedToYmd > $calendarToday ? $calendarToday : $selectedToYmd;
 @endphp
 
-<aside class="pds-summary-cal" data-confirm-url="{{ $tripleConfirmUrl }}" data-from="{{ $confirmFrom }}" data-to="{{ $confirmTo }}" data-today="{{ $calendarToday }}" data-checker="{{ $tripleCheckerKey }}">
+<aside class="pds-summary-cal" data-confirm-url="{{ $tripleConfirmUrl }}" data-from="{{ $confirmFrom }}" data-to="{{ $confirmTo }}" data-today="{{ $calendarToday }}" data-checker="{{ $tripleCheckerKey }}" data-branch-id="{{ (int) ($selectedBranchId ?? 0) }}">
     <header class="pds-summary-cal__head">
         <div>
             <p class="pds-summary-cal__eyebrow">{{ __('message.expense_summary_triple_check') }}</p>
