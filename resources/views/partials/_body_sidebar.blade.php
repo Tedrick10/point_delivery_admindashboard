@@ -17,26 +17,26 @@
         ) {
             // Dashboard
             $menu
-                ->add('<span>' . __('message.dashboard') . '</span>', ['route' => 'home'])
+                ->add(adminUiSpan('nav.dashboard', __('message.dashboard')), ['route' => 'home'])
                 ->prepend('<i class="fas fa-home"></i>')
                 ->link->attr(['class' => '']);
 
             // New Order
             $menu
-                ->add('<span>' . __('message.dispatch') . '</span>', ['class' => '', 'route' => 'order.create'])
+                ->add(adminUiSpan('nav.new_order', __('message.dispatch')), ['class' => '', 'route' => 'order.create'])
                 ->prepend('<i class="fa fa-plus"></i>')
                 ->data('permission', 'order-add')
                 ->link->attr(['class' => '']);
 
             $menu
-                ->add('<span>' . __('message.nav_operations') . '</span>', ['class' => 'pds-nav-section'])
+                ->add(adminUiSpan('nav.section.operations', __('message.nav_operations')), ['class' => 'pds-nav-section'])
                 ->data('is_section', true)
                 ->link->href('javascript:void(0)')
                 ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
 
             // Order (group)
             $menu
-                ->add('<span>' . __('message.order') . '</span>', ['class' => ''])
+                ->add(adminUiSpan('nav.order', __('message.order')), ['class' => ''])
                 ->prepend('<i class="fa fa-thin fa-file"></i>')
                 ->nickname('order')
                 ->data('permission', 'order-list')
@@ -44,7 +44,7 @@
                 ->href('#order');
 
             $menu->order
-                ->add('<span>' . __('message.order_list') . '</span>', [
+                ->add(adminUiSpan('nav.order_list', __('message.order_list')), [
                     'class' => 'sidebar-layout',
                     'route' => ['order.index', 'orders_type' => 'list'],
                 ])
@@ -56,10 +56,10 @@
             $preOrderCount = app(\App\Services\DispatchOrderWorkflowService::class)->preOrderCount();
             $preOrderBadgeClass = 'badge badge-pill badge-info p-1 animate__animated animate__flash' . ($preOrderCount > 0 ? '' : ' d-none');
             $preOrderLabel =
-                '<span>' . __('message.pre_order_list') . ' ' .
+                '<span data-admin-text-key="nav.pre_order" data-admin-edit-text="1">' . e(adminUiText('nav.pre_order', __('message.pre_order_list'))) . '</span> ' .
                 '<span class="' . $preOrderBadgeClass . '" id="preOrderCount" data-live-badge="preOrderCount">' .
                 ($preOrderCount > 0 ? $preOrderCount : '') .
-                '</span></span>';
+                '</span>';
             $menu->order
                 ->add($preOrderLabel, [
                     'class' => 'sidebar-layout',
@@ -75,7 +75,7 @@
                 ->link->attr(['class' => '']);
 
             $menu->order
-                ->add('<span>' . __('message.follow_up') . '</span>', [
+                ->add(adminUiSpan('nav.follow_up', __('message.follow_up')), [
                     'class' => 'sidebar-layout',
                     'route' => 'order.dispatch.to-assign',
                 ])
@@ -89,12 +89,12 @@
             $assign100Count = $hubService->poolCount($isHubUser ? (int) $authUser->id : null);
             $assign100BadgeClass = 'badge badge-pill badge-warning p-1 animate__animated animate__flash' . ($assign100Count > 0 ? '' : ' d-none');
             // Header toggle: label only. Count badge lives on the inner Assign 100 child.
-            $assign100Label = '<span>' . __('message.assign_100') . '</span>';
+            $assign100Label = adminUiSpan('nav.assign_100', __('message.assign_100'));
             $assign100ChildLabel =
-                '<span>' . __('message.assign_100') . ' ' .
+                '<span data-admin-text-key="nav.assign_100" data-admin-edit-text="1">' . e(adminUiText('nav.assign_100', __('message.assign_100'))) . '</span> ' .
                 '<span class="' . $assign100BadgeClass . '" id="assign100Count" data-live-badge="assign100Count">' .
                 ($assign100Count > 0 ? $assign100Count : '') .
-                '</span></span>';
+                '</span>';
 
             $menu
                 ->add($assign100Label, ['class' => ''])
@@ -119,10 +119,10 @@
                 $hubInboxCount = $hubService->inboxCount((int) $authUser->id);
                 $hubInboxBadgeClass = 'badge badge-pill badge-info p-1' . ($hubInboxCount > 0 ? '' : ' d-none');
                 $hubInboxLabel =
-                    '<span>' . __('message.from_mdy_to_ygn') . ' ' .
+                    '<span data-admin-text-key="nav.from_mdy_to_ygn" data-admin-edit-text="1">' . e(adminUiText('nav.from_mdy_to_ygn', __('message.from_mdy_to_ygn'))) . '</span> ' .
                     '<span class="' . $hubInboxBadgeClass . '" id="hubInboxCount" data-live-badge="hubInboxCount">' .
                     ($hubInboxCount > 0 ? $hubInboxCount : '') .
-                    '</span></span>';
+                    '</span>';
                 $menu->assign100
                     ->add($hubInboxLabel, [
                         'class' => 'sidebar-layout',
@@ -137,12 +137,13 @@
                 foreach ($hubService->accounts() as $hubAccount) {
                     $inboundCount = $hubService->inboundCount((int) $hubAccount->id);
                     $hubLabelText = $hubService->inboundMenuLabel($hubAccount);
+                    $hubNavKey = 'nav.hub.'.(int) $hubAccount->id;
                     $hubInboundBadgeClass = 'badge badge-pill badge-info p-1' . ($inboundCount > 0 ? '' : ' d-none');
                     $hubLabel =
-                        '<span>' . e($hubLabelText) . ' ' .
+                        '<span data-admin-text-key="'.e($hubNavKey).'" data-admin-edit-text="1">' . e(adminUiText($hubNavKey, $hubLabelText)) . '</span> ' .
                         '<span class="' . $hubInboundBadgeClass . '" id="hubInboundCount-' . (int) $hubAccount->id . '" data-live-badge="hubInboundCount-' . (int) $hubAccount->id . '">' .
                         ($inboundCount > 0 ? $inboundCount : '') .
-                        '</span></span>';
+                        '</span>';
                     $menu->assign100
                         ->add($hubLabel, [
                             'class' => 'sidebar-layout',
@@ -168,10 +169,10 @@
                 ->count();
             $pickupErrorBadgeClass = 'badge badge-pill badge-danger p-1 animate__animated animate__flash' . ($pickupErrorCount > 0 ? '' : ' d-none');
             $pickupErrorLabel =
-                '<span>' . __('message.pickup_error_order_list') . ' ' .
+                '<span data-admin-text-key="nav.pickup_error" data-admin-edit-text="1">' . e(adminUiText('nav.pickup_error', __('message.pickup_error_order_list'))) . '</span> ' .
                 '<span class="' . $pickupErrorBadgeClass . '" id="pickupErrorCount" data-live-badge="pickupErrorCount">' .
                 ($pickupErrorCount > 0 ? $pickupErrorCount : '') .
-                '</span></span>';
+                '</span>';
             $menu->order
                 ->add($pickupErrorLabel, [
                     'class' => 'sidebar-layout',
@@ -192,10 +193,10 @@
             $pickupCancelledCount = $pickupCancelledQuery->count();
             $pickupCancelledBadgeClass = 'badge badge-pill badge-danger p-1 animate__animated animate__flash' . ($pickupCancelledCount > 0 ? '' : ' d-none');
             $pickupCancelledLabel =
-                '<span>' . __('message.pickup_cancelled_order_list') . ' ' .
+                '<span data-admin-text-key="nav.pickup_cancelled" data-admin-edit-text="1">' . e(adminUiText('nav.pickup_cancelled', __('message.pickup_cancelled_order_list'))) . '</span> ' .
                 '<span class="' . $pickupCancelledBadgeClass . '" id="pickupCancelledCount" data-live-badge="pickupCancelledCount">' .
                 ($pickupCancelledCount > 0 ? $pickupCancelledCount : '') .
-                '</span></span>';
+                '</span>';
             $menu->order
                 ->add($pickupCancelledLabel, [
                     'class' => 'sidebar-layout',
@@ -211,14 +212,14 @@
                 ->link->attr(['class' => '']);
 
             $menu
-                ->add('<span>' . __('message.nav_partners') . '</span>', ['class' => 'pds-nav-section'])
+                ->add(adminUiSpan('nav.section.partners', __('message.nav_partners')), ['class' => 'pds-nav-section'])
                 ->data('is_section', true)
                 ->link->href('javascript:void(0)')
                 ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
 
             // Rider List
             $menu
-                ->add('<span>' . __('message.rider_list') . '</span>', [
+                ->add(adminUiSpan('nav.rider_list', __('message.rider_list')), [
                     'route' => 'order.dispatch.rider-list',
                 ])
                 ->data('permission', 'order-list')
@@ -228,7 +229,7 @@
             // Account Creation — right after Rider List (Managers with subadmin-list)
             if (\Illuminate\Support\Facades\Route::has('sub-admin.index')) {
                 $menu
-                    ->add('<span>' . __('message.account_creation') . '</span>', [
+                    ->add(adminUiSpan('nav.account_creation', __('message.account_creation')), [
                         'route' => 'sub-admin.index',
                     ])
                     ->data('permission', 'subadmin-list')
@@ -239,7 +240,7 @@
 
             // Online Shop List
             $menu
-                ->add('<span>' . __('message.list_form_title', ['form' => __('message.online_shop')]) . '</span>', [
+                ->add(adminUiSpan('nav.online_shop', __('message.list_form_title', ['form' => __('message.online_shop')])), [
                     'route' => 'users.index',
                 ])
                 ->data('permission', 'users-list')
@@ -248,7 +249,7 @@
 
             // Delivery Man
             $menu
-                ->add('<span>' . __('message.delivery_man') . '</span>', [
+                ->add(adminUiSpan('nav.delivery_man', __('message.delivery_man')), [
                     'route' => 'deliveryman.index',
                 ])
                 ->data('permission', 'deliveryman-list')
@@ -256,14 +257,14 @@
                 ->link->attr(['class' => '']);
 
             $menu
-                ->add('<span>' . __('message.nav_finance') . '</span>', ['class' => 'pds-nav-section'])
+                ->add(adminUiSpan('nav.section.finance', __('message.nav_finance')), ['class' => 'pds-nav-section'])
                 ->data('is_section', true)
                 ->link->href('javascript:void(0)')
                 ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
 
             // Settlement / Finance (group) — pin in header so it stays outside More
             $menu
-                ->add('<span>' . __('message.settlement') . '</span>', ['class' => ''])
+                ->add(adminUiSpan('nav.settlement', __('message.settlement')), ['class' => ''])
                 ->prepend('<i class="fas fa-hand-holding-usd"></i>')
                 ->nickname('settlement')
                 ->data('permission', 'order-list')
@@ -272,7 +273,7 @@
                 ->href('#settlement');
 
             $menu->settlement
-                ->add('<span>' . __('message.os_list') . '</span>', [
+                ->add(adminUiSpan('nav.os_list', __('message.os_list')), [
                     'class' => 'sidebar-layout',
                     'route' => 'order.dispatch.os-list',
                 ])
@@ -283,7 +284,7 @@
             $kyoShinScopes = app(\App\Services\KyoShinService::class)->allowedScopeKeys(Auth::user());
             if ($kyoShinScopes !== []) {
                 $menu->settlement
-                    ->add('<span>' . __('message.kyo_shin_title') . '</span>', [
+                    ->add(adminUiSpan('nav.kyo_shin', __('message.kyo_shin_title')), [
                         'class' => 'sidebar-layout',
                         'route' => 'order.kyo-shin',
                     ])
@@ -293,7 +294,7 @@
             }
 
             $menu->settlement
-                ->add('<span>' . __('message.daily_check_list') . '</span>', [
+                ->add(adminUiSpan('nav.daily_check', __('message.daily_check_list')), [
                     'class' => 'sidebar-layout',
                     'route' => 'order.daily-checklist',
                 ])
@@ -302,7 +303,7 @@
                 ->link->attr(['class' => '']);
 
             $menu->settlement
-                ->add('<span>' . __('message.money_transfer_list') . '</span>', [
+                ->add(adminUiSpan('nav.money_transfer', __('message.money_transfer_list')), [
                     'class' => 'sidebar-layout',
                     'route' => 'order.money-transfer',
                 ])
@@ -311,7 +312,7 @@
                 ->link->attr(['class' => '']);
 
             $menu->settlement
-                ->add('<span>' . __('message.rider_remit_title') . '</span>', [
+                ->add(adminUiSpan('nav.rider_remit', __('message.rider_remit_title')), [
                     'class' => 'sidebar-layout',
                     'route' => 'order.rider-remit',
                 ])
@@ -320,7 +321,7 @@
                 ->link->attr(['class' => '']);
 
             $menu->settlement
-                ->add('<span>' . __('message.cash_payout_title') . '</span>', [
+                ->add(adminUiSpan('nav.cash_payout', __('message.cash_payout_title')), [
                     'class' => 'sidebar-layout',
                     'route' => ['order.cash-payout', 'status' => 'unassigned'],
                 ])
@@ -329,7 +330,7 @@
                 ->link->attr(['class' => '']);
 
             $menu->settlement
-                ->add('<span>' . __('message.os_receive_screen_title') . '</span>', [
+                ->add(adminUiSpan('nav.os_receive', __('message.os_receive_screen_title')), [
                     'class' => 'sidebar-layout',
                     'route' => 'order.os-receive',
                 ])
@@ -338,7 +339,7 @@
                 ->link->attr(['class' => '']);
 
             $menu->settlement
-                ->add('<span>' . __('message.expenses_title') . '</span>', [
+                ->add(adminUiSpan('nav.expenses', __('message.expenses_title')), [
                     'class' => 'sidebar-layout',
                     'route' => 'order.expenses',
                 ])
@@ -347,7 +348,7 @@
                 ->link->attr(['class' => '']);
 
             $menu->settlement
-                ->add('<span>' . __('message.expense_summary_title') . '</span>', [
+                ->add(adminUiSpan('nav.expense_summary', __('message.expense_summary_title')), [
                     'class' => 'sidebar-layout',
                     'route' => 'order.expense-summary',
                 ])
@@ -356,14 +357,14 @@
                 ->link->attr(['class' => '']);
 
             $menu
-                ->add('<span>' . __('message.nav_admin') . '</span>', ['class' => 'pds-nav-section'])
+                ->add(adminUiSpan('nav.section.admin', __('message.nav_admin')), ['class' => 'pds-nav-section'])
                 ->data('is_section', true)
                 ->link->href('javascript:void(0)')
                 ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
 
             if (\Illuminate\Support\Facades\Route::has('branch.index')) {
                 $menu
-                    ->add('<span>' . __('message.branch') . '</span>', [
+                    ->add(adminUiSpan('nav.branch', __('message.branch')), [
                         'route' => 'branch.index',
                     ])
                     ->data('permission', 'branch-list')
@@ -373,7 +374,7 @@
 
             if (\Illuminate\Support\Facades\Route::has('branch-admins.index')) {
                 $menu
-                    ->add('<span>' . __('message.sa_branch_admins') . '</span>', [
+                    ->add(adminUiSpan('nav.branch_admins', __('message.sa_branch_admins')), [
                         'route' => 'branch-admins.index',
                     ])
                     ->data('permission', 'branch-admin-list')
@@ -383,7 +384,7 @@
 
             if (\Illuminate\Support\Facades\Route::has('delivery-route-locations.index')) {
                 $menu
-                    ->add('<span>' . __('message.delivery_route_locations_title') . '</span>', [
+                    ->add(adminUiSpan('nav.delivery_route', __('message.delivery_route_locations_title')), [
                         'route' => 'delivery-route-locations.index',
                     ])
                     ->data('permission', 'delivery-route-list')
@@ -393,7 +394,7 @@
 
             // My Salary — every office / admin account can open their own payroll slip
             $menu
-                ->add('<span>' . __('message.hr_my_salary_title') . '</span>', [
+                ->add(adminUiSpan('nav.my_salary', __('message.hr_my_salary_title')), [
                     'route' => 'hr.my-salary.index',
                 ])
                 ->prepend('<i class="fas fa-money-check-alt"></i>')
@@ -401,7 +402,7 @@
 
             // HR / Payroll (admin) — Late Time Fine / Extra Fine / ရုံးမှခဏယူငွေ → Super Admin only
             $menu
-                ->add('<span>' . __('message.hr_payroll') . '</span>', ['class' => ''])
+                ->add(adminUiSpan('nav.hr_payroll', __('message.hr_payroll')), ['class' => ''])
                 ->prepend('<i class="fas fa-users-cog"></i>')
                 ->nickname('hrpayroll')
                 ->data('permission', 'hr-payroll-list')
@@ -409,7 +410,7 @@
                 ->href('#hrpayroll');
 
             $menu->hrpayroll
-                ->add('<span>' . __('message.hr_office_salary_title') . '</span>', [
+                ->add(adminUiSpan('nav.office_salary', __('message.hr_office_salary_title')), [
                     'class' => 'sidebar-layout',
                     'route' => 'hr.office-salary.index',
                 ])
@@ -418,7 +419,7 @@
                 ->link->attr(['class' => '']);
 
             $menu->hrpayroll
-                ->add('<span>' . __('message.hr_rider_salary_title') . '</span>', [
+                ->add(adminUiSpan('nav.rider_salary', __('message.hr_rider_salary_title')), [
                     'class' => 'sidebar-layout',
                     'route' => 'hr.rider-salary.index',
                 ])
@@ -427,14 +428,14 @@
                 ->link->attr(['class' => '']);
 
             $menu
-                ->add('<span>' . __('message.nav_system') . '</span>', ['class' => 'pds-nav-section'])
+                ->add(adminUiSpan('nav.section.system', __('message.nav_system')), ['class' => 'pds-nav-section'])
                 ->data('is_section', true)
                 ->link->href('javascript:void(0)')
                 ->attr(['class' => 'pds-nav-section__link', 'tabindex' => '-1']);
 
             // Terms & Privacy
             $menu
-                ->add('<span>' . __('message.terms_condition') . '</span>', [
+                ->add(adminUiSpan('nav.terms', __('message.terms_condition')), [
                     'route' => 'term-condition',
                 ])
                 ->data('permission', 'terms condition')
@@ -442,7 +443,7 @@
                 ->link->attr(['class' => '']);
 
             $menu
-                ->add('<span>' . __('message.privacy_policy') . '</span>', [
+                ->add(adminUiSpan('nav.privacy', __('message.privacy_policy')), [
                     'route' => 'privacy-policy',
                 ])
                 ->data('permission', 'privacy policy')
@@ -462,13 +463,13 @@
                 '</span>';
 
             $menu
-                ->add('<span>' . __('message.dispatch') . '</span>', ['class' => '', 'route' => 'order.create'])
+                ->add(adminUiSpan('nav.new_order', __('message.dispatch')), ['class' => '', 'route' => 'order.create'])
                 ->prepend('<i class="fa fa-plus"></i>')
                 ->data('permission', 'order-add')
                 ->link->attr(['class' => '']);
             if ($requestCount == 0) {
                 $menu
-                    ->add('<span>' . __('message.order') . '</span>', ['class' => ''])
+                    ->add(adminUiSpan('nav.order', __('message.order')), ['class' => ''])
                     ->prepend('<i class="fa fa-thin fa-file"></i>')
                     ->nickname('order')
                     ->data('permission', 'order-list')

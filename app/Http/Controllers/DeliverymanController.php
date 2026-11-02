@@ -493,10 +493,21 @@ class DeliverymanController extends Controller
             'contact_number' => [
                 'required',
                 'max:20',
-                \Illuminate\Validation\Rule::unique('users', 'contact_number')
-                    ->ignore($deliveryman->id)
-                    ->whereNull('deleted_at')
-                    ->where('user_type', 'delivery_man'),
+                function ($attribute, $value, $fail) use ($deliveryman) {
+                    $variants = contactNumberLookupVariants((string) $value);
+                    if ($variants === []) {
+                        return;
+                    }
+                    $exists = User::query()
+                        ->where('user_type', 'delivery_man')
+                        ->whereNull('deleted_at')
+                        ->where('id', '!=', $deliveryman->id)
+                        ->whereIn('contact_number', $variants)
+                        ->exists();
+                    if ($exists) {
+                        $fail(__('message.contact_number_already_taken'));
+                    }
+                },
             ],
         ], [
             'contact_number.unique' => __('message.contact_number_already_taken'),

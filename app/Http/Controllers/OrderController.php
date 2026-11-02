@@ -799,6 +799,8 @@ class OrderController extends Controller
     {
         if ($status === '' || $status === 'all') {
             $query->whereIn('dispatch_order_items.status', $activeStatuses);
+            // Match Follow Up badge: cancelled parents never belong in "All".
+            $this->excludeFollowUpCancelledParents($query);
 
             return;
         }
@@ -849,6 +851,25 @@ class OrderController extends Controller
                 }),
             default => $query->whereIn('dispatch_order_items.status', $activeStatuses),
         };
+
+        // Completed/Delivered/etc. must not leak Cancelled-badge rows (parent order cancelled
+        // while item DB status is still completed). Cancelled filter keeps those rows.
+        if ($status !== 'cancelled') {
+            $this->excludeFollowUpCancelledParents($query);
+        }
+    }
+
+    /**
+     * Hide parcels that Follow Up labels as Cancelled (order cancelled / pickup-error cancel).
+     */
+    protected function excludeFollowUpCancelledParents($query): void
+    {
+        $query->whereDoesntHave('order', function ($oq) {
+            $oq->where(function ($inner) {
+                $inner->where('status', 'cancelled')
+                    ->orWhereIn('pickup_error_choice', ['cancel', 'express']);
+            });
+        });
     }
 
     /**
@@ -3142,7 +3163,8 @@ class OrderController extends Controller
             } else {
                 $rules['delivered_type'] = 'required|string|in:gate,other';
                 if ((string) $request->input('delivered_type') === 'gate') {
-                    $rules['gate_amount'] = 'required|numeric|gt:0';
+                    // Allow 0 တန်ဆာခ — some gate parcels have no fee.
+                    $rules['gate_amount'] = 'required|numeric|min:0';
                 }
             }
         }
@@ -6788,6 +6810,8 @@ class OrderController extends Controller
         }
 
         if ($request->cancelorderreturn == 1) {
+            $cancelledOrder = Order::find($request->order_id);
+            $previousStatus = $cancelledOrder?->status;
             $updateSuccessful = Order::where('id', $request->order_id)
                 ->update([
                     'status' => 'cancelled',
@@ -6796,15 +6820,14 @@ class OrderController extends Controller
                     'assign_datetime' => null,
                 ]);
             if ($updateSuccessful) {
-                $data['history_type'] = 'cancelled';
-                $data['history_message'] = __('message.cancelled_order');
-                $history_data = [
-                    'reason' => $request->reason,
-                    'status' => 'cancelled',
-                ];
-                OrderHistory::create($data);
                 $cancelledOrder = Order::find($request->order_id);
                 if ($cancelledOrder) {
+                    saveOrderHistory([
+                        'history_type' => 'cancelled',
+                        'order_id' => $cancelledOrder->id,
+                        'order' => $cancelledOrder,
+                        'previous_status' => $previousStatus,
+                    ]);
                     app(DispatchOrderWorkflowService::class)
                         ->releaseRiderAssignmentsForCancelledOrder($cancelledOrder);
                 }
@@ -7357,6 +7380,8 @@ class OrderController extends Controller
             }
         }
 
+        $previousStatusBeforeUpdate = (string) ($order->status ?? '');
+
         try {
             DB::beginTransaction();
 
@@ -7411,6 +7436,9 @@ class OrderController extends Controller
                 'order_id'     => $id,
                 'order'        => $order,
             ];
+            if ($status === 'cancelled') {
+                $history_data['previous_status'] = $previousStatusBeforeUpdate ?? null;
+            }
 
             try {
                 saveOrderHistory($history_data);
@@ -8482,59 +8510,80 @@ class OrderController extends Controller
 
     public function saveCancelOrder(Request $request)
     {
-        $order = Order::find($request->id);
-
-        if (!$order) {
-            return redirect()->back()->with('error', __('message.not_found_entry', ['name' => __('message.order')]));
-        }
-
-        $reason = $request->reason === 'Other' ? $request->other_reason : $request->reason;
-
-        $order->status = 'cancelled';
-        $order->reason = $reason;
-        $order->delivery_man_id = null;
-        $order->assign_datetime = null;
-        $order->save();
-
-        // Drop last-mile / pickup rider links so items leave Rider List and
-        // the cancelled order appears under Pick Up Cancelled.
-        app(DispatchOrderWorkflowService::class)
-            ->releaseRiderAssignmentsForCancelledOrder($order->fresh());
-
         $message = __('message.cancelled_order');
+        $actor = auth()->user();
+        $reason = $request->reason === 'Other' ? $request->other_reason : $request->reason;
+        $orderId = (int) $request->id;
 
-        if ($order->payment_id) {
-            if ($order->payment->payment_type !== 'cash' && $order->payment->payment_type !== 'wallet') {
-                $wallet = Wallet::where('user_id', $order->client_id)->first();
+        try {
+            DB::transaction(function () use ($orderId, $reason, $actor) {
+                $order = Order::query()->where('id', $orderId)->lockForUpdate()->first();
 
-                if ($wallet) {
-                    $wallet->total_amount += $order->payment->total_amount;
-                    $wallet->save();
-                } else {
-                    $wallet = Wallet::create([
-                        'user_id'      => $order->client_id,
-                        'total_amount' => $order->payment->total_amount,
-                    ]);
+                if (! $order) {
+                    throw new \RuntimeException('order_not_found');
                 }
 
-                // Save wallet history
-                WalletHistory::create([
-                    'user_id'          => $order->client_id,
-                    'amount'           => $order->payment->total_amount,
-                    'type'             => 'credit',
-                    'transaction_type' => 'order_cancel_refund',
-                    'order_id'         => $order->id,
-                    'note'             => 'Order cancelled refund',
+                // Double-submit / slow response: already cancelled → skip history + refund.
+                if ((string) ($order->status ?? '') === 'cancelled') {
+                    return;
+                }
+
+                $previousStatus = (string) ($order->status ?? '');
+
+                $order->status = 'cancelled';
+                $order->reason = $reason;
+                $order->delivery_man_id = null;
+                $order->assign_datetime = null;
+                $order->save();
+
+                // Drop last-mile / pickup rider links so items leave Rider List and
+                // the cancelled order appears under Pick Up Cancelled.
+                app(DispatchOrderWorkflowService::class)
+                    ->releaseRiderAssignmentsForCancelledOrder($order->fresh());
+
+                if ($order->payment_id) {
+                    if ($order->payment->payment_type !== 'cash' && $order->payment->payment_type !== 'wallet') {
+                        $wallet = Wallet::where('user_id', $order->client_id)->first();
+
+                        if ($wallet) {
+                            $wallet->total_amount += $order->payment->total_amount;
+                            $wallet->save();
+                        } else {
+                            $wallet = Wallet::create([
+                                'user_id'      => $order->client_id,
+                                'total_amount' => $order->payment->total_amount,
+                            ]);
+                        }
+
+                        // Save wallet history
+                        WalletHistory::create([
+                            'user_id'          => $order->client_id,
+                            'amount'           => $order->payment->total_amount,
+                            'type'             => 'credit',
+                            'transaction_type' => 'order_cancel_refund',
+                            'order_id'         => $order->id,
+                            'note'             => 'Order cancelled refund',
+                        ]);
+                    }
+                }
+
+                saveOrderHistory([
+                    'history_type' => 'cancelled',
+                    'order_id' => $order->id,
+                    'order' => $order->fresh(),
+                    'previous_status' => $previousStatus,
+                    'actor_id' => $actor?->id,
+                    'actor_name' => $actor?->name,
+                    'actor_type' => $actor?->user_type ?? 'admin',
                 ]);
+            });
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'order_not_found') {
+                return redirect()->back()->with('error', __('message.not_found_entry', ['name' => __('message.order')]));
             }
+            throw $e;
         }
 
-        $history_data = [
-            'history_type' => $order->status,
-            'order_id' => $order->id,
-            'order' => $order,
-        ];
-        saveOrderHistory($history_data);
         return redirect()->back()->withSuccess($message);
     }
 }

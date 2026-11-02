@@ -3,6 +3,7 @@
 use App\Mail\sendmail;
 use App\Models\User;
 use App\Models\AppSetting;
+use App\Models\LanguageList;
 use App\Models\LanguageVersionDetail;
 use App\Models\Setting;
 use App\Models\Order;
@@ -830,16 +831,23 @@ function DummyData($key)
 
 function updateLanguageVersion()
 {
-    $language_version_data = LanguageVersionDetail::query()->find(1);
-    if (! $language_version_data) {
-        $language_version_data = LanguageVersionDetail::query()->create([
-            'id' => 1,
-            'default_language_id' => optional(LanguageList::query()->where('is_default', 1)->first())->id,
-            'version_no' => 1,
-        ]);
-    }
+    try {
+        $language_version_data = LanguageVersionDetail::query()->find(1);
+        if (! $language_version_data) {
+            $defaultLanguageId = optional(\App\Models\LanguageList::query()->where('is_default', 1)->first())->id;
+            $language_version_data = LanguageVersionDetail::query()->create([
+                'id' => 1,
+                'default_language_id' => $defaultLanguageId,
+                'version_no' => 1,
+            ]);
+        }
 
-    return $language_version_data->increment('version_no', 1);
+        return $language_version_data->increment('version_no', 1);
+    } catch (\Throwable $e) {
+        Log::warning('updateLanguageVersion failed: '.$e->getMessage());
+
+        return false;
+    }
 }
 
 function appSettingData($type = 'get')
@@ -2141,7 +2149,7 @@ function brandFontSizeScale(?string $id = null): float
 
 function SettingData($type, $key = null)
 {
-    static $cache = [];
+    $cache = &settingDataCacheStore();
     $cacheKey = $type.'|'.(string) $key;
     if (array_key_exists($cacheKey, $cache)) {
         return $cache[$cacheKey];
@@ -2154,6 +2162,37 @@ function SettingData($type, $key = null)
     });
 
     return $cache[$cacheKey] = $setting->pluck('value')->first();
+}
+
+/**
+ * Drop cached SettingData values after writes in the same request.
+ */
+function SettingDataFlush(?string $type = null, ?string $key = null): void
+{
+    $cache = &settingDataCacheStore();
+    if ($type === null) {
+        $cache = [];
+
+        return;
+    }
+    if ($key === null) {
+        $prefix = $type.'|';
+        foreach (array_keys($cache) as $cacheKey) {
+            if (str_starts_with((string) $cacheKey, $prefix)) {
+                unset($cache[$cacheKey]);
+            }
+        }
+
+        return;
+    }
+    unset($cache[$type.'|'.$key]);
+}
+
+function &settingDataCacheStore(): array
+{
+    static $cache = [];
+
+    return $cache;
 }
 
 function appCopyNormalizeLocale(?string $locale = null): string
@@ -2183,6 +2222,42 @@ function appCopyClientApp(?string $hint = null): string
 function appCopy(string $app, string $field, ?string $locale = null): string
 {
     return \App\Services\AppCopyService::get($app, $field, $locale);
+}
+
+/**
+ * Super Admin editable UI text override (shell = sidebar/global, page = current route).
+ */
+function saUiText(string $key, string $default, string $scope = 'shell', ?string $pathname = null): string
+{
+    return \App\Services\SaUiTextService::text($key, $default, $scope, $pathname);
+}
+
+/**
+ * Admin Panel editable UI text (saved by Super Admin; visible to all Admin accounts).
+ */
+function adminUiText(string $key, string $default, string $scope = 'shell', ?string $pathname = null): string
+{
+    return \App\Services\AdminUiTextService::text($key, $default, $scope, $pathname);
+}
+
+/**
+ * Keyed HTML span for Admin Panel chrome labels (nav / headers). Safe for menu titles.
+ */
+function adminUiSpan(string $key, string $default, string $scope = 'shell', ?string $pathname = null): string
+{
+    $text = adminUiText($key, $default, $scope, $pathname);
+
+    return '<span data-admin-text-key="'.e($key).'" data-admin-edit-text="1">'.e($text).'</span>';
+}
+
+/**
+ * Keyed HTML for Super Admin editable labels (sidebar / table titles).
+ */
+function saUiSpan(string $key, string $default, string $scope = 'shell', ?string $pathname = null): string
+{
+    $text = saUiText($key, $default, $scope, $pathname);
+
+    return '<span data-sa-edit-text="1" data-sa-text-key="'.e($key).'">'.e($text).'</span>';
 }
 
 function appCopyBundle(?string $app = null): array
@@ -3771,7 +3846,9 @@ function saveOrderHistory($data)
     $data['datetime'] = date('Y-m-d H:i:s');
     $orderData = $data['order'];
     $emailData = OrderMail::where('type', $orderData->status)->first();
-    $user_type = auth()->user()->user_type;
+    // Cron / system callers may have no auth user (auto-cancel).
+    $authUser = auth()->user();
+    $user_type = $authUser->user_type ?? ($data['actor_type'] ?? 'system');
     $history_data = [];
     $sendTo = [];
     $order_id = $data['order']->id;
@@ -4093,10 +4170,28 @@ function saveOrderHistory($data)
         case 'cancelled':
             $setting = SettingData('order_mail', 'order_cancel_mail');
             $data['history_message'] = __('message.cancelled_order');
+            $actorId = $data['actor_id'] ?? ($authUser->id ?? null);
+            $actorName = trim((string) ($data['actor_name'] ?? ($authUser->name ?? '')));
+            $actorType = (string) ($data['actor_type'] ?? ($authUser->user_type ?? 'system'));
+            if ($actorName === '' && ! empty($data['auto_cancel'])) {
+                $actorName = 'System (Auto Cancel)';
+                $actorType = 'system';
+            }
             $history_data = [
                 'reason' => $data['order']->reason,
                 'status' => $data['order']->status,
+                'previous_status' => $data['previous_status'] ?? null,
+                'actor_id' => $actorId,
+                'actor_name' => $actorName !== '' ? $actorName : null,
+                'actor_type' => $actorType,
+                'auto_cancel' => ! empty($data['auto_cancel']),
             ];
+            if (in_array($actorType, ['admin', 'demo_admin', 'manager'], true) && $actorName !== '') {
+                $history_data['admin_name'] = $actorName;
+            }
+            if ($actorType === 'client' && $actorName !== '') {
+                $history_data['client_name'] = $actorName;
+            }
             processOrderHistory($data, $history_data);
             $sendTo = removeValueFromArray(['admin', 'client', 'delivery_man'], $user_type);
 
@@ -4735,7 +4830,23 @@ function saveOrderHistory($data)
 function processOrderHistory($data, $history_data)
 {
     $data['history_data'] = json_encode($history_data);
-    sleep(1);
+
+    // Collapse accidental double-submits: same order + cancelled within a short window.
+    if (($data['history_type'] ?? '') === 'cancelled') {
+        $orderId = (int) ($data['order_id'] ?? ($data['order']->id ?? 0));
+        if ($orderId > 0) {
+            $recent = OrderHistory::query()
+                ->where('order_id', $orderId)
+                ->where('history_type', 'cancelled')
+                ->where('datetime', '>=', now()->subSeconds(90)->format('Y-m-d H:i:s'))
+                ->orderByDesc('id')
+                ->first();
+            if ($recent) {
+                return;
+            }
+        }
+    }
+
     OrderHistory::create($data);
 }
 function stringLong($str = '', $type = 'title', $length = 0) //Add … if string is too long
@@ -6901,8 +7012,10 @@ function normalizeContactNumber(?string $phone): string
  * Matches 09… / +95… / partial digits and dual-number storage.
  *
  * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $query
+ * @param  bool  $exactName  When true, name must match exactly (case/space-insensitive).
+ *                           Phone search still allows variants / partial digits.
  */
-function applyNameOrPhoneSearch($query, ?string $term, string $nameColumn = 'name', string $phoneColumn = 'contact_number'): void
+function applyNameOrPhoneSearch($query, ?string $term, string $nameColumn = 'name', string $phoneColumn = 'contact_number', bool $exactName = false): void
 {
     $term = trim((string) $term);
     if ($term === '') {
@@ -6928,20 +7041,20 @@ function applyNameOrPhoneSearch($query, ?string $term, string $nameColumn = 'nam
         $phoneDigits = substr($phoneDigits, 1);
     }
 
-    $words = preg_split('/\s+/u', $term, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $looksLikePhone = $phoneDigits !== '' && preg_match('/^[\d\s\+\-\/\(\)\.]+$/u', $term) === 1;
+    $nameTerm = mb_strtolower(trim(preg_replace('/\s+/u', ' ', $term) ?? $term));
 
-    $query->where(function ($inner) use ($term, $words, $phoneVariants, $phoneDigits, $nameColumn, $phoneColumn) {
-        $inner->where($nameColumn, 'LIKE', '%'.$term.'%')
-            ->orWhere($phoneColumn, 'LIKE', '%'.$term.'%');
-
-        // Multi-word names: all tokens must appear in name (order-independent).
-        if (count($words) > 1) {
-            $inner->orWhere(function ($allWords) use ($words, $nameColumn) {
-                foreach ($words as $word) {
-                    $allWords->where($nameColumn, 'LIKE', '%'.$word.'%');
-                }
-            });
+    $query->where(function ($inner) use ($term, $nameTerm, $phoneVariants, $phoneDigits, $nameColumn, $phoneColumn, $exactName, $looksLikePhone) {
+        if ($exactName) {
+            // "Khin Myat Noe" → only that shop, never "Myat Noe Khin".
+            if (! $looksLikePhone && $nameTerm !== '') {
+                $inner->whereRaw('LOWER(TRIM('.$nameColumn.')) = ?', [$nameTerm]);
+            }
+        } else {
+            $inner->where($nameColumn, 'LIKE', '%'.$term.'%');
         }
+
+        $inner->orWhere($phoneColumn, 'LIKE', '%'.$term.'%');
 
         foreach ($phoneVariants as $variant) {
             $inner->orWhere($phoneColumn, 'LIKE', '%'.$variant.'%');
@@ -6953,10 +7066,53 @@ function applyNameOrPhoneSearch($query, ?string $term, string $nameColumn = 'nam
     });
 }
 
-/** @deprecated Use applyNameOrPhoneSearch() */
+/** Online Shop search: exact name match + phone variants. */
 function applyOnlineShopNameOrPhoneSearch($query, ?string $term, string $nameColumn = 'name', string $phoneColumn = 'contact_number'): void
 {
-    applyNameOrPhoneSearch($query, $term, $nameColumn, $phoneColumn);
+    applyNameOrPhoneSearch($query, $term, $nameColumn, $phoneColumn, true);
+}
+
+/**
+ * Ensure a client username is unique. Prefer phone digits when the chosen
+ * username is already taken (same-name Online Shops).
+ */
+function ensureUniqueClientUsername(string $username, string $phone = '', ?int $ignoreUserId = null): string
+{
+    $username = sanitizeRegistrationUsername($username);
+    if ($username === '') {
+        $username = registrationUsernameFromPhone($phone);
+    }
+    if ($username === '') {
+        $username = 'os'.substr((string) time(), -8);
+    }
+
+    $taken = function (string $candidate) use ($ignoreUserId): bool {
+        $q = \App\Models\User::query()->where('username', $candidate);
+        if ($ignoreUserId) {
+            $q->where('id', '!=', $ignoreUserId);
+        }
+
+        return $q->exists();
+    };
+
+    if (! $taken($username)) {
+        return $username;
+    }
+
+    $phoneUser = registrationUsernameFromPhone($phone);
+    if ($phoneUser !== '' && ! $taken($phoneUser)) {
+        return $phoneUser;
+    }
+
+    $base = preg_replace('/[^A-Za-z0-9._-]/', '', $username) ?: 'os';
+    for ($i = 2; $i < 1000; $i++) {
+        $candidate = $base.$i;
+        if (! $taken($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return $base.substr((string) time(), -4);
 }
 
 /**
@@ -7224,6 +7380,15 @@ function resolveDispatchOsPartyUserId(?\App\Models\Order $order): int
         return $fallback;
     }
 
+    $pickup = resolveDispatchPickupPoint($order);
+    $pickupPhone = trim((string) ($pickup['contact_number'] ?? ''));
+    if ($pickupPhone !== '') {
+        $byPhone = findClientIdByOsContactNumber($pickupPhone);
+        if ($byPhone > 0) {
+            return $byPhone;
+        }
+    }
+
     $resolvedName = resolveDispatchOsName($order);
     if ($resolvedName === '-' || trim($resolvedName) === '') {
         return $fallback;
@@ -7236,6 +7401,7 @@ function resolveDispatchOsPartyUserId(?\App\Models\Order $order): int
 
 /**
  * Find an Online Shop (client) user id by display / pickup name.
+ * Ambiguous duplicate names return 0 so callers keep order.client_id.
  */
 function findClientIdByOsDisplayName(string $name): int
 {
@@ -7252,14 +7418,24 @@ function findClientIdByOsDisplayName(string $name): int
     static $clientIndex = null;
     if ($clientIndex === null) {
         $clientIndex = [];
+        $ambiguous = [];
         $clients = \App\Models\User::query()
             ->where('user_type', 'client')
             ->whereNull('deleted_at')
+            ->orderBy('id')
             ->get(['id', 'name']);
 
         foreach ($clients as $client) {
             $full = normalizeOsDisplayNameKey((string) $client->name);
             if ($full === '') {
+                continue;
+            }
+            if (isset($ambiguous[$full])) {
+                continue;
+            }
+            if (isset($clientIndex[$full])) {
+                unset($clientIndex[$full]);
+                $ambiguous[$full] = true;
                 continue;
             }
             $clientIndex[$full] = (int) $client->id;
@@ -7274,6 +7450,32 @@ function findClientIdByOsDisplayName(string $name): int
     // "noe noe" ⊂ "noe noe thadan hmue") was remapping parcels across
     // Online Shops and leaking them into Show Slip Completed.
     return $cache[$key] = 0;
+}
+
+/**
+ * Resolve Online Shop by phone (unique within client user_type).
+ */
+function findClientIdByOsContactNumber(?string $phone): int
+{
+    $variants = contactNumberLookupVariants($phone);
+    if ($variants === []) {
+        return 0;
+    }
+
+    static $cache = [];
+    $cacheKey = implode('|', $variants);
+    if (array_key_exists($cacheKey, $cache)) {
+        return $cache[$cacheKey];
+    }
+
+    $id = (int) (\App\Models\User::query()
+        ->where('user_type', 'client')
+        ->whereNull('deleted_at')
+        ->whereIn('contact_number', $variants)
+        ->orderBy('id')
+        ->value('id') ?? 0);
+
+    return $cache[$cacheKey] = $id;
 }
 
 /**

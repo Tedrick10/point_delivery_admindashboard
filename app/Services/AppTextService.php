@@ -344,6 +344,20 @@ class AppTextService
         File::put($path, "<?php\n\nreturn ".$export.";\n");
     }
 
+    /**
+     * Remove Super Admin in-app keyword overrides for a mobile app (user|rider).
+     */
+    public static function resetMobileOverrides(string $app): int
+    {
+        $app = in_array($app, ['user', 'rider'], true) ? $app : 'user';
+        $prefix = $app.'_';
+
+        return (int) Setting::query()
+            ->where('type', self::KEYWORD_TYPE)
+            ->where('key', 'like', $prefix.'%')
+            ->delete();
+    }
+
     public static function saveMobileTexts(string $app, array $texts): void
     {
         $enList = LanguageList::query()->where('language_code', 'en')->first();

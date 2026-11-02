@@ -28,3 +28,4 @@
 
 @include('partials._scripts')
 @include('partials._dynamic_script')
+@include('partials._admin_ui_text_edit')

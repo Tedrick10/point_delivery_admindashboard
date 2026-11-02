@@ -246,6 +246,9 @@ class ScreenController extends Controller
             'fuelMinWays' => $screen === 'rider-remit'
                 ? app(RiderRemitService::class)->fuelMinWays()
                 : null,
+            'fuelStartDate' => $screen === 'rider-remit'
+                ? app(RiderRemitService::class)->fuelStartDate()
+                : null,
             'defaultOfficeSalary' => in_array($screen, ['office-salary', 'network'], true)
                 ? app(HrPayrollService::class)->defaultOfficeMonthlySalary()
                 : null,

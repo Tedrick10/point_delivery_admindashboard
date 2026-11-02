@@ -96,7 +96,7 @@ class ClientDataTable extends DataTable
                 if ($term === '') {
                     return;
                 }
-                applyNameOrPhoneSearch($query, $term, 'users.name', 'users.contact_number');
+                applyOnlineShopNameOrPhoneSearch($query, $term, 'users.name', 'users.contact_number');
             }, true)
             ->editColumn('otp_verify_at', function ($data) {
                 if ($data->otp_verify_at !== null) {

@@ -1133,12 +1133,34 @@ class DispatchOrderItemController extends Controller
             $query->where('status', $statusFilter);
         }
 
-        $perPage = config('constant.PER_PAGE_LIMIT', 20);
+        $perPage = (int) config('constant.PER_PAGE_LIMIT', 20);
         if ($request->filled('per_page') && is_numeric($request->per_page)) {
             $perPage = (int) $request->per_page;
         }
-        if ((int) $request->get('per_page') === -1) {
-            $perPage = max(1, $query->count());
+
+        // Active OS lists (On Way / Assigned / Pending / Undelivered): return the full
+        // filtered set in one page by default. Client silent-refresh used to wipe page 2+
+        // (per_page=20), so Way > 20 looked unscrolled. Explicit per_page still honored.
+        $activeOnePageFilters = [
+            'undelivered',
+            'courier_departed',
+            'courier_assigned',
+            'assigned',
+            'assigned_active',
+            'pending',
+        ];
+        $wantsAllActive = in_array($statusFilter, $activeOnePageFilters, true)
+            && ! $request->filled('per_page');
+
+        if ((int) $request->get('per_page') === -1 || $wantsAllActive) {
+            $perPage = max(1, (clone $query)->count());
+        }
+
+        // Safety cap for accidental huge ranges; active one-page path uses exact count above.
+        if (! $wantsAllActive && (int) $request->get('per_page') !== -1) {
+            $perPage = max(1, min(500, $perPage > 0 ? $perPage : 20));
+        } else {
+            $perPage = max(1, $perPage);
         }
 
         $page = $query->paginate($perPage);
@@ -1422,7 +1444,8 @@ class DispatchOrderItemController extends Controller
             $rules['delivered_type'] = 'required|string|in:gate,other';
             $rules['delivered_photo'] = 'required|image|max:10240';
             if ((string) $request->input('delivered_type') === 'gate') {
-                $rules['gate_amount'] = 'required|numeric|gt:0';
+                // Allow 0 တန်ဆာခ — some gate parcels have no fee.
+                $rules['gate_amount'] = 'required|numeric|min:0';
             }
         }
         $request->validate($rules);

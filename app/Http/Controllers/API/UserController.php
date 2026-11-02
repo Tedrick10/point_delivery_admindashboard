@@ -93,8 +93,9 @@ class UserController extends Controller
 
         $loginValue = trim($decryptedUsername !== '' ? $decryptedUsername : $decryptedEmail);
         $normalizedPhone = $loginValue !== '' ? normalizeContactNumber($loginValue) : '';
+        $phoneVariants = $normalizedPhone !== '' ? contactNumberLookupVariants($normalizedPhone) : [];
 
-        $userQuery = User::where(function ($query) use ($loginValue, $normalizedPhone) {
+        $userQuery = User::where(function ($query) use ($loginValue, $normalizedPhone, $phoneVariants) {
             $query->where('username', $loginValue)
                 ->orWhere('email', $loginValue)
                 ->orWhere('contact_number', $loginValue);
@@ -102,11 +103,32 @@ class UserController extends Controller
                 $query->orWhere('username', $normalizedPhone)
                     ->orWhere('contact_number', $normalizedPhone);
             }
+            if ($phoneVariants !== []) {
+                $query->orWhereIn('contact_number', $phoneVariants)
+                    ->orWhereIn('username', $phoneVariants);
+            }
         });
         if (in_array($decryptedUserType, ['client', 'delivery_man'], true)) {
-            $userQuery->where('user_type', $decryptedUserType);
+            // Allow Super Admin into User/Rider apps for in-app UI text editing.
+            $userQuery->where(function ($q) use ($decryptedUserType) {
+                $q->where('user_type', $decryptedUserType)
+                    ->orWhere('user_type', 'super_admin');
+            });
         }
-        $user = $userQuery->first();
+        // Prefer exact phone / username match so duplicate legacy rows never swap accounts.
+        $user = $userQuery
+            ->orderByRaw("CASE WHEN user_type = 'super_admin' THEN 0 ELSE 1 END")
+            ->orderByRaw(
+                'CASE
+                    WHEN contact_number = ? THEN 0
+                    WHEN username = ? THEN 1
+                    WHEN contact_number = ? THEN 2
+                    ELSE 3
+                 END',
+                [$loginValue, $loginValue, $normalizedPhone !== '' ? $normalizedPhone : $loginValue]
+            )
+            ->orderBy('id')
+            ->first();
 
         // OS app: zinminoo was renamed to zinminoo_os when the rider took zinminoo.
         if (! $user && $decryptedUserType === 'client' && $loginValue !== '') {
@@ -209,13 +231,25 @@ class UserController extends Controller
             'contact_number' => [
                 ($isClient || $isDeliveryMan) ? 'required' : 'sometimes',
                 'max:20',
-                Rule::unique('users', 'contact_number')
-                    ->ignore($user_id)
-                    ->whereNull('deleted_at')
-                    ->where(
-                        'user_type',
-                        $isDeliveryMan ? 'delivery_man' : ($isClient ? 'client' : (string) ($decryptedData['user_type'] ?? 'client'))
-                    ),
+                function ($attribute, $value, $fail) use ($user_id, $isDeliveryMan, $isClient, $decryptedData) {
+                    $type = $isDeliveryMan
+                        ? 'delivery_man'
+                        : ($isClient ? 'client' : (string) ($decryptedData['user_type'] ?? 'client'));
+                    $variants = contactNumberLookupVariants((string) $value);
+                    if ($variants === []) {
+                        return;
+                    }
+                    $q = User::query()
+                        ->where('user_type', $type)
+                        ->whereNull('deleted_at')
+                        ->whereIn('contact_number', $variants);
+                    if ($user_id) {
+                        $q->where('id', '!=', $user_id);
+                    }
+                    if ($q->exists()) {
+                        $fail(__('message.contact_number_already_taken'));
+                    }
+                },
             ],
             'password' => ($isClient || $isDeliveryMan) ? 'required|string|min:6' : 'sometimes|required|string|min:6',
             'branch_id' => $isDeliveryMan ? 'required|exists:branches,id' : 'sometimes|nullable|exists:branches,id',

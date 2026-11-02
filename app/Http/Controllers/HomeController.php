@@ -56,9 +56,8 @@ class HomeController extends Controller
      */
     public function index(Request $request)
     {
-        if (isSuperAdmin(auth()->user())) {
-            return redirect()->route('super-admin.dashboard');
-        }
+        // Super Admin may open Admin Panel to edit shared chrome texts (saved for all Admin accounts).
+        // Default SA home remains Super Admin dashboard via login + SA nav.
 
         $auth_user = auth()->user();
         $forcedBranchId = forcedBranchId($auth_user);
@@ -964,13 +963,17 @@ class HomeController extends Controller
                     : \App\Models\City::whereIn('id', $cityIds)->pluck('name', 'id');
                 $items = $items->get()->map(function ($user) use ($cities) {
                     $cityName = $cities[$user->city_id ?? null] ?? null;
-                    $displayName = $user->text . ($cityName ? ' (' . $cityName . ')' : '');
+                    $phone = normalizeContactNumber($user->contact_number);
+                    // Same-name shops: always show phone so staff can pick the right one.
+                    $displayName = $user->text
+                        . ($phone !== '' ? ' · '.$phone : '')
+                        . ($cityName ? ' ('.$cityName.')' : '');
 
                     return [
                         'id' => $user->id,
                         'name' => $user->text,
                         'text' => $displayName,
-                        'phone' => normalizeContactNumber($user->contact_number),
+                        'phone' => $phone,
                         'address' => $user->address,
                     ];
                 });

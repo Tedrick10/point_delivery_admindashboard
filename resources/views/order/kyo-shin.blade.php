@@ -7,9 +7,9 @@
                 <div class="pds-rider-hero__copy">
                     <div class="pds-rider-hero__eyebrow">
                         <i class="fas fa-hand-holding-usd" aria-hidden="true"></i>
-                        <span>{{ __('message.order') }}</span>
+                        <span data-admin-edit-text="1" data-admin-text-key="table.kyo.eyebrow">{{ adminUiText('table.kyo.eyebrow', __('message.order')) }}</span>
                     </div>
-                    <h4 class="pds-rider-hero__title">{{ $pageTitle }}</h4>
+                    <h4 class="pds-rider-hero__title" data-admin-edit-text="1" data-admin-text-key="table.kyo.page_title">{{ adminUiText('table.kyo.page_title', $pageTitle) }}</h4>
                 </div>
             </div>
 
@@ -56,7 +56,7 @@
                         <i class="fas fa-wallet"></i>
                     </div>
                     <div class="pds-kyo-shin-hero__copy">
-                        <span>{{ __('message.kyo_shin_sa_amount') }}</span>
+                        <span data-admin-edit-text="1" data-admin-text-key="table.kyo.sa_amount">{{ adminUiText('table.kyo.sa_amount', __('message.kyo_shin_sa_amount')) }}</span>
                         <strong>{{ number_format($summary['total']) }} <small>Ks</small></strong>
                     </div>
                     <em class="pds-kyo-shin-hero__thein">{{ number_format($summary['thein_total'], 2) }} {{ __('message.kyo_shin_thein') }}</em>
@@ -65,7 +65,7 @@
                     <article class="pds-kyo-shin-metric is-balance is-{{ $summary['balance_sign'] }}">
                         <div class="pds-kyo-shin-metric__top">
                             <span class="pds-kyo-shin-metric__icon" aria-hidden="true"><i class="fas fa-balance-scale"></i></span>
-                            <span class="pds-kyo-shin-metric__label">{{ __('message.kyo_shin_books_balance') }}</span>
+                            <span class="pds-kyo-shin-metric__label" data-admin-edit-text="1" data-admin-text-key="table.kyo.books_balance">{{ adminUiText('table.kyo.books_balance', __('message.kyo_shin_books_balance')) }}</span>
                             <button type="button" class="pds-kyo-shin-history-btn" data-toggle="modal" data-target="#kyoShinLedgerModal" title="{{ __('message.kyo_shin_ledger') }}" aria-label="{{ __('message.kyo_shin_ledger') }}">
                                 <i class="fas fa-history" aria-hidden="true"></i>
                             </button>
@@ -76,7 +76,7 @@
                     <article class="pds-kyo-shin-metric is-paid">
                         <div class="pds-kyo-shin-metric__top">
                             <span class="pds-kyo-shin-metric__icon" aria-hidden="true"><i class="fas fa-coins"></i></span>
-                            <span class="pds-kyo-shin-metric__label">{{ __('message.kyo_shin_cash_held') }}</span>
+                            <span class="pds-kyo-shin-metric__label" data-admin-edit-text="1" data-admin-text-key="table.kyo.cash_held">{{ adminUiText('table.kyo.cash_held', __('message.kyo_shin_cash_held')) }}</span>
                         </div>
                         <strong>{{ number_format($summary['cash_on_hand']) }} <small>Ks</small></strong>
                         <em>{{ number_format($summary['thein_cash_on_hand'], 2) }} {{ __('message.kyo_shin_thein') }}</em>
@@ -84,7 +84,7 @@
                     <article class="pds-kyo-shin-metric is-returned">
                         <div class="pds-kyo-shin-metric__top">
                             <span class="pds-kyo-shin-metric__icon" aria-hidden="true"><i class="fas fa-undo"></i></span>
-                            <span class="pds-kyo-shin-metric__label">{{ __('message.kyo_shin_returned_today') }}</span>
+                            <span class="pds-kyo-shin-metric__label" data-admin-edit-text="1" data-admin-text-key="table.kyo.returned_today">{{ adminUiText('table.kyo.returned_today', __('message.kyo_shin_returned_today')) }}</span>
                         </div>
                         <strong>{{ number_format($summary['returned_today']) }} <small>Ks</small></strong>
                         <em>{{ number_format($summary['thein_returned_today'], 2) }} {{ __('message.kyo_shin_thein') }}</em>
@@ -92,7 +92,7 @@
                     <article class="pds-kyo-shin-metric is-remain {{ $summary['os_receivable'] < 0 ? 'is-over' : '' }}">
                         <div class="pds-kyo-shin-metric__top">
                             <span class="pds-kyo-shin-metric__icon" aria-hidden="true"><i class="fas fa-file-invoice-dollar"></i></span>
-                            <span class="pds-kyo-shin-metric__label">{{ __('message.kyo_shin_os_receivable') }}</span>
+                            <span class="pds-kyo-shin-metric__label" data-admin-edit-text="1" data-admin-text-key="table.kyo.os_receivable">{{ adminUiText('table.kyo.os_receivable', __('message.kyo_shin_os_receivable')) }}</span>
                         </div>
                         <strong>{{ number_format($summary['os_receivable']) }} <small>Ks</small></strong>
                         <em>{{ number_format($summary['thein_os_receivable'], 2) }} {{ __('message.kyo_shin_thein') }}</em>
@@ -148,17 +148,17 @@
                             <table class="table pds-rider-list-table pds-os-settlement-table">
                                 <thead>
                                     <tr>
-                                        <th class="pds-rider-col-no">{{ __('message.no') }}</th>
-                                        <th>{{ __('message.code') }}</th>
-                                        <th>{{ __('message.os_name') }}</th>
-                                        <th>{{ __('message.customer_name') }}</th>
-                                        <th>{{ __('message.phone') }}</th>
-                                        <th>{{ __('message.kyo_shin_paid_date') }}</th>
-                                        <th>{{ __('message.kyo_shin_due_date') }}</th>
+                                        <th class="pds-rider-col-no">{!! adminUiSpan('table.col.no', __('message.no')) !!}</th>
+                                        <th>{!! adminUiSpan('table.col.code', __('message.code')) !!}</th>
+                                        <th>{!! adminUiSpan('table.col.os_name', __('message.os_name')) !!}</th>
+                                        <th>{!! adminUiSpan('table.col.customer_name', __('message.customer_name')) !!}</th>
+                                        <th>{!! adminUiSpan('table.col.phone', __('message.phone')) !!}</th>
+                                        <th>{!! adminUiSpan('table.kyo.paid_date', __('message.kyo_shin_paid_date')) !!}</th>
+                                        <th>{!! adminUiSpan('table.kyo.due_date', __('message.kyo_shin_due_date')) !!}</th>
                                         @if($tab === \App\Services\KyoShinService::TAB_FINISHED)
-                                            <th>{{ __('message.kyo_shin_finished_date') }}</th>
+                                            <th>{!! adminUiSpan('table.kyo.finished_date', __('message.kyo_shin_finished_date')) !!}</th>
                                         @endif
-                                        <th class="text-right">{{ __('message.amount') }}</th>
+                                        <th class="text-right">{!! adminUiSpan('table.col.amount', __('message.amount')) !!}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -231,7 +231,7 @@
                         <table class="table pds-rider-list-table pds-os-settlement-table">
                             <thead>
                                 <tr>
-                                    <th class="pds-rider-col-no">{{ __('message.no') }}</th>
+                                    <th class="pds-rider-col-no">{!! adminUiSpan('table.col.no', __('message.no')) !!}</th>
                                     @if(! empty($showCheckStatus))
                                         <th class="pds-rider-sticky-col pds-rider-sticky-col--check">
                                             @if(! empty($canCheck))
@@ -239,23 +239,23 @@
                                             @endif
                                         </th>
                                     @endif
-                                    <th>{{ __('message.os_name') }}</th>
-                                    <th class="text-right">{{ __('message.kyo_shin_total_advanced_paid') }}</th>
+                                    <th>{!! adminUiSpan('table.col.os_name', __('message.os_name')) !!}</th>
+                                    <th class="text-right">{!! adminUiSpan('table.kyo.total_advanced_paid', __('message.kyo_shin_total_advanced_paid')) !!}</th>
                                     @if($tab === \App\Services\KyoShinService::TAB_OS_LIST)
-                                        <th class="text-right">{{ __('message.kyo_shin_remain') }}</th>
-                                        <th class="text-right">{{ __('message.kyo_shin_advanced_paid') }}</th>
+                                        <th class="text-right">{!! adminUiSpan('table.kyo.remain', __('message.kyo_shin_remain')) !!}</th>
+                                        <th class="text-right">{!! adminUiSpan('table.kyo.advanced_paid', __('message.kyo_shin_advanced_paid')) !!}</th>
                                     @endif
-                                    <th class="text-center">{{ __('message.kyo_shin_total_parcels') }}</th>
+                                    <th class="text-center">{!! adminUiSpan('table.kyo.total_parcels', __('message.kyo_shin_total_parcels')) !!}</th>
                                     @if($tab === \App\Services\KyoShinService::TAB_OS_LIST)
-                                        <th>{{ __('message.kyo_shin_due_date') }}</th>
-                                        <th>{{ __('message.kyo_shin_created_date') }}</th>
+                                        <th>{!! adminUiSpan('table.kyo.due_date', __('message.kyo_shin_due_date')) !!}</th>
+                                        <th>{!! adminUiSpan('table.kyo.created_date', __('message.kyo_shin_created_date')) !!}</th>
                                     @elseif($tab === \App\Services\KyoShinService::TAB_ADVANCED_PAID)
-                                        <th>{{ __('message.kyo_shin_finished_date') }}</th>
-                                        <th>{{ __('message.kyo_shin_due_date') }}</th>
+                                        <th>{!! adminUiSpan('table.kyo.finished_date', __('message.kyo_shin_finished_date')) !!}</th>
+                                        <th>{!! adminUiSpan('table.kyo.due_date', __('message.kyo_shin_due_date')) !!}</th>
                                     @else
-                                        <th>{{ __('message.kyo_shin_return_date') }}</th>
-                                        <th>{{ __('message.kyo_shin_due_date') }}</th>
-                                        <th>{{ __('message.action') }}</th>
+                                        <th>{!! adminUiSpan('table.kyo.return_date', __('message.kyo_shin_return_date')) !!}</th>
+                                        <th>{!! adminUiSpan('table.kyo.due_date', __('message.kyo_shin_due_date')) !!}</th>
+                                        <th>{!! adminUiSpan('table.col.action', __('message.action')) !!}</th>
                                     @endif
                                 </tr>
                             </thead>
@@ -509,23 +509,23 @@
                                     </header>
                                     <div class="pds-kyo-shin-ledger__grid">
                                         <div class="pds-kyo-shin-ledger__metric is-total">
-                                            <span>{{ __('message.kyo_shin_sa_amount') }}</span>
+                                            <span data-admin-edit-text="1" data-admin-text-key="table.kyo.sa_amount">{{ adminUiText('table.kyo.sa_amount', __('message.kyo_shin_sa_amount')) }}</span>
                                             <strong>{{ number_format($ledger->sa_amount) }} <small>Ks</small></strong>
                                         </div>
                                         <div class="pds-kyo-shin-ledger__metric is-balance is-{{ $sign }}">
-                                            <span>{{ __('message.kyo_shin_books_balance') }}</span>
+                                            <span data-admin-edit-text="1" data-admin-text-key="table.kyo.books_balance">{{ adminUiText('table.kyo.books_balance', __('message.kyo_shin_books_balance')) }}</span>
                                             <strong>{{ $balanceDisplay }} <small>Ks</small></strong>
                                         </div>
                                         <div class="pds-kyo-shin-ledger__metric is-held">
-                                            <span>{{ __('message.kyo_shin_cash_held') }}</span>
+                                            <span data-admin-edit-text="1" data-admin-text-key="table.kyo.cash_held">{{ adminUiText('table.kyo.cash_held', __('message.kyo_shin_cash_held')) }}</span>
                                             <strong>{{ number_format($ledger->cash_on_hand ?? (float) $ledger->cash_held) }} <small>Ks</small></strong>
                                         </div>
                                         <div class="pds-kyo-shin-ledger__metric is-returned">
-                                            <span>{{ __('message.kyo_shin_returned_today') }}</span>
+                                            <span data-admin-edit-text="1" data-admin-text-key="table.kyo.returned_today">{{ adminUiText('table.kyo.returned_today', __('message.kyo_shin_returned_today')) }}</span>
                                             <strong>{{ number_format($ledger->returned_today ?? $ledger->returned_amount ?? 0) }} <small>Ks</small></strong>
                                         </div>
                                         <div class="pds-kyo-shin-ledger__metric is-remain">
-                                            <span>{{ __('message.kyo_shin_os_receivable') }}</span>
+                                            <span data-admin-edit-text="1" data-admin-text-key="table.kyo.os_receivable">{{ adminUiText('table.kyo.os_receivable', __('message.kyo_shin_os_receivable')) }}</span>
                                             <strong>{{ number_format($ledger->os_receivable) }} <small>Ks</small></strong>
                                         </div>
                                     </div>

@@ -1120,9 +1120,13 @@
                         notify(@json(__('message.delivered_type_required')), 'error');
                         return;
                     }
-                    if (deliveredType === 'gate' && !(Number(String(gateAmount).replace(/,/g, '')) > 0)) {
-                        notify(@json(__('message.gate_amount_required')), 'error');
-                        return;
+                    if (deliveredType === 'gate') {
+                        var gateNum = Number(String(gateAmount).replace(/,/g, ''));
+                        // Allow 0 တန်ဆာခ; only block empty / invalid / negative.
+                        if (gateAmount === '' || gateAmount === null || Number.isNaN(gateNum) || gateNum < 0) {
+                            notify(@json(__('message.gate_amount_required')), 'error');
+                            return;
+                        }
                     }
 
                     $('#riderDeliveredTypeModal').modal('hide');

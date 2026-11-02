@@ -583,7 +583,153 @@ body.sa-panel {
     background: rgba(254, 111, 7, 0.35);
     border-radius: 999px;
 }
-.sa-user { font-size: 0.85rem; opacity: 0.8; margin-bottom: 0.5rem; padding: 0 0.35rem; color: var(--sa-ink); }
+.sa-user {
+    font-size: 0.85rem;
+    opacity: 0.8;
+    margin-bottom: 0.5rem;
+    padding: 0 0.35rem;
+    color: var(--sa-ink);
+}
+.sa-user--link {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.65rem;
+    padding: 0.45rem 0.5rem;
+    border-radius: 12px;
+    text-decoration: none;
+    opacity: 1;
+    color: var(--sa-ink);
+    border: 1px solid transparent;
+    transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+.sa-user--link:hover,
+.sa-user--link.is-active {
+    background: rgba(254, 111, 7, 0.08);
+    border-color: rgba(254, 111, 7, 0.28);
+    color: #FE6F07;
+}
+.sa-user__avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #FF8A3D, #FE6F07);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.9rem;
+    overflow: hidden;
+    flex: 0 0 auto;
+}
+.sa-user__avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.sa-user__meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.2;
+}
+.sa-user__name {
+    font-size: 0.88rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sa-user__action {
+    font-style: normal;
+    font-size: 0.72rem;
+    color: var(--sa-muted);
+    font-weight: 600;
+}
+.sa-user--link:hover .sa-user__action,
+.sa-user--link.is-active .sa-user__action {
+    color: #FE6F07;
+}
+.sa-profile-panel .sa-module-panel__head p {
+    margin-top: 0.25rem;
+    font-size: 0.88rem;
+}
+.sa-profile-hero {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 0 0 1.25rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--sa-border);
+    border-radius: 16px;
+    background: #fafbfc;
+}
+.sa-profile-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 999px;
+    overflow: hidden;
+    flex: 0 0 auto;
+    background: linear-gradient(135deg, #FF8A3D, #FE6F07);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.6rem;
+    font-weight: 800;
+}
+.sa-profile-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.sa-profile-hero__copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+.sa-profile-hero__copy strong {
+    font-size: 1.05rem;
+    color: var(--sa-ink);
+}
+.sa-profile-hero__copy > span {
+    color: var(--sa-muted);
+    font-size: 0.86rem;
+}
+.sa-profile-upload {
+    display: inline-flex;
+    margin-top: 0.45rem;
+    cursor: pointer;
+}
+.sa-profile-upload span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid rgba(254, 111, 7, 0.35);
+    background: #fff;
+    color: #FE6F07;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+.sa-profile-upload:hover span {
+    background: rgba(254, 111, 7, 0.08);
+}
+.sa-profile-form .sa-field-hint {
+    display: block;
+    margin-top: 0.35rem;
+    color: var(--sa-muted);
+    font-size: 0.78rem;
+}
+.sa-profile-form .sa-field-error {
+    margin-top: 0.3rem;
+    color: #dc2626;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
 .sa-logout {
     width: 100%;
     border: 1px solid var(--sa-border);
@@ -705,7 +851,9 @@ body.pds-admin .sa-topbar-chat__badge.d-none {
     box-shadow: 0 6px 16px rgba(11, 18, 32, 0.08);
     background: #FFF4EC;
 }
-.sa-notify__badge {
+.sa-notify__badge,
+body.sa-panel .sa-notify__badge,
+body.sa-panel .sa-notify__btn .sa-notify__badge {
     position: absolute;
     top: -4px;
     right: -4px;
@@ -713,8 +861,9 @@ body.pds-admin .sa-topbar-chat__badge.d-none {
     height: 16px;
     padding: 0 4px;
     border-radius: 999px;
-    background: #EF4444;
-    color: #fff;
+    background: #EF4444 !important;
+    color: #fff !important;
+    -webkit-text-fill-color: #fff !important;
     font-size: 0.6rem;
     font-weight: 800;
     line-height: 16px;
@@ -724,7 +873,8 @@ body.pds-admin .sa-topbar-chat__badge.d-none {
     align-items: center;
     justify-content: center;
 }
-.sa-notify__badge.is-empty { display: none; }
+.sa-notify__badge.is-empty,
+body.sa-panel .sa-notify__badge.is-empty { display: none !important; }
 .sa-notify__panel {
     position: absolute;
     top: calc(100% + 10px);
@@ -3583,11 +3733,103 @@ h1, h2, h3, .sa-page-title, .sa-branches__head h2, .sa-branch-card h3 {
 
 /* Simple Super Admin home */
 .sa-pagehead {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
     margin: 0 0 1.15rem;
     padding-bottom: 0.85rem;
     border-bottom: 1px solid var(--sa-border);
 }
-.sa-pagehead p {
+.sa-pagehead__copy { min-width: 0; flex: 1 1 auto; }
+/* Floating Edit bar (bottom-right) — matches Admin Panel */
+.sa-ui-editbar {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 1080;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(20, 17, 15, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow:
+        0 12px 28px rgba(20, 17, 15, 0.12),
+        0 2px 6px rgba(20, 17, 15, 0.06);
+}
+.sa-ui-editbar__btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    border: 0 !important;
+    border-radius: 999px !important;
+    min-height: 40px;
+    padding: 0 1.15rem !important;
+    background: linear-gradient(135deg, #FF8A3D 0%, #FE6F07 55%, #F05A00 100%) !important;
+    color: #fff !important;
+    font: inherit;
+    font-size: 0.84rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.01em;
+    line-height: 1 !important;
+    cursor: pointer;
+    box-shadow: 0 8px 18px rgba(254, 111, 7, 0.28);
+    transition: transform .12s ease, filter .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.sa-ui-editbar__btn i,
+.sa-ui-editbar__btn span,
+.sa-ui-editbar__btn [data-sa-edit-label] {
+    color: #fff !important;
+}
+.sa-ui-editbar__btn i {
+    font-size: 0.72rem;
+    opacity: 0.95;
+}
+.sa-ui-editbar__btn:hover {
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+    color: #fff !important;
+}
+.sa-ui-editbar__btn:active {
+    transform: translateY(0);
+}
+.sa-ui-editbar__btn.is-on {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.22);
+}
+.sa-ui-editbar__btn.is-on,
+.sa-ui-editbar__btn.is-on i,
+.sa-ui-editbar__btn.is-on span,
+.sa-ui-editbar__btn.is-on [data-sa-edit-label] {
+    color: #fff !important;
+}
+.sa-ui-editbar__btn--ghost {
+    background: #fff !important;
+    color: #475569 !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+}
+.sa-ui-editbar__btn--ghost i,
+.sa-ui-editbar__btn--ghost span {
+    color: #475569 !important;
+}
+.sa-ui-editbar__btn--ghost:hover {
+    background: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+    filter: none;
+    transform: none;
+}
+.sa-ui-editbar__btn--ghost:hover i,
+.sa-ui-editbar__btn--ghost:hover span {
+    color: #0f172a !important;
+}
+.sa-pagehead__copy p {
     margin: 0 0 0.2rem;
     font-size: 0.72rem;
     font-weight: 700;
@@ -3595,7 +3837,7 @@ h1, h2, h3, .sa-page-title, .sa-branches__head h2, .sa-branch-card h3 {
     text-transform: uppercase;
     color: #FE6F07;
 }
-.sa-pagehead h1 {
+.sa-pagehead__copy h1 {
     margin: 0;
     font-family: var(--sa-display);
     font-size: 1.7rem;
@@ -3603,11 +3845,93 @@ h1, h2, h3, .sa-page-title, .sa-branches__head h2, .sa-branch-card h3 {
     letter-spacing: -0.03em;
     color: var(--sa-ink);
 }
-.sa-pagehead span {
+.sa-pagehead__copy > span {
     display: block;
     margin-top: 0.25rem;
     color: var(--sa-muted);
     font-size: 0.88rem;
+}
+body.sa-panel-editing .sa-sidebar {
+    box-shadow: inset 0 0 0 1px rgba(254, 111, 7, 0.22);
+}
+body.sa-panel-editing .sa-sidebar .sa-nav a {
+    cursor: default;
+}
+body.sa-panel-editing .sa-sidebar .sa-nav__text,
+body.sa-panel-editing .sa-sidebar .sa-nav__label,
+body.sa-panel-editing .sa-sidebar .sa-brand-name,
+body.sa-panel-editing .sa-sidebar .sa-brand-sub {
+    cursor: text;
+}
+/* Soft text cue only — no boxes, no underline; never change display/layout */
+body.sa-panel-editing [data-sa-text-key][contenteditable="true"],
+body.sa-panel-editing .sa-text-edit {
+    outline: none !important;
+    cursor: text;
+    user-select: text;
+    -webkit-user-select: text;
+    caret-color: #FE6F07;
+    text-decoration: none !important;
+    box-shadow: none !important;
+    color: #C2410C !important;
+}
+/* Keep table header cells as table-cells — never stack */
+body.sa-panel-editing .sa-module-table th[data-sa-text-key][contenteditable="true"],
+body.sa-panel-editing .sa-module-table td[data-sa-text-key][contenteditable="true"] {
+    display: table-cell !important;
+}
+body.sa-panel-editing .sa-module-table th [data-sa-text-key][contenteditable="true"] {
+    display: inline !important;
+}
+body.sa-panel-editing [data-sa-text-key][contenteditable="true"]:hover,
+body.sa-panel-editing .sa-text-edit:hover {
+    color: #EA580C !important;
+}
+body.sa-panel-editing [data-sa-text-key][contenteditable="true"]:focus,
+body.sa-panel-editing .sa-text-edit:focus {
+    color: #9A3412 !important;
+    background: rgba(254, 111, 7, 0.08);
+    border-radius: 4px;
+    box-shadow: 0 0 0 3px rgba(254, 111, 7, 0.12) !important;
+}
+/* Title / block labels hug text width when focused wash shows */
+body.sa-panel-editing .sa-pagehead__copy [data-sa-text-key][contenteditable="true"],
+body.sa-panel-editing .sa-pagehead__copy .sa-text-edit {
+    width: max-content;
+    max-width: 100%;
+}
+/* Lock structural display so Edit mode cannot collapse buttons / page head / nav */
+body.sa-panel-editing .sa-btn,
+body.sa-panel-editing a.sa-btn {
+    display: inline-flex !important;
+}
+body.sa-panel-editing .sa-pagehead__copy h1,
+body.sa-panel-editing .sa-pagehead__copy p,
+body.sa-panel-editing .sa-pagehead__copy > span {
+    display: block !important;
+}
+body.sa-panel-editing .sa-nav a {
+    display: flex !important;
+}
+/* Freeze form fields while editing — but keep radios/checkboxes fully hidden */
+body.sa-panel-editing .sa-work-switch,
+body.sa-panel-editing .sa-content input:not([type="radio"]):not([type="checkbox"]):not([type="hidden"]),
+body.sa-panel-editing .sa-content textarea,
+body.sa-panel-editing .sa-content select {
+    pointer-events: none !important;
+    opacity: 0.72;
+}
+body.sa-panel-editing .sa-content input[type="radio"],
+body.sa-panel-editing .sa-content input[type="checkbox"],
+body.sa-panel-editing .sa-route-mode input {
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+@media (max-width: 720px) {
+    .sa-pagehead {
+        align-items: flex-start;
+        flex-direction: column;
+    }
 }
 
 .sa-home { display: flex; flex-direction: column; gap: 1rem; }
@@ -4937,7 +5261,9 @@ body.sa-panel .sa-expense-summary-panel .pds-summary-cal__confirm:hover { backgr
     text-transform: none;
     color: #64748b;
 }
-.sa-rider-remit-default__form input[type="number"] {
+.sa-rider-remit-default__form input[type="number"],
+.sa-rider-remit-default__form input[type="date"],
+.sa-rider-remit-default__date {
     flex: 1 1 auto;
     min-width: 140px;
     max-width: none;
@@ -4949,6 +5275,13 @@ body.sa-panel .sa-expense-summary-panel .pds-summary-cal__confirm:hover { backgr
     font-weight: 800;
     color: #0f172a;
     background: #fff;
+}
+.sa-rider-remit-default__form input[type="date"] {
+    min-width: 11.5rem;
+    font-variant-numeric: tabular-nums;
+}
+.sa-rider-remit-default__hint--start {
+    padding-top: 0;
 }
 .sa-rider-remit-default__form .sa-fuel-default-form__btn {
     margin-left: auto;

@@ -56,15 +56,30 @@ class UserRequest extends FormRequest
 
     /**
      * Phone unique among non-deleted users of the same user_type only.
+     * OS and Rider may share a number; 09… / +95… variants count as the same phone.
      */
     protected function uniqueContactNumberRule(?int $ignoreUserId = null, ?string $userType = null)
     {
         $userType = $userType ?: $this->contactUserType();
 
-        return Rule::unique('users', 'contact_number')
-            ->ignore($ignoreUserId)
-            ->whereNull('deleted_at')
-            ->where('user_type', $userType);
+        return function ($attribute, $value, $fail) use ($ignoreUserId, $userType) {
+            $variants = function_exists('contactNumberLookupVariants')
+                ? contactNumberLookupVariants((string) $value)
+                : [trim((string) $value)];
+            if ($variants === []) {
+                return;
+            }
+            $query = User::query()
+                ->where('user_type', $userType)
+                ->whereNull('deleted_at')
+                ->whereIn('contact_number', $variants);
+            if ($ignoreUserId) {
+                $query->where('id', '!=', $ignoreUserId);
+            }
+            if ($query->exists()) {
+                $fail(__('message.contact_number_already_taken'));
+            }
+        };
     }
 
     /**

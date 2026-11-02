@@ -332,11 +332,11 @@
 
 
 
-        /** Shared Name / Phone matcher for Online Shop search UIs. */
+        /** Shared Name / Phone matcher for Online Shop search UIs. Exact name only. */
 
         function matchOsTerm(term, name, phone) {
 
-            var query = String(term || '').toLowerCase().trim();
+            var query = String(term || '').toLowerCase().trim().replace(/\s+/g, ' ');
 
             if (!query) {
 
@@ -346,9 +346,11 @@
 
 
 
-            var nameHit = String(name || '').toLowerCase().indexOf(query) !== -1;
+            var nameNorm = String(name || '').toLowerCase().trim().replace(/\s+/g, ' ');
 
-            if (nameHit) {
+            // Exact name: "Khin Myat Noe" must not match "Myat Noe Khin".
+
+            if (nameNorm !== '' && nameNorm === query) {
 
                 return true;
 
@@ -408,7 +410,7 @@
 
             return list.filter(function (row) {
 
-                return matchOsTerm(term, (row.name || '') + ' ' + (row.text || ''), row.phone || '');
+                return matchOsTerm(term, row.name || '', row.phone || '');
 
             });
 
@@ -524,9 +526,13 @@
 
                     }
 
-                    // Also dig digits out of "Name · 09…" labels.
+                    // Exact name uses data.name; phone uses data-phone / label digits.
 
-                    return matchOsTerm(params.term, data.text || '', phone || data.text || '') ? data : null;
+                    return matchOsTerm(
+                        params.term,
+                        data.name || '',
+                        phone || data.phone || data.text || ''
+                    ) ? data : null;
 
                 },
 

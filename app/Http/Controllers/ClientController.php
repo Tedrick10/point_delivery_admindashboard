@@ -224,26 +224,24 @@ class ClientController extends Controller
         }
 
         if ($request->boolean('from_dispatch')) {
+            // Merge ONLY on the same phone. Same display name + different phone
+            // must create a separate Online Shop (never overwrite the other shop).
             $phoneVariants = contactNumberLookupVariants((string) ($request->contact_number ?? ''));
-            $existingUser = User::where('user_type', 'client')
-                ->where(function ($query) use ($request, $username, $phoneVariants) {
-                    if (! empty($phoneVariants)) {
-                        $query->whereIn('contact_number', $phoneVariants);
-                    } elseif ($request->filled('contact_number')) {
-                        $query->where('contact_number', $request->contact_number);
-                    }
-                    if ($username !== '') {
-                        $query->orWhere('username', $username);
-                    }
-                })
-                ->first();
+            $existingUser = null;
+            if ($phoneVariants !== []) {
+                $existingUser = User::where('user_type', 'client')
+                    ->whereNull('deleted_at')
+                    ->whereIn('contact_number', $phoneVariants)
+                    ->orderBy('id')
+                    ->first();
+            }
 
             if ($existingUser) {
                 // New Order re-save must surface on Online Shop Approved list
                 // under the destination branch (not stay Pending / unassigned).
                 $existingUser->fill([
                     'name' => $request->name,
-                    'username' => $username !== '' ? $username : $existingUser->username,
+                    // Keep existing username — do not steal another shop's login id.
                     'contact_number' => $request->contact_number ?: $existingUser->contact_number,
                     'address' => $address !== '' ? $address : $existingUser->address,
                     'city_id' => $city?->id ?? $existingUser->city_id,
@@ -267,6 +265,10 @@ class ClientController extends Controller
                 ]);
             }
         }
+
+        // Same name is allowed; username must stay unique (phone-based fallback).
+        $username = ensureUniqueClientUsername($username, (string) ($request->contact_number ?? ''));
+        $request->merge(['username' => $username]);
 
         $request->validate([
             'name' => 'required|string|max:255',

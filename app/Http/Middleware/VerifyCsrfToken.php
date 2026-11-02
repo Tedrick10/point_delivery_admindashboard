@@ -12,6 +12,10 @@ class VerifyCsrfToken extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        //
+        // Super Admin UI text sync (auth + same-origin only; avoids host/cookie CSRF flakes)
+        'super-admin/ui-text',
+        'super-admin/ui-text/*',
+        'super-admin/admin-ui-text',
+        'super-admin/admin-ui-text/*',
     ];
 }

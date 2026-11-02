@@ -419,6 +419,9 @@ class PaymentController extends Controller
                 $data['history_data']    = json_encode([
                     'reason' => __('message.payment_failed'),
                     'status' => 'cancelled',
+                    'actor_name' => 'System (Payment Failed)',
+                    'actor_type' => 'system',
+                    'auto_cancel' => true,
                 ]);
         
                 OrderHistory::create($data);

@@ -9,6 +9,7 @@ use App\Http\Resources\LanguageTableResource;
 use App\Models\LanguageList;
 use App\Models\SMSSetting;
 use App\Services\AppTextService;
+use App\Services\AppUiLabelService;
 
 class LanguageTableController extends Controller
 {
@@ -17,6 +18,9 @@ class LanguageTableController extends Controller
         $allowDeliverymanSetting = SettingData('allow_deliveryman', 'allow_deliveryman');
         $is_allow_deliveryman = $allowDeliverymanSetting === null || $allowDeliverymanSetting === '' || (int) $allowDeliverymanSetting === 1;
         AppTextService::ensureMobileLocales();
+        $app = appCopyClientApp();
+        $locale = AppUiLabelService::normalizeLocale($request->get('locale') ?: app()->getLocale());
+        $uiLabels = AppUiLabelService::bundle($app, $locale);
         $version_data = LanguageVersionDetail::where('version_no',request('version_no'))->first();
 
         if (isset($version_data) && !empty($version_data)) {
@@ -27,7 +31,8 @@ class LanguageTableController extends Controller
                 'ui_theme' => uiThemePackId(),
                 'brand_font' => brandFontId(),
                 'brand_color' => brandColorId(),
-                'app_copy' => appCopyBundle(appCopyClientApp()),
+                'app_copy' => appCopyBundle($app),
+                'ui_labels' => $uiLabels,
                 'walkthrough' => walkthroughSlides(),
             ]);
         }
@@ -49,7 +54,8 @@ class LanguageTableController extends Controller
             'brand_font' => brandFontId(),
             'brand_color' => brandColorId(),
             'twilio_sms' => $is_twilio_active,
-            'app_copy' => appCopyBundle(appCopyClientApp()),
+            'app_copy' => appCopyBundle($app),
+            'ui_labels' => $uiLabels,
             'walkthrough' => walkthroughSlides(),
         ];
 

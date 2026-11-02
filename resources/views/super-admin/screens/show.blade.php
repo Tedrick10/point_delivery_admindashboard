@@ -135,15 +135,27 @@
                                inputmode="numeric"
                                class="sa-no-spin">
                     </label>
+                    <label class="sa-rider-remit-default__field" for="sa_fuel_start_date">
+                        <span>{{ __('message.sa_fuel_start_date_label') }}</span>
+                        <input type="date"
+                               id="sa_fuel_start_date"
+                               name="fuel_start_date"
+                               value="{{ $fuelStartDate ?? '' }}"
+                               class="sa-rider-remit-default__date">
+                    </label>
                     <button type="submit" class="sa-module-hero__btn sa-fuel-default-form__btn">
                         {{ __('message.save') }}
                     </button>
                 </form>
                 <p class="sa-rider-remit-default__hint">{{ __('message.sa_fuel_min_ways_hint') }}</p>
+                <p class="sa-rider-remit-default__hint sa-rider-remit-default__hint--start">{{ __('message.sa_fuel_start_date_hint') }}</p>
                 @error('fuel_amount')
                     <p class="sa-fuel-default-panel__err">{{ $message }}</p>
                 @enderror
                 @error('fuel_min_ways')
+                    <p class="sa-fuel-default-panel__err">{{ $message }}</p>
+                @enderror
+                @error('fuel_start_date')
                     <p class="sa-fuel-default-panel__err">{{ $message }}</p>
                 @enderror
             </section>
@@ -168,9 +180,9 @@
                                 <thead>
                                     <tr>
                                         <th class="sa-rider-remit-table__num">#</th>
-                                        <th>{{ __('message.name') }}</th>
-                                        <th>{{ __('message.rider_remit_fuel') }}</th>
-                                        <th>{{ __('message.sa_fuel_min_ways_col') }}</th>
+                                        <th>{!! saUiSpan('table.col.name', __('message.name')) !!}</th>
+                                        <th>{!! saUiSpan('table.col.fuel', __('message.rider_remit_fuel')) !!}</th>
+                                        <th>{!! saUiSpan('table.col.fuel_min_ways', __('message.sa_fuel_min_ways_col')) !!}</th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -291,8 +303,8 @@
                     <thead>
                         <tr>
                             <th class="sa-late-fine-table__num">#</th>
-                            <th>{{ __('message.name') }}</th>
-                            <th>{{ __('message.hr_allowance_minutes') }}</th>
+                            <th>{!! saUiSpan('table.col.name', __('message.name')) !!}</th>
+                            <th>{!! saUiSpan('table.col.allowance_minutes', __('message.hr_allowance_minutes')) !!}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -374,8 +386,8 @@
                     <thead>
                         <tr>
                             <th class="sa-rider-salary-table__num">#</th>
-                            <th>{{ __('message.name') }}</th>
-                            <th>{{ __('message.hr_way_rate') }}</th>
+                            <th>{!! saUiSpan('table.col.name', __('message.name')) !!}</th>
+                            <th>{!! saUiSpan('table.col.way_rate', __('message.hr_way_rate')) !!}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -481,8 +493,8 @@
                     <thead>
                         <tr>
                             <th class="sa-office-salary-table__num">#</th>
-                            <th>{{ __('message.name') }}</th>
-                            <th>{{ __('message.hr_monthly_salary') }}</th>
+                            <th>{!! saUiSpan('table.col.name', __('message.name')) !!}</th>
+                            <th>{!! saUiSpan('table.col.monthly_salary', __('message.hr_monthly_salary')) !!}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -551,18 +563,18 @@
     @if(($screenKey ?? '') === 'kyo-shin')
         <section class="sa-module-panel sa-fuel-default-panel">
             <header class="sa-module-panel__head">
-                <h3>{{ __('message.kyo_shin_set_totals') }}</h3>
-                <span>{{ __('message.sa_fuel_default_badge') }}</span>
+                <h3>{!! saUiSpan('table.kyo.set_totals', __('message.kyo_shin_set_totals')) !!}</h3>
+                <span>{!! saUiSpan('table.kyo.auto_fill', __('message.sa_fuel_default_badge')) !!}</span>
             </header>
             <div class="sa-module-table-wrap">
                 <table class="sa-module-table sa-late-fine-staff-table">
                     <thead>
                         <tr>
-                            <th>{{ __('message.kyo_shin_branch') }}</th>
-                            <th>{{ __('message.kyo_shin_sa_amount') }}</th>
-                            <th>{{ __('message.kyo_shin_cash_held') }}</th>
-                            <th>{{ __('message.kyo_shin_returned_today') }}</th>
-                            <th>{{ __('message.kyo_shin_os_receivable') }}</th>
+                            <th>{!! saUiSpan('table.kyo.branch', __('message.kyo_shin_branch')) !!}</th>
+                            <th>{!! saUiSpan('table.kyo.sa_amount', __('message.kyo_shin_sa_amount')) !!}</th>
+                            <th>{!! saUiSpan('table.kyo.cash_held', __('message.kyo_shin_cash_held')) !!}</th>
+                            <th>{!! saUiSpan('table.kyo.returned_today', __('message.kyo_shin_returned_today')) !!}</th>
+                            <th>{!! saUiSpan('table.kyo.os_receivable', __('message.kyo_shin_os_receivable')) !!}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -759,9 +771,9 @@
                 <table class="sa-home-table">
                     <thead>
                         <tr>
-                            <th>{{ __('message.name') }}</th>
-                            <th>{{ __('message.branch_settlement_mode') }}</th>
-                            <th>{{ __('message.sa_admin') }}</th>
+                            <th>{!! saUiSpan('table.col.name', __('message.name')) !!}</th>
+                            <th>{!! saUiSpan('table.col.settlement_mode', __('message.branch_settlement_mode')) !!}</th>
+                            <th>{!! saUiSpan('table.col.admin', __('message.sa_admin')) !!}</th>
                             <th class="sa-num">{{ __('message.sa_riders') }}</th>
                         </tr>
                     </thead>
@@ -835,7 +847,7 @@
                     <table class="sa-home-table">
                         <thead>
                             <tr>
-                                <th>{{ __('message.branch') }}</th>
+                                <th>{!! saUiSpan('table.col.branch', __('message.branch')) !!}</th>
                                 @foreach($branchCols as $col)
                                     <th class="sa-num">{{ $col }}</th>
                                 @endforeach

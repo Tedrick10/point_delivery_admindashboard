@@ -4,9 +4,11 @@
             <div class="col-lg-12 mb-3">
                 <div class="pds-dashboard-hero pds-hero-animate">
                     <div class="pds-dashboard-hero-content">
-                        <p class="pds-dashboard-eyebrow mb-1">{{ __('message.dashboard') }}</p>
+                        <p class="pds-dashboard-eyebrow mb-1"
+                           data-admin-edit-text="1"
+                           data-admin-text-key="page.eyebrow">{{ adminUiText('page.eyebrow', __('message.dashboard'), 'page') }}</p>
                         <h2 class="pds-dashboard-title mb-0">
-                            {{ __('message.dashboard') }}
+                            <span data-admin-edit-text="1" data-admin-text-key="page.title">{{ adminUiText('page.title', __('message.dashboard'), 'page') }}</span>
                             @if(isBranchAdmin() && auth()->user()->branch)
                                 <span class="text-muted" style="font-size:0.55em;font-weight:600;">· {{ auth()->user()->branch->name }}</span>
                             @endif
@@ -20,13 +22,17 @@
             <div class="col-lg-12">
                 <div class="card pds-dashboard-panel pds-panel-animate">
                     <div class="row align-items-center pds-section-toolbar">
-                        <h5 class="pds-section-title mb-0">{{ __('message.today_order_counts') }}</h5>
+                        <h5 class="pds-section-title mb-0"
+                            data-admin-edit-text="1"
+                            data-admin-text-key="page.today_counts">{{ adminUiText('page.today_counts', __('message.today_order_counts'), 'page') }}</h5>
                         <div class="ml-auto d-flex justify-content-end pds-section-actions">
                             <a href="{{ route('dashboard.filter.data', $params) }}" class="btn btn-sm btn-primary loadRemoteModel">
-                                <i class="fas fa-filter"></i> {{ __('message.filter')}}
+                                <i class="fas fa-filter"></i>
+                                <span data-admin-edit-text="1" data-admin-text-key="page.filter">{{ adminUiText('page.filter', __('message.filter'), 'page') }}</span>
                             </a>
                             <a href="{{ route('home') }}" class="btn btn-sm btn-outline-primary">
-                                <i class="ri-repeat-line"></i> {{ __('message.reset_filter')}}
+                                <i class="ri-repeat-line"></i>
+                                <span data-admin-edit-text="1" data-admin-text-key="page.reset_filter">{{ adminUiText('page.reset_filter', __('message.reset_filter'), 'page') }}</span>
                             </a>
                         </div>
                     </div>
@@ -37,7 +43,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.total_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.total_order">{{ adminUiText('stat.total_order', __('message.total_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_order_today">{{ $data['dashboard']['total_order_today'] }}</h5>
                                             </div>
@@ -55,7 +61,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.pending_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.pending_order">{{ adminUiText('stat.pending_order', __('message.pending_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_order_today_peding">{{ $data['dashboard']['total_order_today_peding'] }}</h5>
                                             </div>
@@ -75,7 +81,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.inprogress_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.inprogress_order">{{ adminUiText('stat.inprogress_order', __('message.inprogress_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_order_today_inprogress">{{ $data['dashboard']['total_order_today_inprogress'] }}</h5>
                                             </div>
@@ -94,7 +100,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.completed_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.completed_order">{{ adminUiText('stat.completed_order', __('message.completed_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_order_today_completed">{{ $data['dashboard']['total_order_today_completed'] }}</h5>
                                             </div>
@@ -113,7 +119,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.cancel_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.cancel_order">{{ adminUiText('stat.cancel_order', __('message.cancel_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_order_today_cancelled">{{ $data['dashboard']['total_order_today_cancelled'] }}</h5>
                                             </div>
@@ -137,7 +143,9 @@
             <div class="col-lg-12">
                 <div class="card pds-dashboard-panel pds-panel-animate">
                     <div class="row pds-section-toolbar">
-                        <h5 class="pds-section-title mb-0">{{ __('message.order_detail') }}</h5>
+                        <h5 class="pds-section-title mb-0"
+                            data-admin-edit-text="1"
+                            data-admin-text-key="page.order_detail">{{ adminUiText('page.order_detail', __('message.order_detail'), 'page') }}</h5>
                     </div>
                     <div class="card-body">
                         <div class="row pds-stats-grid">
@@ -146,7 +154,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.total_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.total_order">{{ adminUiText('stat.total_order', __('message.total_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_order">{{ $data['dashboard']['total_order'] }}</h5>
                                             </div>
@@ -164,7 +172,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.created_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.created_order">{{ adminUiText('stat.created_order', __('message.created_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_create_order">{{ $data['dashboard']['total_create_order'] }}</h5>
                                             </div>
@@ -183,7 +191,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.assigned_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.assigned_order">{{ adminUiText('stat.assigned_order', __('message.assigned_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_assigned_order">{{ $data['dashboard']['total_assigned_order'] }}</h5>
                                             </div>
@@ -202,7 +210,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.accepted_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.accepted_order">{{ adminUiText('stat.accepted_order', __('message.accepted_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_accepetd_order">{{ $data['dashboard']['total_accepetd_order'] }}</h5>
                                             </div>
@@ -221,7 +229,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.arrived_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.arrived_order">{{ adminUiText('stat.arrived_order', __('message.arrived_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_arrived_order">{{ $data['dashboard']['total_arrived_order'] }}</h5>
                                             </div>
@@ -240,7 +248,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.picked_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.picked_order">{{ adminUiText('stat.picked_order', __('message.picked_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_pickup_order">{{ $data['dashboard']['total_pickup_order'] }}</h5>
                                             </div>
@@ -258,7 +266,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.departed_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.departed_order">{{ adminUiText('stat.departed_order', __('message.departed_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_departed_order">{{ $data['dashboard']['total_departed_order'] }}</h5>
                                             </div>
@@ -276,7 +284,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.delivered_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.delivered_order">{{ adminUiText('stat.delivered_order', __('message.delivered_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_delivered_order">{{ $data['dashboard']['total_delivered_order'] }}</h5>
                                             </div>
@@ -295,7 +303,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.cancel_order') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.cancel_order">{{ adminUiText('stat.cancel_order', __('message.cancel_order')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700" data-live-stat="total_cancelled_order">{{ $data['dashboard']['total_cancelled_order'] }}</h5>
                                             </div>
@@ -314,7 +322,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.total_user') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.total_user">{{ adminUiText('stat.total_user', __('message.total_user')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700">{{ $data['dashboard']['total_user'] }}</h5>
                                             </div>
@@ -332,7 +340,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.total_delivery_person') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.total_delivery_person">{{ adminUiText('stat.total_delivery_person', __('message.total_delivery_person')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700">{{ $data['dashboard']['total_delivery_person'] }}</h5>
                                             </div>
@@ -392,7 +400,7 @@
             <div class="col-lg-4 mb-3">
                 <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
                     <div class="pds-section-toolbar">
-                        <h5 class="pds-section-title mb-0">{{ __('message.today_status_chart') }}</h5>
+                        <h5 class="pds-section-title mb-0" data-admin-edit-text="1" data-admin-text-key="page.today_status_chart">{{ adminUiText('page.today_status_chart', __('message.today_status_chart'), 'page') }}</h5>
                         <span class="pds-chart-panel__badge">{{ __('message.today_order') }}</span>
                     </div>
                     <div class="card-body">
@@ -403,7 +411,7 @@
             <div class="col-lg-8 mb-3">
                 <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
                     <div class="pds-section-toolbar">
-                        <h5 class="pds-section-title mb-0">{{ __('message.order_pipeline_chart') }}</h5>
+                        <h5 class="pds-section-title mb-0" data-admin-edit-text="1" data-admin-text-key="page.order_pipeline_chart">{{ adminUiText('page.order_pipeline_chart', __('message.order_pipeline_chart'), 'page') }}</h5>
                     </div>
                     <div class="card-body">
                         <div id="pds-order-pipeline-bar" class="pds-chart-canvas pds-chart-canvas--tall"></div>
@@ -413,7 +421,7 @@
             <div class="col-lg-8 mb-3">
                 <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
                     <div class="pds-section-toolbar">
-                        <h5 class="pds-section-title mb-0">{{ __('message.weekly_order_count') }}</h5>
+                        <h5 class="pds-section-title mb-0" data-admin-edit-text="1" data-admin-text-key="page.weekly_order_count">{{ adminUiText('page.weekly_order_count', __('message.weekly_order_count'), 'page') }}</h5>
                     </div>
                     <div class="card-body">
                         <div id="pds-weekly-order-bar" class="pds-chart-canvas"></div>
@@ -423,7 +431,7 @@
             <div class="col-lg-4 mb-3">
                 <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
                     <div class="pds-section-toolbar">
-                        <h5 class="pds-section-title mb-0">{{ __('message.weekly_order_share') }}</h5>
+                        <h5 class="pds-section-title mb-0" data-admin-edit-text="1" data-admin-text-key="page.weekly_order_share">{{ adminUiText('page.weekly_order_share', __('message.weekly_order_share'), 'page') }}</h5>
                     </div>
                     <div class="card-body">
                         <div id="dash-count-chart-pie" class="pds-chart-canvas"></div>
@@ -433,7 +441,7 @@
             <div class="col-lg-12 mb-3">
                 <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
                     <div class="pds-section-toolbar">
-                        <h5 class="pds-section-title mb-0">{{ __('message.monthly_order_count') }}</h5>
+                        <h5 class="pds-section-title mb-0" data-admin-edit-text="1" data-admin-text-key="page.monthly_order_count">{{ adminUiText('page.monthly_order_count', __('message.monthly_order_count'), 'page') }}</h5>
                     </div>
                     <div class="card-body">
                         <div id="wave-chart" class="pds-chart-canvas pds-chart-canvas--wide"></div>
@@ -443,7 +451,7 @@
             <div class="col-lg-7 mb-3">
                 <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
                     <div class="pds-section-toolbar">
-                        <h5 class="pds-section-title mb-0">{{ __('message.monthly_payment_count') }}</h5>
+                        <h5 class="pds-section-title mb-0" data-admin-edit-text="1" data-admin-text-key="page.monthly_payment_count">{{ adminUiText('page.monthly_payment_count', __('message.monthly_payment_count'), 'page') }}</h5>
                     </div>
                     <div class="card-body">
                         <div id="dash-payment-chart-bar" class="pds-chart-canvas pds-chart-canvas--wide"></div>
@@ -453,7 +461,7 @@
             <div class="col-lg-5 mb-3">
                 <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
                     <div class="pds-section-toolbar">
-                        <h5 class="pds-section-title mb-0">{{ __('message.orders_by_city') }}</h5>
+                        <h5 class="pds-section-title mb-0" data-admin-edit-text="1" data-admin-text-key="page.orders_by_city">{{ adminUiText('page.orders_by_city', __('message.orders_by_city'), 'page') }}</h5>
                     </div>
                     <div class="card-body">
                         <div id="city-package-chart" class="pds-chart-canvas"></div>
@@ -463,7 +471,7 @@
             <div class="col-lg-12 mb-3">
                 <div class="card pds-dashboard-panel pds-chart-panel pds-panel-animate">
                     <div class="pds-section-toolbar">
-                        <h5 class="pds-section-title mb-0">{{ __('message.number_of_packages') }}</h5>
+                        <h5 class="pds-section-title mb-0" data-admin-edit-text="1" data-admin-text-key="page.number_of_packages">{{ adminUiText('page.number_of_packages', __('message.number_of_packages'), 'page') }}</h5>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive pds-dash-city-table">
@@ -503,7 +511,7 @@
             <div class="col-lg-12">
                 <div class="card pds-dashboard-panel pds-panel-animate">
                     <div class="row align-items-center pds-section-toolbar">
-                        <h5 class="pds-section-title mb-0">{{ __('message.total_collect') }}</h5>
+                        <h5 class="pds-section-title mb-0" data-admin-edit-text="1" data-admin-text-key="page.total_collect">{{ adminUiText('page.total_collect', __('message.total_collect'), 'page') }}</h5>
                     </div>
                     <div class="card-body">
                         <div class="row pds-stats-grid">
@@ -512,7 +520,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.total_collection') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.total_collection">{{ adminUiText('stat.total_collection', __('message.total_collection')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700">{{ getPriceFormat($data['dashboard']['total_collection_by_order']) }}</h5>
                                             </div>
@@ -531,7 +539,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.total_admin') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.total_admin">{{ adminUiText('stat.total_admin', __('message.total_admin')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700">{{ getPriceFormat($data['dashboard']['total_admin_comission']) }}</h5>
                                             </div>
@@ -549,7 +557,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.total_delivery_boy') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.total_delivery_boy">{{ adminUiText('stat.total_delivery_boy', __('message.total_delivery_boy')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700">{{ getPriceFormat($data['dashboard']['total_delivery_comission']) }}</h5>
                                             </div>
@@ -570,7 +578,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.total_wallet') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.total_wallet">{{ adminUiText('stat.total_wallet', __('message.total_wallet')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700">{{ getPriceFormat ($data['dashboard']['total_wallet_balance']) }}</h5>
                                             </div>
@@ -588,7 +596,7 @@
                                     <div class="card-body">
                                         <div class="d-flex align-items-center justify-content-between">
                                             <div class="mm-cart-text">
-                                                <p class="mb-0">{{ __('message.monthly_payment_count') }}</p>
+                                                <p class="mb-0" data-admin-edit-text="1" data-admin-text-key="stat.monthly_payment_count">{{ adminUiText('stat.monthly_payment_count', __('message.monthly_payment_count')) }}</p>
                                                 <br>
                                                 <h5 class="font-weight-700">{{ getPriceFormat ($data['dashboard']['monthly_payment_count']) }}</h5>
                                             </div>
@@ -609,7 +617,7 @@
                     <div class="col-md-12">
                         <div class="card pds-dashboard-panel pds-panel-animate">
                             <div class="row align-items-center pds-section-toolbar">
-                                <h5 class="pds-section-title mb-0">{{ __('message.recent_order')}}</h5>
+                                <h5 class="pds-section-title mb-0" data-admin-edit-text="1" data-admin-text-key="page.recent_order">{{ adminUiText('page.recent_order', __('message.recent_order'), 'page') }}</h5>
                                 <div class="ml-auto pds-section-actions">
                                     <a href="{{ route('order.index') }}" class="btn btn-sm btn-primary">{{ __('message.view_all') }}</a>
                                 </div>
@@ -699,7 +707,7 @@
                     <div class="col-md-12">
                         <div class="card pds-dashboard-panel pds-panel-animate">
                             <div class="row align-items-center pds-section-toolbar">
-                                <h5 class="pds-section-title mb-0">{{ __('message.recent_withdrawrequest')}}</h5>
+                                <h5 class="pds-section-title mb-0" data-admin-edit-text="1" data-admin-text-key="page.recent_withdraw">{{ adminUiText('page.recent_withdraw', __('message.recent_withdrawrequest'), 'page') }}</h5>
                                 <div class="ml-auto pds-section-actions">
                                     <a href="{{ route('withdrawrequest.index') }}" class="btn btn-sm btn-primary">{{ __('message.view_all') }}</a>
                                 </div>

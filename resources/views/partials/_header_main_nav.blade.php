@@ -20,7 +20,7 @@
 <div class="pds-main-nav" aria-label="Main">
     <button type="button" class="pds-main-nav__mobile-toggle" id="pdsMainNavToggle" aria-expanded="false" aria-controls="pdsMainNavList">
         <i class="fas fa-bars"></i>
-        <span>Menu</span>
+        <span data-admin-edit-text="1" data-admin-text-key="nav.menu">{{ adminUiText('nav.menu', 'Menu') }}</span>
     </button>
 
     <ul class="pds-main-nav__list" id="pdsMainNavList">
@@ -67,7 +67,7 @@
         @endforelse
         <li class="pds-main-nav__item has-dropdown pds-main-nav__item--more is-empty" id="pdsMainNavMore" hidden>
             <button type="button" class="pds-main-nav__link pds-main-nav__link--dropdown" aria-expanded="false">
-                <span class="pds-main-nav__label">More</span>
+                <span class="pds-main-nav__label" data-admin-edit-text="1" data-admin-text-key="nav.more">{{ adminUiText('nav.more', 'More') }}</span>
                 <i class="fas fa-chevron-down pds-main-nav__caret" aria-hidden="true"></i>
             </button>
             <div class="pds-main-nav__dropdown" role="menu">
@@ -116,6 +116,40 @@
             moreItem.hidden = true;
         }
 
+        var moreAdminTitle = @json(adminUiText('nav.section.admin', __('message.nav_admin')));
+
+        function extractLabelMeta(labelEl) {
+            var labelText = 'Item';
+            var iconHtml = '';
+            var textKey = '';
+            if (!labelEl) return { labelText: labelText, iconHtml: iconHtml, textKey: textKey };
+            var keyed = labelEl.matches('[data-admin-text-key]')
+                ? labelEl
+                : labelEl.querySelector('[data-admin-text-key]');
+            if (keyed) {
+                textKey = (keyed.getAttribute('data-admin-text-key') || '').trim();
+            }
+            var labelClone = labelEl.cloneNode(true);
+            var iconEl = labelClone.querySelector('i, .fas, .fa, .far, .fab');
+            if (iconEl) {
+                iconHtml = iconEl.outerHTML;
+                iconEl.remove();
+            }
+            labelClone.querySelectorAll('.badge').forEach(function (b) { b.remove(); });
+            labelText = (labelClone.textContent || '').replace(/\s+/g, ' ').trim() || 'Item';
+            return { labelText: labelText, iconHtml: iconHtml, textKey: textKey };
+        }
+
+        function makeEditableTextNode(text, textKey) {
+            var span = document.createElement('span');
+            span.textContent = text;
+            if (textKey) {
+                span.setAttribute('data-admin-text-key', textKey);
+                span.setAttribute('data-admin-edit-text', '1');
+            }
+            return span;
+        }
+
         function ensureMoreAdminGroup() {
             var group = moreInner.querySelector(':scope > .pds-main-nav__more-group[data-pds-more-admin="1"]');
             if (group) return group;
@@ -124,7 +158,7 @@
             group.setAttribute('data-pds-more-admin', '1');
             var title = document.createElement('div');
             title.className = 'pds-main-nav__more-title';
-            title.textContent = 'Admin';
+            title.appendChild(makeEditableTextNode(moreAdminTitle, 'nav.section.admin'));
             group.appendChild(title);
             // Flat overflow items sit after Settlement groups — append at end.
             moreInner.appendChild(group);
@@ -136,18 +170,10 @@
             item.classList.add('is-overflow-hidden');
 
             var labelEl = item.querySelector('.pds-main-nav__label');
-            var labelText = 'Item';
-            var iconHtml = '';
-            if (labelEl) {
-                var labelClone = labelEl.cloneNode(true);
-                var iconEl = labelClone.querySelector('i, .fas, .fa, .far, .fab');
-                if (iconEl) {
-                    iconHtml = iconEl.outerHTML;
-                    iconEl.remove();
-                }
-                labelClone.querySelectorAll('.badge').forEach(function (b) { b.remove(); });
-                labelText = (labelClone.textContent || '').replace(/\s+/g, ' ').trim() || 'Item';
-            }
+            var meta = extractLabelMeta(labelEl);
+            var labelText = meta.labelText;
+            var iconHtml = meta.iconHtml;
+            var textKey = meta.textKey;
             var badge = item.querySelector('.pds-main-nav__label .badge, .pds-main-nav__link > .badge');
             var badgeHtml = badge ? badge.outerHTML : '';
 
@@ -158,7 +184,7 @@
                     group.className = 'pds-main-nav__more-group';
                     var title = document.createElement('div');
                     title.className = 'pds-main-nav__more-title';
-                    title.textContent = labelText;
+                    title.appendChild(makeEditableTextNode(labelText, textKey));
                     group.appendChild(title);
                     children.forEach(function (child) {
                         group.appendChild(child.cloneNode(true));
@@ -168,8 +194,11 @@
                 } else {
                     var stub = document.createElement('span');
                     stub.className = 'pds-main-nav__sublink';
-                    stub.textContent = labelText;
+                    stub.appendChild(makeEditableTextNode(labelText, textKey));
                     moreInner.insertBefore(stub, moreInner.firstChild);
+                }
+                if (typeof window.__pdsAdminUiRefreshEdit === 'function') {
+                    window.__pdsAdminUiRefreshEdit();
                 }
                 return;
             }
@@ -181,9 +210,7 @@
             if (iconHtml) {
                 a.insertAdjacentHTML('afterbegin', iconHtml);
             }
-            var name = document.createElement('span');
-            name.textContent = labelText;
-            a.appendChild(name);
+            a.appendChild(makeEditableTextNode(labelText, textKey));
             if (badgeHtml) {
                 a.insertAdjacentHTML('beforeend', badgeHtml);
             }
@@ -195,6 +222,9 @@
                 adminGroup.insertBefore(a, adminTitle.nextSibling);
             } else {
                 adminGroup.appendChild(a);
+            }
+            if (typeof window.__pdsAdminUiRefreshEdit === 'function') {
+                window.__pdsAdminUiRefreshEdit();
             }
         }
 

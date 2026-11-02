@@ -14,14 +14,19 @@ class RiderRemitSettingsController extends Controller
         $data = $request->validate([
             'fuel_amount' => 'required|numeric|min:0',
             'fuel_min_ways' => 'required|integer|min:1|max:1000',
+            'fuel_start_date' => 'nullable|date',
         ]);
 
         $oldDefault = $service->defaultFuelAmount();
         $amount = $service->setDefaultFuelAmount((float) $data['fuel_amount']);
         $service->setFuelMinWays((int) $data['fuel_min_ways']);
+        $startDate = $service->setFuelStartDate(
+            array_key_exists('fuel_start_date', $data) ? (string) ($data['fuel_start_date'] ?? '') : null
+        );
 
         $day = now('Asia/Yangon')->toDateString();
         $service->applyDefaultFuelToOpenRemits($day, null, $oldDefault, $amount);
+        // Recompute all open remits so days before fuel_start_date become 0.
         $service->resyncOpenRemitFuel((int) ($request->user()?->id ?? 0) ?: null);
 
         if ($request->expectsJson() || $request->ajax()) {
@@ -29,6 +34,7 @@ class RiderRemitSettingsController extends Controller
                 'message' => __('message.sa_fuel_default_saved'),
                 'default_fuel' => $amount,
                 'fuel_min_ways' => $service->fuelMinWays(),
+                'fuel_start_date' => $startDate,
             ]);
         }
 

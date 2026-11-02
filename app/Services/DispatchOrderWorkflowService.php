@@ -919,22 +919,42 @@ class DispatchOrderWorkflowService
      */
     public function healPickupErrorChoicesToCancelled(): int
     {
-        $ids = Order::query()
+        $orders = Order::query()
             ->whereIn('pickup_error_choice', ['cancel', 'express'])
             ->where('status', '!=', 'cancelled')
-            ->pluck('id');
+            ->get();
 
-        if ($ids->isEmpty()) {
+        if ($orders->isEmpty()) {
             return 0;
         }
 
-        $updated = Order::query()
-            ->whereIn('id', $ids)
-            ->update([
+        $ids = $orders->pluck('id');
+
+        foreach ($orders as $order) {
+            $previous = (string) ($order->status ?? '');
+            $order->forceFill([
                 'status' => 'cancelled',
                 'delivery_man_id' => null,
                 'assign_datetime' => null,
-            ]);
+            ])->save();
+
+            try {
+                saveOrderHistory([
+                    'history_type' => 'cancelled',
+                    'order_id' => $order->id,
+                    'order' => $order->fresh(),
+                    'previous_status' => $previous,
+                    'auto_cancel' => true,
+                    'actor_name' => 'System (Heal Cancel Choice)',
+                    'actor_type' => 'system',
+                ]);
+            } catch (\Throwable $e) {
+                \Log::warning('heal cancel history failed', [
+                    'order_id' => $order->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         \App\Models\DispatchOrderItem::query()
             ->whereIn('order_id', $ids)
@@ -953,7 +973,7 @@ class DispatchOrderWorkflowService
                 'assigned_at' => null,
             ]);
 
-        return (int) $updated;
+        return $orders->count();
     }
 
     public function isDedicatedPickupList(?string $dispatchStatus): bool

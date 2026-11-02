@@ -37,6 +37,9 @@ class RiderRemitService
             ['type' => 'rider_remit', 'key' => 'default_fuel_amount'],
             ['value' => (string) $amount]
         );
+        if (function_exists('SettingDataFlush')) {
+            SettingDataFlush('rider_remit', 'default_fuel_amount');
+        }
 
         return $amount;
     }
@@ -60,8 +63,79 @@ class RiderRemitService
             ['type' => 'rider_remit', 'key' => 'fuel_min_ways'],
             ['value' => (string) $ways]
         );
+        if (function_exists('SettingDataFlush')) {
+            SettingDataFlush('rider_remit', 'fuel_min_ways');
+        }
 
         return $ways;
+    }
+
+    /**
+     * First calendar day ဆီဖိုး may appear on Rider ငွေအပ် (Y-m-d).
+     * Empty / null = no start gate (legacy behaviour).
+     */
+    public function fuelStartDate(): ?string
+    {
+        $raw = trim((string) (SettingData('rider_remit', 'fuel_start_date') ?? ''));
+        if ($raw === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($raw, 'Asia/Yangon')->toDateString();
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    public function setFuelStartDate(?string $day): ?string
+    {
+        $day = trim((string) $day);
+        if ($day === '') {
+            \App\Models\Setting::query()->updateOrCreate(
+                ['type' => 'rider_remit', 'key' => 'fuel_start_date'],
+                ['value' => '']
+            );
+            if (function_exists('SettingDataFlush')) {
+                SettingDataFlush('rider_remit', 'fuel_start_date');
+            }
+
+            return null;
+        }
+
+        $ymd = $this->parseDate($day)->toDateString();
+        \App\Models\Setting::query()->updateOrCreate(
+            ['type' => 'rider_remit', 'key' => 'fuel_start_date'],
+            ['value' => $ymd]
+        );
+        if (function_exists('SettingDataFlush')) {
+            SettingDataFlush('rider_remit', 'fuel_start_date');
+        }
+
+        return $ymd;
+    }
+
+    /**
+     * Whether ဆီဖိုး is allowed on this remit calendar day.
+     */
+    public function isFuelActiveOnDate(?string $day): bool
+    {
+        $start = $this->fuelStartDate();
+        if ($start === null || $start === '') {
+            return true;
+        }
+        $day = trim((string) $day);
+        if ($day === '') {
+            return true;
+        }
+
+        try {
+            $ymd = Carbon::parse($day, 'Asia/Yangon')->toDateString();
+        } catch (\Throwable $e) {
+            return true;
+        }
+
+        return $ymd >= $start;
     }
 
     /**
@@ -98,7 +172,8 @@ class RiderRemitService
                 (float) $row->fuel_amount,
                 $fuelWayCount,
                 $isOtherBranch,
-                $branchId > 0 ? $branchId : null
+                $branchId > 0 ? $branchId : null,
+                $remitDay
             );
             $fee = $this->resolveFeeAmount(
                 $row->fee_amount,
@@ -392,11 +467,17 @@ class RiderRemitService
         ?float $savedFuel,
         int $itemCount,
         bool $isOtherBranch = false,
-        ?int $remitBranchId = null
+        ?int $remitBranchId = null,
+        ?string $remitDay = null
     ): float {
         // $savedFuel kept for call-site BC. ဆီဖိုး is system-controlled (SA default /
         // per-rider) — never sticky from an old remit row after default becomes 0.
         if ($isOtherBranch || $this->isForeignRiderOnRemit($riderId, $remitBranchId)) {
+            return 0.0;
+        }
+
+        // Before Super Admin fuel start date → always 0 on Rider ငွေအပ်.
+        if ($remitDay !== null && $remitDay !== '' && ! $this->isFuelActiveOnDate($remitDay)) {
             return 0.0;
         }
 
@@ -435,6 +516,9 @@ class RiderRemitService
             return 0;
         }
 
+        // Before fuel start date, open remits must stay at 0 — never fill default.
+        $applyAmount = $this->isFuelActiveOnDate($day) ? $newDefault : 0.0;
+
         $customRiderIds = \App\Models\Setting::query()
             ->where('type', 'rider_remit')
             ->where('key', 'like', 'rider_fuel_%')
@@ -462,7 +546,7 @@ class RiderRemitService
                     ->where('users.branch_id', $branchStore);
             })
             ->update([
-                'fuel_amount' => $newDefault,
+                'fuel_amount' => $applyAmount,
                 'updated_by' => auth()->id(),
             ]);
 
@@ -563,7 +647,8 @@ class RiderRemitService
                 $savedFuel,
                 $fuelWayCount,
                 $isOtherBranch,
-                $branchStore > 0 ? $branchStore : null
+                $branchStore > 0 ? $branchStore : null,
+                $day
             );
             $fee = $this->resolveFeeAmount(
                 $isOtherBranch ? null : $savedFee,
@@ -704,7 +789,8 @@ class RiderRemitService
                 $savedFuel,
                 $fuelWayCount,
                 $isOtherBranch,
-                $branchId && $branchId > 0 ? $branchId : null
+                $branchId && $branchId > 0 ? $branchId : null,
+                $day
             );
             $fee = $this->resolveFeeAmount(
                 $isOtherBranch ? null : $remit?->fee_amount,
@@ -1123,7 +1209,8 @@ class RiderRemitService
             $open !== null ? (float) $open->fuel_amount : null,
             $fuelWayCount,
             $isOtherBranch,
-            $branchId > 0 ? $branchId : null
+            $branchId > 0 ? $branchId : null,
+            $day
         );
         $fee = $this->resolveFeeAmount(
             $isOtherBranch ? null : $open?->fee_amount,

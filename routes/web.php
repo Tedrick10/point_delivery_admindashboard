@@ -31,6 +31,7 @@ use App\Http\Controllers\DeliveryManDocumentController;
 use App\Http\Controllers\DeliveryPartnerController;
 use App\Http\Controllers\Frontendwebsite\FronthomeController;
 use App\Http\Controllers\SuperAdmin\AuthController as SuperAdminAuthController;
+use App\Http\Controllers\SuperAdmin\ProfileController as SuperAdminProfileController;
 use App\Http\Controllers\SuperAdmin\BranchAdminController as SuperAdminBranchAdminController;
 use App\Http\Controllers\SuperAdmin\BranchController as SuperAdminBranchController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
@@ -702,6 +703,8 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
         Route::post('logout', [SuperAdminAuthController::class, 'logout'])->name('logout');
         Route::get('/', [SuperAdminDashboardController::class, 'index'])->name('dashboard');
         Route::get('dashboard', [SuperAdminDashboardController::class, 'index']);
+        Route::get('profile', [SuperAdminProfileController::class, 'show'])->name('profile.show');
+        Route::put('profile', [SuperAdminProfileController::class, 'update'])->name('profile.update');
         Route::get('screens', [SuperAdminScreenController::class, 'hub'])->name('screens.hub');
         Route::get('screens/{screen}', [SuperAdminScreenController::class, 'show'])->name('screens.show');
 
@@ -770,6 +773,18 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
             ->name('system-settings.app-copy');
         Route::post('ui-theme', [\App\Http\Controllers\SuperAdmin\UiThemeController::class, 'update'])
             ->name('ui-theme.update');
+        Route::get('ui-text', [\App\Http\Controllers\SuperAdmin\SaUiTextController::class, 'show'])
+            ->name('ui-text.show');
+        Route::post('ui-text', [\App\Http\Controllers\SuperAdmin\SaUiTextController::class, 'save'])
+            ->name('ui-text.save');
+        Route::post('ui-text/reset', [\App\Http\Controllers\SuperAdmin\SaUiTextController::class, 'reset'])
+            ->name('ui-text.reset');
+        Route::get('admin-ui-text', [\App\Http\Controllers\SuperAdmin\AdminUiTextController::class, 'show'])
+            ->name('admin-ui-text.show');
+        Route::post('admin-ui-text', [\App\Http\Controllers\SuperAdmin\AdminUiTextController::class, 'save'])
+            ->name('admin-ui-text.save');
+        Route::post('admin-ui-text/reset', [\App\Http\Controllers\SuperAdmin\AdminUiTextController::class, 'reset'])
+            ->name('admin-ui-text.reset');
     });
 });
 

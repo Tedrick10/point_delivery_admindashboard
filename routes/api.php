@@ -47,6 +47,10 @@ Route::get('branch-list', [API\BranchController::class, 'getList']);
 Route::get('dispatch-public-item-track', [API\DispatchOrderItemController::class, 'searchPublicTrackItems']);
 
 Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function () {
+    Route::get('app-ui-text', [API\AppUiTextController::class, 'show']);
+    Route::post('app-ui-text', [API\AppUiTextController::class, 'save']);
+    Route::post('app-ui-text/reset', [API\AppUiTextController::class, 'reset']);
+
     Route::get('dashboard-detail', [API\UserController::class, 'dashboard']);
     Route::get('dashboard-chartdata', [API\UserController::class, 'dashboardChartData']);
 

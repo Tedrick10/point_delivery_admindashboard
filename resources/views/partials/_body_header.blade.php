@@ -9,8 +9,8 @@
                     <img src="{{ getSingleMedia(appSettingData('get'),'site_logo',null) }}" class="img-fluid mode light-img rounded-normal site_logo_preview pds-topbar-logo" alt="POINT">
                     <img src="{{ getSingleMedia(appSettingData('get'),'site_dark_logo',null) }}" class="img-fluid mode dark-img rounded-normal darkmode-logo site_dark_logo_preview pds-topbar-logo" alt="POINT">
                     <span class="pds-topbar-brand-copy">
-                        <span class="pds-topbar-brand-copy__name">POINT</span>
-                        <span class="pds-topbar-brand-copy__tag">Delivery</span>
+                        <span class="pds-topbar-brand-copy__name" data-admin-edit-text="1" data-admin-text-key="brand.name">{{ adminUiText('brand.name', 'POINT') }}</span>
+                        <span class="pds-topbar-brand-copy__tag" data-admin-edit-text="1" data-admin-text-key="brand.tag">{{ adminUiText('brand.tag', 'Delivery') }}</span>
                     </span>
                 </a>
             </div>

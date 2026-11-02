@@ -1640,6 +1640,26 @@ class DispatchOrderAuditService
                         return $carry;
                     }
                 }
+                // Collapse duplicate Cancelled cards from double-submit / sleep retries.
+                if ($type === 'cancelled') {
+                    $reason = trim((string) ($e['reason'] ?? ''));
+                    $message = trim((string) ($e['message'] ?? $e['summary'] ?? ''));
+                    $sortAt = (int) ($e['sort_at'] ?? 0);
+                    $already = $carry->contains(function (array $existing) use ($reason, $message, $sortAt) {
+                        if (($existing['type'] ?? '') !== 'cancelled') {
+                            return false;
+                        }
+                        $sameReason = trim((string) ($existing['reason'] ?? '')) === $reason;
+                        $sameMessage = trim((string) ($existing['message'] ?? $existing['summary'] ?? '')) === $message;
+                        $existingAt = (int) ($existing['sort_at'] ?? 0);
+                        $closeInTime = abs($existingAt - $sortAt) <= 120;
+
+                        return $closeInTime && ($sameReason || $sameMessage || ($reason === '' && $message === ''));
+                    });
+                    if ($already) {
+                        return $carry;
+                    }
+                }
                 $carry->push($e);
 
                 return $carry;
@@ -2582,12 +2602,42 @@ class DispatchOrderAuditService
 
         if ($choiceLabel && in_array($choice, ['cancel', 'express'], true)) {
             return $this->t('dispatch_audit_cancelled_choice', [
-                'client' => $clientName,
+                'client' => $this->resolveName(
+                    $data['client_name'] ?? null,
+                    $data['actor_name'] ?? null,
+                    $clientName
+                ),
                 'order' => $order->id,
                 'choice' => $choiceLabel,
             ]);
         }
 
+        $reason = trim((string) ($data['reason'] ?? $order->reason ?? ''));
+        $isAuto = ! empty($data['auto_cancel'])
+            || str_contains(strtolower($reason), 'auto cancelled');
+
+        $actor = $this->resolveName(
+            $data['actor_name'] ?? null,
+            $data['admin_name'] ?? null,
+            $data['client_name'] ?? null,
+            $isAuto ? 'System (Auto Cancel)' : null
+        );
+
+        if ($isAuto) {
+            return $this->t('dispatch_audit_cancelled_auto', [
+                'actor' => $actor !== '' && $actor !== '-' ? $actor : 'System (Auto Cancel)',
+                'order' => $order->id,
+            ]);
+        }
+
+        if ($actor !== '' && $actor !== '-') {
+            return $this->t('dispatch_audit_cancelled_by', [
+                'actor' => $actor,
+                'order' => $order->id,
+            ]);
+        }
+
+        // Legacy rows with no actor stored in history_data.
         return $this->t('dispatch_audit_cancelled', [
             'order' => $order->id,
         ]);

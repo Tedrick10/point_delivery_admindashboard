@@ -257,5 +257,16 @@
 
     setOpen(false);
     toggleOther($reason.val());
+
+    // Prevent double-submit while cancel is slow (notifications / history write).
+    $modal.find('form.pds-cancel-order-form').off('submit.pdsCancelOnce').on('submit.pdsCancelOnce', function () {
+        var $form = $(this);
+        if ($form.data('pds-submitting')) {
+            return false;
+        }
+        $form.data('pds-submitting', true);
+        $form.find('button[type="submit"]').prop('disabled', true).addClass('is-loading');
+        return true;
+    });
 })(jQuery);
 </script>

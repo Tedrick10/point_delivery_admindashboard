@@ -15,13 +15,46 @@ class OrderAutoCancelCommand extends Command
     public function handle()
     {
         $now = Carbon::now()->addMinutes(30);
-        $orders = Order::where('status', 'create')
-            ->whereRaw("STR_TO_DATE(JSON_UNQUOTE(JSON_EXTRACT(pickup_point, '$.end_time')), '%Y-%m-%d %H:%i') < ?", [$now])
+
+        // Only true draft/create slots — never cancel once pickup/dispatch has progressed.
+        $orders = Order::query()
+            ->where('status', 'create')
+            ->whereRaw(
+                "STR_TO_DATE(JSON_UNQUOTE(JSON_EXTRACT(pickup_point, '$.end_time')), '%Y-%m-%d %H:%i') < ?",
+                [$now]
+            )
+            ->whereDoesntHave('dispatchItems', function ($q) {
+                $q->whereIn('status', [
+                    'assigned',
+                    'courier_assigned',
+                    'courier_departed',
+                    'completed',
+                    'pending',
+                    'accepted',
+                    'arrived',
+                ]);
+            })
             ->get();
 
+        $createCount = 0;
         foreach ($orders as $order) {
+            $previous = (string) ($order->status ?? 'create');
             $order->status = 'cancelled';
+            $order->reason = 'Auto cancelled — create pickup window expired';
+            $order->delivery_man_id = null;
+            $order->assign_datetime = null;
             $order->save();
+
+            saveOrderHistory([
+                'history_type' => 'cancelled',
+                'order_id' => $order->id,
+                'order' => $order,
+                'auto_cancel' => true,
+                'actor_name' => 'System (Auto Cancel)',
+                'actor_type' => 'system',
+                'previous_status' => $previous,
+            ]);
+            $createCount++;
         }
 
         $pickupErrors = Order::where('status', 'pickup_error')
@@ -34,21 +67,30 @@ class OrderAutoCancelCommand extends Command
             })
             ->get();
 
+        $pickupCount = 0;
         foreach ($pickupErrors as $order) {
+            $previous = (string) ($order->status ?? 'pickup_error');
             $order->status = 'cancelled';
             $order->reason = $order->reason
                 ? ($order->reason . ' | Auto cancelled after 2 days (pickup error)')
                 : 'Auto cancelled after 2 days (pickup error)';
+            $order->delivery_man_id = null;
+            $order->assign_datetime = null;
             $order->save();
 
             saveOrderHistory([
                 'history_type' => 'cancelled',
                 'order_id' => $order->id,
                 'order' => $order,
+                'auto_cancel' => true,
+                'actor_name' => 'System (Auto Cancel)',
+                'actor_type' => 'system',
+                'previous_status' => $previous,
             ]);
+            $pickupCount++;
         }
 
-        $this->info('Cancelled create: ' . $orders->count() . ', pickup_error: ' . $pickupErrors->count());
+        $this->info('Cancelled create: ' . $createCount . ', pickup_error: ' . $pickupCount);
 
         return Command::SUCCESS;
     }
