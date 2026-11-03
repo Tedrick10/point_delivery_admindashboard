@@ -168,6 +168,7 @@ class UserController extends Controller
                 $user->fcm_token = $decryptedfcmToken;
             }
             $user->last_actived_at = now();
+            $this->ensureClientSkipsLoginGates($user);
             $user->save();
 
             return json_custom_response(['data' => $this->buildLoginPayload($user)], 200);
@@ -212,17 +213,12 @@ class UserController extends Controller
         $isDeliveryMan = ($decryptedData['user_type'] ?? '') === 'delivery_man';
         $validator = Validator::make($decryptedData, [
             'name' => ($isClient || $isDeliveryMan) ? 'required|string|max:255' : 'sometimes|nullable|string|max:255',
+            // Username optional — derived from phone for OS / Rider app signup.
             'username' => [
-                'required',
+                'sometimes',
+                'nullable',
                 'string',
-                'min:3',
                 'max:50',
-                'regex:/^[A-Za-z0-9._-]+$/',
-                function ($attribute, $value, $fail) {
-                    if (User::where('username', $value)->exists()) {
-                        $fail(__('message.username_taken'));
-                    }
-                },
             ],
             // Client app has no Email field — synthetic email is assigned server-side.
             'email' => $isDeliveryMan
@@ -285,8 +281,11 @@ class UserController extends Controller
         }
 
         $phone = $input['contact_number'] ?? '';
-        $input['username'] = sanitizeRegistrationUsername($input['username'] ?? '')
-            ?: registrationUsernameFromPhone($phone);
+        $input['username'] = ensureUniqueClientUsername(
+            sanitizeRegistrationUsername($input['username'] ?? '')
+                ?: registrationUsernameFromPhone($phone),
+            (string) $phone
+        );
         // Always assign a unique synthetic email for clients (no Email UI).
         $input['email'] = $isClient
             ? ensureUniqueRegistrationEmail($phone, $input['email'] ?? null)
@@ -643,7 +642,9 @@ class UserController extends Controller
             return json_message_response(__('message.no_record_found'), 400);
         }
 
-        $user->fill($request->all())->update();
+        // Account phone is the login id — apps cannot change it after create.
+        $payload = $request->except(['contact_number', 'phone', 'username', 'email', 'password', 'user_type']);
+        $user->fill($payload)->update();
 
         if (isset($request->profile_image) && $request->profile_image != null) {
             $user->clearMediaCollection('profile_image');
@@ -1516,6 +1517,33 @@ class UserController extends Controller
         return $user->createToken('auth_token')->plainTextToken;
     }
 
+    /**
+     * User App should not force Change password / Select region after login.
+     */
+    private function ensureClientSkipsLoginGates(User $user): void
+    {
+        if ($user->user_type !== 'client') {
+            return;
+        }
+
+        if ((int) ($user->is_temp_password ?? 0) === 1) {
+            $user->is_temp_password = 0;
+        }
+
+        if (empty($user->city_id) || empty($user->country_id)) {
+            $city = City::query()->where('name', 'MDY')->where('status', 1)->first()
+                ?? City::query()->where('status', 1)->orderBy('id')->first();
+            if ($city) {
+                if (empty($user->city_id)) {
+                    $user->city_id = $city->id;
+                }
+                if (empty($user->country_id)) {
+                    $user->country_id = $city->country_id;
+                }
+            }
+        }
+    }
+
     private function buildLoginPayload(User $user): array
     {
         $success = $user->toArray();
@@ -1888,7 +1916,7 @@ class UserController extends Controller
             'email_verified_at' => now(),
             'otp_verify_at' => now(),
             'created_by_admin' => 1,
-            'is_temp_password' => 1,
+            'is_temp_password' => 0,
             'status' => 1,
             'approval_status' => User::APPROVAL_APPROVED,
         ]);
@@ -1909,8 +1937,12 @@ class UserController extends Controller
      */
     public function registerPendingPushToken(Request $request)
     {
-        $username = sanitizeRegistrationUsername(
-            (string) ($this->decryptData($request->input('username')) ?: $request->input('username'))
+        $loginId = sanitizeRegistrationUsername(
+            (string) ($this->decryptData($request->input('username'))
+                ?: $this->decryptData($request->input('phone'))
+                ?: $request->input('username')
+                ?: $request->input('phone')
+                ?: '')
         );
         $fcmToken = trim((string) (
             $this->decryptData($request->input('fcm_token'))
@@ -1918,20 +1950,15 @@ class UserController extends Controller
             ?: ''
         ));
 
-        if ($username === '' || $fcmToken === '') {
+        if ($loginId === '' || $fcmToken === '') {
             return json_custom_response([
                 'status' => false,
-                'message' => 'username and fcm_token required',
+                'message' => 'phone and fcm_token required',
             ], 422);
         }
 
-        $user = User::query()
-            ->where('user_type', 'client')
-            ->where('username', $username)
-            ->whereIn('approval_status', [User::APPROVAL_PENDING, User::APPROVAL_APPROVED])
-            ->first();
-
-        if (! $user) {
+        $user = findOsClientByLoginId($loginId);
+        if (! $user || ! in_array((string) $user->approval_status, [User::APPROVAL_PENDING, User::APPROVAL_APPROVED], true)) {
             return json_custom_response([
                 'status' => false,
                 'message' => __('message.not_found_entry', ['name' => __('message.online_shop')]),
@@ -1953,21 +1980,22 @@ class UserController extends Controller
      */
     public function checkOsApprovalStatus(Request $request)
     {
-        $username = sanitizeRegistrationUsername(
-            (string) ($this->decryptData($request->input('username')) ?: $request->input('username'))
+        $loginId = sanitizeRegistrationUsername(
+            (string) ($this->decryptData($request->input('username'))
+                ?: $this->decryptData($request->input('phone'))
+                ?: $request->input('username')
+                ?: $request->input('phone')
+                ?: '')
         );
 
-        if ($username === '') {
+        if ($loginId === '') {
             return json_custom_response([
                 'status' => false,
-                'message' => 'username required',
+                'message' => 'phone required',
             ], 422);
         }
 
-        $user = User::query()
-            ->where('user_type', 'client')
-            ->where('username', $username)
-            ->first();
+        $user = findOsClientByLoginId($loginId);
 
         if (! $user) {
             return json_custom_response([
@@ -1976,11 +2004,15 @@ class UserController extends Controller
             ], 404);
         }
 
+        $phone = normalizeContactNumber((string) ($user->contact_number ?? ''))
+            ?: (string) ($user->contact_number ?? $user->username ?? '');
         $approval = (string) ($user->approval_status ?? User::APPROVAL_PENDING);
         $payload = [
             'status' => true,
             'approval_status' => $approval,
-            'username' => $user->username,
+            'phone' => $phone,
+            // Legacy key — now the phone number used for login.
+            'username' => $phone,
         ];
 
         if ($approval === User::APPROVAL_APPROVED) {
@@ -1989,7 +2021,8 @@ class UserController extends Controller
                 $payload['password'] = $password;
             }
             $payload['message'] = trans('message.push_os_approved_body', [
-                'username' => $user->username,
+                'phone' => $phone,
+                'username' => $phone,
                 'password' => $password !== '' ? $password : '—',
             ], 'my');
             $payload['subject'] = trans('message.push_os_approved_title', [], 'my');

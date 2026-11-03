@@ -980,7 +980,7 @@
         }
     </style>
     {{-- Inline boot: @section/@push is skipped by x-master-layout (same pattern as Daily Check). --}}
-    <script src="{{ asset('js/dispatch-os-fields.js') }}?v=14"></script>
+    <script src="{{ asset('js/dispatch-os-fields.js') }}?v=15"></script>
     <script>
         (function bootMoneyTransfer(attempt) {
             attempt = attempt || 0;

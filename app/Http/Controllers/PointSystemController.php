@@ -65,6 +65,14 @@ class PointSystemController extends Controller
                 'adminApprover:id,name',
                 'superAdminConfirmer:id,name',
             ])
+            // OS receive Point pay removed — Follow Up shows order bonus payments only.
+            ->where(function ($query) {
+                $query->where('payment_kind', PointOrderPayment::KIND_ORDER)
+                    ->orWhere(function ($inner) {
+                        $inner->whereNull('payment_kind')
+                            ->whereNull('os_receive_settlement_id');
+                    });
+            })
             ->where('status', '!=', PointOrderPayment::STATUS_REJECTED)
             ->when($followStatus !== 'all', fn ($query) => $query->where('status', $followStatus))
             ->when($q !== '' && $tab === 'follow-up', function ($query) use ($q) {
@@ -91,9 +99,19 @@ class PointSystemController extends Controller
             $salaryStatus = 'all';
         }
 
+        $salaryKind = trim((string) $request->get('salary_kind', 'os'));
+        if (! in_array($salaryKind, ['os', 'staff', 'rider'], true)) {
+            $salaryKind = 'os';
+        }
+
+        $applySalaryKind = function ($query) use ($salaryKind) {
+            self::applySalaryRequestKindFilter($query, $salaryKind);
+        };
+
         $salaryRequests = PointSalaryRequest::query()
             ->with(['user:id,name,user_type', 'staff:id,name,staff_group', 'approver:id,name'])
             ->when($salaryStatus !== 'all', fn ($query) => $query->where('status', $salaryStatus))
+            ->tap($applySalaryKind)
             ->when($q !== '' && $tab === 'salary', function ($query) use ($q) {
                 $query->where(function ($inner) use ($q) {
                     $inner->where('salary_period', 'like', "%{$q}%")
@@ -113,6 +131,14 @@ class PointSystemController extends Controller
             ->limit(50)
             ->get();
 
+        $salaryKindCounts = [
+            'os' => (int) PointSalaryRequest::query()->tap(fn ($q) => self::applySalaryRequestKindFilter($q, 'os'))->count(),
+            'staff' => (int) PointSalaryRequest::query()->tap(fn ($q) => self::applySalaryRequestKindFilter($q, 'staff'))->count(),
+            'rider' => (int) PointSalaryRequest::query()->tap(fn ($q) => self::applySalaryRequestKindFilter($q, 'rider'))->count(),
+        ];
+
+        $salaryTotalsBase = PointSalaryRequest::query()->tap($applySalaryKind);
+
         return [
             'tab' => $tab,
             'q' => $q,
@@ -124,26 +150,49 @@ class PointSystemController extends Controller
             'followUps' => $followUps,
             'followPointTotals' => [
                 'pending' => (float) PointOrderPayment::query()
+                    ->where(function ($query) {
+                        $query->where('payment_kind', PointOrderPayment::KIND_ORDER)
+                            ->orWhere(function ($inner) {
+                                $inner->whereNull('payment_kind')
+                                    ->whereNull('os_receive_settlement_id');
+                            });
+                    })
                     ->whereIn('status', [
                         PointOrderPayment::STATUS_PENDING_ADMIN,
                         PointOrderPayment::STATUS_PENDING_SUPER_ADMIN,
                     ])
                     ->sum('points'),
                 'confirmed' => (float) PointOrderPayment::query()
+                    ->where(function ($query) {
+                        $query->where('payment_kind', PointOrderPayment::KIND_ORDER)
+                            ->orWhere(function ($inner) {
+                                $inner->whereNull('payment_kind')
+                                    ->whereNull('os_receive_settlement_id');
+                            });
+                    })
                     ->where('status', PointOrderPayment::STATUS_CONFIRMED)
                     ->sum('points'),
             ],
             'salaryStatus' => $salaryStatus,
+            'salaryKind' => $salaryKind,
+            'salaryKindCounts' => $salaryKindCounts,
             'salaryRequests' => $salaryRequests,
             'salaryPointTotals' => [
-                'pending' => (float) PointSalaryRequest::query()
+                'pending' => (float) (clone $salaryTotalsBase)
                     ->where('status', PointSalaryRequest::STATUS_PENDING)
                     ->sum('points'),
-                'confirmed' => (float) PointSalaryRequest::query()
+                'confirmed' => (float) (clone $salaryTotalsBase)
                     ->where('status', PointSalaryRequest::STATUS_APPROVED)
                     ->sum('points'),
             ],
             'pendingFollowUps' => PointOrderPayment::query()
+                ->where(function ($query) {
+                    $query->where('payment_kind', PointOrderPayment::KIND_ORDER)
+                        ->orWhere(function ($inner) {
+                            $inner->whereNull('payment_kind')
+                                ->whereNull('os_receive_settlement_id');
+                        });
+                })
                 ->whereIn('status', [
                     PointOrderPayment::STATUS_PENDING_ADMIN,
                     PointOrderPayment::STATUS_PENDING_SUPER_ADMIN,
@@ -154,6 +203,42 @@ class PointSystemController extends Controller
             'searchUsersUrl' => route('point-system.search-users'),
             'creditUrl' => route('point-system.credit'),
         ];
+    }
+
+    /**
+     * Filter Bonus Requests by audience: OS clients, office Staff, or Riders.
+     */
+    protected static function applySalaryRequestKindFilter($query, string $kind): void
+    {
+        if ($kind === 'os') {
+            $query->where(function ($inner) {
+                $inner->where('request_kind', PointSalaryRequest::KIND_CLIENT)
+                    ->orWhereHas('user', fn ($u) => $u->where('user_type', 'client'));
+            });
+
+            return;
+        }
+
+        if ($kind === 'rider') {
+            $query->where(function ($inner) {
+                $inner->where(function ($x) {
+                    $x->whereNull('request_kind')
+                        ->orWhere('request_kind', '!=', PointSalaryRequest::KIND_CLIENT);
+                })->whereHas('user', fn ($u) => $u->where('user_type', 'delivery_man'));
+            });
+
+            return;
+        }
+
+        // Staff (and other non-client / non-rider accounts).
+        $query->where(function ($inner) {
+            $inner->where(function ($x) {
+                $x->whereNull('request_kind')
+                    ->orWhere('request_kind', '!=', PointSalaryRequest::KIND_CLIENT);
+            })->whereHas('user', function ($u) {
+                $u->whereNotIn('user_type', ['client', 'delivery_man']);
+            });
+        });
     }
 
     /**
@@ -320,6 +405,7 @@ class PointSystemController extends Controller
                 'tab' => $tab,
                 'status' => $tab === 'follow-up' ? $request->input('status') : null,
                 'salary_status' => $tab === 'salary' ? $request->input('salary_status') : null,
+                'salary_kind' => $tab === 'salary' ? $request->input('salary_kind') : null,
                 'q' => filled($request->input('q')) ? $request->input('q') : null,
             ], fn ($v) => $v !== null && $v !== '');
 
@@ -376,6 +462,13 @@ class PointSystemController extends Controller
             ->get();
 
         $pendingFollowUps = PointOrderPayment::query()
+            ->where(function ($query) {
+                $query->where('payment_kind', PointOrderPayment::KIND_ORDER)
+                    ->orWhere(function ($inner) {
+                        $inner->whereNull('payment_kind')
+                            ->whereNull('os_receive_settlement_id');
+                    });
+            })
             ->whereIn('status', [
                 PointOrderPayment::STATUS_PENDING_ADMIN,
                 PointOrderPayment::STATUS_PENDING_SUPER_ADMIN,
@@ -430,6 +523,13 @@ class PointSystemController extends Controller
                 'adminApprover:id,name',
                 'superAdminConfirmer:id,name',
             ])
+            ->where(function ($query) {
+                $query->where('payment_kind', PointOrderPayment::KIND_ORDER)
+                    ->orWhere(function ($inner) {
+                        $inner->whereNull('payment_kind')
+                            ->whereNull('os_receive_settlement_id');
+                    });
+            })
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($inner) use ($q) {
@@ -561,12 +661,24 @@ class PointSystemController extends Controller
             $status = 'all';
         }
 
+        $kind = trim((string) $request->get('kind', 'os'));
+        if (! in_array($kind, ['os', 'staff', 'rider'], true)) {
+            $kind = 'os';
+        }
+
         $rows = PointSalaryRequest::query()
             ->with(['user:id,name,user_type', 'staff:id,name,staff_group', 'approver:id,name'])
             ->when($status !== 'all', fn ($q) => $q->where('status', $status))
+            ->tap(fn ($q) => self::applySalaryRequestKindFilter($q, $kind))
             ->orderByDesc('id')
             ->paginate(30)
             ->withQueryString();
+
+        $kindCounts = [
+            'os' => (int) PointSalaryRequest::query()->tap(fn ($q) => self::applySalaryRequestKindFilter($q, 'os'))->count(),
+            'staff' => (int) PointSalaryRequest::query()->tap(fn ($q) => self::applySalaryRequestKindFilter($q, 'staff'))->count(),
+            'rider' => (int) PointSalaryRequest::query()->tap(fn ($q) => self::applySalaryRequestKindFilter($q, 'rider'))->count(),
+        ];
 
         $pageTitle = __('message.point_salary_requests');
         $canConfirm = $this->canConfirm();
@@ -577,6 +689,8 @@ class PointSystemController extends Controller
             'assets',
             'rows',
             'status',
+            'kind',
+            'kindCounts',
             'canConfirm'
         ));
     }

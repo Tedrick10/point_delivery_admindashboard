@@ -2647,6 +2647,28 @@ function osSettlementBranchIdForItem($item): int
 }
 
 /**
+ * Daily Check OS / Expense Summary branch tab for a parcel.
+ * Prefer the remitting rider's home hub so OS + Summary match Rider Daily Check
+ * (e.g. MDY rider remitting a တောင်ကြီး destination parcel stays on MDY: +2,500 on 16-10-2026).
+ * Falls back to destination (to, else from) when no rider hub is set.
+ */
+function dailyCheckOsBranchIdForItem($item): int
+{
+    $riderBranch = 0;
+    if ($item && $item->relationLoaded('deliveryMan') && $item->deliveryMan) {
+        $riderBranch = (int) ($item->deliveryMan->branch_id ?? 0);
+    } elseif (! empty($item?->delivery_man_id)) {
+        $riderBranch = (int) (\App\Models\User::query()->whereKey((int) $item->delivery_man_id)->value('branch_id') ?? 0);
+    }
+
+    if ($riderBranch > 0) {
+        return $riderBranch;
+    }
+
+    return osSettlementBranchIdForItem($item);
+}
+
+/**
  * Keep parcels whose destination branch matches the tab.
  *
  * @param  \Illuminate\Support\Collection<int, mixed>|iterable  $items
@@ -6797,7 +6819,7 @@ function osLoginPasswordFromProfile($userOrProfile): string
 /**
  * First-time OS client approval: ensure login credentials + push notify User App.
  *
- * @return array{username: string, password: string}|null
+ * @return array{username: string, phone: string, password: string}|null
  */
 function finalizeOsClientFirstApproval(\App\Models\User $user, string $previousApproval): ?array
 {
@@ -6813,12 +6835,20 @@ function finalizeOsClientFirstApproval(\App\Models\User $user, string $previousA
         return null;
     }
 
+    $phone = normalizeContactNumber((string) ($user->contact_number ?? ''));
+    if ($phone === '') {
+        $phone = preg_replace('/\s+/', '', trim((string) ($user->contact_number ?? ''))) ?: '';
+    }
+
+    // Keep DB username in sync with phone for uniqueness / legacy lookups.
     $username = sanitizeRegistrationUsername((string) ($user->username ?? ''));
-    if ($username === '') {
-        $username = registrationUsernameFromPhone((string) ($user->contact_number ?? ''));
-        if ($username !== '') {
-            $user->username = $username;
-        }
+    if ($username === '' && $phone !== '') {
+        $username = ensureUniqueClientUsername(
+            registrationUsernameFromPhone($phone),
+            $phone,
+            (int) $user->id
+        );
+        $user->username = $username;
     }
 
     // Prefer signup password stored in os_profile; otherwise generate a temp password.
@@ -6835,14 +6865,14 @@ function finalizeOsClientFirstApproval(\App\Models\User $user, string $previousA
     );
     $user->save();
 
-    if ($username === '' || $plainPassword === '') {
+    if ($phone === '' || $plainPassword === '') {
         return null;
     }
 
     try {
         app(\App\Services\AppPushService::class)->notifyOsAccountApproved(
             $user->fresh(),
-            $username,
+            $phone,
             $plainPassword
         );
     } catch (\Throwable $e) {
@@ -6850,7 +6880,9 @@ function finalizeOsClientFirstApproval(\App\Models\User $user, string $previousA
     }
 
     return [
-        'username' => $username,
+        // `username` kept for older clients; value is now the phone number.
+        'username' => $phone,
+        'phone' => $phone,
         'password' => $plainPassword,
     ];
 }
@@ -7227,7 +7259,46 @@ function normalizeOrderContactNumbers(array $data): array
 
 function registrationUsernameFromPhone(string $phone): string
 {
-    return preg_replace('/\s+/', '', trim($phone));
+    $normalized = normalizeContactNumber($phone);
+    if ($normalized !== '') {
+        return $normalized;
+    }
+
+    return preg_replace('/\s+/', '', trim($phone)) ?: '';
+}
+
+/**
+ * Resolve an Online Shop client by phone (preferred) or legacy username.
+ */
+function findOsClientByLoginId(string $loginId): ?\App\Models\User
+{
+    $loginId = trim($loginId);
+    if ($loginId === '') {
+        return null;
+    }
+
+    $normalized = normalizeContactNumber($loginId);
+    $variants = $normalized !== '' ? contactNumberLookupVariants($normalized) : [];
+
+    return \App\Models\User::query()
+        ->where('user_type', 'client')
+        ->where(function ($query) use ($loginId, $normalized, $variants) {
+            $query->where('username', $loginId)
+                ->orWhere('contact_number', $loginId);
+            if ($normalized !== '' && $normalized !== $loginId) {
+                $query->orWhere('username', $normalized)
+                    ->orWhere('contact_number', $normalized);
+            }
+            if ($variants !== []) {
+                $query->orWhereIn('contact_number', $variants)
+                    ->orWhereIn('username', $variants);
+            }
+        })
+        ->orderByRaw(
+            'CASE WHEN contact_number = ? OR username = ? THEN 0 ELSE 1 END',
+            [$normalized !== '' ? $normalized : $loginId, $normalized !== '' ? $normalized : $loginId]
+        )
+        ->first();
 }
 
 function sanitizeRegistrationUsername(string $username): string
@@ -7649,10 +7720,28 @@ function formatDispatchDeliAmount($item, $amount = null): string
         ? number_format($amount, 0, '.', ',')
         : number_format($amount, 2, '.', ',');
 
-    $label = trim((string) dispatchDeliPayLabel($item));
+    $label = trim((string) dispatchDeliPayLabelWithPointNote($item));
 
     // Price + space + (Type) — never "3,000(Os Pay)"
     return $formatted.' ('.$label.')';
+}
+
+/**
+ * Prefer Point-settlement note when Os Pay was cleared with Bonus Points.
+ *
+ * @param  \App\Models\DispatchOrderItem|object|array<string,mixed>  $item
+ */
+function dispatchDeliPayLabelWithPointNote($item): string
+{
+    $note = is_array($item)
+        ? trim((string) ($item['os_pay_point_note'] ?? ''))
+        : trim((string) ($item->os_pay_point_note ?? ''));
+
+    if ($note !== '') {
+        return $note;
+    }
+
+    return dispatchDeliPayLabel($item);
 }
 
 /**
@@ -7669,7 +7758,7 @@ function formatDispatchDeliAmountHtml($item, $amount = null): string
     $formatted = abs($amount - round($amount)) < 0.001
         ? number_format($amount, 0, '.', ',')
         : number_format($amount, 2, '.', ',');
-    $label = trim((string) dispatchDeliPayLabel($item));
+    $label = trim((string) dispatchDeliPayLabelWithPointNote($item));
 
     return formatDeliAmountPartsHtml($formatted, $label);
 }

@@ -258,7 +258,7 @@
 
     @section('bottom_script')
         {{ $dataTable->scripts() }}
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=11"></script>
         <script src="{{ asset('js/dispatch-pickup-rider-list.js') }}?v=12"></script>
         {{-- admin-live.js is loaded globally from _scripts --}}
         <script>

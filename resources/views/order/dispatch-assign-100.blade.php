@@ -500,7 +500,7 @@
 
 
     @section('bottom_script')
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=11"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>
             $(document).ready(function () {

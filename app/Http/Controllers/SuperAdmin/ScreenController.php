@@ -205,8 +205,6 @@ class ScreenController extends Controller
             $kyoShinControl = app(KyoShinService::class)->summaries();
         } elseif ($screen === 'expense-summary') {
             $expenseSummary = \App\Http\Controllers\ExpenseSummaryController::screenPayload($request);
-        } elseif ($screen === 'welcome-promotion') {
-            $welcomePromotion = WelcomePromotionController::screenPayload($request);
         } elseif ($screen === 'account-creation') {
             $accountCreation = AccountCreationController::screenPayload($request);
         } elseif ($screen === 'roles-permissions') {

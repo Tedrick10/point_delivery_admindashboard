@@ -388,9 +388,41 @@
 
 
 
-        window.pdsMatchOsTerm = matchOsTerm;
+        /** Rider / delivery-man modal search: partial name + phone (not OS exact-name). */
+        function matchRiderTerm(term, name, phone) {
+            var query = String(term || '').toLowerCase().trim().replace(/\s+/g, ' ');
+            if (!query) {
+                return true;
+            }
 
-        window.pdsMatchNameOrPhone = matchOsTerm;
+            var nameNorm = String(name || '').toLowerCase().trim().replace(/\s+/g, ' ');
+            if (nameNorm !== '' && nameNorm.indexOf(query) !== -1) {
+                return true;
+            }
+
+            var rowPhone = String(phone || '');
+            if (rowPhone.toLowerCase().indexOf(query) !== -1) {
+                return true;
+            }
+
+            var qDigits = phoneDigits(query);
+            if (qDigits.length >= 2) {
+                var rowDigits = phoneDigits(rowPhone);
+                if (rowDigits.indexOf(qDigits) !== -1) {
+                    return true;
+                }
+                if (qDigits.length >= 8 && rowDigits !== '' && qDigits.indexOf(rowDigits) !== -1) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        window.pdsMatchOsTerm = matchOsTerm;
+        window.pdsMatchRiderNameOrPhone = matchRiderTerm;
+        // Rider assign modals + pickup assign use this global — keep partial match.
+        window.pdsMatchNameOrPhone = matchRiderTerm;
 
 
 

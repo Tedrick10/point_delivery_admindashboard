@@ -17,8 +17,11 @@ use App\Models\OsMoneyTransfer;
 use App\Models\OsSettlementBatch;
 use App\Models\OsSettlementDraft;
 use App\Models\Order;
+use App\Models\PointSalaryRequest;
 use App\Services\OsSettlementService;
+use App\Services\PointSalaryRequestService;
 use App\Services\KyoShinService;
+use InvalidArgumentException;
 use App\Models\AppSetting;
 use App\Models\Vehicle;
 use App\Http\Resources\DeliverymanVehicleHistoryResource;
@@ -2404,7 +2407,8 @@ class OrderController extends Controller
             $item->needs_reply = ($item->last_chat_sender_type === 'client');
         }
 
-        // Unanswered (last msg from OS) stay on top; after admin replies, sink to bottom.
+        // Unanswered (last msg from OS) stay on top; answered below.
+        // Within each tab/bucket: newest chat first (today above older days).
         $items = $items
             ->sort(function ($a, $b) {
                 $aNeed = ! empty($a->needs_reply) ? 1 : 0;
@@ -2416,8 +2420,7 @@ class OrderController extends Controller
                 $aTime = optional($a->last_chat_at)->timestamp ?? 0;
                 $bTime = optional($b->last_chat_at)->timestamp ?? 0;
 
-                // Within the same bucket: older first so the most recently updated sinks last.
-                return $aTime <=> $bTime;
+                return $bTime <=> $aTime;
             })
             ->values();
 
@@ -3627,7 +3630,7 @@ class OrderController extends Controller
                 $fill['delivery_locked'] = false;
             }
             if ($toStatus === 'pending') {
-                $fill['remark'] = $remark;
+                // Keep admin/item remark intact; pending note is stored via recordDispatchItemPendingRemark.
                 $fill['pending_photo_id'] = $pendingPhotoId;
                 $fill['delivery_locked'] = false;
             }
@@ -3920,7 +3923,34 @@ class OrderController extends Controller
             ->get()
             ->keyBy('os_user_id');
 
-        $buildOsRow = function (int $osId, $itemGroup, string $amountMode = 'settlement', string $settlementSide = 'pay') use ($clients, $settlementService, $drafts) {
+        // OS client Bonus Requests (pending) — show on Os ဆီသို့လွှဲရန် until Super Admin Confirms.
+        $pendingOsBonuses = PointSalaryRequest::query()
+            ->where('status', PointSalaryRequest::STATUS_PENDING)
+            ->where('request_kind', PointSalaryRequest::KIND_CLIENT)
+            ->get()
+            ->keyBy('user_id');
+
+        $pendingBonusOsIds = $pendingOsBonuses->keys()
+            ->map(static fn ($id) => (int) $id)
+            ->filter(static fn ($id) => $id > 0)
+            ->values();
+
+        if ($pendingBonusOsIds->isNotEmpty()) {
+            $missingClientIds = $pendingBonusOsIds
+                ->reject(static fn ($id) => $clients->has($id))
+                ->values()
+                ->all();
+            if ($missingClientIds !== []) {
+                $extraClients = User::withTrashed()
+                    ->whereIn('id', $missingClientIds)
+                    ->with('city')
+                    ->get()
+                    ->keyBy('id');
+                $clients = $clients->union($extraClients);
+            }
+        }
+
+        $buildOsRow = function (int $osId, $itemGroup, string $amountMode = 'settlement', string $settlementSide = 'pay') use ($clients, $settlementService, $drafts, $pendingOsBonuses) {
             if ($itemGroup->isEmpty()) {
                 return null;
             }
@@ -3969,6 +3999,27 @@ class OrderController extends Controller
                 ? formatOsClientAddress($client)
                 : '';
 
+            $pendingBonus = ($settlementSide === 'pay' && $amountMode === 'settlement')
+                ? ($pendingOsBonuses->get($osId) ?? null)
+                : null;
+
+            $unpaidOsPay = ($settlementSide === 'pay' && $amountMode === 'settlement')
+                ? round((float) $itemGroup
+                    ->filter(static fn ($item) => dispatchDeliPayLabel($item) === 'Os Pay')
+                    ->sum(static function ($item) {
+                        $deli = (float) ($item->deli_amount ?? 0);
+                        $paid = (float) ($item->os_paid ?? 0);
+
+                        return max(0, $deli - $paid);
+                    }), 2)
+                : 0.0;
+
+            $pendingBonusPoints = $pendingBonus ? (float) $pendingBonus->points : 0.0;
+            $pendingBonusSettled = $pendingBonus ? (float) ($pendingBonus->os_pay_settled_amount ?? 0) : 0.0;
+            $pendingBonusRemaining = $pendingBonus
+                ? round(max(0, $pendingBonusPoints - $pendingBonusSettled), 2)
+                : 0.0;
+
             return (object) [
                 'id' => $osId,
                 'name' => $name,
@@ -3988,6 +4039,12 @@ class OrderController extends Controller
                 'item_ids' => $itemGroup->pluck('id')->map(static fn ($id) => (int) $id)->values()->all(),
                 'is_finished' => false,
                 'batch_id' => null,
+                'unpaid_os_pay' => $unpaidOsPay,
+                'pending_bonus_amount' => $pendingBonus ? (float) $pendingBonus->amount : 0.0,
+                'pending_bonus_points' => $pendingBonusPoints,
+                'pending_bonus_settled' => $pendingBonusSettled,
+                'pending_bonus_remaining' => $pendingBonusRemaining,
+                'pending_bonus_request_id' => $pendingBonus ? (int) $pendingBonus->id : null,
             ];
         };
 
@@ -4638,6 +4695,67 @@ class OrderController extends Controller
         ]);
     }
 
+    /**
+     * Os ဆီသို့လွှဲရန် — settle this OS's unpaid Os Pay using pending Bonus Request points.
+     * Deducts (holds) the full request on first settle; Os Pay portion is applied to parcels.
+     */
+    public function dispatchOsSettleOsPayWithPoints(Request $request, $osId, PointSalaryRequestService $pointSalary)
+    {
+        if (! auth()->user()->can('order-edit')) {
+            return response()->json(['message' => __('message.demo_permission_denied')], 403);
+        }
+
+        $osId = (int) $osId;
+        if ($osId <= 0) {
+            return response()->json(['message' => __('message.something_went_wrong')], 422);
+        }
+
+        $data = $request->validate([
+            'item_ids' => 'nullable|array',
+            'item_ids.*' => 'integer',
+            'request_id' => 'nullable|integer',
+        ]);
+
+        $pending = PointSalaryRequest::query()
+            ->where('user_id', $osId)
+            ->where('status', PointSalaryRequest::STATUS_PENDING)
+            ->where('request_kind', PointSalaryRequest::KIND_CLIENT)
+            ->when(! empty($data['request_id']), static fn ($q) => $q->where('id', (int) $data['request_id']))
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $pending) {
+            return response()->json(['message' => __('message.point_os_pay_no_pending_bonus')], 422);
+        }
+
+        $itemIds = array_values(array_unique(array_filter(array_map(
+            'intval',
+            (array) ($data['item_ids'] ?? [])
+        ))));
+
+        try {
+            $row = $pointSalary->settleOsPayFromPayToOs(
+                $pending,
+                auth()->user(),
+                $itemIds !== [] ? $itemIds : null
+            );
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message' => __('message.point_os_pay_settled_ok'),
+            'data' => [
+                'request_id' => (int) $row->id,
+                'requested_points' => (float) $row->points,
+                'os_pay_settled_amount' => (float) $row->os_pay_settled_amount,
+                'points_remaining' => (float) $row->remainingPoints(),
+                'os_pay_settled_details' => $row->os_pay_settled_details ?? [],
+                'os_pay_settled_item_ids' => $row->os_pay_settled_item_ids ?? [],
+            ],
+        ]);
+    }
+
     public function dispatchOsSettlementFinish(Request $request, $osId)
     {
         if (! auth()->user()->can('order-edit')) {
@@ -5132,8 +5250,8 @@ class OrderController extends Controller
             return redirect()->back()->withErrors($message);
         }
 
-        $order = Order::findOrFail($orderId);
-        $item = DispatchOrderItem::with('photoMedia')->where('order_id', $orderId)->findOrFail($itemId);
+        $order = Order::withTrashed()->findOrFail($orderId);
+        $item = DispatchOrderItem::with('photoMedia')->where('order_id', $order->id)->findOrFail($itemId);
         $workflow = app(DispatchOrderWorkflowService::class);
         if (! $workflow->canAdminEditDispatchItemInfo($order, $item)) {
             return response()->json([
@@ -5156,8 +5274,8 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.demo_permission_denied')], 403);
         }
 
-        $order = Order::findOrFail($orderId);
-        $item = DispatchOrderItem::with('photoMedia')->where('order_id', $orderId)->findOrFail($itemId);
+        $order = Order::withTrashed()->findOrFail($orderId);
+        $item = DispatchOrderItem::with('photoMedia')->where('order_id', $order->id)->findOrFail($itemId);
         $cities = \App\Models\Branch::where('status', 1)->orderBy('name')->get();
         $deliveryCities = $this->dispatchDeliveryCities();
         $isViewOnly = true;
@@ -5174,7 +5292,7 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.demo_permission_denied')], 403);
         }
 
-        $order = Order::with('delivery_man')->findOrFail($orderId);
+        $order = Order::withTrashed()->with('delivery_man')->findOrFail($orderId);
         $item = DispatchOrderItem::with([
             'order.delivery_man',
             'deliveryMan',
@@ -5184,7 +5302,7 @@ class OrderController extends Controller
             'kyoShinItem',
             'fromBranch',
             'toBranch',
-        ])->where('order_id', $orderId)->findOrFail($itemId);
+        ])->where('order_id', $order->id)->findOrFail($itemId);
 
         if (! $item->relationLoaded('order') || ! $item->order) {
             $item->setRelation('order', $order);
@@ -5516,16 +5634,38 @@ class OrderController extends Controller
         return redirect()->route('order.dispatch.items', $orderId)->withSuccess(__('message.delete_form', ['form' => __('message.item_name')]));
     }
 
+    /**
+     * Resolve dispatch item + order for Message chat (order may be soft/hard-deleted).
+     *
+     * @return array{0: DispatchOrderItem, 1: ?Order}
+     */
+    protected function resolveDispatchItemChatContext($orderId, $itemId): array
+    {
+        $item = DispatchOrderItem::with([
+            'order.client.media',
+            'deliveryMan:id,name',
+        ])->findOrFail($itemId);
+
+        $order = $item->order;
+        if (! $order) {
+            $order = Order::withTrashed()
+                ->with('client.media')
+                ->find((int) ($item->order_id ?: $orderId));
+            if ($order) {
+                $item->setRelation('order', $order);
+            }
+        }
+
+        return [$item, $order];
+    }
+
     public function dispatchItemMessageShow($orderId, $itemId)
     {
         if (! auth()->user()->can('order-list')) {
             return redirect()->back()->withErrors(__('message.permission_denied_for_account'));
         }
 
-        $item = DispatchOrderItem::with([
-            'order.client.media',
-            'deliveryMan:id,name',
-        ])->where('order_id', $orderId)->findOrFail($itemId);
+        [$item, $order] = $this->resolveDispatchItemChatContext($orderId, $itemId);
 
         \App\Models\DispatchItemMessage::query()
             ->where('dispatch_order_item_id', $item->id)
@@ -5541,10 +5681,9 @@ class OrderController extends Controller
             ->orderBy('created_at')
             ->get();
 
-        $order = $item->order;
         $osName = resolveDispatchOsName($order);
         $pageTitle = __('message.chat').' — '.($item->code ? '#'.$item->code : '#'.$item->id);
-        $canEditInfo = $order
+        $canEditInfo = $order && ! $order->trashed()
             ? app(\App\Services\DispatchOrderWorkflowService::class)->canAdminEditDispatchItemInfo($order, $item)
             : false;
 
@@ -5565,7 +5704,7 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.demo_permission_denied')], 403);
         }
 
-        $item = DispatchOrderItem::with('order.client.media')->where('order_id', $orderId)->findOrFail($itemId);
+        [$item, $order] = $this->resolveDispatchItemChatContext($orderId, $itemId);
 
         // Admin opened the thread — mark OS replies as read.
         \App\Models\DispatchItemMessage::query()
@@ -5583,7 +5722,6 @@ class OrderController extends Controller
             ->get()
             ->map(fn ($m) => $this->formatDispatchItemChatMessage($m, auth()->id()));
 
-        $order = $item->order;
         $osName = resolveDispatchOsName($order);
         $osProfileImage = resolveUploadedProfileImageUrl(optional($order)->client);
         $metaLine = trim(
@@ -5620,8 +5758,12 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.required', ['name' => __('message.chat')])], 422);
         }
 
-        $order = Order::with('client')->findOrFail($orderId);
-        $item = DispatchOrderItem::where('order_id', $orderId)->findOrFail($itemId);
+        [$item, $order] = $this->resolveDispatchItemChatContext($orderId, $itemId);
+        if (! $order) {
+            return response()->json([
+                'message' => __('message.not_found_entry', ['name' => __('message.order')]),
+            ], 404);
+        }
         $user = auth()->user();
         $body = trim((string) $request->input('message', ''));
         $hasImage = $request->hasFile('chat_image');

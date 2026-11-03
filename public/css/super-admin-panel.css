@@ -7012,8 +7012,20 @@ body.sa-panel .sa-expense-summary-panel .pds-summary-cal__confirm:hover { backgr
     border-bottom: 1px solid var(--pt-line);
     background: #fff;
 }
+.sa-point-toolbar__filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 1 1 260px;
+    min-width: 0;
+    justify-content: flex-end;
+}
 .sa-point-toolbar .sa-point-find {
     margin-left: auto;
+}
+.sa-point-toolbar__filters .sa-point-find {
+    margin-left: 0;
 }
 .sa-point-totals {
     display: grid;
@@ -7280,15 +7292,24 @@ body.sa-panel .sa-expense-summary-panel .pds-summary-cal__confirm:hover { backgr
 }
 .sa-point-chip {
     display: inline-flex;
+    align-items: baseline;
+    gap: 0.28rem;
     min-width: 3.1rem;
     justify-content: center;
-    padding: 0.22rem 0.55rem;
+    padding: 0.22rem 0.65rem;
     border-radius: 999px;
     background: #F3EEE8;
     color: #6F675F;
     font-size: 0.8rem;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.sa-point-chip__unit {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    opacity: 0.88;
 }
 .sa-point-chip.is-hot {
     background: var(--pt-soft);
@@ -7847,7 +7868,12 @@ body.sa-point-modal-open { overflow: hidden; }
     display: flex;
     gap: 0.4rem;
     justify-content: flex-end;
+    align-items: center;
     flex-wrap: wrap;
+    min-width: 2rem;
+}
+.sa-point-card__acts .sa-point-card__info-btn {
+    margin-left: 0;
 }
 .sa-point-card__btn {
     display: inline-flex;
@@ -7881,6 +7907,152 @@ body.sa-point-modal-open { overflow: hidden; }
     background: linear-gradient(135deg, var(--pt-2), var(--pt));
     color: #fff;
     transform: translateY(-1px);
+}
+.sa-point-card__info-btn {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 0.1rem;
+    border-radius: 999px;
+    border: 1px solid #fdba74;
+    background: #fff;
+    color: #ea580c;
+    cursor: pointer;
+    box-shadow: 0 3px 8px rgba(194, 65, 12, 0.08);
+    transition: background .15s ease, color .15s ease, transform .12s ease, box-shadow .15s ease;
+}
+.sa-point-card__info-btn i {
+    font-size: 0.68rem;
+    font-weight: 800;
+}
+.sa-point-card__info-btn:hover {
+    background: #ea580c;
+    border-color: #ea580c;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px rgba(234, 88, 12, 0.22);
+}
+.sa-settled-parcels-modal__panel {
+    max-width: 440px;
+    width: min(100%, 440px);
+    padding: 1.25rem 1.2rem 1.1rem;
+}
+.sa-settled-parcels-modal__hero {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin-bottom: 0.95rem;
+    padding-right: 2rem;
+}
+.sa-settled-parcels-modal__icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(145deg, #fff7ed, #ffedd5);
+    border: 1px solid #fed7aa;
+    color: #ea580c;
+    font-size: 1.05rem;
+}
+.sa-settled-parcels-modal__hero h4 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #1c1917;
+}
+.sa-settled-parcels-modal__hero p {
+    margin: 0.2rem 0 0;
+    font-size: 0.8rem;
+    color: #78716c;
+    font-weight: 600;
+}
+.sa-settled-parcels-modal__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.45rem;
+    max-height: min(52vh, 360px);
+    overflow-y: auto;
+}
+.sa-settled-parcels-modal__list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.7rem 0.8rem;
+    border-radius: 14px;
+    background: #fffaf5;
+    border: 1px solid #ffe8d1;
+}
+.sa-settled-parcels-modal__list li.is-empty {
+    justify-content: center;
+    color: #a8a29e;
+    font-weight: 600;
+}
+.sa-settled-parcels-modal__main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+}
+.sa-settled-parcels-modal__main strong {
+    font-size: 0.86rem;
+    font-weight: 800;
+    color: #1c1917;
+}
+.sa-settled-parcels-modal__main span {
+    font-size: 0.78rem;
+    color: #78716c;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sa-settled-parcels-modal__amts {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.1rem;
+}
+.sa-settled-parcels-modal__amts b {
+    font-size: 0.92rem;
+    font-weight: 800;
+    color: #ea580c;
+}
+.sa-settled-parcels-modal__amts em {
+    font-style: normal;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #9a3412;
+    opacity: 0.85;
+}
+.sa-settled-parcels-modal__foot {
+    margin-top: 1rem;
+}
+.sa-settled-parcels-modal__done {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #e7e5e4;
+    border-radius: 14px;
+    background: #fff;
+    color: #57534e;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+}
+.sa-settled-parcels-modal__done:hover {
+    background: #fafaf9;
+    color: #1c1917;
+    border-color: #d6d3d1;
 }
 .sa-point-card__note {
     display: flex;

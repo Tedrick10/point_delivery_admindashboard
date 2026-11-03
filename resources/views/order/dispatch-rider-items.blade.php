@@ -557,7 +557,7 @@
 
     @push('bottom_script')
         <script src="{{ asset('js/pds-photo-zoom.js') }}?v=3"></script>
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=11"></script>
         <script src="{{ asset('js/dispatch-item-form.js') }}?v=37"></script>
         @include('order.partials._dispatch-item-message-scripts')
         <script>

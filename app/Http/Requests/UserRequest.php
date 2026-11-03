@@ -100,7 +100,8 @@ class UserRequest extends FormRequest
         ];
 
         if ($this->routeIs('deliveryman.*', 'deliveryman.store')) {
-            $rules['username'] = 'required|unique:users,username,'.$user_id;
+            // Username is auto-derived from phone — not collected in the form.
+            $rules['username'] = 'nullable|string|max:50|unique:users,username,'.$user_id;
             $rules['email'] = 'sometimes|nullable|email|unique:users,email,'.$user_id;
             // Admin sets rider phone (required). No midnight re-entry in Rider App.
             $rules['contact_number'] = ['required', 'max:30', $this->uniqueContactNumberRule($user_id)];
@@ -115,14 +116,8 @@ class UserRequest extends FormRequest
         }
 
         if ($this->requiresOsProfile()) {
-            $rules['username'] = [
-                'required',
-                'string',
-                'min:3',
-                'max:50',
-                'regex:/^[A-Za-z0-9._-]+$/',
-                'unique:users,username,'.$user_id,
-            ];
+            // Username is auto-derived from phone — not collected in the form.
+            $rules['username'] = 'nullable|string|max:50|unique:users,username,'.$user_id;
             $rules['os_profile.address_unit'] = 'required|string|max:255';
             $rules['os_profile.state_division'] = 'nullable|string|max:255';
             $rules['os_profile.township'] = 'nullable|string|max:255';
@@ -178,6 +173,19 @@ class UserRequest extends FormRequest
                 $contactNumber = null;
             }
             $this->merge(['contact_number' => $contactNumber]);
+        }
+
+        // OS / Rider: derive username from phone when the form no longer collects it.
+        $isOsOrRider = $this->requiresOsProfile()
+            || $this->routeIs('deliveryman.*', 'deliveryman.store');
+        if ($isOsOrRider && ! $this->editingUserId()) {
+            $phone = (string) ($this->input('contact_number') ?? '');
+            $derived = registrationUsernameFromPhone($phone);
+            if ($derived !== '') {
+                $this->merge([
+                    'username' => ensureUniqueClientUsername($derived, $phone),
+                ]);
+            }
         }
     }
 

@@ -108,13 +108,6 @@ return [
         'workspace' => null,
         'links' => [],
     ],
-    'welcome-promotion' => [
-        'title_key' => 'sa_screen_welcome_promotion',
-        'subtitle_key' => 'sa_screen_welcome_promotion_sub',
-        'icon' => 'fa-percent',
-        'workspace' => null,
-        'links' => [],
-    ],
     'late-fine' => [
         'title_key' => 'sa_screen_late_fine',
         'subtitle_key' => 'sa_screen_late_fine_sub',

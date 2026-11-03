@@ -7,10 +7,12 @@
     $salaryRequests = $pointSystem['salaryRequests'] ?? collect();
     $followPointTotals = $pointSystem['followPointTotals'] ?? ['pending' => 0, 'confirmed' => 0];
     $salaryPointTotals = $pointSystem['salaryPointTotals'] ?? ['pending' => 0, 'confirmed' => 0];
+    $salaryKindCounts = $pointSystem['salaryKindCounts'] ?? ['os' => 0, 'staff' => 0, 'rider' => 0];
     $q = $pointSystem['q'] ?? '';
     $recipientType = $pointSystem['recipientType'] ?? 'os';
     $followStatus = $pointSystem['followStatus'] ?? 'all';
     $salaryStatus = $pointSystem['salaryStatus'] ?? 'all';
+    $salaryKind = $pointSystem['salaryKind'] ?? 'os';
     $pendingFollowUps = (int) ($pointSystem['pendingFollowUps'] ?? 0);
     $pendingSalary = (int) ($pointSystem['pendingSalary'] ?? 0);
     $searchUsersUrl = $pointSystem['searchUsersUrl'] ?? route('point-system.search-users');
@@ -22,7 +24,19 @@
         'recipient_type' => $type,
         'q' => $q !== '' ? $q : null,
     ]));
+    $salaryKindUrl = fn (string $kind) => route('super-admin.screens.show', array_filter([
+        'screen' => 'point-system',
+        'tab' => 'salary',
+        'salary_kind' => $kind,
+        'salary_status' => $salaryStatus !== 'all' ? $salaryStatus : null,
+        'q' => $q !== '' ? $q : null,
+    ]));
     $listTitle = match ($recipientType) {
+        'staff' => __('message.point_list_staff'),
+        'rider' => __('message.point_list_rider'),
+        default => __('message.point_list_os'),
+    };
+    $salaryKindTitle = match ($salaryKind) {
         'staff' => __('message.point_list_staff'),
         'rider' => __('message.point_list_rider'),
         default => __('message.point_list_os'),
@@ -65,7 +79,7 @@
                 </div>
                 <div class="sa-point-shell__stats">
                     <span><strong>{{ number_format((int) ($directoryCounts[$recipientType] ?? 0)) }}</strong> people</span>
-                    <span><strong>{{ $directory->filter(fn ($r) => (float) $r->balance > 0)->count() }}</strong> with points</span>
+                    <span><strong>{{ $directory->filter(fn ($r) => (float) $r->balance > 0)->count() }}</strong> with bonus</span>
                 </div>
             </header>
 
@@ -96,7 +110,7 @@
                         <tr>
                             <th style="width:3rem;">#</th>
                             <th>Person</th>
-                            <th style="width:7rem;">Balance</th>
+                            <th style="width:9.5rem;">Balance</th>
                             <th style="width:6.5rem;"></th>
                         </tr>
                     </thead>
@@ -105,8 +119,8 @@
                             <tr class="js-sa-point-row"
                                 data-id="{{ $row->id }}"
                                 data-name="{{ $row->name }}"
-                                data-label="#{{ $row->id }} {{ $row->name }} · {{ number_format((float) $row->balance, 2) }} pts"
-                                data-balance="{{ number_format((float) $row->balance, 2) }}">
+                                data-label="#{{ $row->id }} {{ $row->name }} · {{ number_format((float) $row->balance, 0) }} MMK"
+                                data-balance="{{ number_format((float) $row->balance, 0) }}">
                                 <td class="sa-point-list__idx">{{ $i + 1 }}</td>
                                 <td>
                                     <div class="sa-point-who">
@@ -118,7 +132,7 @@
                                 </td>
                                 <td>
                                     <span class="sa-point-chip {{ ((float) $row->balance) > 0 ? 'is-hot' : '' }}">
-                                        {{ number_format((float) $row->balance, 0) }}
+                                        {{ number_format((float) $row->balance, 0) }}<span class="sa-point-chip__unit">MMK</span>
                                     </span>
                                 </td>
                                 <td>
@@ -167,7 +181,7 @@
 
                         <div class="sa-point-composer__row">
                             <label>
-                                <span>Points</span>
+                                <span>{{ __('message.point_amount') }}</span>
                                 <input type="number" name="amount" id="saPointAmount" min="1" step="1" required value="100" inputmode="numeric">
                             </label>
                         </div>
@@ -177,7 +191,7 @@
                         </label>
                         <button type="submit" class="sa-point-composer__go" id="saPointSubmit" disabled>
                             <i class="fas fa-plus" aria-hidden="true"></i>
-                            Credit Points
+                            {{ __('message.point_give_submit') }}
                         </button>
                     </form>
 
@@ -221,16 +235,16 @@
                     <button type="submit">Go</button>
                 </div>
             </form>
-            <div class="sa-point-totals" aria-label="Point totals">
+            <div class="sa-point-totals" aria-label="Bonus totals">
                 <div class="sa-point-total sa-point-total--wait">
                     <span>Pending</span>
                     <b>{{ number_format((float) ($followPointTotals['pending'] ?? 0), 0) }}</b>
-                    <em>Points</em>
+                    <em>MMK</em>
                 </div>
                 <div class="sa-point-total sa-point-total--ok">
                     <span>Confirmed</span>
                     <b>{{ number_format((float) ($followPointTotals['confirmed'] ?? 0), 0) }}</b>
-                    <em>Points</em>
+                    <em>MMK</em>
                 </div>
             </div>
             <div class="sa-follow-cards">
@@ -253,7 +267,7 @@
                             </div>
                         </div>
                         <div class="sa-follow-card__pts">
-                            <span>Points</span>
+                            <span>MMK</span>
                             <b>{{ number_format((float) $row->points, 0) }}</b>
                         </div>
                         <div class="sa-follow-card__acts">
@@ -295,47 +309,62 @@
         @php
             $salaryStatuses = [
                 'all' => __('message.all'),
-                'pending' => 'Pending',
-                'approved' => 'Approved',
-                'rejected' => 'Rejected',
+                'pending' => __('message.point_status_pending'),
+                'approved' => __('message.point_status_confirmed'),
+                'rejected' => __('message.point_status_rejected'),
             ];
         @endphp
         <section class="sa-point-shell">
             <header class="sa-point-shell__head">
                 <div>
-                    <h3>{{ __('message.point_salary_requests') }}</h3>
+                    <h3>{{ __('message.point_salary_requests') }} · {{ $salaryKindTitle }}</h3>
+                    <p class="text-muted mb-0 small">{{ __('message.point_salary_requests_hint') }}</p>
                 </div>
                 <div class="sa-point-shell__stats">
                     <span><strong>{{ $salaryRequests->count() }}</strong> shown</span>
                 </div>
             </header>
-            <form method="GET" action="{{ route('super-admin.screens.show', 'point-system') }}" class="sa-point-toolbar">
-                <input type="hidden" name="tab" value="salary">
-                <label class="sa-point-dd">
-                    <span class="sa-point-dd__icon" aria-hidden="true"><i class="fas fa-filter"></i></span>
-                    <select name="salary_status" class="sa-point-dd__select" onchange="this.form.submit()">
-                        @foreach($salaryStatuses as $key => $label)
-                            <option value="{{ $key }}" @selected($salaryStatus === $key)>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                    <span class="sa-point-dd__chev" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
-                </label>
-                <div class="sa-point-find">
-                    <i class="fas fa-search" aria-hidden="true"></i>
-                    <input type="search" name="q" value="{{ $q }}" placeholder="Search name, period, id…">
-                    <button type="submit">Go</button>
+            <div class="sa-point-toolbar">
+                <div class="sa-point-seg" role="tablist" aria-label="Bonus request audience">
+                    <a href="{{ $salaryKindUrl('os') }}" class="{{ $salaryKind === 'os' ? 'is-on' : '' }}">
+                        OS <i>{{ (int) ($salaryKindCounts['os'] ?? 0) }}</i>
+                    </a>
+                    <a href="{{ $salaryKindUrl('staff') }}" class="{{ $salaryKind === 'staff' ? 'is-on' : '' }}">
+                        Staff <i>{{ (int) ($salaryKindCounts['staff'] ?? 0) }}</i>
+                    </a>
+                    <a href="{{ $salaryKindUrl('rider') }}" class="{{ $salaryKind === 'rider' ? 'is-on' : '' }}">
+                        Rider <i>{{ (int) ($salaryKindCounts['rider'] ?? 0) }}</i>
+                    </a>
                 </div>
-            </form>
-            <div class="sa-point-totals" aria-label="Point totals">
+                <form method="GET" action="{{ route('super-admin.screens.show', 'point-system') }}" class="sa-point-toolbar__filters">
+                    <input type="hidden" name="tab" value="salary">
+                    <input type="hidden" name="salary_kind" value="{{ $salaryKind }}">
+                    <label class="sa-point-dd">
+                        <span class="sa-point-dd__icon" aria-hidden="true"><i class="fas fa-filter"></i></span>
+                        <select name="salary_status" class="sa-point-dd__select" onchange="this.form.submit()">
+                            @foreach($salaryStatuses as $key => $label)
+                                <option value="{{ $key }}" @selected($salaryStatus === $key)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <span class="sa-point-dd__chev" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                    </label>
+                    <div class="sa-point-find">
+                        <i class="fas fa-search" aria-hidden="true"></i>
+                        <input type="search" name="q" value="{{ $q }}" placeholder="Search name, period, id…">
+                        <button type="submit">Go</button>
+                    </div>
+                </form>
+            </div>
+            <div class="sa-point-totals" aria-label="Bonus totals">
                 <div class="sa-point-total sa-point-total--wait">
-                    <span>Pending</span>
+                    <span>{{ __('message.point_status_pending') }}</span>
                     <b>{{ number_format((float) ($salaryPointTotals['pending'] ?? 0), 0) }}</b>
-                    <em>Points</em>
+                    <em>MMK</em>
                 </div>
                 <div class="sa-point-total sa-point-total--ok">
-                    <span>Confirmed</span>
+                    <span>{{ __('message.point_status_confirmed') }}</span>
                     <b>{{ number_format((float) ($salaryPointTotals['confirmed'] ?? 0), 0) }}</b>
-                    <em>Points</em>
+                    <em>MMK</em>
                 </div>
             </div>
             <div class="sa-point-cards">
@@ -343,6 +372,11 @@
                     @php
                         $st = (string) $row->status;
                         $tone = $st === 'approved' ? 'ok' : ($st === 'rejected' ? 'no' : 'wait');
+                        $statusLabel = match ($st) {
+                            'approved' => __('message.point_status_confirmed'),
+                            'rejected' => __('message.point_status_rejected'),
+                            default => __('message.point_status_pending'),
+                        };
                     @endphp
                     <article class="sa-point-card sa-point-card--{{ $tone }}">
                         <div class="sa-point-card__top">
@@ -353,46 +387,70 @@
                                 <div class="sa-point-card__info">
                                     <div class="sa-point-card__title-row">
                                         <strong>{{ optional($row->user)->name }}</strong>
-                                        <span class="sa-point-card__status sa-point-card__status--{{ $tone }}">{{ ucfirst($st) }}</span>
+                                        <span class="sa-point-card__status sa-point-card__status--{{ $tone }}">{{ $statusLabel }}</span>
                                     </div>
                                     <div class="sa-point-card__meta">
                                         <span>#{{ $row->id }}</span>
                                         <span>{{ $row->salary_period }}</span>
+                                        <span>{{ match ($salaryKind) {
+                                            'staff' => 'Staff',
+                                            'rider' => 'Rider',
+                                            default => 'OS',
+                                        } }}</span>
                                         <span>{{ $i + 1 }} of {{ $salaryRequests->count() }}</span>
                                     </div>
                                 </div>
                             </div>
                             <div class="sa-point-card__metrics">
-                                <div class="sa-point-card__metric">
-                                    <span>Points</span>
-                                    <b>{{ number_format((float) $row->points, 0) }}</b>
-                                </div>
-                                <div class="sa-point-card__arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></div>
                                 <div class="sa-point-card__metric sa-point-card__metric--mmk">
-                                    <span>Salary</span>
+                                    <span>{{ __('message.point_bonus_requested') }}</span>
                                     <b>{{ number_format((float) $row->amount, 0) }} <small>MMK</small></b>
                                 </div>
+                                @if(($row->request_kind ?? '') === 'client')
+                                    <div class="sa-point-card__metric">
+                                        <span>{{ __('message.point_bonus_os_pay_settled') }}</span>
+                                        <b>{{ number_format((float) ($row->os_pay_settled_amount ?? 0), 0) }}</b>
+                                    </div>
+                                    <div class="sa-point-card__metric sa-point-card__metric--remain">
+                                        <span>{{ __('message.point_bonus_remaining') }}</span>
+                                        <b>{{ number_format((float) ($row->points_remaining ?? max(0, (float) $row->points - (float) ($row->os_pay_settled_amount ?? 0))), 0) }}</b>
+                                    </div>
+                                @endif
                             </div>
                             <div class="sa-point-card__acts">
+                                @if(($row->request_kind ?? '') === 'client' && is_array($row->os_pay_settled_details) && count($row->os_pay_settled_details) > 0)
+                                    @php
+                                        $parcelPayload = collect($row->os_pay_settled_details)->map(static function ($detail) {
+                                            return [
+                                                'item_id' => (int) ($detail['item_id'] ?? 0),
+                                                'customer' => (string) ($detail['customer'] ?? '-'),
+                                                'settled' => (float) ($detail['settled'] ?? 0),
+                                                'deli_amount' => (float) ($detail['deli_amount'] ?? 0),
+                                            ];
+                                        })->values()->all();
+                                    @endphp
+                                    <button
+                                        type="button"
+                                        class="sa-point-card__info-btn js-sa-settled-parcels"
+                                        data-name="{{ optional($row->user)->name ?: ('#'.$row->id) }}"
+                                        data-request-id="{{ (int) $row->id }}"
+                                        data-parcels='@json($parcelPayload)'
+                                        title="{{ __('message.point_bonus_settled_parcels') }}"
+                                        aria-label="{{ __('message.point_bonus_settled_parcels') }}"
+                                    >
+                                        <i class="fas fa-info" aria-hidden="true"></i>
+                                    </button>
+                                @endif
                                 @if($st === 'pending')
                                     <form method="POST" action="{{ route('point-system.salary.approve', $row->id) }}">
                                         @csrf
                                         <input type="hidden" name="embed_return" value="super-admin">
                                         <input type="hidden" name="salary_status" value="{{ $salaryStatus }}">
+                                        <input type="hidden" name="salary_kind" value="{{ $salaryKind }}">
                                         <input type="hidden" name="q" value="{{ $q }}">
                                         <button class="sa-point-card__btn sa-point-card__btn--ok" type="submit">
                                             <i class="fas fa-check" aria-hidden="true"></i>
-                                            {{ __('message.point_action_approve') }}
-                                        </button>
-                                    </form>
-                                    <form method="POST" action="{{ route('point-system.salary.reject', $row->id) }}" onsubmit="return confirm(@json(__('message.are_you_sure')));">
-                                        @csrf
-                                        <input type="hidden" name="embed_return" value="super-admin">
-                                        <input type="hidden" name="salary_status" value="{{ $salaryStatus }}">
-                                        <input type="hidden" name="q" value="{{ $q }}">
-                                        <button class="sa-point-card__btn" type="submit">
-                                            <i class="fas fa-times" aria-hidden="true"></i>
-                                            {{ __('message.point_action_reject') }}
+                                            {{ __('message.point_salary_action_confirm') }}
                                         </button>
                                     </form>
                                 @endif
@@ -411,6 +469,28 @@
             </div>
         </section>
     @endif
+
+    <div class="sa-point-modal sa-settled-parcels-modal" id="saSettledParcelsModal" hidden>
+        <div class="sa-point-modal__backdrop js-sa-settled-parcels-close" tabindex="-1"></div>
+        <div class="sa-point-modal__panel sa-settled-parcels-modal__panel" role="dialog" aria-modal="true" aria-labelledby="saSettledParcelsTitle">
+            <button type="button" class="sa-point-modal__x js-sa-settled-parcels-close" aria-label="Close">
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+            <div class="sa-settled-parcels-modal__hero">
+                <span class="sa-settled-parcels-modal__icon" aria-hidden="true"><i class="fas fa-box-open"></i></span>
+                <div>
+                    <h4 id="saSettledParcelsTitle">{{ __('message.point_bonus_settled_parcels') }}</h4>
+                    <p id="saSettledParcelsSubtitle">—</p>
+                </div>
+            </div>
+            <ul class="sa-settled-parcels-modal__list" id="saSettledParcelsList"></ul>
+            <div class="sa-settled-parcels-modal__foot">
+                <button type="button" class="sa-settled-parcels-modal__done js-sa-settled-parcels-close">
+                    {{ __('message.close') }}
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 @once
@@ -484,6 +564,83 @@
 
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+    });
+})();
+
+(function () {
+    var modal = document.getElementById('saSettledParcelsModal');
+    var list = document.getElementById('saSettledParcelsList');
+    var subtitle = document.getElementById('saSettledParcelsSubtitle');
+    if (!modal || !list) return;
+
+    function fmt(n) {
+        var v = Number(n || 0);
+        if (!isFinite(v)) v = 0;
+        return v.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    }
+
+    function openParcelsModal(btn) {
+        var name = btn.getAttribute('data-name') || '—';
+        var requestId = btn.getAttribute('data-request-id') || '';
+        var parcels = [];
+        try {
+            parcels = JSON.parse(btn.getAttribute('data-parcels') || '[]') || [];
+        } catch (e) {
+            parcels = [];
+        }
+
+        if (subtitle) {
+            subtitle.textContent = (requestId ? '#' + requestId + ' · ' : '') + name + ' · ' + parcels.length + ' parcels';
+        }
+
+        list.innerHTML = '';
+        if (!parcels.length) {
+            list.innerHTML = '<li class="is-empty">{{ __('message.no_record_found') }}</li>';
+        } else {
+            parcels.forEach(function (row) {
+                var li = document.createElement('li');
+                li.innerHTML =
+                    '<div class="sa-settled-parcels-modal__main">' +
+                        '<strong>#' + (row.item_id || 0) + '</strong>' +
+                        '<span>' + (row.customer || '-') + '</span>' +
+                    '</div>' +
+                    '<div class="sa-settled-parcels-modal__amts">' +
+                        '<b>' + fmt(row.settled) + '</b>' +
+                        '<em>Deli ' + fmt(row.deli_amount) + '</em>' +
+                    '</div>';
+                list.appendChild(li);
+            });
+        }
+
+        modal.hidden = false;
+        document.body.classList.add('sa-point-modal-open');
+        requestAnimationFrame(function () {
+            modal.classList.add('is-open');
+        });
+    }
+
+    function closeParcelsModal() {
+        modal.classList.remove('is-open');
+        document.body.classList.remove('sa-point-modal-open');
+        setTimeout(function () {
+            if (!modal.classList.contains('is-open')) modal.hidden = true;
+        }, 180);
+    }
+
+    document.querySelectorAll('.js-sa-settled-parcels').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openParcelsModal(btn);
+        });
+    });
+
+    modal.querySelectorAll('.js-sa-settled-parcels-close').forEach(function (el) {
+        el.addEventListener('click', closeParcelsModal);
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && modal.classList.contains('is-open')) closeParcelsModal();
     });
 })();
 </script>

@@ -649,6 +649,7 @@ body.pds-admin .pds-admin-kpay-modal,
 body.pds-admin #osAdminKpayConfirmModal.modal,
 body.pds-admin #osAdminKpayFormModal.modal,
 body.pds-admin #osAdminKpayActionModal.modal,
+body.pds-admin #osSettlePointsModal.modal,
 body.pds-admin #osAdminKpayHistoryModal.modal {
     z-index: 21060 !important;
 }
@@ -763,10 +764,23 @@ body.pds-admin .pds-admin-kpay-modal .modal-body {
 }
 body.pds-admin .pds-admin-kpay-modal .modal-footer {
     position: relative;
-    z-index: 40;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
     border-top: 0;
     padding: 0.9rem 1.3rem 1.25rem;
-    gap: 0.55rem;
+    gap: 0.65rem;
+    overflow: visible;
+}
+body.pds-admin .pds-admin-kpay-modal .modal-footer > .btn {
+    width: 100%;
+    margin: 0;
+    min-width: 0;
+    min-height: 46px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 body.pds-admin .pds-admin-kpay-modal .form-group {
     margin-bottom: 0.9rem;
@@ -1011,14 +1025,29 @@ body.pds-admin .pds-admin-kpay-action-modal .pds-admin-kpay-modal__danger:hover 
 body.pds-admin .pds-admin-kpay-action-modal .pds-admin-kpay-modal__danger:hover span {
     color: #fff !important;
 }
-body.pds-admin .pds-admin-kpay-action-modal .pds-admin-kpay-modal__primary {
+body.pds-admin .pds-admin-kpay-action-modal .pds-admin-kpay-modal__primary,
+body.pds-admin .pds-admin-kpay-action-modal .pds-admin-kpay-modal__primary:hover,
+body.pds-admin .pds-admin-kpay-action-modal .pds-admin-kpay-modal__primary:focus,
+body.pds-admin .pds-admin-kpay-action-modal .pds-admin-kpay-modal__primary:active,
+body.pds-admin #osSettlePointsConfirmBtn,
+body.pds-admin #osSettlePointsConfirmBtn:hover,
+body.pds-admin #osSettlePointsConfirmBtn:focus,
+body.pds-admin #osSettlePointsConfirmBtn:active {
     border: 0;
     border-radius: 14px;
     background: linear-gradient(135deg, #fe6f07, #ea580c);
-    color: #fff;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff;
     font-weight: 800;
     padding: 0.7rem 1.1rem;
     box-shadow: 0 12px 22px rgba(234, 88, 12, 0.24);
+}
+body.pds-admin .pds-admin-kpay-action-modal .pds-admin-kpay-modal__primary i,
+body.pds-admin .pds-admin-kpay-action-modal .pds-admin-kpay-modal__primary span,
+body.pds-admin #osSettlePointsConfirmBtn i,
+body.pds-admin #osSettlePointsConfirmBtn span {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff;
 }
 body.pds-admin .pds-admin-kpay-action-modal .pds-admin-kpay-modal__danger:disabled,
 body.pds-admin .pds-admin-kpay-action-modal .pds-admin-kpay-modal__primary:disabled {
@@ -1125,6 +1154,9 @@ body.pds-admin .pds-admin-kpay-confirm-select .pds-admin-kpay-combo {
     width: 100%;
     z-index: 5;
 }
+body.pds-admin .pds-admin-kpay-confirm-select .pds-admin-kpay-combo.is-open {
+    z-index: 80;
+}
 body.pds-admin .pds-admin-kpay-confirm-select .pds-admin-kpay-combo__native {
     position: absolute !important;
     width: 1px !important;
@@ -1176,17 +1208,30 @@ body.pds-admin .pds-admin-kpay-confirm-select .pds-admin-kpay-combo__panel {
     position: absolute;
     left: 0;
     right: 0;
-    top: calc(100% + 6px);
-    max-height: 280px;
+    /* Open upward so Search / list never collide with Cancel · Transfer. */
+    top: auto;
+    bottom: calc(100% + 8px);
+    max-height: min(280px, 42vh);
     overflow: hidden;
     border: 1px solid #fed7aa;
     border-radius: 16px;
     background: #fff;
-    box-shadow: 0 18px 40px rgba(28, 25, 23, 0.16);
-    z-index: 30;
+    box-shadow: 0 -14px 36px rgba(28, 25, 23, 0.14), 0 8px 20px rgba(28, 25, 23, 0.08);
+    z-index: 90;
 }
 body.pds-admin .pds-admin-kpay-confirm-select .pds-admin-kpay-combo.is-open .pds-admin-kpay-combo__panel {
     display: flex !important;
+}
+body.pds-admin #osAdminKpayConfirmModal .modal-content {
+    overflow: visible;
+}
+body.pds-admin #osAdminKpayConfirmModal .modal-body {
+    overflow: visible;
+    position: relative;
+    z-index: 2;
+}
+body.pds-admin #osAdminKpayConfirmModal .modal-footer {
+    z-index: 1;
 }
 body.pds-admin .pds-admin-kpay-combo__search-wrap {
     padding: 0.75rem 0.75rem 0.45rem;
@@ -1852,6 +1897,51 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
         </div>
     </div>
 
+    <div class="modal fade pds-admin-kpay-modal pds-admin-kpay-action-modal pds-os-settle-points-modal" id="osSettlePointsModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h5 class="modal-title">
+                        <span class="pds-admin-kpay-action-hero" aria-hidden="true"><i class="fas fa-hand-holding-usd"></i></span>
+                        <span>{{ __('message.os_settlement_settle_os_pay_title') }}</span>
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <p class="pds-admin-kpay-action-copy">{{ __('message.os_settlement_settle_os_pay_body') }}</p>
+                    <div class="pds-admin-kpay-action-card">
+                        <span class="pds-admin-kpay-action-card__avatar" id="osSettlePointsAvatar" aria-hidden="true">O</span>
+                        <div class="pds-admin-kpay-action-card__main">
+                            <strong id="osSettlePointsOsName">—</strong>
+                            <span id="osSettlePointsOsPhone">—</span>
+                        </div>
+                    </div>
+                    <div class="pds-os-settle-points-metrics">
+                        <div class="pds-os-settle-points-metric">
+                            <span>{{ __('message.point_bonus_requested') }}</span>
+                            <b id="osSettlePointsBonus">—</b>
+                        </div>
+                        <div class="pds-os-settle-points-metric is-os-pay">
+                            <span>{{ __('message.point_bonus_os_pay_settled') }}</span>
+                            <b id="osSettlePointsOsPay">—</b>
+                        </div>
+                        <div class="pds-os-settle-points-metric is-remain">
+                            <span>{{ __('message.point_bonus_remaining') }}</span>
+                            <b id="osSettlePointsRemain">—</b>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('message.cancel') }}</button>
+                    <button type="button" class="btn pds-admin-kpay-modal__primary" id="osSettlePointsConfirmBtn">
+                        <i class="fas fa-check" aria-hidden="true"></i>
+                        <span>{{ __('message.point_salary_action_confirm') }}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- No .fade: production SnackBar-less + fade can leave the confirm dialog at opacity 0. --}}
     <div class="modal pds-admin-kpay-modal" id="osAdminKpayConfirmModal" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" role="document">
@@ -1924,7 +2014,7 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
 
     @section('bottom_script')
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=11"></script>
         <script>
             $(document).ready(function () {
                 if (typeof window.initOnlineShopFilterSelect === 'function') {
@@ -1958,8 +2048,10 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                 var uploadUrlTemplate = @json(url('dispatch-os-list/__OS__/upload-kpay-slip'));
                 var removeUrlTemplate = @json(url('dispatch-os-list/__OS__/remove-kpay-slip'));
                 var finishUrlTemplate = @json(url('dispatch-os-list/__OS__/finish'));
+                var settleOsPayPointsUrlTemplate = @json(url('dispatch-os-list/__OS__/settle-os-pay-points'));
                 var slipPreviewUrlTemplate = @json(url('dispatch-os-list/__OS__/slip-preview'));
                 var finishAllUrl = @json(route('order.dispatch.os-finish-all'));
+                var settleOsPayPending = null;
                 var adminKpayStoreUrl = @json(route('order.dispatch.os-admin-kpay.store'));
                 var adminKpayClearUrl = @json(route('order.dispatch.os-admin-kpay.clear'));
                 var adminKpayDestroyUrlTemplate = @json(url('dispatch-os-list/admin-kpay-accounts/__ID__/delete'));
@@ -3472,6 +3564,104 @@ body.pds-admin .pds-money-transfer-os__kpay--admin {
                         },
                     });
                 }
+
+                function formatSettleMmK(value) {
+                    var n = Number(value || 0);
+                    if (!isFinite(n)) n = 0;
+                    return n.toLocaleString('en-US', { maximumFractionDigits: 0 }) + ' MMK';
+                }
+
+                function openSettleOsPayModal($btn) {
+                    var osId = String($btn.attr('data-os-id') || '').trim();
+                    if (!osId || osId === '0') return;
+                    var requestId = parseInt($btn.attr('data-request-id') || '0', 10) || 0;
+                    var itemIdsAttr = String($btn.attr('data-item-ids') || '').trim();
+                    var itemIds = itemIdsAttr
+                        ? itemIdsAttr.split(',').map(function (v) { return parseInt(v, 10); }).filter(function (v) { return v > 0; })
+                        : [];
+                    var osName = String($btn.attr('data-os-name') || '').trim() || ('#' + osId);
+                    var osPhone = String($btn.attr('data-os-phone') || '').trim() || '—';
+                    var bonus = Number($btn.attr('data-bonus') || 0);
+                    var osPay = Number($btn.attr('data-os-pay') || 0);
+                    var remaining = Number($btn.attr('data-remaining') || Math.max(0, bonus - osPay));
+                    var initial = (osName || 'O').charAt(0).toUpperCase();
+
+                    settleOsPayPending = {
+                        osId: osId,
+                        requestId: requestId,
+                        itemIds: itemIds,
+                        $btn: $btn,
+                    };
+
+                    $('#osSettlePointsAvatar').text(initial);
+                    $('#osSettlePointsOsName').text(osName);
+                    $('#osSettlePointsOsPhone').text(osPhone);
+                    $('#osSettlePointsBonus').text(formatSettleMmK(bonus));
+                    $('#osSettlePointsOsPay').text(formatSettleMmK(osPay));
+                    $('#osSettlePointsRemain').text(formatSettleMmK(remaining));
+                    $('#osSettlePointsConfirmBtn').prop('disabled', false);
+
+                    var $modal = $('#osSettlePointsModal');
+                    if (typeof mountAdminKpayModal === 'function') {
+                        mountAdminKpayModal($modal);
+                    }
+                    $modal.modal('show');
+                }
+
+                function submitSettleOsPay() {
+                    if (!settleOsPayPending) return;
+                    var pending = settleOsPayPending;
+                    var $btn = pending.$btn;
+                    var $confirmBtn = $('#osSettlePointsConfirmBtn');
+                    if ($btn.data('busy')) return;
+
+                    $btn.prop('disabled', true).data('busy', 1);
+                    $confirmBtn.prop('disabled', true);
+
+                    $.ajax({
+                        url: settleOsPayPointsUrlTemplate.replace('__OS__', pending.osId),
+                        method: 'POST',
+                        data: {
+                            _token: csrf,
+                            request_id: pending.requestId || null,
+                            item_ids: pending.itemIds,
+                        },
+                        success: function (res) {
+                            var msg = (res && res.message) ? res.message : @json(__('message.point_os_pay_settled_ok'));
+                            $('#osSettlePointsModal').modal('hide');
+                            notify(msg, 'success');
+                            window.location.reload();
+                        },
+                        error: function (xhr) {
+                            var msg = (xhr.responseJSON && xhr.responseJSON.message)
+                                ? xhr.responseJSON.message
+                                : @json(__('message.something_went_wrong'));
+                            notify(msg, 'error');
+                            $btn.prop('disabled', false).data('busy', 0);
+                            $confirmBtn.prop('disabled', false);
+                        },
+                    });
+                }
+
+                $(document).off('click.pdsOsSettlePoints', '.pds-os-settle-points-btn')
+                    .on('click.pdsOsSettlePoints', '.pds-os-settle-points-btn', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var $btn = $(this);
+                    if ($btn.prop('disabled') || $btn.data('busy')) return;
+                    openSettleOsPayModal($btn);
+                });
+
+                $(document).off('click.pdsOsSettlePointsConfirm', '#osSettlePointsConfirmBtn')
+                    .on('click.pdsOsSettlePointsConfirm', '#osSettlePointsConfirmBtn', function (e) {
+                    e.preventDefault();
+                    submitSettleOsPay();
+                });
+
+                $('#osSettlePointsModal').off('hidden.bs.modal.pdsOsSettlePoints')
+                    .on('hidden.bs.modal.pdsOsSettlePoints', function () {
+                    settleOsPayPending = null;
+                });
 
                 $(document).off('click.pdsOsFinish', '.pds-os-finish-btn')
                     .on('click.pdsOsFinish', '.pds-os-finish-btn', function (e) {

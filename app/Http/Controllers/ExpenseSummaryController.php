@@ -73,9 +73,11 @@ class ExpenseSummaryController extends Controller
         [$branchId, $branchFilter, $branches] = resolveDestinationBranchFilter($request);
         $summaryService = app(\App\Services\ExpenseSummaryService::class);
         $authUser = auth()->user();
-        // Stored rows + auto-repair Income=0 stale rows (destination DeliAmount).
-        // Full live sync stays off for SPA speed; Income Card lines load on eye-click.
-        $rows = $summaryService->rowsForPeriod($from, $to, $branchId, $authUser, false);
+        // Single-day CHECK: resync Income from live Daily Check OS DeliAmount so
+        // Summary cannot lag after late finishes / deli edits (e.g. 1,493,000 vs 1,496,500).
+        // Multi-day ranges keep the cheap Income=0 stale repair only (SPA speed).
+        $syncIncome = $from === $to;
+        $rows = $summaryService->rowsForPeriod($from, $to, $branchId, $authUser, $syncIncome);
         $incomeItemsByDate = [];
 
         $branchTabCounts = $summaryService->branchRowCounts($from, $to);

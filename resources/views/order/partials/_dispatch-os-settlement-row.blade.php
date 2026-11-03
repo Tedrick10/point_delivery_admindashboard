@@ -54,6 +54,51 @@
                 @else
                     <span class="pds-os-settlement-badge">{{ $row->item_count }} {{ __('message.items') }}</span>
                 @endif
+                @if($section === 'pay' && (float) ($row->pending_bonus_points ?? $row->pending_bonus_amount ?? 0) > 0)
+                    @php
+                        $bonusRaw = (float) ($row->pending_bonus_points ?? $row->pending_bonus_amount ?? 0);
+                        $bonusSettledRaw = (float) ($row->pending_bonus_settled ?? 0);
+                        $bonusRemainRaw = (float) ($row->pending_bonus_remaining ?? max(0, $bonusRaw - $bonusSettledRaw));
+                        $unpaidOsPay = (float) ($row->unpaid_os_pay ?? 0);
+                        $canSettleOsPay = $unpaidOsPay > 0 && $bonusRemainRaw > 0;
+                        $osDisplayName = (string) ($row->display_name ?? $row->name ?? '');
+                        $osDisplayPhone = (string) ($row->phone ?? '-');
+                    @endphp
+                    <div class="pds-os-bonus-card">
+                        <div class="pds-os-bonus-card__head">
+                            <span class="pds-os-bonus-card__icon" aria-hidden="true"><i class="fas fa-coins"></i></span>
+                            <div class="pds-os-bonus-card__copy">
+                                <span class="pds-os-bonus-card__label">{{ __('message.point_bonus_requested') }}</span>
+                                <strong>{{ number_format($bonusRaw, 0) }} <small>MMK</small></strong>
+                            </div>
+                        </div>
+                        @if($bonusSettledRaw > 0)
+                            <div class="pds-os-bonus-card__stats">
+                                <span>{{ __('message.point_bonus_os_pay_settled') }} <b>{{ number_format($bonusSettledRaw, 0) }}</b></span>
+                                <span>{{ __('message.point_bonus_remaining') }} <b>{{ number_format($bonusRemainRaw, 0) }}</b></span>
+                            </div>
+                        @endif
+                        @if($canSettleOsPay)
+                            <button
+                                type="button"
+                                class="pds-os-settle-points-btn"
+                                data-os-id="{{ $row->id }}"
+                                data-request-id="{{ (int) ($row->pending_bonus_request_id ?? 0) }}"
+                                data-item-ids="{{ $itemIdsAttr }}"
+                                data-os-name="{{ e($osDisplayName) }}"
+                                data-os-phone="{{ e($osDisplayPhone) }}"
+                                data-bonus="{{ $bonusRaw }}"
+                                data-os-pay="{{ $unpaidOsPay }}"
+                                data-remaining="{{ max(0, $bonusRemainRaw - $unpaidOsPay) }}"
+                                title="{{ __('message.os_settlement_settle_os_pay_points') }}"
+                            >
+                                <i class="fas fa-hand-holding-usd" aria-hidden="true"></i>
+                                <span>{{ __('message.os_settlement_settle_os_pay_points') }}</span>
+                                <em>{{ number_format($unpaidOsPay, 0) }}</em>
+                            </button>
+                        @endif
+                    </div>
+                @endif
             </div>
         </div>
     </td>

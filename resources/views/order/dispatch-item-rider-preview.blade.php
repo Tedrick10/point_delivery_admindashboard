@@ -98,7 +98,8 @@
         $push('Deli Amount', $deliAmount);
     }
     $push('Size', ($sizeLabel !== '' && $sizeLabel !== '-') ? $sizeLabel : '');
-    if (empty($pendingRemarks)) {
+    // Always show admin/item Remark even when Pending Remarks history exists.
+    if ($remark !== '' && $remark !== '-' && $remark !== 'rider_added') {
         $push('Remark', $remark);
     }
     if (! $usesReturnUi) {

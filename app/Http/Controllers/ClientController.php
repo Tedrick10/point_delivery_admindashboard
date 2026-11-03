@@ -272,7 +272,7 @@ class ClientController extends Controller
 
         $request->validate([
             'name' => 'required|string|max:255',
-            'username' => 'required|string|min:3|max:50|unique:users,username',
+            'username' => 'required|string|max:50|unique:users,username',
             'password' => 'required|string|min:6|confirmed',
             'contact_number' => [
                 'required',
@@ -317,7 +317,7 @@ class ClientController extends Controller
             'status' => 1,
             'approval_status' => User::APPROVAL_APPROVED,
             'created_by_admin' => 1,
-            'is_temp_password' => 1,
+            'is_temp_password' => 0,
             'email_verified_at' => now(),
             'otp_verify_at' => now(),
             'referral_code' => generateRandomCode(),
@@ -399,7 +399,7 @@ class ClientController extends Controller
             $payload['user_type'] = 'client';
             $payload['referral_code'] = generateRandomCode();
             $payload['created_by_admin'] = $request->created_by_admin ?? 1;
-            $payload['is_temp_password'] = $request->is_temp_password ?? 1;
+            $payload['is_temp_password'] = $request->is_temp_password ?? 0;
             $payload['is_vip'] = 0;
 
             $approvalStatus = $request->input('approval_status', User::APPROVAL_APPROVED);
@@ -565,45 +565,11 @@ class ClientController extends Controller
             return json_custom_response(['status' => false, 'message' => $message]);
         }
 
-        $rawPhone = $request->input('contact_number');
-        if ((! $request->filled('contact_number') || $rawPhone === '' || $rawPhone === null) && $request->filled('phone')) {
-            $rawPhone = $request->input('phone');
-        }
-        if (is_array($rawPhone)) {
-            $rawPhone = collect($rawPhone)->filter()->last();
-        }
-        if ($rawPhone !== null && $rawPhone !== '') {
-            $contactNumber = normalizeContactNumber((string) $rawPhone);
-            if ($contactNumber === '' || strlen(preg_replace('/\D+/', '', $contactNumber) ?? '') < 8) {
-                return redirect()->back()->withInput()->withErrors([
-                    'contact_number' => __('message.please_enter_contact_number'),
-                ]);
-            }
-            $request->merge(['contact_number' => $contactNumber]);
-        }
+        // Phone is immutable after create (login id). Ignore any posted contact_number/phone.
+        $request->merge(['contact_number' => $user->contact_number]);
 
         $request->validate([
             'password' => 'nullable|string|min:6|confirmed',
-            'contact_number' => [
-                'required',
-                'string',
-                'max:50',
-                function ($attribute, $value, $fail) use ($user) {
-                    $variants = contactNumberLookupVariants((string) $value);
-                    if ($variants === []) {
-                        return;
-                    }
-                    $exists = User::query()
-                        ->where('user_type', 'client')
-                        ->whereNull('deleted_at')
-                        ->where('id', '!=', $user->id)
-                        ->whereIn('contact_number', $variants)
-                        ->exists();
-                    if ($exists) {
-                        $fail(__('message.contact_number_already_taken'));
-                    }
-                },
-            ],
             'os_profile.state_division' => 'nullable|string|max:255',
             'os_profile.township' => 'nullable|string|max:255',
         ]);
@@ -615,7 +581,7 @@ class ClientController extends Controller
         if (! empty($existingProfile['login_password']) && empty($osProfile['login_password'])) {
             $osProfile['login_password'] = $existingProfile['login_password'];
         }
-        $payload = $request->only(['name', 'contact_number']);
+        $payload = $request->only(['name']);
         $payload['address'] = buildUserAddressFromProfile($osProfile);
         $payload['os_profile'] = $osProfile;
 
@@ -704,7 +670,8 @@ class ClientController extends Controller
             'approval_status' => $user->approval_status,
             'approval_rejection_reason' => $user->approval_rejection_reason,
             'label' => __('message.'.$user->approval_status),
-            'username' => $credentials['username'] ?? null,
+            'username' => $credentials['phone'] ?? $credentials['username'] ?? null,
+            'phone' => $credentials['phone'] ?? $credentials['username'] ?? null,
             'password' => $credentials['password'] ?? null,
         ]);
     }

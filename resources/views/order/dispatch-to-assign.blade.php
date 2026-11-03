@@ -280,7 +280,7 @@
     @section('bottom_script')
         <link rel="stylesheet" href="{{ asset('css/pds-expense-photo-zoom.css') }}?v=2">
         <script src="{{ asset('js/pds-photo-zoom.js') }}?v=5"></script>
-        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
+        <script src="{{ asset('js/dispatch-os-fields.js') }}?v=11"></script>
         <script>
             (function () {
                 var osSearchRoute = "{{ route('ajax-list', ['type' => 'os_dispatch_search']) }}";

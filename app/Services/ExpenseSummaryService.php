@@ -17,9 +17,8 @@ class ExpenseSummaryService
     }
 
     /**
-     * Income = settled OS DeliAmount for the card date, by parcel destination.
-     * Summary / Income Card follow the branch that received the parcel — not OS home —
-     * so Yangon / POL / Sagaing income leaves the Mandalay tab.
+     * Income = settled OS DeliAmount for the card date, by remitting rider hub
+     * (same Daily Check OS tab as Rider — destination alone undercounted MDY).
      * AKO's Given = Income − Expense (set in generateFromCard).
      */
     public function incomeForDate(string $day, $user = null, ?int $branchId = null): float
@@ -59,26 +58,27 @@ class ExpenseSummaryService
         }
 
         // Load network-wide settled OS invoices for the day, then attribute
-        // Income to parcel destination (not OS home branch).
+        // Income to remitting rider hub (same as Daily Check OS / Rider tabs).
         $fromInvoices = $this->dailyCheckList->osInvoiceRowsForDate($day, null);
         $rows = $fromInvoices->isNotEmpty()
             ? $fromInvoices
             : $this->dailyCheckList->listRows($day, $day, 'os', null, null, null);
 
         if ($branchId && $branchId > 0) {
-            $rows = $this->scopeIncomeDeliToDestinationBranch($rows, $branchId);
+            $rows = $this->scopeIncomeDeliToRemitHub($rows, $branchId);
         }
 
         return $rows;
     }
 
     /**
-     * Recalculate each OS row's deli_amount using only parcels delivered to $branchId.
+     * Recalculate each OS row's deli_amount using parcels remitted at $branchId
+     * (rider home hub; falls back to destination).
      *
      * @param  Collection<int, object>  $rows
      * @return Collection<int, object>
      */
-    protected function scopeIncomeDeliToDestinationBranch(Collection $rows, int $branchId): Collection
+    protected function scopeIncomeDeliToRemitHub(Collection $rows, int $branchId): Collection
     {
         $invoiceIds = $rows->pluck('id')->map(fn ($id) => (int) $id)->filter()->unique()->values();
         if ($invoiceIds->isEmpty()) {
@@ -97,8 +97,9 @@ class ExpenseSummaryService
             ->values();
 
         $itemsById = DispatchOrderItem::query()
+            ->with(['deliveryMan:id,branch_id'])
             ->whereIn('id', $allItemIds->all() ?: [0])
-            ->get(['id', 'to_branch_id', 'from_branch_id', 'deli_amount'])
+            ->get(['id', 'to_branch_id', 'from_branch_id', 'deli_amount', 'delivery_man_id'])
             ->keyBy('id');
 
         return $rows
@@ -110,8 +111,7 @@ class ExpenseSummaryService
                     if (! $item) {
                         continue;
                     }
-                    $dest = (int) ($item->to_branch_id ?: $item->from_branch_id ?: 0);
-                    if ($dest !== $branchId) {
+                    if (dailyCheckOsBranchIdForItem($item) !== $branchId) {
                         continue;
                     }
                     $deli += (float) ($item->deli_amount ?? 0);
@@ -198,7 +198,9 @@ class ExpenseSummaryService
     /**
      * Repair rows that still look like the old OS-home Generate bug:
      * non-MDY branch with Expense > 0 but Income stuck at 0.
-     * Cheap enough for Summary page load (only touches stale rows).
+     * Also refreshes single-row periods that can lag live Daily Check DeliAmount
+     * after late finishes (Income > 0 but outdated).
+     * Cheap enough for Summary page load (only touches stale / tiny sets).
      *
      * @param  \Illuminate\Support\Collection<int, ExpenseSummary>  $rows
      * @return \Illuminate\Support\Collection<int, ExpenseSummary>
@@ -210,6 +212,14 @@ class ExpenseSummaryService
                 && (float) ($row->expense ?? 0) > 0.0001
                 && (int) ($row->branch_id ?? 0) > 0;
         })->values();
+
+        // One calendar day with few branch rows → cheap enough to always re-check live income.
+        if ($stale->isEmpty() && $rows->count() > 0 && $rows->count() <= 12) {
+            $dates = $rows->map(fn (ExpenseSummary $row) => $row->summary_date?->toDateString())->filter()->unique();
+            if ($dates->count() === 1) {
+                $stale = $rows->values();
+            }
+        }
 
         if ($stale->isEmpty()) {
             return $rows;

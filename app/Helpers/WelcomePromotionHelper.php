@@ -9,6 +9,9 @@ class WelcomePromotionHelper
 {
     public static function getDiscountForUser(?User $user, float $amount): array
     {
+        // Feature removed from Super Admin + User App — keep helpers as no-ops.
+        return ['discount' => 0, 'eligible' => false, 'remaining' => 0];
+
         if (! $user) {
             return ['discount' => 0, 'eligible' => false, 'remaining' => 0];
         }
@@ -62,6 +65,9 @@ class WelcomePromotionHelper
 
     public static function applyAfterOrder(User $user): void
     {
+        // Feature removed — do not increment usage counters.
+        return;
+
         $promo = WelcomePromotion::getActive();
         if (! $promo) {
             return;

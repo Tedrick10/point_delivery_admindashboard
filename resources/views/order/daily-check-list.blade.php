@@ -418,7 +418,7 @@
     </div>
 
     {{-- Inline boot so Item Count click works even if @section/@push is skipped by the layout component --}}
-    <script src="{{ asset('js/dispatch-os-fields.js') }}?v=10"></script>
+    <script src="{{ asset('js/dispatch-os-fields.js') }}?v=11"></script>
     <script>
         (function bootDailyCheckList() {
             if (!window.jQuery) {

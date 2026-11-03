@@ -103,10 +103,6 @@ class PointController extends Controller
             return json_message_response(__('message.demo_permission_denied'), 403);
         }
 
-        if (($user->user_type ?? '') === 'client') {
-            return json_message_response(__('message.demo_permission_denied'), 403);
-        }
-
         $data = $request->validate([
             'points' => 'required|numeric|min:0.01',
             'month' => 'nullable|string',

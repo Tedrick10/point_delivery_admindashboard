@@ -18386,6 +18386,200 @@ body.pds-admin .pds-os-settlement-badge--link:hover {
     background: rgba(var(--brand-rgb), 0.2);
 }
 
+body.pds-admin .pds-os-bonus-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin-top: 0.55rem;
+    max-width: 17.5rem;
+    padding: 0.55rem 0.65rem 0.6rem;
+    border-radius: 14px;
+    background:
+        linear-gradient(180deg, #fffaf5 0%, #fff7ed 100%);
+    border: 1px solid #fed7aa;
+    box-shadow: 0 6px 14px rgba(194, 65, 12, 0.06);
+}
+
+body.pds-admin .pds-os-bonus-card__head {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+}
+
+body.pds-admin .pds-os-bonus-card__icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(145deg, #fff7ed, #ffedd5);
+    border: 1px solid #fdba74;
+    color: #ea580c;
+    font-size: 0.78rem;
+}
+
+body.pds-admin .pds-os-bonus-card__copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+}
+
+body.pds-admin .pds-os-bonus-card__label {
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #9a3412;
+    opacity: 0.78;
+}
+
+body.pds-admin .pds-os-bonus-card__copy strong {
+    font-size: 0.92rem;
+    font-weight: 800;
+    color: #c2410c;
+    line-height: 1.15;
+}
+
+body.pds-admin .pds-os-bonus-card__copy strong small {
+    font-size: 0.68rem;
+    font-weight: 700;
+    opacity: 0.75;
+}
+
+body.pds-admin .pds-os-bonus-card__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.7rem;
+    padding: 0.2rem 0 0.05rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #9a3412;
+}
+
+body.pds-admin .pds-os-bonus-card__stats b {
+    font-weight: 800;
+    color: #c2410c;
+}
+
+body.pds-admin .pds-os-settle-points-btn,
+body.pds-admin .pds-os-settle-points-btn:focus,
+body.pds-admin .pds-os-settle-points-btn:active,
+body.pds-admin .pds-os-settle-points-btn:hover {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem;
+    width: 100%;
+    margin: 0;
+    padding: 0.48rem 0.65rem;
+    border-radius: 11px;
+    border: 0;
+    background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
+    color: #ffffff !important;
+    font-size: 0.72rem;
+    font-weight: 800;
+    cursor: pointer;
+    line-height: 1.2;
+    box-shadow: 0 8px 16px rgba(234, 88, 12, 0.22);
+    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+    -webkit-text-fill-color: #ffffff;
+}
+
+body.pds-admin .pds-os-settle-points-btn:hover {
+    filter: brightness(1.04);
+    box-shadow: 0 10px 18px rgba(234, 88, 12, 0.28);
+    transform: translateY(-1px);
+}
+
+body.pds-admin .pds-os-settle-points-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+body.pds-admin .pds-os-settle-points-btn i,
+body.pds-admin .pds-os-settle-points-btn > span,
+body.pds-admin .pds-os-settle-points-btn em,
+body.pds-admin .pds-os-settle-points-btn em * {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+
+body.pds-admin .pds-os-settle-points-btn > span {
+    flex: 1 1 auto;
+    text-align: left;
+}
+
+body.pds-admin .pds-os-settle-points-btn em {
+    font-style: normal;
+    font-weight: 800;
+    padding: 0.18rem 0.45rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+
+body.pds-admin .pds-os-settle-points-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin: 1rem auto 0.15rem;
+    max-width: 100%;
+}
+
+body.pds-admin .pds-os-settle-points-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.7rem 0.55rem;
+    border-radius: 14px;
+    background: #fff;
+    border: 1px solid #f0e6db;
+    text-align: center;
+}
+
+body.pds-admin .pds-os-settle-points-metric span {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #78716c;
+    letter-spacing: 0.01em;
+}
+
+body.pds-admin .pds-os-settle-points-metric b {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #1c1917;
+}
+
+body.pds-admin .pds-os-settle-points-metric.is-os-pay {
+    background: #fff7ed;
+    border-color: #fed7aa;
+}
+
+body.pds-admin .pds-os-settle-points-metric.is-os-pay b {
+    color: #ea580c;
+}
+
+body.pds-admin .pds-os-settle-points-metric.is-remain {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+}
+
+body.pds-admin .pds-os-settle-points-metric.is-remain b {
+    color: #047857;
+}
+
+@media (max-width: 520px) {
+    body.pds-admin .pds-os-settle-points-metrics {
+        grid-template-columns: 1fr;
+    }
+}
+
 body.pds-admin .pds-dispatch-rider-list-city {
     margin-top: 0.1rem;
     font-size: 0.78rem;

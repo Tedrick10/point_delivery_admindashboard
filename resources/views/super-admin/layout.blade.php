@@ -170,7 +170,7 @@
         </div>
     </main>
     @php
-        $saOkScreens = ['delivery-route', 'kyo-shin', 'rider-remit', 'office-salary', 'rider-salary', 'late-fine', 'welcome-promotion'];
+        $saOkScreens = ['delivery-route', 'kyo-shin', 'rider-remit', 'office-salary', 'rider-salary', 'late-fine'];
         $saOkMessage = (request()->routeIs('super-admin.screens.show') && in_array($saScreenKey, $saOkScreens, true))
             ? session('success')
             : null;

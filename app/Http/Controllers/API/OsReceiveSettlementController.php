@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\OsReceiveSettlement;
 use App\Services\OsReceiveSettlementService;
 use Illuminate\Http\Request;
-use InvalidArgumentException;
 
 class OsReceiveSettlementController extends Controller
 {
@@ -63,27 +62,6 @@ class OsReceiveSettlementController extends Controller
 
         return json_custom_response([
             'data' => app(OsReceiveSettlementService::class)->toApiArray($receive, $user),
-        ]);
-    }
-
-    public function payWithPoints(Request $request, int $id)
-    {
-        $user = auth()->user();
-        $receive = OsReceiveSettlement::query()->findOrFail($id);
-
-        if ((string) $user->user_type !== 'client' || (int) $receive->os_user_id !== (int) $user->id) {
-            return json_message_response(__('message.demo_permission_denied'), 403);
-        }
-
-        try {
-            $updated = app(OsReceiveSettlementService::class)->payWithPoints($receive, $user);
-        } catch (InvalidArgumentException|\RuntimeException $e) {
-            return json_message_response($e->getMessage(), 422);
-        }
-
-        return json_custom_response([
-            'message' => __('message.os_receive_paid_with_points'),
-            'data' => app(OsReceiveSettlementService::class)->toApiArray($updated, $user),
         ]);
     }
 

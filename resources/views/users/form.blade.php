@@ -44,7 +44,7 @@
 
                         @if(!isset($id))
                             <input type="hidden" name="created_by_admin" value="1">
-                            <input type="hidden" name="is_temp_password" value="1">
+                            <input type="hidden" name="is_temp_password" value="0">
                         @endif
 
                         <div class="pds-user-reg-footer">
@@ -74,7 +74,6 @@
 
             var formRules = {
                 name: { required: true },
-                username: { required: true, minlength: 3 },
                 phone: { required: true },
                 'os_profile[address_unit]': { required: true },
                 'os_profile[kpay_name]': { required: true },
@@ -113,7 +112,6 @@
                 rules: formRules,
                 messages: {
                     name: { required: "{{ __('message.please_enter_name') }}" },
-                    username: { required: "{{ __('message.please_enter_username') }}" },
                     phone: { required: "{{ __('message.please_enter_contact_number') }}" },
                     password: {
                         required: "{{ __('message.please_enter_password') }}",

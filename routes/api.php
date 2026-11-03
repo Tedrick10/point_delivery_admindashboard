@@ -117,7 +117,6 @@ Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function ()
     Route::get('os-receive/unsettled-summary', [API\OsReceiveSettlementController::class, 'unsettledSummary']);
     Route::get('os-receive/{id}', [API\OsReceiveSettlementController::class, 'show']);
     Route::post('os-receive/{id}/upload-payslip', [API\OsReceiveSettlementController::class, 'uploadPayslip']);
-    Route::post('os-receive/{id}/pay-with-points', [API\OsReceiveSettlementController::class, 'payWithPoints']);
 
     Route::get('user-list', [API\UserController::class, 'userList']);
     Route::get('reference-list', [API\ReferenceController::class, 'getList']);
@@ -360,12 +359,16 @@ Route::group(['middleware' => ['auth:sanctum', 'assign_user_role']], function ()
     Route::get('shop-products', [API\ShopShowcaseController::class, 'products']);
     Route::get('shop-product-detail/{id}', [API\ShopShowcaseController::class, 'productDetail']);
 
-    // Welcome Promotion
+    // Welcome Promotion — feature removed; keep endpoint as empty no-op for old app builds.
     Route::get('welcome-promotion-detail', function () {
-        $promo = \App\Models\WelcomePromotion::getActive();
-        $user = auth()->user();
-        $info = \App\Helpers\WelcomePromotionHelper::getDiscountForUser($user, 0);
-        return json_custom_response(['data' => array_merge($promo ? $promo->toArray() : [], $info)]);
+        return json_custom_response([
+            'data' => [
+                'eligible' => false,
+                'remaining' => 0,
+                'discount' => 0,
+                'status' => 0,
+            ],
+        ]);
     });
 
     // Admin create point account

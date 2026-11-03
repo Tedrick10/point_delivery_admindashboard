@@ -108,8 +108,8 @@ class HrOfficeSalaryRow extends Model
     }
 
     /**
-     * Office: Total လစာ = Basic + approved Point→Salary
-     * Rider:  Total လစာ = Way လစာ + approved Point→Salary
+     * Office: Total လစာ = Basic only (Bonus System is paid separately).
+     * Rider:  Total လစာ = Way လစာ only.
      */
     public function getTotalSalaryAttribute(): float
     {
@@ -117,7 +117,7 @@ class HrOfficeSalaryRow extends Model
             ? $this->way_pay
             : $this->basic_salary;
 
-        return round((float) $base + (float) ($this->point_salary_amount ?? 0), 2);
+        return round((float) $base, 2);
     }
 
     /**
@@ -135,7 +135,7 @@ class HrOfficeSalaryRow extends Model
     }
 
     /**
-     * နှုတ်ပြီးကျန်ငွေ = Total လစာ (Point ပေါင်းပြီး) − Total နှုတ်ငွေ
+     * နှုတ်ပြီးကျန်ငွေ = Total လစာ − Total နှုတ်ငွေ (Bonus မပါ)
      */
     public function getNetPayAttribute(): float
     {

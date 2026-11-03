@@ -163,7 +163,7 @@ class AppPushService
         );
     }
 
-    public function notifyOsAccountApproved(User $client, string $username, string $password): void
+    public function notifyOsAccountApproved(User $client, string $phone, string $password): void
     {
         if (($client->user_type ?? '') !== 'client') {
             return;
@@ -174,8 +174,10 @@ class AppPushService
             self::TYPE_OS_APPROVED,
             trans('message.push_os_approved_title', [], 'my'),
             trans('message.push_os_approved_body', [
-                'username' => $username,
+                'phone' => $phone,
                 'password' => $password,
+                // Legacy placeholder if an old translation still uses :username.
+                'username' => $phone,
             ], 'my'),
             [
                 'id' => 'OS_'.$client->id,
@@ -183,7 +185,8 @@ class AppPushService
                 'item_id' => '',
                 'screen' => 'login',
                 'app' => 'os',
-                'username' => $username,
+                'phone' => $phone,
+                'username' => $phone,
             ]
         );
     }

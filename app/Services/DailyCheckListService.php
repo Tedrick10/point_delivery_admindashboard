@@ -41,8 +41,8 @@ class DailyCheckListService
         $rows = collect();
         $pendingGroups = [];
 
-        // Rider invoices follow rider home branch; OS invoices follow parcel destination
-        // (same as ငွေရှင်းတမ်း) so Other City / Yangon deliveries leave the MDY tab.
+        // Rider + OS Daily Check tabs follow the remitting hub (rider home branch) so
+        // OS / Summary totals match Rider when destination differs (e.g. MDY→TGY).
         if (in_array(DailyCheckInvoice::PARTY_RIDER, $modes, true)) {
             $this->repairRiderInvoiceBranches($fromDay, $toDay);
         }
@@ -55,11 +55,12 @@ class DailyCheckListService
             $itemBranchId = $partyType === DailyCheckInvoice::PARTY_OS ? null : $branchId;
             $items = $this->baseItemsQuery($fromDay, $toDay, $itemBranchId, $partyType)
                 ->when($partyType === DailyCheckInvoice::PARTY_OS, function ($q) {
-                    // OS only after Finish (admin_finished_at). No-fee Os Return stays off Daily Check.
-                    // Do not filter by order.client_id here — photo/Viber parcels often store the
+                    // Match Rider sheet: completed + admin_completed_at (baseItemsQuery) is enough.
+                    // Requiring Finish (admin_finished_at) left remitted parcels off OS/Summary
+                    // while Rider already counted them (e.g. 16-10-2026 MDY: 994,000 vs 996,500).
+                    // Do not filter by order.client_id — photo/Viber parcels often store the
                     // uploader as client_id while pickup_point is the real Online Shop.
                     $q->where('status', 'completed');
-                    $q->whereNotNull('admin_finished_at');
                     $q->whereHas('order');
                 })
                 ->when($partyType === DailyCheckInvoice::PARTY_RIDER, function ($q) use ($riderId) {
@@ -105,7 +106,7 @@ class DailyCheckListService
                 $displayItems = $groupItems;
                 if ($partyType === DailyCheckInvoice::PARTY_OS && $branchId !== null && $branchId > 0) {
                     $displayItems = $groupItems
-                        ->filter(static fn (DispatchOrderItem $item) => osSettlementBranchIdForItem($item) === (int) $branchId)
+                        ->filter(static fn (DispatchOrderItem $item) => dailyCheckOsBranchIdForItem($item) === (int) $branchId)
                         ->values();
                     if ($displayItems->isEmpty()) {
                         continue;
@@ -143,9 +144,9 @@ class DailyCheckListService
             $branchId = $riderBranch ? (int) $riderBranch : null;
         }
         if ($partyType === DailyCheckInvoice::PARTY_OS && $items && $items->isNotEmpty()) {
-            // OS sheet tab = parcel destination majority (to, else from) — matches ငွေရှင်းတမ်း.
+            // OS sheet tab = remitting rider hub majority (fallback destination).
             $branchId = $items
-                ->map(static fn (DispatchOrderItem $i) => osSettlementBranchIdForItem($i))
+                ->map(static fn (DispatchOrderItem $i) => dailyCheckOsBranchIdForItem($i))
                 ->filter(static fn ($id) => (int) $id > 0)
                 ->countBy()
                 ->sortDesc()
@@ -158,7 +159,7 @@ class DailyCheckListService
         }
         if ($branchId === null && $items && $items->isNotEmpty()) {
             $branchId = $items
-                ->map(static fn (DispatchOrderItem $i) => osSettlementBranchIdForItem($i))
+                ->map(static fn (DispatchOrderItem $i) => dailyCheckOsBranchIdForItem($i))
                 ->filter(static fn ($id) => (int) $id > 0)
                 ->countBy()
                 ->sortDesc()
@@ -218,7 +219,6 @@ class DailyCheckListService
             ->whereIn('id', $ids)
             ->when($invoice->isOs(), function ($q) {
                 $q->whereIn('status', ['completed', 'return']);
-                $q->whereNotNull('admin_finished_at');
             })
             ->get()
             ->sortBy(fn ($item) => array_search((int) $item->id, array_map('intval', $ids), true) ?: 9999)
@@ -399,7 +399,7 @@ class DailyCheckListService
     }
 
     /**
-     * Align stored OS invoice branch_id with parcel destination majority.
+     * Align stored OS invoice branch_id with remitting rider hub majority.
      */
     protected function repairOsInvoiceBranches(string $fromDay, string $toDay): void
     {
@@ -415,8 +415,9 @@ class DailyCheckListService
                     ->values()
                     ->all();
                 $destByItem = DispatchOrderItem::query()
+                    ->with(['deliveryMan:id,branch_id'])
                     ->whereIn('id', $allIds ?: [0])
-                    ->get(['id', 'to_branch_id', 'from_branch_id'])
+                    ->get(['id', 'to_branch_id', 'from_branch_id', 'delivery_man_id'])
                     ->keyBy('id');
 
                 foreach ($invoices as $invoice) {
@@ -427,7 +428,7 @@ class DailyCheckListService
                                 return 0;
                             }
 
-                            return osSettlementBranchIdForItem($item);
+                            return dailyCheckOsBranchIdForItem($item);
                         })
                         ->filter(static fn ($id) => (int) $id > 0)
                         ->countBy()
@@ -481,9 +482,9 @@ class DailyCheckListService
     public function osDestinationTabCounts(string $fromDay, string $toDay): Collection
     {
         $items = $this->baseItemsQuery($fromDay, $toDay, null, DailyCheckInvoice::PARTY_OS)
-            ->whereNotNull('admin_finished_at')
+            ->where('status', 'completed')
             ->whereHas('order')
-            ->with(['order'])
+            ->with(['order', 'deliveryMan:id,branch_id'])
             ->get();
 
         $buckets = [];
@@ -491,7 +492,7 @@ class DailyCheckListService
             if (! dailyCheckListItemInPeriod($item, $fromDay, $toDay)) {
                 continue;
             }
-            $dest = osSettlementBranchIdForItem($item);
+            $dest = dailyCheckOsBranchIdForItem($item);
             if ($dest <= 0) {
                 continue;
             }
@@ -513,7 +514,6 @@ class DailyCheckListService
         $items = $this->baseItemsQuery($day, $day, null)
             ->when($invoice->isOs(), function ($q) {
                 $q->where('status', 'completed');
-                $q->whereNotNull('admin_finished_at');
                 $q->whereHas('order');
             })
             ->when($invoice->isRider(), function ($q) use ($invoice) {
@@ -530,7 +530,7 @@ class DailyCheckListService
                         return false;
                     }
                     $invBranch = (int) ($invoice->branch_id ?? 0);
-                    if ($invBranch > 0 && osSettlementBranchIdForItem($item) !== $invBranch) {
+                    if ($invBranch > 0 && dailyCheckOsBranchIdForItem($item) !== $invBranch) {
                         return false;
                     }
 

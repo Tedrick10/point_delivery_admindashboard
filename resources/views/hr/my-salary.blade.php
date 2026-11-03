@@ -11,7 +11,7 @@
             </div>
             <div class="pds-hr-hero__stats">
                 <div class="pds-hr-stat{{ ((float) ($salary['net_pay'] ?? 0)) < 0 ? ' pds-hr-stat--danger' : '' }}">
-                    <span class="pds-hr-stat__value">{{ number_format((float) ($salary['net_pay'] ?? 0)) }}</span>
+                    <span class="pds-hr-stat__value">{{ number_format((float) ($salary['net_pay'] ?? 0)) }} MMK</span>
                     <span class="pds-hr-stat__label">{{ __('message.hr_net_pay') }}</span>
                 </div>
                 <div class="pds-hr-stat pds-hr-stat--soft">
@@ -37,15 +37,15 @@
             <div class="pds-hr-summary">
                 <div class="pds-hr-summary__card">
                     <span class="pds-hr-summary__label">{{ __('message.hr_total_salary') }}</span>
-                    <span class="pds-hr-summary__value">{{ number_format($salary['total_salary']) }}</span>
+                    <span class="pds-hr-summary__value">{{ number_format($salary['total_salary']) }} MMK</span>
                 </div>
                 <div class="pds-hr-summary__card pds-hr-summary__card--danger">
                     <span class="pds-hr-summary__label">{{ __('message.hr_total_deduction') }}</span>
-                    <span class="pds-hr-summary__value">{{ number_format($salary['total_deduction']) }}</span>
+                    <span class="pds-hr-summary__value">{{ number_format($salary['total_deduction']) }} MMK</span>
                 </div>
                 <div class="pds-hr-summary__card {{ ((float) $salary['net_pay']) < 0 ? 'pds-hr-summary__card--danger' : 'pds-hr-summary__card--success' }}">
                     <span class="pds-hr-summary__label">{{ __('message.hr_net_pay') }}</span>
-                    <span class="pds-hr-summary__value">{{ number_format($salary['net_pay']) }}</span>
+                    <span class="pds-hr-summary__value">{{ number_format($salary['net_pay']) }} MMK</span>
                 </div>
             </div>
 
@@ -63,7 +63,7 @@
                     @else
                         <div class="pds-hr-my-salary__item">
                             <span>{{ __('message.hr_monthly_salary') }}</span>
-                            <strong>{{ number_format((float) $salary['basic_salary'] + (float) ($salary['point_salary_amount'] ?? 0)) }}</strong>
+                            <strong>{{ number_format((float) $salary['basic_salary']) }} MMK</strong>
                         </div>
                         <div class="pds-hr-my-salary__item">
                             <span>{{ __('message.hr_day_rate') }}</span>
@@ -101,7 +101,7 @@
                     </div>
                     <button type="button" class="pds-hr-my-salary__item pds-hr-my-salary__item--point js-pds-point-open" id="pdsPointOpenBtn">
                         <span>{{ __('message.point_balance') }}</span>
-                        <strong>{{ number_format((float) ($pointBalance ?? 0), 0) }}</strong>
+                        <strong>{{ number_format((float) ($pointBalance ?? 0), 0) }} MMK</strong>
                     </button>
                 </div>
             </div>
@@ -120,6 +120,11 @@
                             @php
                                 $st = (string) $req->status;
                                 $tag = $st === 'approved' ? 'ok' : ($st === 'rejected' ? 'no' : 'wait');
+                                $statusLabel = match ($st) {
+                                    'approved' => __('message.point_status_confirmed'),
+                                    'rejected' => __('message.point_status_rejected'),
+                                    default => __('message.point_status_pending'),
+                                };
                             @endphp
                             <article class="pds-point-reqs__card pds-point-reqs__card--{{ $tag }}">
                                 <div class="pds-point-reqs__icon" aria-hidden="true">
@@ -127,20 +132,13 @@
                                 </div>
                                 <div class="pds-point-reqs__body">
                                     <div class="pds-point-reqs__line">
-                                        <strong>+{{ number_format((float) $req->points, 0) }}</strong>
-                                        <span class="pds-point-reqs__unit">pts</span>
-                                        <span class="pds-point-reqs__tag pds-point-reqs__tag--{{ $tag }}">{{ ucfirst($st) }}</span>
+                                        <strong>{{ number_format((float) $req->amount, 0) }}</strong>
+                                        <span class="pds-point-reqs__unit">MMK</span>
+                                        <span class="pds-point-reqs__tag pds-point-reqs__tag--{{ $tag }}">{{ $statusLabel }}</span>
                                     </div>
                                     <div class="pds-point-reqs__meta">
-                                        <span>{{ number_format((float) $req->amount, 0) }} MMK</span>
                                         <span>{{ optional($req->created_at)->format('d M Y · H:i') }}</span>
                                     </div>
-                                    @if(filled($req->remark))
-                                        <p class="pds-point-reqs__note">
-                                            <i class="fas fa-quote-left" aria-hidden="true"></i>
-                                            <span>{{ $req->remark }}</span>
-                                        </p>
-                                    @endif
                                 </div>
                             </article>
                         @endforeach
@@ -162,7 +160,7 @@
                         <h5 id="pdsPointModalTitle">{{ __('message.point_request_on_salary') }}</h5>
                         <div class="pds-point-modal__bal">
                             <span>{{ __('message.point_balance') }}</span>
-                            <strong>{{ number_format((float) ($pointBalance ?? 0), 0) }} <small>pts</small></strong>
+                            <strong>{{ number_format((float) ($pointBalance ?? 0), 0) }} <small>MMK</small></strong>
                         </div>
                     </div>
 
@@ -170,11 +168,7 @@
                         <input type="hidden" name="month" value="{{ $monthValue }}">
                         <label class="pds-point-modal__field">
                             <span>{{ __('message.point_amount') }}</span>
-                            <input type="number" name="points" id="pdsPointAmount" min="1" step="1" required inputmode="numeric" placeholder="0" value="">
-                        </label>
-                        <label class="pds-point-modal__field">
-                            <span>{{ __('message.remark') }}</span>
-                            <input type="text" name="remark" placeholder="Optional">
+                            <input type="number" name="points" id="pdsPointAmount" min="1" step="1" required inputmode="numeric" placeholder="0 MMK" value="">
                         </label>
                         <button type="submit" class="pds-point-modal__submit">
                             {{ __('message.point_request_on_salary') }}

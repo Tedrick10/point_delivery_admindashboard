@@ -42,17 +42,10 @@
                                         @enderror
                                     </div>
 
-                                    <div class="form-group col-md-6">
-                                        {{ html()->label(__('message.username').' <span class="text-danger">*</span>', 'username')->class('form-control-label') }}
-                                        {{ html()->text('username', isset($id) ? optional($data)->username : old('username'))
-                                            ->placeholder(__('message.username'))
-                                            ->class('form-control')
-                                            ->required()
-                                            ->when(isset($id), fn($field) => $field->attribute('readonly', 'readonly')) }}
-                                        @error('username')
-                                            <span class="help-block error">{{ $message }}</span>
-                                        @enderror
-                                    </div>
+                                    {{-- Username removed: Rider logs in with phone (contact_number). --}}
+                                    @if(isset($id) && optional($data)->username)
+                                        {{ html()->hidden('username', optional($data)->username) }}
+                                    @endif
 
                                     <div class="form-group col-md-6">
                                         @if(isset($id))
@@ -116,8 +109,12 @@
                                         {{ html()->text('contact_number', isset($id) ? optional($data)->contact_number : old('contact_number'))
                                             ->placeholder(__('message.contact_number'))
                                             ->class('form-control')
-                                            ->required()
-                                            ->attribute('id', 'phone') }}
+                                            ->attribute('id', 'phone')
+                                            ->when(isset($id), fn ($field) => $field->attribute('readonly', 'readonly')->attribute('tabindex', '-1'))
+                                            ->when(!isset($id), fn ($field) => $field->required()) }}
+                                        @if(isset($id))
+                                            <small class="form-text text-muted">{{ __('message.phone_not_editable') }}</small>
+                                        @endif
                                         @error('contact_number')
                                             <span class="help-block error">{{ $message }}</span>
                                         @enderror

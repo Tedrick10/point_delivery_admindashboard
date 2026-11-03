@@ -61,6 +61,8 @@ class DispatchOrderItem extends Model
         'pickup_pay_mode',
         'cust_get',
         'os_to_pay',
+        'os_paid',
+        'os_pay_point_note',
         'gate_amount',
         'gate_os_paid',
         'point_amount',

@@ -395,6 +395,7 @@ Route::group(['middleware' => ['auth', 'verified', 'assign_user_role', 'redirect
     Route::post('dispatch-os-list/{osId}/upload-kpay-slip', [OrderController::class, 'dispatchOsSettlementUploadKpay'])->name('order.dispatch.os-upload-kpay');
     Route::post('dispatch-os-list/{osId}/remove-kpay-slip', [OrderController::class, 'dispatchOsSettlementRemoveKpay'])->name('order.dispatch.os-remove-kpay');
     Route::post('dispatch-os-list/{osId}/finish', [OrderController::class, 'dispatchOsSettlementFinish'])->name('order.dispatch.os-finish');
+    Route::post('dispatch-os-list/{osId}/settle-os-pay-points', [OrderController::class, 'dispatchOsSettleOsPayWithPoints'])->name('order.dispatch.os-settle-os-pay-points');
     Route::post('dispatch-os-list/finish-all', [OrderController::class, 'dispatchOsSettlementFinishAll'])->name('order.dispatch.os-finish-all');
     Route::post('dispatch-os-list/admin-kpay-accounts', [OrderController::class, 'dispatchOsAdminKpayStore'])->name('order.dispatch.os-admin-kpay.store');
     Route::post('dispatch-os-list/admin-kpay-accounts/clear', [OrderController::class, 'dispatchOsAdminKpayClear'])->name('order.dispatch.os-admin-kpay.clear');
@@ -757,10 +758,6 @@ Route::prefix('super-admin')->name('super-admin.')->group(function () {
         Route::post('roles-permissions/permissions/toggle', [RolesPermissionsController::class, 'togglePermission'])->name('roles-permissions.toggle-permission');
         Route::delete('roles-permissions/roles/{id}', [RolesPermissionsController::class, 'destroyRole'])->name('roles-permissions.destroy-role');
         Route::post('expense-summary/confirm', [ExpenseSummaryController::class, 'confirm'])->name('expense-summary.confirm');
-        Route::post('welcome-promotion/settings', [\App\Http\Controllers\SuperAdmin\WelcomePromotionController::class, 'updateSettings'])
-            ->name('welcome-promotion.settings');
-        Route::put('welcome-promotion/shops/{id}', [\App\Http\Controllers\SuperAdmin\WelcomePromotionController::class, 'updateShop'])
-            ->name('welcome-promotion.shop');
         Route::post('system-settings/general', [\App\Http\Controllers\SuperAdmin\SystemSettingsController::class, 'updateGeneral'])
             ->name('system-settings.general');
         Route::post('system-settings/api-server', [\App\Http\Controllers\SuperAdmin\SystemSettingsController::class, 'updateApiServer'])

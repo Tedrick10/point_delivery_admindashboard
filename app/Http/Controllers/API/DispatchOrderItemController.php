@@ -990,7 +990,9 @@ class DispatchOrderItemController extends Controller
 
     /**
      * Rider Daily Tracking — this rider's ways that moved Delivered → Completed.
-     * No dates = all. Optional from_date / to_date filters by Completed day (Yangon).
+     * No dates = all. Optional from_date / to_date use Daily Check sheet day
+     * (rider_remit_date / 10:00 Yangon), so deliver day 1 + remit day 2 still
+     * shows under day 1.
      */
     public function listDailyTracking(Request $request)
     {
@@ -1019,32 +1021,67 @@ class DispatchOrderItemController extends Controller
             ->where('status', 'completed')
             ->whereNotNull('delivered_at')
             ->whereNotNull('admin_completed_at')
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man', 'kyoShinItem'])
-            ->orderByDesc('admin_completed_at')
-            ->orderByDesc('id');
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man', 'kyoShinItem']);
 
         if ($hasDateFilter) {
-            $start = Carbon::parse($fromDay, 'Asia/Yangon')->startOfDay()->utc();
-            $end = Carbon::parse($toDay, 'Asia/Yangon')->endOfDay()->utc();
-            $query->where('admin_completed_at', '>=', $start)
-                ->where('admin_completed_at', '<=', $end);
+            // Same fetch window as Daily Check / Rider Completed list.
+            $boundsStart = dailyCheckListDayBounds($fromDay)['start'];
+            $boundsEnd = dailyCheckListDayBounds($toDay)['end'];
+            $query->where(function ($q) use ($fromDay, $toDay, $boundsStart, $boundsEnd) {
+                $q->where(function ($byCompleted) use ($boundsStart, $boundsEnd) {
+                    $byCompleted->where('admin_completed_at', '>=', $boundsStart)
+                        ->where('admin_completed_at', '<', $boundsEnd);
+                })->orWhere(function ($byRemit) use ($fromDay, $toDay) {
+                    $byRemit->whereNotNull('rider_remit_date')
+                        ->whereDate('rider_remit_date', '>=', $fromDay)
+                        ->whereDate('rider_remit_date', '<=', $toDay);
+                });
+            });
         }
+
+        $rows = $query
+            ->orderByDesc('rider_remit_date')
+            ->orderByDesc('admin_completed_at')
+            ->orderByDesc('id')
+            ->get();
+
+        if ($hasDateFilter) {
+            $rows = $rows
+                ->filter(fn (DispatchOrderItem $item) => dailyCheckListItemInPeriod($item, $fromDay, $toDay))
+                ->values();
+        }
+
+        $rows = $rows
+            ->sortByDesc(function (DispatchOrderItem $item) {
+                return dailyCheckListDateForItem($item)->format('Y-m-d').'|'.str_pad((string) $item->id, 12, '0', STR_PAD_LEFT);
+            })
+            ->values();
 
         $perPage = config('constant.PER_PAGE_LIMIT', 20);
         if ($request->filled('per_page') && is_numeric($request->per_page)) {
             $perPage = (int) $request->per_page;
         }
         if ((int) $request->get('per_page') === -1) {
-            $perPage = max(1, (clone $query)->count());
+            $perPage = max(1, $rows->count());
         }
-
-        $page = $query->paginate($perPage);
-        $items = DispatchOrderItemResource::collection($page);
+        $pageNum = max(1, (int) $request->get('page', 1));
+        $total = $rows->count();
+        $lastPage = max(1, (int) ceil($total / max(1, $perPage)));
+        if ($pageNum > $lastPage) {
+            $pageNum = $lastPage;
+        }
+        $slice = $rows->forPage($pageNum, $perPage)->values();
+        $items = DispatchOrderItemResource::collection($slice);
 
         return json_custom_response([
-            'pagination' => json_pagination_response($items),
+            'pagination' => [
+                'total_items' => $total,
+                'per_page' => $perPage,
+                'currentPage' => $pageNum,
+                'totalPages' => $lastPage,
+            ],
             'data' => $items,
-            'total' => $page->total(),
+            'total' => $total,
             'from_date' => $fromDay,
             'to_date' => $toDay,
         ]);
@@ -1483,9 +1520,8 @@ class DispatchOrderItemController extends Controller
         if (in_array($toStatus, ['courier_assigned', 'courier_departed', 'pending'], true)) {
             $fill['delivery_locked'] = false;
         }
-        if ($toStatus === 'pending' && $remark !== null && $remark !== '') {
-            $fill['remark'] = $remark;
-        }
+        // Pending note goes only to dispatch_item_pending_remarks — do not overwrite
+        // admin/item remark (shown in App View / Rider App alongside Pending Remarks).
 
         // Any transition to Delivered is final — lock so status cannot change again.
         if ($toStatus === 'completed') {

@@ -70,7 +70,7 @@
         [
             'key' => 'people',
             'label' => __('message.sa_nav_people'),
-            'keys' => ['account-creation', 'roles-permissions', 'office-salary', 'rider-salary', 'late-fine', 'welcome-promotion'],
+            'keys' => ['account-creation', 'roles-permissions', 'office-salary', 'rider-salary', 'late-fine'],
         ],
         [
             'key' => 'settings',

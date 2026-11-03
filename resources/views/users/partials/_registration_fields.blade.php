@@ -30,18 +30,57 @@
 <div class="pds-user-reg-form">
     <div class="pds-user-reg-section">
         <h6 class="pds-user-reg-section__title">
+            <i class="fas fa-user"></i>
+            <span>{{ __('message.reg_section_personal') }}</span>
+        </h6>
+        <div class="pds-dispatch-grid pds-dispatch-grid-2">
+            <div class="pds-dispatch-field">
+                <label for="reg_name">{{ __('message.reg_os_name') }} <span class="text-danger">*</span></label>
+                <input type="text" name="name" id="reg_name" class="pds-dispatch-input"
+                       placeholder="{{ __('message.reg_placeholder_os_name') }}"
+                       value="{{ old('name', optional($data ?? null)->name) }}" required>
+            </div>
+
+            <div class="pds-dispatch-field">
+                <label for="phone">{{ __('message.phone') }} <span class="text-danger">*</span></label>
+                <div class="pds-phone-field">
+                    <input type="tel"
+                           id="phone"
+                           name="phone"
+                           class="pds-dispatch-input"
+                           data-user-reg-phone="1"
+                           placeholder="{{ __('message.reg_placeholder_phone') }}"
+                           value="{{ $phoneNational }}"
+                           @if($isEdit) readonly tabindex="-1" @else required @endif>
+                </div>
+                {{-- Edit/create store local 09… format (no +95). Phone is immutable after create. --}}
+                <input type="hidden"
+                       name="contact_number"
+                       id="contact_number_hidden"
+                       value="{{ $phoneStored }}"
+                       data-os-create-phone="1">
+                @if($isEdit)
+                    <small class="pds-field-hint">{{ __('message.phone_not_editable') }}</small>
+                @else
+                    <small class="pds-field-hint">{{ __('message.phone_country_hint') }}</small>
+                @endif
+                @error('contact_number')
+                    <span class="help-block error">{{ $message }}</span>
+                @enderror
+            </div>
+        </div>
+    </div>
+
+    <div class="pds-user-reg-section">
+        <h6 class="pds-user-reg-section__title">
             <i class="fas fa-lock"></i>
             <span>{{ __('message.reg_section_account') }}</span>
         </h6>
         <div class="pds-dispatch-grid pds-dispatch-grid-2">
-            <div class="pds-dispatch-field pds-dispatch-field--full">
-                <label for="reg_username">{{ __('message.username') }} <span class="text-danger">*</span></label>
-                <input type="text" name="username" id="reg_username" class="pds-dispatch-input"
-                       placeholder="{{ __('message.reg_placeholder_username') }}"
-                       value="{{ $usernameValue }}"
-                       autocomplete="username"
-                       @if($isEdit) readonly tabindex="-1" @else required @endif>
-            </div>
+            {{-- Username removed: login id is phone (contact_number). Server still stores a phone-based username for DB uniqueness. --}}
+            @if($isEdit && $usernameValue !== '')
+                <input type="hidden" name="username" value="{{ $usernameValue }}">
+            @endif
 
             @if($isEdit)
             @php $currentLoginPassword = osLoginPasswordFromProfile($data ?? null); @endphp
@@ -103,45 +142,6 @@
                 </div>
             </div>
             @endif
-        </div>
-    </div>
-
-    <div class="pds-user-reg-section">
-        <h6 class="pds-user-reg-section__title">
-            <i class="fas fa-user"></i>
-            <span>{{ __('message.reg_section_personal') }}</span>
-        </h6>
-        <div class="pds-dispatch-grid pds-dispatch-grid-2">
-            <div class="pds-dispatch-field">
-                <label for="reg_name">{{ __('message.reg_os_name') }} <span class="text-danger">*</span></label>
-                <input type="text" name="name" id="reg_name" class="pds-dispatch-input"
-                       placeholder="{{ __('message.reg_placeholder_os_name') }}"
-                       value="{{ old('name', optional($data ?? null)->name) }}" required>
-            </div>
-
-            <div class="pds-dispatch-field">
-                <label for="phone">{{ __('message.phone') }} <span class="text-danger">*</span></label>
-                <div class="pds-phone-field">
-                    <input type="tel"
-                           id="phone"
-                           name="phone"
-                           class="pds-dispatch-input"
-                           data-user-reg-phone="1"
-                           placeholder="{{ __('message.reg_placeholder_phone') }}"
-                           value="{{ $phoneNational }}"
-                           required>
-                </div>
-                {{-- Edit/create store local 09… format (no +95). --}}
-                <input type="hidden"
-                       name="contact_number"
-                       id="contact_number_hidden"
-                       value="{{ $phoneStored }}"
-                       data-os-create-phone="1">
-                <small class="pds-field-hint">{{ __('message.phone_country_hint') }}</small>
-                @error('contact_number')
-                    <span class="help-block error">{{ $message }}</span>
-                @enderror
-            </div>
         </div>
     </div>
 

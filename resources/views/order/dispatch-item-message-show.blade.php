@@ -5,6 +5,8 @@
     $metaLine = trim($parcelLabel.' · '.($item->customer_phone ?: ''));
     $riderName = optional($item->deliveryMan)->name;
     $canEditInfo = !empty($canEditInfo);
+    $routeOrderId = (int) ($order?->id ?? $item->order_id ?? 0);
+    $hasLiveOrder = $order && ! $order->trashed();
 @endphp
 <x-master-layout>
     <div class="container-fluid pds-page-wrap pds-motion-enter pds-support-page">
@@ -16,13 +18,15 @@
                         <p class="pds-support-page-subtitle mb-0">{{ $metaLine !== '' ? $metaLine : $parcelLabel }}</p>
                     </div>
                     <div class="pds-support-page-actions">
-                        <a href="{{ route('order.dispatch.item.rider-preview', [$order->id, $item->id]) }}"
-                           class="btn btn-sm btn-outline-primary loadRemoteModel pds-support-page-action"
-                           title="{{ __('message.rider_app_view') }}">
-                            <i class="fas fa-eye"></i>
-                        </a>
-                        @if($canEditInfo)
-                            <a href="{{ route('order.dispatch.item.edit', [$order->id, $item->id]) }}"
+                        @if($routeOrderId > 0)
+                            <a href="{{ route('order.dispatch.item.rider-preview', [$routeOrderId, $item->id]) }}"
+                               class="btn btn-sm btn-outline-primary loadRemoteModel pds-support-page-action"
+                               title="{{ __('message.rider_app_view') }}">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        @endif
+                        @if($canEditInfo && $hasLiveOrder)
+                            <a href="{{ route('order.dispatch.item.edit', [$routeOrderId, $item->id]) }}"
                                class="btn btn-sm btn-outline-primary loadRemoteModel pds-support-page-action"
                                title="{{ __('message.edit') }}">
                                 <i class="fas fa-pen"></i>
@@ -125,7 +129,7 @@
                                 </button>
                             </div>
 
-                            {{ html()->form('POST', route('order.dispatch.item.messages.store', [$order->id, $item->id]))->id('supportChatForm')->class('pds-messenger-composer pds-support-composer')->attribute('enctype', 'multipart/form-data')->open() }}
+                            {{ html()->form('POST', route('order.dispatch.item.messages.store', [$routeOrderId ?: 0, $item->id]))->id('supportChatForm')->class('pds-messenger-composer pds-support-composer')->attribute('enctype', 'multipart/form-data')->open() }}
                                 <input type="hidden" name="message_type" id="supportChatMessageType" value="text">
                                 <input type="file" name="chat_image" id="supportChatImage" accept="image/*,.gif,.webp" class="d-none">
                                 <input type="file" name="chat_media" id="supportChatAudio" accept="audio/*,.m4a,.mp3,.aac,.ogg,.wav,.webm" class="d-none">
@@ -192,7 +196,7 @@
                     if ($customerPhone === '') {
                         $customerPhone = null;
                     }
-                    $orderStatus = preg_replace('/[^a-z0-9_-]+/', '-', strtolower((string) ($order->status ?? 'open'))) ?: 'open';
+                    $orderStatus = preg_replace('/[^a-z0-9_-]+/', '-', strtolower((string) ($order?->status ?? $item->status ?? 'open'))) ?: 'open';
                 @endphp
                 <aside class="card pds-page-card pds-support-detail-card">
                     <div class="pds-support-detail-hero">
@@ -207,7 +211,7 @@
                                      class="pds-support-detail-avatar">
                             </div>
                             <div class="pds-support-detail-profile-copy">
-                                @if(optional($order->client)->id)
+                                @if(optional($order?->client)->id)
                                     <a href="{{ route('users.show', $order->client->id) }}" class="pds-support-detail-name">{{ $osName ?: $order->client->name }}</a>
                                 @else
                                     <span class="pds-support-detail-name">{{ $osName ?: ($item->customer_name ?: '-') }}</span>
@@ -227,7 +231,13 @@
                                 <div class="pds-support-detail-meta-copy">
                                     <span class="pds-support-detail-label">{{ __('message.order_id') }}</span>
                                     <span class="pds-support-detail-value">
-                                        <a href="{{ route('order.show', $order->id) }}" class="pds-support-order-link">#{{ $order->id }}</a>
+                                        @if($hasLiveOrder)
+                                            <a href="{{ route('order.show', $order->id) }}" class="pds-support-order-link">#{{ $order->id }}</a>
+                                        @elseif($routeOrderId > 0)
+                                            #{{ $routeOrderId }}
+                                        @else
+                                            {{ $parcelLabel }}
+                                        @endif
                                     </span>
                                 </div>
                             </div>
@@ -262,7 +272,7 @@
                                 <span class="pds-support-detail-meta-icon"><i class="far fa-calendar-alt"></i></span>
                                 <div class="pds-support-detail-meta-copy">
                                     <span class="pds-support-detail-label">{{ __('message.created_at') }}</span>
-                                    <span class="pds-support-detail-value">{{ dateAgoFormate($item->created_at ?? $order->created_at, true) }}</span>
+                                    <span class="pds-support-detail-value">{{ dateAgoFormate($item->created_at ?? $order?->created_at, true) }}</span>
                                 </div>
                             </div>
                         </div>
@@ -284,7 +294,7 @@
                                     <li>Confirm parcel details before closing</li>
                                 </ul>
                             </div>
-                            @if(optional($order->client)->id)
+                            @if(optional($order?->client)->id)
                                 <a href="{{ route('users.show', $order->client->id) }}" class="pds-support-detail-cta">
                                     <i class="fas fa-user"></i> View OS profile
                                 </a>
@@ -310,7 +320,7 @@
             }
 
             withJquery(function ($) {
-            const orderId = {{ (int) $order->id }};
+            const orderId = {{ (int) $routeOrderId }};
             const itemId = {{ (int) $item->id }};
             const chatBody = document.getElementById('support-chat-body');
             const chatForm = document.getElementById('supportChatForm');
@@ -335,7 +345,7 @@
             const voiceCancel = document.getElementById('supportChatVoiceCancel');
             const voiceSend = document.getElementById('supportChatVoiceSend');
             const composerInner = document.getElementById('supportChatComposerInner');
-            const chatMessagesUrl = @json(route('order.dispatch.item.messages', [$order->id, $item->id]));
+            const chatMessagesUrl = @json(route('order.dispatch.item.messages', [$routeOrderId ?: 0, $item->id]));
             const defaultAvatar = @json($osAvatar);
             const csrfToken = @json(csrf_token());
             const initialMessages = @json($initialChatMessages);

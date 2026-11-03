@@ -260,9 +260,17 @@ class DeliverymanController extends Controller
         $is_document_verification = registrationSettingValue('driver_registration_setting', 'document_verification');
 
         $request['password'] = bcrypt($request->password);
-        $request['username'] = $request->username ?? stristr($request->email, "@", true) . rand(100, 1000);
+        $contactForUser = normalizeContactNumber((string) $request->input('contact_number', ''));
+        $username = sanitizeRegistrationUsername((string) ($request->username ?? ''));
+        if ($username === '') {
+            $username = ensureUniqueClientUsername(
+                registrationUsernameFromPhone($contactForUser !== '' ? $contactForUser : (string) $request->input('contact_number', '')),
+                $contactForUser !== '' ? $contactForUser : (string) $request->input('contact_number', '')
+            );
+        }
+        $request['username'] = $username;
         if (! filled($request->email)) {
-            $base = preg_replace('/[^a-zA-Z0-9._-]/', '', (string) $request->username) ?: ('rider' . rand(1000, 9999));
+            $base = preg_replace('/[^a-zA-Z0-9._-]/', '', (string) $username) ?: ('rider' . rand(1000, 9999));
             $request['email'] = strtolower($base) . rand(10, 99) . '@demo.local';
         }
         $request['display_name'] = $request['name'];
@@ -449,11 +457,19 @@ class DeliverymanController extends Controller
         $request->validate([
             'branch_id' => 'required|exists:branches,id',
             'name' => 'required|string|max:255',
-            'contact_number' => 'nullable|string|max:30',
             'password' => 'nullable|string|min:6|confirmed',
         ]);
 
-        $payload = $request->except(['password', 'password_confirmation', 'email', 'username', 'user_type']);
+        // Phone is immutable after create (login id).
+        $payload = $request->except([
+            'password',
+            'password_confirmation',
+            'email',
+            'username',
+            'user_type',
+            'contact_number',
+            'phone',
+        ]);
         if ($request->filled('password')) {
             $payload['password'] = bcrypt($request->password);
             $payload['is_temp_password'] = 0;
@@ -476,6 +492,7 @@ class DeliverymanController extends Controller
 
     /**
      * Inline update rider contact number from Rider List table.
+     * Disabled — phone is the login id and cannot change after create.
      */
     public function updateContactNumber(Request $request, $id)
     {
@@ -483,47 +500,10 @@ class DeliverymanController extends Controller
             return response()->json(['message' => __('message.demo_permission_denied')], 403);
         }
 
-        if (env('APP_DEMO')) {
-            return response()->json(['message' => __('message.demo_permission_denied')], 403);
-        }
-
-        $deliveryman = User::where('user_type', 'delivery_man')->findOrFail($id);
-
-        $request->validate([
-            'contact_number' => [
-                'required',
-                'max:20',
-                function ($attribute, $value, $fail) use ($deliveryman) {
-                    $variants = contactNumberLookupVariants((string) $value);
-                    if ($variants === []) {
-                        return;
-                    }
-                    $exists = User::query()
-                        ->where('user_type', 'delivery_man')
-                        ->whereNull('deleted_at')
-                        ->where('id', '!=', $deliveryman->id)
-                        ->whereIn('contact_number', $variants)
-                        ->exists();
-                    if ($exists) {
-                        $fail(__('message.contact_number_already_taken'));
-                    }
-                },
-            ],
-        ], [
-            'contact_number.unique' => __('message.contact_number_already_taken'),
-        ]);
-
-        $phone = function_exists('normalizeContactNumber')
-            ? normalizeContactNumber((string) $request->input('contact_number', ''))
-            : preg_replace('/\s+/', '', (string) $request->input('contact_number', ''));
-        $deliveryman->contact_number = $phone;
-        $deliveryman->save();
-
         return response()->json([
-            'message' => __('message.update_form', ['form' => __('message.contact_number')]),
-            'contact_number' => $deliveryman->contact_number,
-            'display' => maskSensitiveInfo('contact_number', $deliveryman->contact_number),
-        ]);
+            'status' => false,
+            'message' => __('message.phone_not_editable'),
+        ], 422);
     }
 
     public function updateWorkStatus(Request $request, int $id)

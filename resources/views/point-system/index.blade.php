@@ -127,7 +127,7 @@
                                                 <div class="small text-muted">{{ optional($wallet->user)->contact_number }}</div>
                                             </td>
                                             <td>{{ optional($wallet->user)->user_type }}</td>
-                                            <td><strong>{{ number_format((float) $wallet->balance, 2) }}</strong></td>
+                                            <td><strong>{{ number_format((float) $wallet->balance, 0) }} MMK</strong></td>
                                             <td>{{ optional($wallet->updated_at)->format('Y-m-d H:i') }}</td>
                                         </tr>
                                     @empty

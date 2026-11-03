@@ -104,8 +104,12 @@ class DispatchOrderItemResource extends JsonResource
             'received_date' => $this->received_date
                 ? \Carbon\Carbon::parse($this->received_date)->format('d-m-Y')
                 : null,
-            'completed_at' => $this->admin_completed_at
-                ? \Carbon\Carbon::parse($this->admin_completed_at)->timezone('Asia/Yangon')->format('d-m-Y')
+            // Sheet day (rider_remit_date / 10:00 Yangon) — same as Daily Check List,
+            // so deliver day 1 still shows as day 1 after day-2 remittance.
+            'completed_at' => ($this->admin_completed_at || $this->rider_remit_date)
+                ? (function_exists('dailyCheckListDateForItem')
+                    ? dailyCheckListDateForItem($this->resource)->format('d-m-Y')
+                    : \Carbon\Carbon::parse($this->admin_completed_at)->timezone('Asia/Yangon')->format('d-m-Y'))
                 : null,
             'updated_at' => $this->updated_at
                 ? \Carbon\Carbon::parse($this->updated_at)->toIso8601String()
