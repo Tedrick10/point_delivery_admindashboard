@@ -203,19 +203,31 @@ class OrderController extends Controller
                 $per_page = $request->per_page;
             }
             if ((int) $request->per_page === -1) {
-                $per_page = max(1, (clone $order)->count());
+                // Cap "all" pages so one slow COUNT + huge payload cannot stall local/16GB servers.
+                $per_page = 200;
             }
         } elseif (auth()->check() && auth()->user()->user_type === 'delivery_man') {
-            // Rider Pick Up list: return all assigned parcels (old apps omit per_page and hit the 10/20 cap).
-            $per_page = max(1, (clone $order)->count());
+            // Rider Pick Up list: return assigned parcels without the tiny default page size,
+            // but avoid an extra COUNT(*) on every refresh.
+            $per_page = 200;
         }
 
         $order = $order->with([
-            'delivery_man',
+            'client:id,name,contact_number,daily_contact_number,user_type',
+            'delivery_man:id,name,contact_number,daily_contact_number,user_type,city_id,latitude,longitude',
+            'country:id,name',
+            'city',
+            'payment:id,order_id,payment_type,payment_status',
+            'vehicle:id',
+            'retunOrdered:id,parent_order_id',
+            'ratings' => function ($query) {
+                $query->whereNull('dispatch_order_item_id')
+                    ->select(['id', 'order_id', 'user_id', 'rating', 'comment']);
+            },
             'dispatchItems' => function ($query) {
                 $statuses = app(\App\Services\DispatchOrderWorkflowService::class)->clientVisibleItemStatuses();
                 $query->whereIn('status', $statuses)
-                    ->with(['fromBranch', 'toBranch', 'photoMedia', 'kyoShinItem'])
+                    ->with(['fromBranch:id,name', 'toBranch:id,name', 'photoMedia', 'kyoShinItem'])
                     ->orderBy('id');
             },
         ]);
@@ -243,7 +255,13 @@ class OrderController extends Controller
     {
         $id = $request->id;
         $order = Order::where('id', $id)->withTrashed()->with([
-            'delivery_man',
+            'client:id,name,contact_number,daily_contact_number,user_type',
+            'delivery_man:id,name,contact_number,daily_contact_number,user_type,city_id,latitude,longitude',
+            'country:id,name',
+            'city',
+            'payment:id,order_id,payment_type,payment_status',
+            'vehicle:id',
+            'retunOrdered:id,parent_order_id',
             'profofPictures',
             'dispatchItems' => function ($query) {
                 $statuses = app(\App\Services\DispatchOrderWorkflowService::class)->clientVisibleItemStatuses();
@@ -259,44 +277,63 @@ class OrderController extends Controller
 
         $pickupService = app(\App\Services\PickupParcelDispatchService::class);
         if ($pickupService->isDispatchPickupOrder($order)) {
+            $beforeCount = (int) ($order->dispatchItems?->count() ?? 0);
             $pickupService->ensureDispatchItems($order);
-            $order = $order->fresh([
-                'profofPictures',
-                'dispatchItems' => function ($query) {
-                    $statuses = app(\App\Services\DispatchOrderWorkflowService::class)->clientVisibleItemStatuses();
-                    $query->whereIn('status', $statuses)
-                        ->with(['fromBranch', 'toBranch', 'photoMedia', 'kyoShinItem'])
-                        ->orderBy('id');
-                },
-            ]);
+            // Only reload relations when ensureDispatchItems actually created rows.
+            if ((int) $order->dispatchItems()->count() !== $beforeCount) {
+                $order->load([
+                    'profofPictures',
+                    'dispatchItems' => function ($query) {
+                        $statuses = app(\App\Services\DispatchOrderWorkflowService::class)->clientVisibleItemStatuses();
+                        $query->whereIn('status', $statuses)
+                            ->with(['fromBranch', 'toBranch', 'photoMedia', 'kyoShinItem'])
+                            ->orderBy('id');
+                    },
+                ]);
+            }
         }
         $order_detail = new OrderDetailResource($order);
 
-        $order_history = optional($order)->orderHistory;
+        // Cap history payload for mobile detail screens (full audit stays on website).
+        $order_history = $order->orderHistory()->limit(40)->get();
 
-        $payment = Payment::where('order_id', $id)->first();
-        if ($payment != null) {
-            $payment = new PaymentResource($payment);
-        }
+        $paymentRow = Payment::where('order_id', $id)->first();
+        $payment = $paymentRow ? new PaymentResource($paymentRow) : null;
+
         $current_user = auth()->user();
-        if (count($current_user->unreadNotifications) > 0) {
-            $current_user->unreadNotifications->where('data.id', $id)->markAsRead();
+        if ($current_user) {
+            // Targeted mark-as-read — never load the entire unread inbox into memory.
+            // `notifications.data` is TEXT JSON, so use LIKE (not JSON path operators).
+            $nid = (int) $id;
+            $current_user->unreadNotifications()
+                ->where(function ($q) use ($nid) {
+                    $q->where('data', 'like', '%"id":'.$nid.'%')
+                        ->orWhere('data', 'like', '%"id":"'.$nid.'"%')
+                        ->orWhere('data', 'like', '%"order_id":'.$nid.'%')
+                        ->orWhere('data', 'like', '%"order_id":"'.$nid.'"%');
+                })
+                ->limit(50)
+                ->update(['read_at' => now()]);
         }
 
+        $client_detail = null;
         if ($order->client_id != null) {
-            $client_detail =  User::where('status', 1)->where('id', $order->client_id)->first();
-            $client_detail = new UserResource($client_detail);
+            $clientModel = $order->relationLoaded('client') ? $order->client : User::where('status', 1)->where('id', $order->client_id)->first();
+            if ($clientModel) {
+                $client_detail = new UserResource($clientModel);
+            }
         }
+        $delivery_man_detail = null;
         if ($order->delivery_man_id != null) {
-            $delivery_man_detail = User::where('status', 1)->where('id', $order->delivery_man_id)->first();
-            $delivery_man_detail = new UserResource($delivery_man_detail);
+            $dmModel = $order->relationLoaded('delivery_man') ? $order->delivery_man : User::where('status', 1)->where('id', $order->delivery_man_id)->first();
+            if ($dmModel) {
+                $delivery_man_detail = new UserResource($dmModel);
+            }
         }
         $courier_company_array = null;
         if ($order && $order->couriercompany_id != null) {
             $courier_company = CourierCompanies::where('id', $order->couriercompany_id)->first();
-            if ($courier_company) {
-                $courier_companies_detail = new CourierCompaniesResource($courier_company);
-            }
+            $courier_companies_detail = $courier_company ? new CourierCompaniesResource($courier_company) : null;
 
             $courier_company_array = $courier_companies_detail ? $courier_companies_detail->toArray(request()) : null;
             if ($courier_company_array && isset($courier_company_array['link'])) {
@@ -306,11 +343,14 @@ class OrderController extends Controller
             }
         }
         $profofpictures_detail = null;
-        $profofpictures = Profofpictures::where('order_id',$order->id)->first();
+        $profofpictures = $order->relationLoaded('profofPictures')
+            ? $order->profofPictures->first()
+            : Profofpictures::where('order_id', $order->id)->first();
         if ($profofpictures) {
             $profofpictures_detail = new ProfofpicturesResource($profofpictures);
         }
 
+        $reschedule_detail = null;
         if ($order->is_reschedule != null) {
             $reschedule = Reschedule::where('id', $order->is_reschedule)->first();
             if ($reschedule) {
@@ -525,25 +565,79 @@ class OrderController extends Controller
     }
     public function orderStatusUpdate(Request $request,$id)
     {
-        $request->validate([ 'status' => 'required' ]);
+        $request->validate([ 'status' => 'required|string|max:64' ]);
 
-        $order = Order::findOrFail($id);
-        $order->status = $request->input('status');
-        $order->save();
+        $order = Order::query()->findOrFail($id);
+        $previousStatus = (string) ($order->status ?? '');
+        $status = (string) $request->input('status');
+        $userId = auth()->id();
 
-        if (auth()->check()) {
+        // Rider may only flip statuses on their own assigned orders.
+        if (auth()->check() && auth()->user()->user_type === 'delivery_man'
+            && (int) $order->delivery_man_id !== (int) $userId) {
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.order_not_editable'),
+            ], 403);
+        }
+
+        $order->forceFill(['status' => $status])->save();
+
+        if ($userId) {
             app(DispatchOrderWorkflowService::class)->syncItemStatusFromDeliveryApp(
                 (int) $order->id,
-                (int) auth()->id(),
-                (string) $order->status
+                (int) $userId,
+                $status
             );
         }
 
-        $message = __('message.status_updated');
-        if(request()->is('api/*')){
-            return json_message_response( $message );
+        if ($status === 'courier_picked_up') {
+            $fresh = $order->fresh(['delivery_man']);
+            app(\App\Services\DispatchOrderAuditService::class)->logPickupCompleted($fresh);
+            app(DispatchOrderWorkflowService::class)->syncOrderWorkflow($fresh);
         }
-        return redirect()->back()->with('success', __('message.status_updated'));
+
+        forgetAdminOrderListLiveVersion();
+
+        // History / Firebase / push after the HTTP response so the app UI unlocks immediately.
+        $orderId = (int) $order->id;
+        dispatch(function () use ($orderId, $status, $previousStatus) {
+            $allowed = [
+                'active', 'delayed', 'cancelled', 'failed', 'pickup_error',
+                'courier_picked_up', 'courier_arrived', 'completed', 'courier_departed',
+            ];
+            if (! in_array($status, $allowed, true)) {
+                return;
+            }
+            $order = Order::query()->find($orderId);
+            if (! $order) {
+                return;
+            }
+            $history = [
+                'history_type' => $status,
+                'order_id' => $orderId,
+                'order' => $order,
+            ];
+            if ($status === 'cancelled') {
+                $history['previous_status'] = $previousStatus;
+            }
+            try {
+                saveOrderHistory($history);
+            } catch (\Throwable $e) {
+                \Log::warning('saveOrderHistory failed after fast status update', [
+                    'order_id' => $orderId,
+                    'status' => $status,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        })->afterResponse();
+
+        $message = __('message.status_updated');
+        if ($request->is('api/*')) {
+            return json_message_response($message);
+        }
+
+        return redirect()->back()->with('success', $message);
     }
     public function transferDeliverymanOrder($id)
     {

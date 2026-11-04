@@ -19,7 +19,7 @@ trait OrderTrait
         $longitude = $order_data->pickup_point['longitude'];
         $vehicle = $order_data->vehicle_id;
 
-        $app_setting = AppSetting::first();
+        $app_setting = cachedAppSetting();
         $unit = $app_setting->distance_unit ?? 'km';
         $radius = $app_setting->distance ?? 50;
         $unit_value = convertUnitvalue($unit);
@@ -128,7 +128,7 @@ trait OrderTrait
         $latitude = $result->pickup_point['latitude'];
         $longitude = $result->pickup_point['longitude'];
 
-        $app_setting = AppSetting::first();
+        $app_setting = cachedAppSetting();
         $unit = isset($app_setting->distance_unit) ? $app_setting->distance_unit : 'km';
         $radius = isset($app_setting->distance) ? $app_setting->distance : 50;
         $unit_value = convertUnitvalue($unit);

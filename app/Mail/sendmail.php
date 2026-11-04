@@ -39,7 +39,7 @@ class sendmail extends Mailable
         $this->status = $data['status'];
         $this->company_name = $data['company_name'];
         $this->client_name = $data['client_name'] ?? 'user';
-        $this->themeColor = AppSetting::first()->color ?? '#9B6BFF';
+        $this->themeColor = cachedAppSetting()->color ?? '#9B6BFF';
 
         if ($this->status === 'completed') {
             $this->generatePDF();

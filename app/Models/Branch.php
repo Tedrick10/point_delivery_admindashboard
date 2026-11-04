@@ -12,6 +12,21 @@ class Branch extends Model
     use HasFactory;
     use SoftDeletes;
 
+    protected static function booted(): void
+    {
+        $forget = static function () {
+            try {
+                cache()->forget('active_branches_list_v1');
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        };
+
+        static::saved($forget);
+        static::deleted($forget);
+        static::restored($forget);
+    }
+
     public const SETTLEMENT_MANUAL = 'manual';
 
     public const SETTLEMENT_MANUAL_HALF_DELI = 'manual_half_deli';

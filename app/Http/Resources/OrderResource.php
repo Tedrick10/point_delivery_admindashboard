@@ -23,8 +23,10 @@ class OrderResource extends JsonResource
              $pdfUrl = route('api-order-invoice', ['id' => $this->id]);
          }
          $basetotal = $this->weight_charge  + $this->distance_charge + $this->vehicle_charge + $this->insurance_charge + $this->fixed_charges;
-         $extraCharge = ExtraCharge::where('city_id',$this->city_id)->get();
-         $cityData = City::find($this->city_id);
+         $extraCharge = $this->extraChargesForCity($this->city_id);
+         $cityData = $this->relationLoaded('city')
+             ? $this->city
+             : ($this->city_id ? City::find($this->city_id) : null);
          $pickupService = app(\App\Services\PickupParcelDispatchService::class);
 
         return [
@@ -98,7 +100,9 @@ class OrderResource extends JsonResource
             'shipped_verify_at'              => $this->shipped_verify_at,
             'cancelled_delivery_man_ids'     => $this->cancelled_delivery_man_ids,
             'deleted_at'                     => $this->deleted_at,
-            'return_order_id'                => $this->retunOrdered->count() > 0 ? true : false,
+            'return_order_id'                => $this->relationLoaded('retunOrdered')
+                ? $this->retunOrdered->isNotEmpty()
+                : $this->retunOrdered()->exists(),
             'vehicle_id'                     => $this->vehicle_id,
             'pickup_vehicle_type'            => $this->pickup_vehicle_type ?? 'motorcycle',
             'vehicle_data'                   => $this->vehicle_data,
@@ -129,6 +133,22 @@ class OrderResource extends JsonResource
             ->get();
     }
 
+    /**
+     * Request-scoped ExtraCharge lookup — avoids N+1 city queries on order-list.
+     */
+    private function extraChargesForCity($cityId)
+    {
+        static $byCity = [];
+        $key = (string) ($cityId ?? '0');
+        if (! array_key_exists($key, $byCity)) {
+            $byCity[$key] = $cityId
+                ? ExtraCharge::query()->where('city_id', $cityId)->get()
+                : collect();
+        }
+
+        return $byCity[$key];
+    }
+
     protected function resolveCanRatePickupRider($request): bool
     {
         $user = $request->user();
@@ -156,11 +176,15 @@ class OrderResource extends JsonResource
             return null;
         }
 
-        $rating = \App\Models\Ratings::query()
-            ->where('order_id', $this->id)
-            ->where('user_id', $user->id)
-            ->whereNull('dispatch_order_item_id')
-            ->first();
+        if ($this->relationLoaded('ratings')) {
+            $rating = $this->ratings->firstWhere('user_id', (int) $user->id);
+        } else {
+            $rating = \App\Models\Ratings::query()
+                ->where('order_id', $this->id)
+                ->where('user_id', $user->id)
+                ->whereNull('dispatch_order_item_id')
+                ->first();
+        }
 
         if (! $rating) {
             return null;

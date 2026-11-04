@@ -132,10 +132,14 @@ class PickupParcelDispatchService
             return max(1, (int) $order->total_parcel);
         }
 
-        $this->ensureDispatchItems($order->fresh());
-        $order = $order->fresh();
-
         $statuses = app(DispatchOrderWorkflowService::class)->clientVisibleItemStatuses();
+
+        // List/API serialization already eager-loads dispatchItems — never write/ensure there.
+        if ($order->relationLoaded('dispatchItems')) {
+            $itemCount = $order->dispatchItems->whereIn('status', $statuses)->count();
+
+            return $itemCount > 0 ? $itemCount : max(1, (int) $order->total_parcel);
+        }
 
         $itemCount = DispatchOrderItem::query()
             ->where('order_id', $order->id)
@@ -160,7 +164,13 @@ class PickupParcelDispatchService
             return false;
         }
 
-        $this->ensureDispatchItems($order->fresh());
+        if ($order->relationLoaded('dispatchItems')) {
+            return $order->dispatchItems
+                ->where('status', 'collected')
+                ->contains(function ($item) {
+                    return empty($item->photo_id) || (int) $item->photo_id === 0;
+                });
+        }
 
         return DispatchOrderItem::query()
             ->where('order_id', $order->id)
@@ -402,26 +412,33 @@ class PickupParcelDispatchService
 
         foreach ($order->getMedia('order_photo') as $media) {
             if (getFileExistsCheck($media)) {
-                    $urls[] = mediaAbsoluteUrl($media);
+                $urls[] = mediaAbsoluteUrl($media);
             }
         }
 
-        $this->ensureDispatchItems($order->fresh());
         $photoService = app(PhotoOrderDispatchService::class);
-
         $statuses = app(DispatchOrderWorkflowService::class)->clientVisibleItemStatuses();
 
-        $items = DispatchOrderItem::query()
-            ->where('order_id', $order->id)
-            ->whereIn('status', $statuses)
-            ->where('photo_id', '>', 0)
-            ->orderBy('id')
-            ->get();
+        // Prefer eager-loaded items (order-list). Avoid ensure/create during serialization.
+        if ($order->relationLoaded('dispatchItems')) {
+            $items = $order->dispatchItems
+                ->whereIn('status', $statuses)
+                ->filter(fn ($item) => (int) ($item->photo_id ?? 0) > 0)
+                ->sortBy('id')
+                ->values();
+        } else {
+            $items = DispatchOrderItem::query()
+                ->where('order_id', $order->id)
+                ->whereIn('status', $statuses)
+                ->where('photo_id', '>', 0)
+                ->orderBy('id')
+                ->get();
+        }
 
         foreach ($items as $item) {
             $media = $photoService->findPhotoMedia((int) $item->photo_id);
             if ($media && getFileExistsCheck($media)) {
-                    $urls[] = mediaAbsoluteUrl($media);
+                $urls[] = mediaAbsoluteUrl($media);
             }
         }
 

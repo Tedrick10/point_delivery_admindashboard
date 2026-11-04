@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Order;
+use App\Services\DispatchOrderWorkflowService;
 use Illuminate\Console\Command;
 use Carbon\Carbon;
 
@@ -54,6 +55,8 @@ class OrderAutoCancelCommand extends Command
                 'actor_type' => 'system',
                 'previous_status' => $previous,
             ]);
+            app(DispatchOrderWorkflowService::class)
+                ->releaseRiderAssignmentsForCancelledOrder($order->fresh());
             $createCount++;
         }
 
@@ -87,6 +90,8 @@ class OrderAutoCancelCommand extends Command
                 'actor_type' => 'system',
                 'previous_status' => $previous,
             ]);
+            app(DispatchOrderWorkflowService::class)
+                ->releaseRiderAssignmentsForCancelledOrder($order->fresh());
             $pickupCount++;
         }
 

@@ -19,7 +19,7 @@ class AppCopyService
 
     public static function defaults(): array
     {
-        $site = AppSetting::query()->first();
+        $site = cachedAppSetting();
         $legacyName = trim((string) (SettingData('app_content', 'app_name') ?: ($site->site_name ?? '')));
         $legacyDesc = trim((string) ($site->site_description ?? ''));
         $brand = $legacyName !== '' ? $legacyName : 'Point Delivery';
@@ -167,7 +167,7 @@ class AppCopyService
                 ['type' => 'app_content', 'key' => 'app_name'],
                 ['value' => $adminTitle]
             );
-            $settings = AppSetting::query()->first();
+            $settings = cachedAppSetting();
             if ($settings) {
                 $settings->site_name = $adminTitle;
                 if ($adminDesc !== '') {

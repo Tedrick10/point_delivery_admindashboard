@@ -863,7 +863,7 @@ class UserController extends Controller
         AppSetting::updateOrCreate(['id' => $request->id], $data);
         $message = __('message.save_form', ['form' => __('message.app_setting')]);
         $response = [
-            'data' => AppSetting::first(),
+            'data' => cachedAppSetting(),
             'message' => $message,
         ];
 
@@ -875,7 +875,7 @@ class UserController extends Controller
         if ($request->has('id') && isset($request->id)) {
             $data = AppSetting::where('id', $request->id)->first();
         } else {
-            $data = AppSetting::first();
+            $data = cachedAppSetting();
         }
         $data['reference_amount'] = SettingData('reference_amount', 'reference_amount');
 
@@ -1172,48 +1172,76 @@ class UserController extends Controller
     public function dashboard(Request $request)
     {
         $dashboard_data = [];
-        $dashboard_data['total_country'] = Country::count();
-        $dashboard_data['total_city'] = City::count();
-        $dashboard_data['total_client'] = User::userCount('client');
-        $dashboard_data['total_delivery_man'] = User::userCount('delivery_man');
-        $dashboard_data['total_order'] = Order::myOrder()->count();
+        $dashboard_data['total_country'] = (int) cache()->remember('dash_total_country_v1', 60, fn () => Country::count());
+        $dashboard_data['total_city'] = (int) cache()->remember('dash_total_city_v1', 60, fn () => City::count());
+        $dashboard_data['total_client'] = (int) cache()->remember('dash_total_client_v1', 30, fn () => User::userCount('client'));
+        $dashboard_data['total_delivery_man'] = (int) cache()->remember('dash_total_delivery_man_v1', 30, fn () => User::userCount('delivery_man'));
         $dashboard_data['today_register_user'] = User::where('user_type', 'client')->whereDate('created_at', today())->count();
 
-        $total_compeleted_earning = Order::myOrder()->where('status', 'completed')->sum('total_amount');
-        $total_cancelled_earning = Order::myOrder()->where('status', 'cancelled')->sum('total_amount');
+        // Collapse ~20 Order COUNTs into 2 grouped queries (critical for 16GB / peak load).
+        $statusRows = Order::myOrder()
+            ->selectRaw('status, COUNT(*) as c, COALESCE(SUM(total_amount),0) as amount')
+            ->groupBy('status')
+            ->get()
+            ->keyBy('status');
+        $todayRows = Order::myOrder()
+            ->whereDate('created_at', today())
+            ->selectRaw('status, COUNT(*) as c')
+            ->groupBy('status')
+            ->pluck('c', 'status');
 
-        $dashboard_data['total_earning'] = $total_compeleted_earning + $total_cancelled_earning;
-        $dashboard_data['total_cancelled_order'] = Order::myOrder()->where('status', 'cancelled')->count();
+        $statusCount = fn (string $status) => (int) optional($statusRows->get($status))->c;
+        $statusAmount = fn (string $status) => (float) optional($statusRows->get($status))->amount;
 
-        $dashboard_data['total_create_order'] = Order::myOrder()->where('status', 'create')->count();
-        $dashboard_data['total_active_order'] = Order::myOrder()->where('status', 'active')->count();
-        $dashboard_data['total_delayed_order'] = Order::myOrder()->where('status', 'delayed')->count();
-        $dashboard_data['total_courier_assigned_order'] = Order::myOrder()->where('status', 'courier_assigned')->count();
-        $dashboard_data['total_courier_picked_up_order'] = Order::myOrder()->where('status', 'courier_picked_up')->count();
-        $dashboard_data['total_courier_departed_order'] = Order::myOrder()->where('status', 'courier_departed')->count();
-        $dashboard_data['total_courier_arrived_order'] = Order::myOrder()->where('status', 'courier_arrived')->count();
-        $dashboard_data['total_completed_order'] = Order::myOrder()->where('status', 'completed')->count();
-        $dashboard_data['total_failed_order'] = Order::myOrder()->where('status', 'failed')->count();
+        $dashboard_data['total_order'] = (int) $statusRows->sum('c');
+        $dashboard_data['total_earning'] = $statusAmount('completed') + $statusAmount('cancelled');
+        $dashboard_data['total_cancelled_order'] = $statusCount('cancelled');
+        $dashboard_data['total_create_order'] = $statusCount('create');
+        $dashboard_data['total_active_order'] = $statusCount('active');
+        $dashboard_data['total_delayed_order'] = $statusCount('delayed');
+        $dashboard_data['total_courier_assigned_order'] = $statusCount('courier_assigned');
+        $dashboard_data['total_courier_picked_up_order'] = $statusCount('courier_picked_up');
+        $dashboard_data['total_courier_departed_order'] = $statusCount('courier_departed');
+        $dashboard_data['total_courier_arrived_order'] = $statusCount('courier_arrived');
+        $dashboard_data['total_completed_order'] = $statusCount('completed');
+        $dashboard_data['total_failed_order'] = $statusCount('failed');
 
-        $dashboard_data['today_create_order'] = Order::myOrder()->whereDate('created_at', today())->where('status', 'create')->count();
-        $dashboard_data['today_active_order'] = Order::myOrder()->whereDate('created_at', today())->where('status', 'active')->count();
-        $dashboard_data['today_delayed_order'] = Order::myOrder()->whereDate('created_at', today())->where('status', 'delayed')->count();
-        $dashboard_data['today_cancelled_order'] = Order::myOrder()->whereDate('created_at', today())->where('status', 'cancelled')->count();
-        $dashboard_data['today_courier_assigned_order'] = Order::myOrder()->whereDate('created_at', today())->where('status', 'courier_assigned')->count();
-        $dashboard_data['today_courier_picked_up_order'] = Order::myOrder()->whereDate('created_at', today())->where('status', 'courier_picked_up')->count();
-        $dashboard_data['today_courier_departed_order'] = Order::myOrder()->whereDate('created_at', today())->where('status', 'courier_departed')->count();
-        $dashboard_data['today_courier_arrived_order'] = Order::myOrder()->whereDate('created_at', today())->where('status', 'courier_arrived')->count();
-        $dashboard_data['today_completed_order'] = Order::myOrder()->whereDate('created_at', today())->where('status', 'completed')->count();
-        $dashboard_data['today_failed_order'] = Order::myOrder()->whereDate('created_at', today())->where('status', 'failed')->count();
+        $dashboard_data['today_create_order'] = (int) ($todayRows['create'] ?? 0);
+        $dashboard_data['today_active_order'] = (int) ($todayRows['active'] ?? 0);
+        $dashboard_data['today_delayed_order'] = (int) ($todayRows['delayed'] ?? 0);
+        $dashboard_data['today_cancelled_order'] = (int) ($todayRows['cancelled'] ?? 0);
+        $dashboard_data['today_courier_assigned_order'] = (int) ($todayRows['courier_assigned'] ?? 0);
+        $dashboard_data['today_courier_picked_up_order'] = (int) ($todayRows['courier_picked_up'] ?? 0);
+        $dashboard_data['today_courier_departed_order'] = (int) ($todayRows['courier_departed'] ?? 0);
+        $dashboard_data['today_courier_arrived_order'] = (int) ($todayRows['courier_arrived'] ?? 0);
+        $dashboard_data['today_completed_order'] = (int) ($todayRows['completed'] ?? 0);
+        $dashboard_data['today_failed_order'] = (int) ($todayRows['failed'] ?? 0);
 
-        $dashboard_data['app_setting'] = AppSetting::first();
+        $dashboard_data['app_setting'] = cachedAppSetting();
+
+        $orderListWith = [
+            'client:id,name,contact_number,user_type',
+            'delivery_man:id,name,contact_number,user_type',
+            'country:id,name',
+            'city',
+            'payment:id,order_id,payment_type,payment_status',
+            'vehicle:id',
+            'retunOrdered:id,parent_order_id',
+            'dispatchItems' => function ($query) {
+                $statuses = app(\App\Services\DispatchOrderWorkflowService::class)->clientVisibleItemStatuses();
+                $query->whereIn('status', $statuses)->orderBy('id');
+            },
+        ];
 
         $upcoming_order = Order::myOrder()->whereNotIn('status', ['draft', 'cancelled', 'completed'])->whereNotNull('pickup_point->start_time')
                         ->where('pickup_point->start_time', '>=', Carbon::now()->format('Y-m-d H:i:s'))
+                        ->with($orderListWith)
                         ->orderBy('pickup_point->start_time', 'asc')->paginate(10);
         $dashboard_data['upcoming_order'] = OrderResource::collection($upcoming_order);
 
-        $recent_order = Order::myOrder()->whereDate('date', '<=', Carbon::now()->format('Y-m-d'))->orderBy('date', 'desc')->paginate(10);
+        $recent_order = Order::myOrder()->whereDate('date', '<=', Carbon::now()->format('Y-m-d'))
+                        ->with($orderListWith)
+                        ->orderBy('date', 'desc')->paginate(10);
         $dashboard_data['recent_order'] = OrderResource::collection($recent_order);
 
         $client = User::where('user_type', 'client')->orderBy('created_at', 'desc')->paginate(10);
@@ -1269,7 +1297,9 @@ class UserController extends Controller
         $dashboard_data['user_weekly_count'] = $data;
 
         $user = auth()->user();
-        $dashboard_data['all_unread_count'] = isset($user->unreadNotifications) ? $user->unreadNotifications->count() : 0;
+        $dashboard_data['all_unread_count'] = $user
+            ? (int) $user->unreadNotifications()->count()
+            : 0;
 
         $weekly_payment_report = Payment::myPayment()->selectRaw('DATE_FORMAT(created_at , "%w") as days , DATE_FORMAT(created_at , "%Y-%m-%d") as date, total_amount ')
                         ->where('payment_status', 'paid')->whereBetween('created_at', [$week_start, $week_end])->get()->toArray();

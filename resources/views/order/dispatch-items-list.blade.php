@@ -776,7 +776,7 @@
                     window.__pdsPageLiveBooted = true;
                     window.bootAdminOrderListLiveRefresh({
                         url: @json(route('order.dispatch.items.live-version', $order->id)),
-                        intervalMs: 5000,
+                        intervalMs: 8000,
                         useItemsReload: true,
                         tableSelector: '.pds-dispatch-items-datatable',
                         data: { order_id: {{ (int) $order->id }} }

@@ -49,7 +49,7 @@
                     return;
                 }
                 loadMessages({ silent: true });
-            }, 4000);
+            }, 8000);
         }
 
         function osAvatarHtml() {

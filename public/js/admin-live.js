@@ -1,7 +1,8 @@
 (function (window, $) {
     'use strict';
 
-    var DEFAULT_INTERVAL = 4000;
+    // 8s is enough for badge freshness and much kinder to 16GB MySQL under concurrent admin tabs.
+    var DEFAULT_INTERVAL = 8000;
 
     function dataTableNode(api) {
         try {

@@ -111,7 +111,7 @@
                 applyFilters();
 
                 pollLive();
-                pollTimer = setInterval(pollLive, 4000);
+                pollTimer = setInterval(pollLive, 8000);
                 document.addEventListener('visibilitychange', function () {
                     if (!document.hidden) pollLive();
                 });

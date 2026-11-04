@@ -36,6 +36,16 @@ class AdminLiveStateService
             return [];
         }
 
+        $cacheKey = 'admin_sidebar_counts_v1:'.(int) $user->id;
+        try {
+            $cached = cache()->get($cacheKey);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        } catch (\Throwable $e) {
+            // continue without cache
+        }
+
         $hubService = app(DispatchHubService::class);
         $isHubUser = isDispatchHub($user);
         $workflow = app(DispatchOrderWorkflowService::class);
@@ -95,7 +105,7 @@ class AdminLiveStateService
             ? unansweredComplaintChatCount()
             : 0;
 
-        return [
+        $payload = [
             'assign100' => $assign100,
             'preOrder' => $preOrder,
             'assignedItems' => $assignedItems,
@@ -109,6 +119,14 @@ class AdminLiveStateService
             'clientWithdraw' => $clientWithdraw,
             'requestCount' => $clientPendingOrders,
         ];
+
+        try {
+            cache()->put($cacheKey, $payload, 5);
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        return $payload;
     }
 
     public function notificationUnread(?User $user = null): int
@@ -118,6 +136,16 @@ class AdminLiveStateService
             return 0;
         }
 
+        $cacheKey = 'admin_notif_unread_v1:'.(int) $user->id;
+        try {
+            $cached = cache()->get($cacheKey);
+            if (is_int($cached) || (is_numeric($cached) && $cached !== null)) {
+                return (int) $cached;
+            }
+        } catch (\Throwable $e) {
+            // continue
+        }
+
         try {
             // Light sync only — never load all notifications into memory on the live poll.
             syncUnreadDispatchItemMessageNotifications($user);
@@ -125,7 +153,14 @@ class AdminLiveStateService
             // Counts must still render even if backfill fails.
         }
 
-        return adminNotificationUnreadCount($user);
+        $count = adminNotificationUnreadCount($user);
+        try {
+            cache()->put($cacheKey, (int) $count, 5);
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        return (int) $count;
     }
 
     public function dashboardStats(Request $request): array
@@ -154,21 +189,36 @@ class AdminLiveStateService
 
         $statuses = ['courier_assigned', 'active', 'courier_arrived', 'courier_departed', 'courier_picked_up'];
 
+        // Two grouped queries instead of ~13 separate COUNTs on every dashboard live poll.
+        $todayRows = Order::myOrder()->today()
+            ->selectRaw('status, COUNT(*) as c')
+            ->groupBy('status')
+            ->pluck('c', 'status');
+        $rangeRows = (clone $ordersQuery)
+            ->selectRaw('status, COUNT(*) as c')
+            ->groupBy('status')
+            ->pluck('c', 'status');
+
+        $todayInProgress = 0;
+        foreach ($statuses as $status) {
+            $todayInProgress += (int) ($todayRows[$status] ?? 0);
+        }
+
         return [
-            'total_order_today' => (int) Order::myOrder()->today()->count(),
-            'total_order_today_peding' => (int) Order::myOrder()->today()->where('status', 'create')->count(),
-            'total_order_today_inprogress' => (int) Order::myOrder()->today()->whereIn('status', $statuses)->count(),
-            'total_order_today_completed' => (int) Order::myOrder()->today()->where('status', 'completed')->count(),
-            'total_order_today_cancelled' => (int) Order::myOrder()->today()->where('status', 'cancelled')->count(),
-            'total_order' => (int) (clone $ordersQuery)->count(),
-            'total_create_order' => (int) (clone $ordersQuery)->where('status', 'create')->count(),
-            'total_accepetd_order' => (int) (clone $ordersQuery)->where('status', 'active')->count(),
-            'total_assigned_order' => (int) (clone $ordersQuery)->where('status', 'courier_assigned')->count(),
-            'total_arrived_order' => (int) (clone $ordersQuery)->where('status', 'courier_arrived')->count(),
-            'total_pickup_order' => (int) (clone $ordersQuery)->where('status', 'courier_picked_up')->count(),
-            'total_departed_order' => (int) (clone $ordersQuery)->where('status', 'courier_departed')->count(),
-            'total_delivered_order' => (int) (clone $ordersQuery)->where('status', 'completed')->count(),
-            'total_cancelled_order' => (int) (clone $ordersQuery)->where('status', 'cancelled')->count(),
+            'total_order_today' => (int) $todayRows->sum(),
+            'total_order_today_peding' => (int) ($todayRows['create'] ?? 0),
+            'total_order_today_inprogress' => $todayInProgress,
+            'total_order_today_completed' => (int) ($todayRows['completed'] ?? 0),
+            'total_order_today_cancelled' => (int) ($todayRows['cancelled'] ?? 0),
+            'total_order' => (int) $rangeRows->sum(),
+            'total_create_order' => (int) ($rangeRows['create'] ?? 0),
+            'total_accepetd_order' => (int) ($rangeRows['active'] ?? 0),
+            'total_assigned_order' => (int) ($rangeRows['courier_assigned'] ?? 0),
+            'total_arrived_order' => (int) ($rangeRows['courier_arrived'] ?? 0),
+            'total_pickup_order' => (int) ($rangeRows['courier_picked_up'] ?? 0),
+            'total_departed_order' => (int) ($rangeRows['courier_departed'] ?? 0),
+            'total_delivered_order' => (int) ($rangeRows['completed'] ?? 0),
+            'total_cancelled_order' => (int) ($rangeRows['cancelled'] ?? 0),
         ];
     }
 
@@ -177,7 +227,7 @@ class AdminLiveStateService
         $user = $user ?: auth()->user();
         $cacheKey = 'admin_live_page_version:' . $pageKey . ':' . md5(json_encode($context) . ':' . ($user?->id ?? 0));
 
-        return (string) cache()->remember($cacheKey, 2, function () use ($pageKey, $user, $context) {
+        return (string) cache()->remember($cacheKey, 5, function () use ($pageKey, $user, $context) {
             return $this->computePageVersion($pageKey, $user, $context);
         });
     }
@@ -227,21 +277,23 @@ class AdminLiveStateService
 
     protected function fingerprintOrders(): string
     {
+        $row = Order::query()->selectRaw('COUNT(*) as c, MAX(id) as mid, MAX(updated_at) as u')->first();
+
         return $this->sha([
-            Order::query()->count(),
-            Order::query()->max('id'),
-            Order::query()->max('updated_at'),
-            Order::query()->max('status'),
+            $row->c ?? 0,
+            $row->mid ?? 0,
+            $row->u ?? '',
         ]);
     }
 
     protected function fingerprintDispatchItems(): string
     {
+        $row = DispatchOrderItem::query()->selectRaw('COUNT(*) as c, MAX(id) as mid, MAX(updated_at) as u')->first();
+
         return $this->sha([
-            DispatchOrderItem::query()->count(),
-            DispatchOrderItem::query()->max('id'),
-            DispatchOrderItem::query()->max('updated_at'),
-            DispatchOrderItem::query()->selectRaw("COALESCE(SUM(LENGTH(COALESCE(status,''))),0) as fp")->value('fp'),
+            $row->c ?? 0,
+            $row->mid ?? 0,
+            $row->u ?? '',
         ]);
     }
 

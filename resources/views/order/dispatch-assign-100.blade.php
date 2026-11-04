@@ -351,9 +351,11 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                @php
+                                    $workflow = $workflow ?? app(\App\Services\DispatchOrderWorkflowService::class);
+                                @endphp
                                 @foreach($items as $index => $item)
                                     @php
-                                        $workflow = app(\App\Services\DispatchOrderWorkflowService::class);
                                         $order = $item->order;
                                         $pickup = resolveDispatchPickupPoint($order);
                                         $osName = resolveDispatchOsName($order);
@@ -1212,7 +1214,7 @@
                     $check.prop('checked', !$check.prop('checked')).trigger('change');
                 });
 
-                // Shortcuts: "/" customer search; "." Assign Rider; "P" print labels.
+                // Shortcuts: "/" customer search; "." Assign Rider; Ctrl/Cmd+P print labels.
                 // Reliability: always key off e.code so Myanmar IME (keyCode 229 / isComposing)
                 // and sticky Select2 focus cannot make / . P "sometimes work".
                 function handleAssign100ShortcutKeydown(e) {
@@ -1228,7 +1230,8 @@
                     var code = e.code || '';
                     var isSlash = code === 'Slash' || code === 'NumpadDivide' || key === '/';
                     var isDot = code === 'Period' || code === 'NumpadDecimal' || key === '.' || key === '။';
-                    var isPrintKey = (!e.ctrlKey && !e.metaKey) && (code === 'KeyP' || key === 'p' || key === 'P');
+                    // Print labels only with Ctrl+P / Cmd+P — bare "P" must not print.
+                    var isPrintKey = (e.ctrlKey || e.metaKey) && (code === 'KeyP' || key === 'p' || key === 'P');
                     var isEnter = code === 'Enter' || code === 'NumpadEnter' || key === 'Enter';
                     var isArrowDown = code === 'ArrowDown' || key === 'ArrowDown';
                     var isArrowUp = code === 'ArrowUp' || key === 'ArrowUp';

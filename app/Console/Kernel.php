@@ -25,6 +25,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('kyo-shin:notify-overdue')->dailyAt('08:00')->timezone('Asia/Yangon');
         $schedule->command('kyo-shin:record-daily-ledger')->dailyAt('23:50')->timezone('Asia/Yangon');
         $schedule->command('payout:generate-delivery-man-reports')->weeklyOn(0, '02:00'); // Wednesday at 2 AM
+        // Keep MySQL lean on 16GB hosts (read notifs, stale tokens, aged histories).
+        $schedule->command('ops:prune-stale')->dailyAt('03:30')->timezone('Asia/Yangon');
 
         $interval = AppSetting::select('backup_type')->first();
         switch ($interval->backup_type) {

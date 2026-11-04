@@ -214,14 +214,39 @@ class DispatchOrderItemDataTable extends DataTable
      */
     protected function totalsForQuery($query): array
     {
-        $items = (clone $query)->get();
+        $agg = (clone $query)
+            ->toBase()
+            ->selectRaw('
+                COALESCE(SUM(advance_paid), 0) as advance_paid,
+                COALESCE(SUM(item_value), 0) as item_value,
+                COALESCE(SUM(deli_amount), 0) as deli_amount,
+                COALESCE(SUM(cust_get), 0) as cust_get
+            ')
+            ->first();
+
+        // displayOsToPay() has return/gate rules — load only the columns it needs.
+        $osToPay = (clone $query)
+            ->without(['toBranch', 'photoMedia', 'order'])
+            ->with(['kyoShinItem:id,dispatch_order_item_id,amount'])
+            ->get([
+                'id',
+                'status',
+                'item_value',
+                'os_to_pay',
+                'deli_amount',
+                'gate_amount',
+                'gate_os_paid',
+                'pickup_pay_mode',
+                'credit_to',
+            ])
+            ->sum(fn ($item) => $item->displayOsToPay());
 
         return [
-            'advance_paid' => round((float) $items->sum('advance_paid'), 2),
-            'item_value' => round((float) $items->sum('item_value'), 2),
-            'deli_amount' => round((float) $items->sum('deli_amount'), 2),
-            'cust_get' => round((float) $items->sum('cust_get'), 2),
-            'os_to_pay' => round((float) $items->sum(fn ($item) => $item->displayOsToPay()), 2),
+            'advance_paid' => round((float) ($agg->advance_paid ?? 0), 2),
+            'item_value' => round((float) ($agg->item_value ?? 0), 2),
+            'deli_amount' => round((float) ($agg->deli_amount ?? 0), 2),
+            'cust_get' => round((float) ($agg->cust_get ?? 0), 2),
+            'os_to_pay' => round((float) $osToPay, 2),
         ];
     }
 

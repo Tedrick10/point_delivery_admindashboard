@@ -1127,7 +1127,7 @@
             );
             window.bootAdminGlobalLive({
                 stateUrl: @json(route('admin.live.state')),
-                intervalMs: 4000,
+                intervalMs: 8000,
                 page: pageName || 'global',
                 includeDashboard: includeDashboard,
                 data: query,
@@ -1146,7 +1146,7 @@
                     // Keep using generic page-version unless a view already booted a specific URL.
                     window.bootAdminPageLiveRefresh({
                         url: @json(route('admin.live.page-version')),
-                        intervalMs: 4000,
+                        intervalMs: 8000,
                         data: $.extend({ page: pageName || 'global' }, query)
                     });
                 }

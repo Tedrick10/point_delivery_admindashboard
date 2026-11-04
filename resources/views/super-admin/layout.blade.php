@@ -569,7 +569,7 @@
             if (typeof window.jQuery === 'undefined' || typeof window.bootAdminGlobalLive !== 'function') return;
             window.bootAdminGlobalLive({
                 stateUrl: @json(route('admin.live.state')),
-                intervalMs: 4000,
+                intervalMs: 8000,
                 page: @json(optional(request()->route())->getName() ?? 'super-admin'),
                 includeDashboard: false,
                 refreshContent: false,

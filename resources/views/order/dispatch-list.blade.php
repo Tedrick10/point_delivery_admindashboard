@@ -637,7 +637,7 @@
                     window.__pdsPageLiveBooted = true;
                     window.bootAdminOrderListLiveRefresh({
                         url: @json(route('order.live-version')),
-                        intervalMs: 5000
+                        intervalMs: 8000
                     });
                 }
 
@@ -765,7 +765,7 @@
                     }
 
                     pollPresence();
-                    setInterval(pollPresence, 4000);
+                    setInterval(pollPresence, 8000);
                     $(document).on('draw.dt', '#dataTableBuilder', function () {
                         pollPresence();
                     });

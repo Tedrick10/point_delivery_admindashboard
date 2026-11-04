@@ -421,7 +421,6 @@ class DispatchOrderWorkflowService
      */
     public function canAdminEditDispatchItemInfo(Order $order, $item = null): bool
     {
-        $hasMessengerThread = $item !== null && $this->dispatchItemHasMessengerThread($item);
         $itemStatus = '';
         $itemHasRider = false;
         if ($item !== null && is_object($item)) {
@@ -446,6 +445,9 @@ class DispatchOrderWorkflowService
         if ($itemStatus !== '' && in_array($itemStatus, $activeItemStatuses, true)) {
             return true;
         }
+
+        // Messenger lookup only when status alone cannot decide editability.
+        $hasMessengerThread = $item !== null && $this->dispatchItemHasMessengerThread($item);
 
         if (in_array($order->status ?? '', ['cancelled', 'completed', 'draft'], true)) {
             // Messenger threads stay editable after delivery/cancel for corrections.
@@ -805,10 +807,19 @@ class DispatchOrderWorkflowService
         ];
 
         if ($runSideEffects) {
-            // Keep counts in sync with the table (Admin Done may reclaim premature Assign 100 rows).
-            $this->reclaimPrematureAssign100Items();
-            $this->promoteReadyOrdersToAssign100();
-            $this->healUtcRolloverReceivedDates();
+            // Throttle global repair scans — live poll + page load both hit this path.
+            $sideEffectKey = 'dispatch_order_list_side_effects_v1';
+            $ranSideEffects = true;
+            try {
+                $ranSideEffects = cache()->add($sideEffectKey, 1, 15);
+            } catch (\Throwable $e) {
+                $ranSideEffects = true;
+            }
+            if ($ranSideEffects) {
+                $this->reclaimPrematureAssign100Items();
+                $this->promoteReadyOrdersToAssign100();
+                $this->healUtcRolloverReceivedDates();
+            }
         }
 
         $yangonToday = Carbon::now('Asia/Yangon');
@@ -820,6 +831,21 @@ class DispatchOrderWorkflowService
             $dateBounds = parseDispatchFilterDateBounds($fromRaw, $toRaw);
         } catch (\Throwable $e) {
             $dateBounds = null;
+        }
+
+        $cacheKey = 'order_list_tab_counts_v1:'.md5(json_encode([
+            $fromRaw,
+            $toRaw,
+            trim((string) $searchTerm),
+            auth()->id(),
+        ]));
+        try {
+            $cached = cache()->get($cacheKey);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        } catch (\Throwable $e) {
+            // continue
         }
 
         $counts = [];
@@ -865,6 +891,14 @@ class DispatchOrderWorkflowService
             }
 
             $counts[$tab] = (int) $query->count();
+        }
+
+        if ($cacheKey) {
+            try {
+                cache()->put($cacheKey, $counts, 5);
+            } catch (\Throwable $e) {
+                // ignore
+            }
         }
 
         return $counts;
@@ -1055,8 +1089,12 @@ class DispatchOrderWorkflowService
             return 0;
         }
 
-        // Promote every Admin-stamped collected parcel — do not wait for incomplete
-        // siblings in the same OS order (those stay on Order List until stamped).
+        // Whole pickup must be Admin Done — one stamped sibling must not enter
+        // Assign 100 while other collected parcels are still incomplete.
+        if (! $this->isAdminDone($order)) {
+            return 0;
+        }
+
         $items = DispatchOrderItem::query()
             ->where('order_id', $order->id)
             ->where('status', 'collected')
@@ -1161,7 +1199,8 @@ class DispatchOrderWorkflowService
 
     /**
      * Move Assign 100 pool rows back to collected when premature.
-     * Incomplete sibling parcels must NOT yank already Admin-stamped pool rows.
+     * If any sibling is still incomplete Admin Done, bounce the whole pickup
+     * set out of Assign 100 (including already-stamped pool rows).
      */
     public function reclaimPrematureAssign100ItemsForOrder(Order $order): int
     {
@@ -1185,8 +1224,8 @@ class DispatchOrderWorkflowService
             ->whereNull('delivery_man_id');
 
         $riderDone = $this->hasPhysicalPickupCompleted($order) || $this->hasLastMileItems($order);
-        if ($riderDone) {
-            // Rider Done: only bounce rows that never got Admin Item Info.
+        if ($riderDone && $this->isAdminDone($order)) {
+            // Fully ready — only bounce rows that somehow never got Admin Item Info.
             $query->whereNull('admin_updated_at');
         }
 
@@ -1194,8 +1233,7 @@ class DispatchOrderWorkflowService
     }
 
     /**
-     * Move Admin-stamped collected items to Assign 100 when Rider Done.
-     * Incomplete siblings stay on Order List; stamped parcels still promote.
+     * Move collected items to Assign 100 only when Rider Done + full Admin Done.
      */
     public function promoteReadyOrdersToAssign100(): int
     {
@@ -1211,15 +1249,26 @@ class DispatchOrderWorkflowService
             ->whereHas('dispatchItems', function ($item) {
                 $item->where('status', 'collected')->whereNotNull('admin_updated_at');
             })
+            // Every collected sibling must be stamped before any enter Assign 100.
+            ->whereDoesntHave('dispatchItems', function ($item) {
+                $item->where('status', 'collected')->whereNull('admin_updated_at');
+            })
             ->pluck('id');
 
+        if ($orderIds->isEmpty()) {
+            return 0;
+        }
+
         $moved = 0;
-        foreach ($orderIds as $orderId) {
-            $order = Order::query()->with('dispatchItems')->find($orderId);
-            if (! $order) {
-                continue;
+        foreach ($orderIds->chunk(50) as $chunk) {
+            $orders = Order::query()
+                ->with('dispatchItems')
+                ->whereIn('id', $chunk->all())
+                ->get();
+
+            foreach ($orders as $order) {
+                $moved += $this->syncOrderWorkflow($order);
             }
-            $moved += $this->syncOrderWorkflow($order);
         }
 
         return $moved;
@@ -1268,7 +1317,6 @@ class DispatchOrderWorkflowService
         }
 
         // Rider done but Admin never stamped Item Info — also premature.
-        // (Old shortcut treated "status=assigned" as Admin Done and left these stuck.)
         $reclaimed += DispatchOrderItem::query()
             ->where('status', 'assigned')
             ->whereNull('delivery_man_id')
@@ -1277,6 +1325,22 @@ class DispatchOrderWorkflowService
                 $q->whereIn('status', ['courier_picked_up', 'courier_departed', 'completed']);
             })
             ->update($payload);
+
+        // Rider done but siblings still incomplete Admin Done — bounce the whole
+        // pickup set (stamped pool rows included) until every parcel is Done.
+        $partialAdminIds = DispatchOrderItem::query()
+            ->where('status', 'assigned')
+            ->whereNull('delivery_man_id')
+            ->whereHas('order.dispatchItems', function ($item) {
+                $item->where('status', 'collected')->whereNull('admin_updated_at');
+            })
+            ->pluck('id');
+
+        foreach ($partialAdminIds->chunk(500) as $chunk) {
+            $reclaimed += DispatchOrderItem::query()
+                ->whereIn('id', $chunk->all())
+                ->update($payload);
+        }
 
         return $reclaimed;
     }
@@ -1389,6 +1453,57 @@ class DispatchOrderWorkflowService
     public function deliveryItemStatuses(): array
     {
         return ['courier_assigned', 'courier_departed', 'pending', 'completed', 'return', 'os_returned'];
+    }
+
+    /**
+     * Open last-mile statuses that Admin Rider List hides when the parent order
+     * is cancelled (those belong under Pick Up Cancelled).
+     */
+    public function riderOpenDeliveryStatuses(): array
+    {
+        return ['courier_assigned', 'courier_departed', 'pending'];
+    }
+
+    /**
+     * Align Rider Delivery list with Admin Rider List: keep Delivered/Return/
+     * Os Returned on cancelled parents, but drop still-open Assigned/On Way/Pending.
+     */
+    public function applyExcludeCancelledOpenDeliveryItems($query)
+    {
+        $open = $this->riderOpenDeliveryStatuses();
+
+        return $query->where(function ($q) use ($open) {
+            $q->whereNotIn('status', $open)
+                ->orWhereDoesntHave('order', function ($order) {
+                    $order->where('status', 'cancelled');
+                });
+        });
+    }
+
+    /**
+     * Backfill: release open rider links still stuck on cancelled parents.
+     */
+    public function releaseStaleCancelledRiderAssignments(?int $orderId = null): int
+    {
+        $orderQuery = Order::query()->where('status', 'cancelled');
+        if ($orderId) {
+            $orderQuery->where('id', $orderId);
+        } else {
+            $open = $this->riderOpenDeliveryStatuses();
+            $orderQuery->whereHas('dispatchItems', function ($q) use ($open) {
+                $q->whereNotNull('delivery_man_id')
+                    ->whereIn('status', $open);
+            });
+        }
+
+        $released = 0;
+        $orderQuery->orderBy('id')->chunkById(100, function ($orders) use (&$released) {
+            foreach ($orders as $order) {
+                $released += $this->releaseRiderAssignmentsForCancelledOrder($order);
+            }
+        });
+
+        return $released;
     }
 
     /**

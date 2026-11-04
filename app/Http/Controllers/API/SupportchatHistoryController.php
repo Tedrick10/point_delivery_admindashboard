@@ -29,7 +29,7 @@ class SupportchatHistoryController extends Controller
                 $per_page = $request->per_page;
             }
             if($request->per_page == -1 ){
-                $per_page = $support->count();
+                $per_page = 200;
             }
         }
 
@@ -37,8 +37,15 @@ class SupportchatHistoryController extends Controller
         $items = SupportchatHistoryResource::collection($support);
 
         $current_user = auth()->user();
-        if(count($current_user->unreadNotifications) > 0 ) {
-            $current_user->unreadNotifications->where('data.sender_id',request('sender_id'))->markAsRead();
+        if ($current_user && request()->filled('sender_id')) {
+            $senderId = (int) request('sender_id');
+            $current_user->unreadNotifications()
+                ->where(function ($q) use ($senderId) {
+                    $q->where('data', 'like', '%"sender_id":'.$senderId.'%')
+                        ->orWhere('data', 'like', '%"sender_id":"'.$senderId.'"%');
+                })
+                ->limit(50)
+                ->update(['read_at' => now()]);
         }
         $response = [
             'pagination' => json_pagination_response($items),

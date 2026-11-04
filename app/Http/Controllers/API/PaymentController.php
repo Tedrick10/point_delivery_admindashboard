@@ -16,6 +16,7 @@ use App\Models\AppSetting;
 use App\Models\OrderHistory;
 use App\Models\PaymentGateway;
 use App\Models\PayTRPayment;
+use App\Services\DispatchOrderWorkflowService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -31,7 +32,7 @@ class PaymentController extends Controller
             if ($result = Order::find($data['order_id'])) {
                 saveOrderHistory(['history_type' => $result->status, 'order_id' => $result->id, 'order' => $result]);
             }   
-            $app_setting = AppSetting::first();
+            $app_setting = cachedAppSetting();
                     if ($app_setting && $app_setting->auto_assign == 1) {
                         $this->autoAssignOrder($result);
                     }         
@@ -383,7 +384,7 @@ class PaymentController extends Controller
                         'history_message'  => __('message.order_create'),
                     ]);
         
-                    $app_setting = AppSetting::first();
+                    $app_setting = cachedAppSetting();
                     if ($app_setting && $app_setting->auto_assign == 1) {
                         $this->autoAssignOrder($order);
                     }
@@ -412,6 +413,12 @@ class PaymentController extends Controller
         } else {
             if ($paymentModule) {
                 Order::where('id', $paymentModule->order_id)->update(['status' => 'cancelled','reason' => __('message.payment_failed') ]);
+
+                $cancelledOrder = Order::find($paymentModule->order_id);
+                if ($cancelledOrder) {
+                    app(DispatchOrderWorkflowService::class)
+                        ->releaseRiderAssignmentsForCancelledOrder($cancelledOrder);
+                }
         
                 $data['order_id']        = $paymentModule->order_id;
                 $data['history_type']    = 'cancelled';

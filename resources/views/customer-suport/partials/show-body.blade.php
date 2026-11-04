@@ -759,7 +759,7 @@
                 pollTimer = setInterval(function () {
                     if (document.hidden) return;
                     refreshChatMessages(false);
-                }, 3000);
+                }, 8000);
             }
 
             function clearImagePreview() {

@@ -49,13 +49,26 @@ class NotificationController extends Controller
         return in_array($this->notificationType($notification), $allowedTypes, true);
     }
 
+    /**
+     * Filter Laravel notifications by JSON data.type without loading the whole inbox.
+     */
+    protected function applyAllowedTypeFilter($query, ?array $allowedTypes)
+    {
+        if ($allowedTypes === null || $allowedTypes === []) {
+            return $query;
+        }
+
+        return $query->where(function ($outer) use ($allowedTypes) {
+            foreach ($allowedTypes as $type) {
+                $safe = addcslashes((string) $type, "%_\\");
+                $outer->orWhere('data', 'like', '%"type":"'.$safe.'"%');
+            }
+        });
+    }
+
     public function getList(Request $request)
     {
         $user = auth()->user();
-
-        $user->last_notification_seen = now();
-        $user->save();
-
         $allowedTypes = $this->allowedTypesForUser($user);
 
         $type = isset($request->type) ? $request->type : null;
@@ -67,49 +80,54 @@ class NotificationController extends Controller
                     $notification->markAsRead();
                 }
             } else {
-                $unread = $user->unreadNotifications;
-                if ($allowedTypes !== null) {
-                    $unread = $unread->filter(fn ($n) => $this->matchesAllowedType($n, $allowedTypes));
-                }
-                foreach ($unread as $notification) {
-                    $notification->markAsRead();
-                }
+                $unread = $this->applyAllowedTypeFilter($user->unreadNotifications(), $allowedTypes);
+                $unread->orderByDesc('created_at')->limit(500)->get()
+                    ->each(function ($notification) {
+                        $notification->markAsRead();
+                    });
             }
         }
 
-        $user->refresh();
-        $user->load(['notifications', 'unreadNotifications']);
+        // Throttle "seen" writes — inbox polling must not UPDATE users every few seconds.
+        $seenKey = 'notif_seen_touch:'.$user->id;
+        if (! cache()->has($seenKey)) {
+            $user->forceFill(['last_notification_seen' => now()])->save();
+            cache()->put($seenKey, 1, 60);
+        }
 
         $category = $request->get('category', 'all');
-        $page = isset($request->page) ? $request->page : 1;
-        $limit = isset($request->limit) ? $request->limit : config('constant.PER_PAGE_LIMIT');
-
-        $notifications = $user->notifications->sortByDesc('created_at');
-        if ($allowedTypes !== null) {
-            $notifications = $notifications->filter(fn ($n) => $this->matchesAllowedType($n, $allowedTypes));
+        $page = max(1, (int) ($request->page ?? 1));
+        $limit = (int) ($request->limit ?? config('constant.PER_PAGE_LIMIT'));
+        if ($limit < 1) {
+            $limit = (int) config('constant.PER_PAGE_LIMIT');
         }
+        $limit = min(50, $limit);
+
+        $query = $this->applyAllowedTypeFilter($user->notifications(), $allowedTypes)
+            ->orderByDesc('created_at');
+
+        // Category filter still needs JSON inspection; pull a bounded window then filter.
         if ($category !== 'all') {
-            $notifications = $notifications->filter(function ($notification) use ($category) {
+            $window = (clone $query)->limit(300)->get();
+            $filtered = $window->filter(function ($notification) use ($category) {
                 $data = is_array($notification->data) ? $notification->data : [];
 
                 return inferNotificationCategory($data) === $category;
-            });
+            })->values();
+            $notifications = $filtered->forPage($page, $limit);
+        } else {
+            $notifications = (clone $query)
+                ->forPage($page, $limit)
+                ->get();
         }
-        $notifications = $notifications->values()->forPage($page, $limit);
 
-        $unread = $user->unreadNotifications;
-        if ($allowedTypes !== null) {
-            $unread = $unread->filter(fn ($n) => $this->matchesAllowedType($n, $allowedTypes));
-        }
-        $all_unread_count = $unread->count();
+        $all_unread_count = (int) $this->applyAllowedTypeFilter($user->unreadNotifications(), $allowedTypes)->count();
 
         $items = NotificationResource::collection($notifications);
 
-        $response = [
+        return json_custom_response([
             'notification_data' => $items,
             'all_unread_count' => $all_unread_count,
-        ];
-
-        return json_custom_response($response);
+        ]);
     }
 }

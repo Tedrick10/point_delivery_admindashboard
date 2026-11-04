@@ -32,7 +32,7 @@ class DashboardController extends Controller
 {
     public function appsetting(Request $request)
     {
-        $data['app_setting'] = AppSetting::first();
+        $data['app_setting'] = cachedAppSetting();
 
         $data['terms_condition'] = SettingData('terms_condition', 'terms_condition');
         $data['privacy_policy'] = SettingData('privacy_policy', 'privacy_policy');
@@ -49,17 +49,19 @@ class DashboardController extends Controller
             'position' => SettingData('CURRENCY', 'CURRENCY_POSITION') ?? 'left',
         ];
         $data['api_base_url'] = $this->resolvedApiBaseUrl();
-        $data['branches'] = Branch::query()
-            ->where('status', 1)
-            ->orderBy('name')
-            ->get(['id', 'name', 'status'])
-            ->map(fn (Branch $branch) => [
-                'id' => $branch->id,
-                'name' => $branch->name,
-                'status' => (int) $branch->status,
-            ])
-            ->values()
-            ->all();
+        $data['branches'] = cache()->remember('active_branches_list_v1', 300, function () {
+            return Branch::query()
+                ->where('status', 1)
+                ->orderBy('name')
+                ->get(['id', 'name', 'status'])
+                ->map(fn (Branch $branch) => [
+                    'id' => $branch->id,
+                    'name' => $branch->name,
+                    'status' => (int) $branch->status,
+                ])
+                ->values()
+                ->all();
+        });
         $data['app_copy'] = appCopyBundle(appCopyClientApp());
 
         return json_custom_response($data);
@@ -68,13 +70,27 @@ class DashboardController extends Controller
     /**
      * Public bootstrap config for User / Delivery apps (no auth).
      * Apps poll this to pick up Admin Dashboard API IP changes without rebuild.
+     *
+     * Unlike app-setting (store builds), this endpoint returns the Admin-saved
+     * LAN URL when present so debug/presentation apps can follow Wi‑Fi IP changes.
      */
     public function serverConfig()
     {
+        $configured = rtrim(trim((string) (SettingData('API_SERVER', 'API_SERVER_BASE_URL') ?? '')), '/');
+        $detected = detectMachineLanBaseUrl();
+        $wifiIp = detectMachineLanIp();
+
+        // Prefer Admin "API Server IP" (may be http://192.168.x.x:8000).
+        // Fall back to live machine detection, then production resolver.
+        $apiBaseUrl = $configured !== ''
+            ? $configured
+            : ($detected !== '' ? $detected : $this->resolvedApiBaseUrl());
+
         return json_custom_response([
-            'api_base_url' => $this->resolvedApiBaseUrl(),
-            'detected_url' => detectMachineLanBaseUrl(),
-            'wifi_ip' => detectMachineLanIp(),
+            'api_base_url' => $apiBaseUrl,
+            'configured_url' => $configured !== '' ? $configured : null,
+            'detected_url' => $detected,
+            'wifi_ip' => $wifiIp,
         ]);
     }
 
@@ -113,7 +129,7 @@ class DashboardController extends Controller
 
     public function commonDashboard($request)
     {
-        $data['app_seeting'] = AppSetting::first();
+        $data['app_seeting'] = cachedAppSetting();
 
         $data['terms_condition'] = SettingData('terms_condition', 'terms_condition');
         $data['privacy_policy'] = SettingData('privacy_policy', 'privacy_policy');
@@ -134,7 +150,7 @@ class DashboardController extends Controller
 
     public function websiteData()
     {
-        $appsetting = AppSetting::first();
+        $appsetting = cachedAppSetting();
         $response = [
             'play_store_link'   => SettingData('app_content', 'play_store_link') ?? null,
             'app_store_link'    => SettingData('app_content', 'app_store_link') ?? null,
@@ -218,7 +234,7 @@ class DashboardController extends Controller
             if ($request->has('id') && isset($request->id)) {
                 $appsetting = AppSetting::where('id', $request->id)->first();
             } else {
-                $appsetting = AppSetting::first();
+                $appsetting = cachedAppSetting();
             }
 
             if ($request->has('status') && isset($request->status)) {
@@ -274,22 +290,29 @@ class DashboardController extends Controller
         $order = $order->orderBy('id', 'desc')->paginate($per_page);
         $order_list = OrderResource::collection($order);
 
-        $cities = City::with('country')->where('status', 1)->get()->groupBy(function ($city) {
-            return $city->country->name;
-        });
-
-        $groupedCitiesArray = $cities->map(function ($cities, $key) {
-            $countryData = (new CountryResource($cities->first()->country))->toArray(request());
-            $cityData = $cities->map(function ($city) {
-                $cityArray = $city->toArray();
-                unset($cityArray['country']);
-                return $cityArray;
+        $groupedCitiesArray = cache()->remember('grouped_active_cities_v1', 300, function () {
+            $cities = City::with('country')->where('status', 1)->get()->groupBy(function ($city) {
+                return optional($city->country)->name ?: 'Unknown';
             });
 
-            return array_merge($countryData, ['cities' => $cityData]);
-        })->values()->toArray();
+            return $cities->map(function ($cities, $key) {
+                $country = $cities->first()->country;
+                if (! $country) {
+                    return null;
+                }
+                $countryData = (new CountryResource($country))->toArray(request());
+                $cityData = $cities->map(function ($city) {
+                    $cityArray = $city->toArray();
+                    unset($cityArray['country']);
 
-        $all_unread_count = isset($auth->unreadNotifications) ? $auth->unreadNotifications->count() : 0;
+                    return $cityArray;
+                });
+
+                return array_merge($countryData, ['cities' => $cityData]);
+            })->filter()->values()->toArray();
+        });
+
+        $all_unread_count = $auth ? (int) $auth->unreadNotifications()->count() : 0;
 
         $wallet_data = Wallet::where('user_id', auth()->id())->first();
         $userObject = (object) $items[0];
@@ -312,27 +335,39 @@ class DashboardController extends Controller
         $auth_user = auth()->user();
         if ($auth_user && $auth_user->user_type === 'delivery_man') {
             $data = [];
-            $todayOrder = Order::where('delivery_man_id', $auth_user->id);
-            $data['today_order'] = $todayOrder->whereDate('updated_at', today())->count();
+            $data['today_order'] = Order::where('delivery_man_id', $auth_user->id)
+                ->whereDate('updated_at', today())
+                ->count();
 
-             $pendingOrder = Order::where('delivery_man_id', $auth_user->id)
-                ->whereIn('status', ['courier_assigned', 'create']);
-            if ($request->has('from_date') && $request->has('to_date')) {
-                $pendingOrder->whereBetween('created_at', [$request->input('from_date'), $request->input('to_date')]);
+            $base = Order::query()->where('delivery_man_id', $auth_user->id);
+            if ($request->filled('from_date') && $request->filled('to_date')) {
+                $base->whereBetween('created_at', [$request->input('from_date'), $request->input('to_date')]);
             }
-            $data['pending_order'] = $pendingOrder->count();
+            $byStatus = (clone $base)
+                ->selectRaw('status, COUNT(*) as c')
+                ->groupBy('status')
+                ->pluck('c', 'status');
 
-            $inprogressOrder = Order::where('delivery_man_id', $auth_user->id)->where('city_id', $auth_user->city_id);
-            if ($request->has('from_date') && $request->has('to_date')) {
-                $inprogressOrder->whereBetween('updated_at', [$request->input('from_date'), $request->input('to_date')]);
+            $data['pending_order'] = (int) (($byStatus['courier_assigned'] ?? 0) + ($byStatus['create'] ?? 0));
+
+            $inProgressStatuses = ['courier_departed', 'courier_arrived', 'courier_picked_up', 'active'];
+            $inProgress = Order::query()
+                ->where('delivery_man_id', $auth_user->id)
+                ->where('city_id', $auth_user->city_id)
+                ->whereIn('status', $inProgressStatuses);
+            if ($request->filled('from_date') && $request->filled('to_date')) {
+                $inProgress->whereBetween('updated_at', [$request->input('from_date'), $request->input('to_date')]);
             }
-            $data['inprogress_order'] = $inprogressOrder->whereIn('status', ['courier_departed', 'courier_arrived', 'courier_picked_up', 'active'])->count();
+            $data['inprogress_order'] = (int) $inProgress->count();
 
-            $completeOrder = Order::where('delivery_man_id', $auth_user->id)->where('city_id', $auth_user->city_id);
-            if ($request->has('from_date') && $request->has('to_date')) {
+            $completeOrder = Order::query()
+                ->where('delivery_man_id', $auth_user->id)
+                ->where('city_id', $auth_user->city_id)
+                ->where('status', 'completed');
+            if ($request->filled('from_date') && $request->filled('to_date')) {
                 $completeOrder->whereBetween('created_at', [$request->input('from_date'), $request->input('to_date')]);
             }
-            $data['complete_order'] = $completeOrder->where('status', 'completed')->count();
+            $data['complete_order'] = (int) $completeOrder->count();
 
             $earning_detail = User::withTrashed()->where('id', $auth_user->id)->withSum('getPayment as delivery_man_commission', 'delivery_man_commission')->first();
 

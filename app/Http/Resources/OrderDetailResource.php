@@ -24,8 +24,10 @@ class OrderDetailResource extends JsonResource
              $pdfUrl = route('api-order-invoice', ['id' => $this->id]);
          }
          $basetotal = $this->weight_charge  + $this->distance_charge + $this->vehicle_charge + $this->insurance_charge + $this->fixed_charges;
-         $extraCharge = ExtraCharge::where('city_id',$this->city_id)->get();
-         $cityData = City::find($this->city_id);
+         $extraCharge = $this->city_id
+             ? ExtraCharge::query()->where('city_id', $this->city_id)->get()
+             : collect();
+         $cityData = $this->relationLoaded('city') ? $this->city : City::find($this->city_id);
 
          if ($this->milisecond != null) {
             $claims = Claims::where('traking_no', $this->milisecond)->first();

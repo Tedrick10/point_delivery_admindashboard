@@ -415,8 +415,8 @@ class FronthomeController extends Controller
     public function deleteAccount()
     {
         $activeTab = request()->query('app', 'user') === 'rider' ? 'rider' : 'user';
-        $supportEmail = optional(\App\Models\AppSetting::query()->first())->support_email
-            ?: optional(\App\Models\AppSetting::query()->first())->site_email
+        $supportEmail = optional(cachedAppSetting())->support_email
+            ?: optional(cachedAppSetting())->site_email
             ?: 'support@pointdelivery.worldwidemyanmar.com';
 
         return view('frontend-website.delete_account', [

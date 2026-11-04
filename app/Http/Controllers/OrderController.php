@@ -973,6 +973,10 @@ class OrderController extends Controller
             'updated_at' => now(),
         ];
 
+        $hasAssignedFromReturn = Schema::hasColumn('dispatch_order_items', 'assigned_from_return');
+        $hasReturnReassigned = Schema::hasColumn('dispatch_order_items', 'return_reassigned');
+        $kyoShin = app(KyoShinService::class);
+
         $updated = 0;
         foreach ($items as $item) {
             $fromStatus = (string) $item->status;
@@ -981,17 +985,17 @@ class OrderController extends Controller
 
             if ($fromStatus === 'return') {
                 $itemPayload['admin_completed_at'] = null;
-                if (Schema::hasColumn('dispatch_order_items', 'assigned_from_return')) {
+                if ($hasAssignedFromReturn) {
                     $itemPayload['assigned_from_return'] = $item->isNormalReturn();
                 }
-                if (Schema::hasColumn('dispatch_order_items', 'return_reassigned')) {
+                if ($hasReturnReassigned) {
                     $itemPayload['return_reassigned'] = false;
                 }
             } else {
-                if (Schema::hasColumn('dispatch_order_items', 'assigned_from_return')) {
+                if ($hasAssignedFromReturn) {
                     $itemPayload['assigned_from_return'] = false;
                 }
-                if (Schema::hasColumn('dispatch_order_items', 'return_reassigned')) {
+                if ($hasReturnReassigned) {
                     $itemPayload['return_reassigned'] = false;
                 }
             }
@@ -1000,7 +1004,7 @@ class OrderController extends Controller
 
             if ($fromStatus === 'return' && $item->isKyoShinGiven()) {
                 try {
-                    app(KyoShinService::class)->clearReturnMoneyReceivedForItemIds([(int) $item->id]);
+                    $kyoShin->clearReturnMoneyReceivedForItemIds([(int) $item->id]);
                 } catch (\Throwable $e) {
                     \Log::warning('kyo shin clear return money failed after follow-up reassign', [
                         'item_id' => $item->id,
@@ -1013,9 +1017,12 @@ class OrderController extends Controller
 
         $items = DispatchOrderItem::query()->whereIn('id', $items->pluck('id')->all())->get();
         $audit = app(DispatchOrderAuditService::class);
-        $push = app(\App\Services\AppPushService::class);
+        $ordersById = Order::query()
+            ->whereIn('id', $items->pluck('order_id')->unique()->filter()->all())
+            ->get()
+            ->keyBy('id');
         foreach ($items->groupBy('order_id') as $orderId => $orderItems) {
-            $order = Order::find($orderId);
+            $order = $ordersById->get($orderId);
             if ($order) {
                 $audit->logDeliveryRiderAssigned(
                     $order,
@@ -1502,25 +1509,34 @@ class OrderController extends Controller
             return response()->json(['message' => __('message.no_record_found')], 422);
         }
 
-        $updated = DispatchOrderItem::query()
+        // Stamp selected Item Info first, then promote only fully Admin Done pickups.
+        DispatchOrderItem::query()
             ->whereIn('id', $items->pluck('id'))
-            ->update([
-                'status' => 'assigned',
-                'assigned_at' => now(),
-                'received_date' => Carbon::now('Asia/Yangon')->toDateString(),
-                'admin_updated_at' => now(),
-            ]);
+            ->whereNull('admin_updated_at')
+            ->update(['admin_updated_at' => now()]);
 
-        if ($updated === 0) {
-            return response()->json(['message' => __('message.no_record_found')], 422);
-        }
-
+        $workflow = app(DispatchOrderWorkflowService::class);
         $audit = app(DispatchOrderAuditService::class);
+        $updated = 0;
+        $blocked = 0;
+
         foreach ($items->groupBy('order_id') as $orderId => $orderItems) {
-            $order = Order::find($orderId);
-            if ($order) {
+            $order = Order::query()->with('dispatchItems')->find($orderId);
+            if (! $order) {
+                continue;
+            }
+
+            if (! $workflow->isReadyForAssign100($order)) {
+                $blocked += $orderItems->count();
+                continue;
+            }
+
+            $moved = $workflow->syncOrderWorkflow($order);
+            $updated += $moved;
+
+            if ($moved > 0) {
                 try {
-                    $audit->logMovedToAssign100($order, $orderItems->count());
+                    $audit->logMovedToAssign100($order, $moved);
                 } catch (\Throwable $e) {
                     \Log::warning('dispatch audit failed after move to assign 100', [
                         'order_id' => $orderId,
@@ -1528,6 +1544,14 @@ class OrderController extends Controller
                     ]);
                 }
             }
+        }
+
+        if ($updated === 0) {
+            return response()->json([
+                'message' => $blocked > 0
+                    ? __('message.assign_100_wait_admin_done')
+                    : __('message.no_record_found'),
+            ], 422);
         }
 
         return response()->json([
@@ -1544,12 +1568,19 @@ class OrderController extends Controller
         }
 
         $workflow = app(DispatchOrderWorkflowService::class);
-        // Reclaim premature rows, then promote ready Admin-stamped parcels.
-        // Promote used to run only on Order List — opening Assign 100 alone
-        // left many OS parcels stuck as collected.
-        $workflow->reclaimPrematureAssign100Items();
-        $workflow->promoteReadyOrdersToAssign100();
-        $workflow->refreshAssign100PoolReceivedDates();
+        // Reclaim/promote stay correct, but do not re-scan the whole pool on every refresh.
+        $repairKey = 'assign100_workflow_repair_v1';
+        $shouldRepair = true;
+        try {
+            $shouldRepair = cache()->add($repairKey, 1, 20);
+        } catch (\Throwable $e) {
+            $shouldRepair = true;
+        }
+        if ($shouldRepair) {
+            $workflow->reclaimPrematureAssign100Items();
+            $workflow->promoteReadyOrdersToAssign100();
+            $workflow->refreshAssign100PoolReceivedDates();
+        }
 
         $hubService = app(\App\Services\DispatchHubService::class);
         $authUser = auth()->user();
@@ -1589,7 +1620,22 @@ class OrderController extends Controller
 
         $itemsQuery = DispatchOrderItem::query()
             ->where('status', 'assigned')
-            ->with(['order.client', 'order.delivery_man', 'fromBranch', 'toBranch', 'deliveryMan', 'hubUser', 'kyoShinItem'])
+            ->with([
+                'order:id,client_id,delivery_man_id,status,created_at,pickup_point,pickup_datetime,city_id,description',
+                'order.client:id,name,contact_number,username,address,email,user_type,branch_id',
+                'order.delivery_man:id,name,contact_number',
+                'fromBranch:id,name',
+                'toBranch:id,name',
+                'deliveryMan:id,name',
+                'hubUser:id,name',
+                'kyoShinItem:id,dispatch_order_item_id',
+            ])
+            ->withCount([
+                'messages as unread_client_replies_count' => function ($q) {
+                    $q->where('sender_type', 'client')->whereNull('read_at');
+                },
+                'messages',
+            ])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id');
 
@@ -1636,7 +1682,8 @@ class OrderController extends Controller
             'showSendToMdy',
             'sendToMdyUrl',
             'showKyoShinAction',
-            'kyoShinActionUrl'
+            'kyoShinActionUrl',
+            'workflow'
         ));
     }
 
@@ -2266,13 +2313,15 @@ class OrderController extends Controller
             ->where('delivery_man_id', $rider->id)
             ->get();
 
-        $orderIds = $items->pluck('order_id')->unique();
         $audit = app(DispatchOrderAuditService::class);
         $push = app(\App\Services\AppPushService::class);
-        foreach ($orderIds as $orderId) {
-            $order = Order::find($orderId);
+        $ordersById = Order::query()
+            ->whereIn('id', $items->pluck('order_id')->unique()->filter()->all())
+            ->get()
+            ->keyBy('id');
+        foreach ($items->groupBy('order_id') as $orderId => $orderItems) {
+            $order = $ordersById->get($orderId);
             if ($order) {
-                $orderItems = $items->where('order_id', $orderId);
                 $audit->logDeliveryRiderAssigned(
                     $order,
                     $rider,
@@ -2925,36 +2974,40 @@ class OrderController extends Controller
         ];
         $clearDeliveredProof = $fromStatus === 'delivered' || $queryStatus === 'completed';
 
+        $hasAssignedFromReturn = Schema::hasColumn('dispatch_order_items', 'assigned_from_return');
+        $hasReturnReassigned = Schema::hasColumn('dispatch_order_items', 'return_reassigned');
+        $kyoShin = app(KyoShinService::class);
+
         $updated = 0;
         $syncedExpenseDays = [];
         foreach ($items as $item) {
             $itemPayload = $payload;
             $itemPayload['status_ordered_at'] = now()->addMilliseconds($updated * 10);
-        if ($fromStatus === 'return') {
+            if ($fromStatus === 'return') {
                 $itemPayload['admin_completed_at'] = null;
                 if ($item->isNormalReturn()) {
                     // No-fee: Assigned → Pending → Os Returned only.
-                    if (Schema::hasColumn('dispatch_order_items', 'assigned_from_return')) {
+                    if ($hasAssignedFromReturn) {
                         $itemPayload['assigned_from_return'] = true;
                     }
-            if (Schema::hasColumn('dispatch_order_items', 'return_reassigned')) {
+                    if ($hasReturnReassigned) {
                         $itemPayload['return_reassigned'] = false;
-            }
+                    }
                 } else {
                     // Fee Return Delivery: behaves like a normal parcel.
-            if (Schema::hasColumn('dispatch_order_items', 'assigned_from_return')) {
+                    if ($hasAssignedFromReturn) {
                         $itemPayload['assigned_from_return'] = false;
                     }
-                    if (Schema::hasColumn('dispatch_order_items', 'return_reassigned')) {
+                    if ($hasReturnReassigned) {
                         $itemPayload['return_reassigned'] = false;
                     }
                 }
             } else {
                 // Re-enter Assigned from Assigned / On Way / Pending / Delivered.
-                if (Schema::hasColumn('dispatch_order_items', 'assigned_from_return')) {
+                if ($hasAssignedFromReturn) {
                     $itemPayload['assigned_from_return'] = false;
                 }
-                if (Schema::hasColumn('dispatch_order_items', 'return_reassigned')) {
+                if ($hasReturnReassigned) {
                     $itemPayload['return_reassigned'] = false;
                 }
             }
@@ -2968,7 +3021,7 @@ class OrderController extends Controller
             $item->forceFill($itemPayload)->save();
             if ($fromStatus === 'return' && $item->isKyoShinGiven()) {
                 try {
-                    app(KyoShinService::class)->clearReturnMoneyReceivedForItemIds([(int) $item->id]);
+                    $kyoShin->clearReturnMoneyReceivedForItemIds([(int) $item->id]);
                 } catch (\Throwable $e) {
                     \Log::warning('kyo shin clear return money failed after reassign', [
                         'item_id' => $item->id,
@@ -2990,8 +3043,12 @@ class OrderController extends Controller
         $items = DispatchOrderItem::query()->whereIn('id', $items->pluck('id')->all())->get();
         $audit = app(DispatchOrderAuditService::class);
         $push = app(\App\Services\AppPushService::class);
+        $ordersById = Order::query()
+            ->whereIn('id', $items->pluck('order_id')->unique()->filter()->all())
+            ->get()
+            ->keyBy('id');
         foreach ($items->groupBy('order_id') as $orderId => $orderItems) {
-            $order = Order::find($orderId);
+            $order = $ordersById->get($orderId);
             if ($order) {
                 $audit->logDeliveryRiderAssigned(
                     $order,
@@ -6995,7 +7052,7 @@ class OrderController extends Controller
             saveOrderHistory($history_data);
         }
         if ($result->status === 'create') {
-            $app_setting = AppSetting::first();
+            $app_setting = cachedAppSetting();
 
             if ((int) $result->bid_type === 1) {
                 $this->nearByDeliveryman($result, $request->all());
@@ -7321,14 +7378,6 @@ class OrderController extends Controller
                     $order->forceFill(['pickup_error_at' => now()])->save();
                 }
 
-                \App\Models\DispatchOrderItem::where('order_id', $order->id)
-                    ->whereIn('status', ['assigned', 'courier_assigned', 'courier_departed'])
-                    ->update([
-                        'status' => 'collected',
-                        'delivery_man_id' => null,
-                        'assigned_at' => null,
-                    ]);
-
                 $order->forceFill([
                     'status' => 'cancelled',
                     'pickup_error_choice' => 'cancel',
@@ -7339,6 +7388,8 @@ class OrderController extends Controller
                 ])->save();
 
                 $order = $order->fresh();
+                app(DispatchOrderWorkflowService::class)
+                    ->releaseRiderAssignmentsForCancelledOrder($order);
 
                 try {
                     app(DispatchOrderAuditService::class)->logUserChoice($order, 'cancel', $user);
@@ -7362,14 +7413,6 @@ class OrderController extends Controller
                     $order->forceFill(['pickup_error_at' => now()])->save();
                 }
 
-                \App\Models\DispatchOrderItem::where('order_id', $order->id)
-                    ->whereIn('status', ['assigned', 'courier_assigned', 'courier_departed'])
-                    ->update([
-                        'status' => 'collected',
-                        'delivery_man_id' => null,
-                        'assigned_at' => null,
-                    ]);
-
                 $order->forceFill([
                     'status' => 'cancelled',
                     'pickup_error_choice' => 'express',
@@ -7380,6 +7423,8 @@ class OrderController extends Controller
                 ])->save();
 
                 $order = $order->fresh();
+                app(DispatchOrderWorkflowService::class)
+                    ->releaseRiderAssignmentsForCancelledOrder($order);
 
                 try {
                     app(DispatchOrderAuditService::class)->logUserChoice($order, 'express', $user);
@@ -7582,16 +7627,33 @@ class OrderController extends Controller
                 $history_data['previous_status'] = $previousStatusBeforeUpdate ?? null;
             }
 
-            try {
-                saveOrderHistory($history_data);
-            } catch (\Throwable $e) {
-                // Order status is already persisted; do not fail the API (e.g. Firebase misconfig).
-                \Log::warning('saveOrderHistory failed after order update', [
-                    'order_id' => $id,
-                    'status' => $status,
-                    'error' => $e->getMessage(),
-                ]);
-            }
+            // Defer heavy history/push/Firebase work so status taps feel instant.
+            $historyOrderId = (int) $id;
+            $historyStatus = (string) $status;
+            $historyPrevious = $previousStatusBeforeUpdate ?? null;
+            dispatch(function () use ($historyOrderId, $historyStatus, $historyPrevious) {
+                $fresh = Order::query()->find($historyOrderId);
+                if (! $fresh) {
+                    return;
+                }
+                $payload = [
+                    'history_type' => $historyStatus,
+                    'order_id' => $historyOrderId,
+                    'order' => $fresh,
+                ];
+                if ($historyStatus === 'cancelled') {
+                    $payload['previous_status'] = $historyPrevious;
+                }
+                try {
+                    saveOrderHistory($payload);
+                } catch (\Throwable $e) {
+                    \Log::warning('saveOrderHistory failed after order update', [
+                        'order_id' => $historyOrderId,
+                        'status' => $historyStatus,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            })->afterResponse();
         }
 
         if ($request->is('api/*') && auth()->check()) {
@@ -7608,6 +7670,8 @@ class OrderController extends Controller
             app(DispatchOrderAuditService::class)->logPickupCompleted($order);
             app(DispatchOrderWorkflowService::class)->syncOrderWorkflow($order);
         }
+
+        forgetAdminOrderListLiveVersion();
 
         // if ($status == 'active') {
         //     $deliveryManId = auth()->id();
@@ -8481,13 +8545,29 @@ class OrderController extends Controller
             $order->delivery_man_id = auth()->id();
             $order->save();
 
-            saveOrderHistory([
-                'history_type' => 'courier_assigned',
-                'order_id' => $order->id,
-                'order' => $order,
-            ]);
+            $orderId = (int) $order->id;
+            dispatch(function () use ($orderId) {
+                $fresh = Order::query()->find($orderId);
+                if (! $fresh) {
+                    return;
+                }
+                try {
+                    saveOrderHistory([
+                        'history_type' => 'courier_assigned',
+                        'order_id' => $orderId,
+                        'order' => $fresh,
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::warning('saveOrderHistory failed after assignOrder', [
+                        'order_id' => $orderId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            })->afterResponse();
         }
         $order->fill($request->all())->update();
+        forgetAdminOrderListLiveVersion();
+
         return response()->json([ 'success' => true, 'message' => __('message.update_form', ['form' => __('message.order')]) ]);
     }
 

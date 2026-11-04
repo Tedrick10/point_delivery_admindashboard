@@ -139,20 +139,37 @@ class DispatchOrderDataTable extends OrderDataTable
                 return '<a href="' . e($url) . '" class="pds-dispatch-item-count is-link" title="' . e(__('message.order_detail_list')) . '">' . e($label) . '</a>';
             })
             ->addColumn('deli_amount', function ($row) use ($workflow) {
-                // Always sum live item DeliAmount (Audit Log changes) — never trust stale orders.total_amount.
-                $amount = (float) $row->dispatchItems()
-                    ->whereIn('status', $workflow->clientVisibleItemStatuses())
-                    ->sum('deli_amount');
+                // Prefer aggregated sum from query(); fall back only if relation missing.
+                if (isset($row->dispatch_items_deli_amount)) {
+                    $amount = (float) $row->dispatch_items_deli_amount;
+                } elseif ($row->relationLoaded('dispatchItems')) {
+                    $amount = (float) $row->dispatchItems
+                        ->whereIn('status', $workflow->clientVisibleItemStatuses())
+                        ->sum('deli_amount');
+                } else {
+                    $amount = (float) $row->dispatchItems()
+                        ->whereIn('status', $workflow->clientVisibleItemStatuses())
+                        ->sum('deli_amount');
+                }
 
-                // Self-heal orders.total_amount so footer/sort/other screens match the list.
+                // Self-heal infrequently so list AJAX does not write every row every poll.
                 if (abs((float) ($row->total_amount ?? 0) - $amount) >= 0.001) {
+                    $healKey = 'heal_order_total_amount_'.$row->id;
+                    $shouldHeal = true;
                     try {
-                        $row->forceFill(['total_amount' => $amount])->saveQuietly();
-                        if (function_exists('forgetAdminOrderListLiveVersion')) {
-                            forgetAdminOrderListLiveVersion();
-                        }
+                        $shouldHeal = cache()->add($healKey, 1, 300);
                     } catch (\Throwable $e) {
-                        // Display the live sum even if persist fails.
+                        $shouldHeal = true;
+                    }
+                    if ($shouldHeal) {
+                        try {
+                            $row->forceFill(['total_amount' => $amount])->saveQuietly();
+                            if (function_exists('forgetAdminOrderListLiveVersion')) {
+                                forgetAdminOrderListLiveVersion();
+                            }
+                        } catch (\Throwable $e) {
+                            // Display the live sum even if persist fails.
+                        }
                     }
                 }
 
@@ -470,11 +487,22 @@ class DispatchOrderDataTable extends OrderDataTable
         request()->offsetUnset('from_date');
         request()->offsetUnset('to_date');
 
+        $visibleStatuses = $workflow->clientVisibleItemStatuses();
         $query = parent::query($model)
-            ->with(['delivery_man', 'client'])
-            ->withCount(['dispatchItems as dispatch_items_count' => function ($query) use ($workflow) {
-                $query->whereIn('status', $workflow->clientVisibleItemStatuses());
-            }]);
+            ->with([
+                'delivery_man:id,name,contact_number',
+                'client:id,name,contact_number,username,address,email,user_type,branch_id',
+                'dispatchItems' => function ($items) use ($visibleStatuses) {
+                    $items->whereIn('status', $visibleStatuses)
+                        ->select(['id', 'order_id', 'status', 'admin_updated_at', 'deli_amount']);
+                },
+            ])
+            ->withCount(['dispatchItems as dispatch_items_count' => function ($query) use ($visibleStatuses) {
+                $query->whereIn('status', $visibleStatuses);
+            }])
+            ->withSum(['dispatchItems as dispatch_items_deli_amount' => function ($query) use ($visibleStatuses) {
+                $query->whereIn('status', $visibleStatuses);
+            }], 'deli_amount');
 
         request()->merge([
             'from_date' => $savedFromDate,
@@ -485,11 +513,20 @@ class DispatchOrderDataTable extends OrderDataTable
         if ($isDedicated) {
             $workflow->applyDedicatedPickupListQuery($query, (string) $dispatchStatus);
         } else {
-            // Pull back Admin-Done-only items that landed in Assign 100 too early,
-            // then promote fully done orders so Order List badges drop to zero.
-            $workflow->reclaimPrematureAssign100Items();
-            $workflow->promoteReadyOrdersToAssign100();
-            $workflow->healUtcRolloverReceivedDates();
+            // Side-effects are important, but DataTables AJAX fires often — throttle
+            // so Order List stays fast on 16GB hosts under live refresh.
+            $sideEffectKey = 'dispatch_order_list_side_effects_v1';
+            $ranSideEffects = false;
+            try {
+                $ranSideEffects = cache()->add($sideEffectKey, 1, 15);
+            } catch (\Throwable $e) {
+                $ranSideEffects = true;
+            }
+            if ($ranSideEffects) {
+                $workflow->reclaimPrematureAssign100Items();
+                $workflow->promoteReadyOrdersToAssign100();
+                $workflow->healUtcRolloverReceivedDates();
+            }
             $listTab = $this->resolveOrderListDispatchStatus($dispatchStatus) ?: 'all';
             $workflow->applyOrderListQuery($query, $listTab);
         }

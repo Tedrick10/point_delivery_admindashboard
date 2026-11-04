@@ -207,6 +207,11 @@ class Order extends Model implements HasMedia
     {
         return $this->hasMany(Profofpictures::class, 'order_id', 'id');
     }
+
+    public function ratings()
+    {
+        return $this->hasMany(Ratings::class, 'order_id', 'id');
+    }
     
     public function orderVehicleHistory()
     {

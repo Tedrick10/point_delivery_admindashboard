@@ -213,69 +213,58 @@ class HomeController extends Controller
 
         if ($params['from_date'] && $params['to_date']) {
             if ($params['from_date'] == $params['to_date']) {
-                $withdrawRequestQuery->whereDate('created_at', '=', [$params['from_date']]);
+                $withdrawRequestQuery->whereDate('created_at', $params['from_date']);
             } else {
                 $withdrawRequestQuery->whereBetween('created_at', [$params['from_date'], $params['to_date']]);
             }
         }
 
-        $monthly_order_count = Order::myOrder()->selectRaw('DATE_FORMAT(created_at , "%w") as days , DATE_FORMAT(created_at , "%Y-%m-%d") as date')
+        $orderCountsByDate = Order::myOrder()
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as total')
             ->whereBetween('created_at', [$month_start, $today])
-            ->get()->toArray();
+            ->groupByRaw('DATE(created_at)')
+            ->pluck('total', 'date');
 
-        $monthly_order_count_data = [];
-
-        $order_collection = collect($monthly_order_count);
-
-        $monthly_payment_report = $paymentQuery->selectRaw('DATE_FORMAT(created_at , "%w") as days , DATE_FORMAT(created_at , "%Y-%m-%d") as date, total_amount ')
+        $monthly_payment_completed_by_date = (clone $paymentQuery)
+            ->selectRaw('DATE(created_at) as date, COALESCE(SUM(total_amount),0) as total_amount')
             ->where('payment_status', 'paid')
             ->whereBetween('created_at', [$month_start, $today])
             ->whereHas('order', function ($query) {
                 $query->where('status', 'completed');
             })->withTrashed()
-            ->get()->toArray();
+            ->groupByRaw('DATE(created_at)')
+            ->pluck('total_amount', 'date');
 
-        $monthly_payment_completed_order_data = [];
-
-        $payment_collection = collect($monthly_payment_report);
-
-        $monthly_payment_cancelled_report = $paymentQuery->selectRaw('DATE_FORMAT(created_at , "%w") as days , DATE_FORMAT(created_at , "%Y-%m-%d") as date, cancel_charges ')
+        $monthly_payment_cancelled_by_date = (clone $paymentQuery)
+            ->selectRaw('DATE(created_at) as date, COALESCE(SUM(cancel_charges),0) as total_amount')
             ->where('payment_status', 'paid')
             ->whereBetween('created_at', [$month_start, $today])
             ->whereHas('order', function ($query) {
                 $query->where('status', 'cancelled');
             })->withTrashed()
-            ->get()->toArray();
+            ->groupByRaw('DATE(created_at)')
+            ->pluck('total_amount', 'date');
 
+        $monthly_order_count_data = [];
+        $monthly_payment_completed_order_data = [];
         $monthly_payment_cancelled_order_data = [];
-        $payment_cancelled_collection = collect($monthly_payment_cancelled_report);
 
         for ($i = 0; $i < $diff; $i++) {
-            $total = $order_collection->filter(function ($value, $key) use ($month_start, $i) {
-                return $value['date'] == date('Y-m-d', strtotime($month_start . ' + ' . $i . 'day'));
-            })->count();
+            $date = date('Y-m-d', strtotime($month_start . ' + ' . $i . 'day'));
 
             $monthly_order_count_data[] = [
-                'total' => $total,
-                'date' => date('Y-m-d', strtotime($month_start . ' + ' . $i . 'day')),
+                'total' => (int) ($orderCountsByDate[$date] ?? 0),
+                'date' => $date,
             ];
-
-            $total_amount = $payment_collection->filter(function ($value, $key) use ($month_start, $i) {
-                return $value['date'] == date('Y-m-d', strtotime($month_start . ' + ' . $i . 'day'));
-            })->sum('total_amount');
 
             $monthly_payment_completed_order_data[] = [
-                'total_amount' => $total_amount,
-                'date' => date('Y-m-d', strtotime($month_start . ' + ' . $i . 'day')),
+                'total_amount' => (float) ($monthly_payment_completed_by_date[$date] ?? 0),
+                'date' => $date,
             ];
 
-            $cancel_charges = $payment_cancelled_collection->filter(function ($value, $key) use ($month_start, $i) {
-                return $value['date'] == date('Y-m-d', strtotime($month_start . ' + ' . $i . 'day'));
-            })->sum('cancel_charges');
-
             $monthly_payment_cancelled_order_data[] = [
-                'total_amount' => $cancel_charges,
-                'date' => date('Y-m-d', strtotime($month_start . ' + ' . $i . 'day')),
+                'total_amount' => (float) ($monthly_payment_cancelled_by_date[$date] ?? 0),
+                'date' => $date,
             ];
         }
         $data['monthly_order_count'] = $monthly_order_count_data;
@@ -302,27 +291,24 @@ class HomeController extends Controller
 
         if ($params['from_date'] && $params['to_date']) {
             if ($params['from_date'] == $params['to_date']) {
-                $ordersQuery->whereDate('created_at', '=', [$params['from_date']]);
+                $ordersQuery->whereDate('created_at', $params['from_date']);
             } else {
                 $ordersQuery->whereBetween('created_at', [$params['from_date'], $params['to_date']]);
             }
         }
-        $weekly_order_count = $ordersQuery->selectRaw('DATE_FORMAT(created_at , "%w") as days , DATE_FORMAT(created_at , "%Y-%m-%d") as date')
+        $weeklyCountsByDate = $ordersQuery
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as total')
             ->whereBetween('created_at', [$week_start, $week_end])
-            ->get()->toArray();
+            ->groupByRaw('DATE(created_at)')
+            ->pluck('total', 'date');
 
         $order_data = [];
-
-        $order_collection = collect($weekly_order_count);
         for ($i = 0; $i < 7; $i++) {
-            $total = $order_collection->filter(function ($value, $key) use ($week_start, $i) {
-                return $value['date'] == date('Y-m-d', strtotime($week_start . ' + ' . $i . 'day'));
-            })->count();
-
+            $date = date('Y-m-d', strtotime($week_start . ' + ' . $i . 'day'));
             $order_data[] = [
                 'day' => date('l', strtotime($week_start . ' + ' . $i . 'day')),
-                'total' => $total,
-                'date' => date('Y-m-d', strtotime($week_start . ' + ' . $i . 'day')),
+                'total' => (int) ($weeklyCountsByDate[$date] ?? 0),
+                'date' => $date,
             ];
         }
 
@@ -386,7 +372,7 @@ class HomeController extends Controller
     public function highDemanding_areas(Request $request)
     {
         $now = Carbon::now();
-        $distanceLimit = AppSetting::first()->distance;
+        $distanceLimit = cachedAppSetting()->distance;
 
         // Get all orders for the day (change to today or yesterday as needed)
         $orders = Order::where('status', 'create')
@@ -506,7 +492,7 @@ class HomeController extends Controller
 
     public function changeLanguage($locale)
     {
-        $languageOption = AppSetting::first()?->language_option ?? [config('app.locale', 'en')];
+        $languageOption = cachedAppSetting()?->language_option ?? [config('app.locale', 'en')];
         $availableLocales = collect(languagesArray($languageOption))->pluck('id')->all();
 
         if (!in_array($locale, $availableLocales, true)) {

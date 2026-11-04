@@ -916,28 +916,36 @@ class DispatchOrderItemController extends Controller
         $riderScope = fn ($q) => $q->where('delivery_man_id', $user->id);
 
         // Hide Admin-Completed (and later Finished) parcels from Rider Delivery.
+        // Also hide open Assigned/On Way/Pending on cancelled parents — same rule
+        // as Admin Rider List (those belong in Pick Up Cancelled).
         $baseQuery = DispatchOrderItem::query()
             ->where($riderScope)
             ->whereIn('status', $statuses)
             ->whereNull('admin_completed_at');
+        $workflow->applyExcludeCancelledOpenDeliveryItems($baseQuery);
         if ($hasDateFilter) {
             $this->applyRiderDeliveryListDayFilter($baseQuery, $fromDay, $toDay);
         }
 
+        $countRow = (clone $baseQuery)->toBase()->selectRaw("
+            COUNT(*) as all_count,
+            SUM(CASE WHEN status = 'courier_assigned' THEN 1 ELSE 0 END) as courier_assigned,
+            SUM(CASE WHEN status = 'courier_departed' THEN 1 ELSE 0 END) as courier_departed,
+            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN status = 'return' AND admin_finished_at IS NULL THEN 1 ELSE 0 END) as return_count,
+            SUM(CASE WHEN status = 'os_returned' THEN 1 ELSE 0 END) as os_returned,
+            SUM(CASE WHEN status = 'completed' OR (status = 'return' AND admin_finished_at IS NOT NULL) THEN 1 ELSE 0 END) as completed
+        ")->first();
+
         $counts = [
-            'all' => (clone $baseQuery)->count(),
-            'courier_assigned' => (clone $baseQuery)->where('status', 'courier_assigned')->count(),
-            'courier_departed' => (clone $baseQuery)->where('status', 'courier_departed')->count(),
-            'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
-            'return' => (clone $baseQuery)->where('status', 'return')->whereNull('admin_finished_at')->count(),
-            'os_returned' => (clone $baseQuery)->where('status', 'os_returned')->count(),
+            'all' => (int) ($countRow->all_count ?? 0),
+            'courier_assigned' => (int) ($countRow->courier_assigned ?? 0),
+            'courier_departed' => (int) ($countRow->courier_departed ?? 0),
+            'pending' => (int) ($countRow->pending ?? 0),
+            'return' => (int) ($countRow->return_count ?? 0),
+            'os_returned' => (int) ($countRow->os_returned ?? 0),
             // Delivered only — not Admin Completed / Finished.
-            'completed' => (clone $baseQuery)->where(function ($q) {
-                $q->where('status', 'completed')
-                    ->orWhere(function ($ret) {
-                        $ret->where('status', 'return')->whereNotNull('admin_finished_at');
-                    });
-            })->count(),
+            'completed' => (int) ($countRow->completed ?? 0),
         ];
 
         $query = DispatchOrderItem::query()
@@ -945,6 +953,7 @@ class DispatchOrderItemController extends Controller
             ->whereIn('status', $statuses)
             ->whereNull('admin_completed_at')
             ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man', 'kyoShinItem']);
+        $workflow->applyExcludeCancelledOpenDeliveryItems($query);
         // Route order: first status tap → first in list (any tab).
         $this->applyRiderDeliveryRouteOrder($query);
         if ($hasDateFilter) {
@@ -973,10 +982,17 @@ class DispatchOrderItemController extends Controller
             }
         }
 
-        // Rider delivery list: always return the full assigned set (page size 10/20 hid parcels).
-        $perPage = max(1, (clone $query)->count());
-
-        $page = $query->paginate($perPage);
+        // Rider delivery list: return the full assigned set (page size 10/20 hid parcels).
+        // Avoid COUNT + paginate double-scan — load once and wrap pagination metadata.
+        $collection = $query->get();
+        $total = $collection->count();
+        $page = new \Illuminate\Pagination\LengthAwarePaginator(
+            $collection,
+            $total,
+            max(1, $total),
+            1,
+            ['path' => request()->url(), 'query' => request()->query()]
+        );
         $items = DispatchOrderItemResource::collection($page);
 
         return json_custom_response([
@@ -1326,12 +1342,14 @@ class DispatchOrderItemController extends Controller
 
         $workflow = app(DispatchOrderWorkflowService::class);
         $statuses = $workflow->deliveryItemStatuses();
-        $item = DispatchOrderItem::query()
+        $itemQuery = DispatchOrderItem::query()
             ->where('id', $itemId)
             ->where('delivery_man_id', $user->id)
             ->whereIn('status', $statuses)
-            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man', 'kyoShinItem'])
-            ->first();
+            ->whereNull('admin_completed_at')
+            ->with(['fromBranch', 'toBranch', 'photoMedia', 'pendingPhotoMedia', 'deliveredPhotoMedia', 'pendingRemarks.photoMedia', 'deliveryMan', 'order.city', 'order.delivery_man', 'kyoShinItem']);
+        $workflow->applyExcludeCancelledOpenDeliveryItems($itemQuery);
+        $item = $itemQuery->first();
 
         if (! $item) {
             return json_custom_response([
@@ -1490,6 +1508,7 @@ class DispatchOrderItemController extends Controller
         $item = DispatchOrderItem::query()
             ->where('id', $itemId)
             ->where('delivery_man_id', $user->id)
+            ->with('order')
             ->first();
 
         if (! $item) {
@@ -1500,6 +1519,18 @@ class DispatchOrderItemController extends Controller
         }
 
         $workflow = app(DispatchOrderWorkflowService::class);
+        $openStatuses = $workflow->riderOpenDeliveryStatuses();
+        $parentStatus = (string) ($item->order->status ?? '');
+        if ($parentStatus === 'cancelled' && in_array((string) $item->status, $openStatuses, true)) {
+            // Stale link after cancel — drop from rider and refuse further taps.
+            $workflow->releaseRiderAssignmentsForCancelledOrder($item->order);
+
+            return json_custom_response([
+                'status' => false,
+                'message' => __('message.order_cancelled'),
+            ], 422);
+        }
+
         $remark = $request->filled('remark') ? trim((string) $request->remark) : null;
 
         try {

@@ -14,9 +14,21 @@ class AppSetting extends Model implements HasMedia
 
     public $timestamps = false;
 
+    protected static function booted(): void
+    {
+        $forget = static function () {
+            if (function_exists('forgetAppSettingCache')) {
+                forgetAppSettingCache();
+            }
+        };
+
+        static::saved($forget);
+        static::deleted($forget);
+    }
+
 	protected static function getData()
     {
-		$data =	self::get()->first();
+		$data =	cachedAppSetting() ?? self::query()->first();
 
 		if($data == null){
 			$data = new self;

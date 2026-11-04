@@ -734,6 +734,11 @@ function forgetAdminOrderListLiveVersion(): void
 {
     try {
         cache()->forget('admin_order_list_live_version');
+        // Sidebar badge cache is short-lived; drop for current admin if present.
+        $uid = auth()->id();
+        if ($uid) {
+            cache()->forget('admin_sidebar_counts_v1:'.(int) $uid);
+        }
     } catch (\Throwable $e) {
         // ignore cache backend failures
     }
@@ -746,31 +751,19 @@ function forgetAdminOrderListLiveVersion(): void
  */
 function adminOrderListLiveVersion(): string
 {
-    return (string) cache()->remember('admin_order_list_live_version', 2, function () {
-        $orderCount = Order::query()->count();
-        $orderMaxId = (int) (Order::query()->max('id') ?? 0);
-        $orderUpdated = (string) (Order::query()->max('updated_at') ?? '');
-        $orderDeliTotal = (string) (Order::query()->sum('total_amount') ?? '0');
-
-        $itemCount = \App\Models\DispatchOrderItem::query()->count();
-        $itemMaxId = (int) (\App\Models\DispatchOrderItem::query()->max('id') ?? 0);
-        $itemUpdated = (string) (\App\Models\DispatchOrderItem::query()->max('updated_at') ?? '');
-        // Explicit DeliAmount fingerprint — item.updated_at alone can miss same-second edits
-        // and left Order List DELIAMOUNT stale while DeliAmount Audit Log already showed the change.
-        $itemDeliTotal = (string) (\App\Models\DispatchOrderItem::query()->sum('deli_amount') ?? '0');
-
-        $historyUpdated = (string) (OrderHistory::query()->max('updated_at') ?? '');
+    // Keep fingerprint sensitive to order/item changes, but avoid full-table SUM scans
+    // on every admin poll. updated_at + counts catch list-relevant writes.
+    return (string) cache()->remember('admin_order_list_live_version', 5, function () {
+        $orderAgg = Order::query()->selectRaw('COUNT(*) as c, MAX(id) as max_id, MAX(updated_at) as max_updated')->first();
+        $itemAgg = \App\Models\DispatchOrderItem::query()->selectRaw('COUNT(*) as c, MAX(id) as max_id, MAX(updated_at) as max_updated')->first();
 
         return sha1(implode('|', [
-            $orderCount,
-            $orderMaxId,
-            $orderUpdated,
-            $orderDeliTotal,
-            $itemCount,
-            $itemMaxId,
-            $itemUpdated,
-            $itemDeliTotal,
-            $historyUpdated,
+            (int) ($orderAgg->c ?? 0),
+            (int) ($orderAgg->max_id ?? 0),
+            (string) ($orderAgg->max_updated ?? ''),
+            (int) ($itemAgg->c ?? 0),
+            (int) ($itemAgg->max_id ?? 0),
+            (string) ($itemAgg->max_updated ?? ''),
         ]));
     });
 }
@@ -852,18 +845,47 @@ function updateLanguageVersion()
 
 function appSettingData($type = 'get')
 {
-    $settings = AppSetting::first();
+    $settings = cachedAppSetting();
 
     if ($settings) {
-        Session::put('setting_data', $settings);
+        try {
+            if (app()->bound('session') && Session::isStarted()) {
+                Session::put('setting_data', $settings);
+            }
+        } catch (\Throwable $e) {
+            // session optional (API / queue)
+        }
     }
 
     return $settings;
 }
 
+/**
+ * Single AppSetting row with short-lived cache (hot path for apps + website).
+ */
+function cachedAppSetting(): ?AppSetting
+{
+    try {
+        return cache()->remember('app_setting_row_v1', 300, function () {
+            return AppSetting::query()->first();
+        });
+    } catch (\Throwable $e) {
+        return AppSetting::query()->first();
+    }
+}
+
+function forgetAppSettingCache(): void
+{
+    try {
+        cache()->forget('app_setting_row_v1');
+    } catch (\Throwable $e) {
+        // ignore
+    }
+}
+
 function appSettingcurrency($key = null)
 {
-    $appsetting = AppSetting::first();
+    $appsetting = cachedAppSetting();
 
     if ($appsetting != null && $key != null) {
         $appsetting = $appsetting->$key;
@@ -2155,13 +2177,34 @@ function SettingData($type, $key = null)
         return $cache[$cacheKey];
     }
 
-    $setting = Setting::where('type', $type);
+    $persistKey = 'setting_data_v1:'.settingDataCacheGeneration().':'.$cacheKey;
+    try {
+        $value = cache()->remember($persistKey, 300, function () use ($type, $key) {
+            $setting = Setting::where('type', $type);
+            $setting->when($key != null, function ($q) use ($key) {
+                return $q->where('key', $key);
+            });
 
-    $setting->when($key != null, function ($q) use ($key) {
-        return $q->where('key', $key);
-    });
+            return $setting->pluck('value')->first();
+        });
+    } catch (\Throwable $e) {
+        $setting = Setting::where('type', $type);
+        $setting->when($key != null, function ($q) use ($key) {
+            return $q->where('key', $key);
+        });
+        $value = $setting->pluck('value')->first();
+    }
 
-    return $cache[$cacheKey] = $setting->pluck('value')->first();
+    return $cache[$cacheKey] = $value;
+}
+
+function settingDataCacheGeneration(): string
+{
+    try {
+        return (string) cache()->get('setting_data_generation', '1');
+    } catch (\Throwable $e) {
+        return '1';
+    }
 }
 
 /**
@@ -2172,6 +2215,11 @@ function SettingDataFlush(?string $type = null, ?string $key = null): void
     $cache = &settingDataCacheStore();
     if ($type === null) {
         $cache = [];
+        try {
+            cache()->forever('setting_data_generation', (string) microtime(true));
+        } catch (\Throwable $e) {
+            // ignore
+        }
 
         return;
     }
@@ -2182,10 +2230,22 @@ function SettingDataFlush(?string $type = null, ?string $key = null): void
                 unset($cache[$cacheKey]);
             }
         }
+        // Type-wide writes are rare; bump generation so all persisted SettingData keys miss.
+        try {
+            cache()->forever('setting_data_generation', (string) microtime(true));
+        } catch (\Throwable $e) {
+            // ignore
+        }
 
         return;
     }
     unset($cache[$type.'|'.$key]);
+    try {
+        cache()->forget('setting_data_v1:'.settingDataCacheGeneration().':'.$type.'|'.$key);
+        cache()->forever('setting_data_generation', (string) microtime(true));
+    } catch (\Throwable $e) {
+        // ignore
+    }
 }
 
 function &settingDataCacheStore(): array
@@ -3613,13 +3673,28 @@ function adminNotificationUnreadCount(?\App\Models\User $user = null, ?string $p
             : 'admin'));
     $panel = $panel === 'super_admin' ? 'super_admin' : 'admin';
 
+    $cacheKey = 'admin_notif_unread_v1:'.(int) $user->id.':'.$panel;
+    try {
+        $cached = cache()->get($cacheKey);
+        if (is_int($cached)) {
+            return $cached;
+        }
+    } catch (\Throwable $e) {
+        // continue
+    }
+
     try {
         $total = (int) $user->unreadNotifications()->count();
         if ($total === 0) {
+            try {
+                cache()->put($cacheKey, 0, 10);
+            } catch (\Throwable $e) {
+            }
+
             return 0;
         }
 
-        return (int) $user->unreadNotifications()
+        $count = (int) $user->unreadNotifications()
             ->orderByDesc('created_at')
             ->limit(250)
             ->get(['id', 'data'])
@@ -3640,6 +3715,13 @@ function adminNotificationUnreadCount(?\App\Models\User $user = null, ?string $p
                 return in_array($category, ['user_messages', 'user_orders'], true);
             })
             ->count();
+
+        try {
+            cache()->put($cacheKey, $count, 10);
+        } catch (\Throwable $e) {
+        }
+
+        return $count;
     } catch (\Throwable $e) {
         return (int) $user->unreadNotifications()->count();
     }
@@ -3679,9 +3761,22 @@ function syncUnreadDispatchItemMessageNotifications(?\App\Models\User $user = nu
         return;
     }
 
+    // Admin live poll used to run a full GROUP BY on every request — throttle hard.
+    $lockKey = 'sync_dispatch_msg_notif_v1:'.(int) $user->id;
+    try {
+        if (! cache()->add($lockKey, 1, 30)) {
+            return;
+        }
+    } catch (\Throwable $e) {
+        // continue without lock
+    }
+
     try {
         // Prefer unanswered threads (latest msg from client), not only read_at IS NULL.
+        // Limit to recent traffic so MySQL does not scan the entire chat history.
         $latestIds = \Illuminate\Support\Facades\DB::table('dispatch_item_messages')
+            ->where('created_at', '>=', now()->subDays(14))
+            ->where('sender_type', 'client')
             ->selectRaw('MAX(id) as id')
             ->groupBy('dispatch_order_item_id')
             ->pluck('id');

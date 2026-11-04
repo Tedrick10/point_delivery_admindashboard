@@ -40,7 +40,7 @@
                if (window.__pdsPageLiveBooted) return;
                window.bootAdminPageLiveRefresh({
                    url: @json(route('admin.live.page-version')),
-                   intervalMs: 4000,
+                   intervalMs: 8000,
                    data: { page: @json($livePageKey ?? (optional(request()->route())->getName() ?? 'global')) },
                    tableSelector: '.pds-datatable'
                });

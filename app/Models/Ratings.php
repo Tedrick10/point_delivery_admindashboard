@@ -51,7 +51,12 @@ class Ratings extends Model
     /** Quick-pick feedback messages for rider rating UI (Myanmar). */
     public static function presetComments(): array
     {
-        return [
+        static $cached = null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        return $cached = [
             __('message.rider_rating_preset_ontime', [], 'my'),
             __('message.rider_rating_preset_polite', [], 'my'),
             __('message.rider_rating_preset_careful', [], 'my'),

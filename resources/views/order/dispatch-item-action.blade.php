@@ -4,18 +4,15 @@
     $canEditInfo = $order
         ? app(\App\Services\DispatchOrderWorkflowService::class)->canAdminEditDispatchItemInfo($order, $item)
         : false;
-    $osName = $order ? resolveDispatchOsName($order) : '-';
-    $osProfileImage = resolveUploadedProfileImageUrl(optional($order)->client);
-    $unreadClientReplies = \App\Models\DispatchItemMessage::query()
-        ->where('dispatch_order_item_id', $item->id)
-        ->where('sender_type', 'client')
-        ->whereNull('read_at')
-        ->count();
-    $metaLine = trim(
-        ($item->code ? '#'.$item->code : '#'.$item->id)
-        .' · '
-        .($item->customer_phone ?: '')
-    );
+    if (isset($item->unread_client_replies_count)) {
+        $unreadClientReplies = (int) $item->unread_client_replies_count;
+    } else {
+        $unreadClientReplies = (int) \App\Models\DispatchItemMessage::query()
+            ->where('dispatch_order_item_id', $item->id)
+            ->where('sender_type', 'client')
+            ->whereNull('read_at')
+            ->count();
+    }
 @endphp
 <div class="pds-dispatch-row-actions">
     @if(!empty($showAssign100Print))
